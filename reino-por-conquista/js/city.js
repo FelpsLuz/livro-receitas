@@ -110,6 +110,13 @@ const Cidade = (() => {
   // ---------- chão, rio, estrada ----------
   function chao(ctx, pal) {
     P(ctx, 0, 144, W, H - 144, pal.grama);
+    // profundidade: o primeiro plano é mais saturado/escuro que o fundo
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    ctx.fillRect(0, 144, W, 18);
+    ctx.fillStyle = 'rgba(20,30,10,.10)';
+    ctx.fillRect(0, 246, W, 24);
+    ctx.fillStyle = 'rgba(20,30,10,.05)';
+    ctx.fillRect(0, 220, W, 26);
     // manchas de grama
     for (let i = 0; i < 90; i++) {
       const x = sr(i * 5) * W, y = 146 + sr(i * 5 + 1) * (H - 150);
@@ -127,11 +134,20 @@ const Cidade = (() => {
     P(ctx, 0, yR, W, 16, pal.neve ? '#9fb8cc' : '#3f6e94');
     P(ctx, 0, yR, W, 2, pal.neve ? '#c8d8e4' : '#5a8ab0');
     P(ctx, 0, yR + 14, W, 2, sombra('#3f6e94', 0.7));
+    // reflexo do céu na superfície
+    ctx.fillStyle = pal.neve ? 'rgba(240,246,250,.35)' : 'rgba(140,190,225,.30)';
+    ctx.fillRect(0, yR + 1, W, 4);
     // brilho da água animado
     ctx.fillStyle = pal.neve ? '#e0ecf4' : '#7fb0d0';
     for (let i = 0; i < 14; i++) {
       const x = ((i * 41 + anim * (0.4 + (i % 3) * 0.2)) % (W + 30)) - 15;
       P(ctx, x, yR + 3 + (i % 4) * 3, 8 + (i % 3) * 4, 1);
+    }
+    // cintilância especular
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    for (let i = 0; i < 5; i++) {
+      const x = ((i * 97 + anim * 0.8) % (W + 20)) - 10;
+      P(ctx, x, yR + 5 + (i % 3) * 4, 2, 1);
     }
     // margens
     P(ctx, 0, yR - 2, W, 2, sombra(pal.grama, 0.75));

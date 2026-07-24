@@ -48,6 +48,12 @@ const Retratos = (() => {
     const n = parseInt(hex.slice(1), 16);
     return `rgb(${Math.round(((n >> 16) & 255) * f)},${Math.round(((n >> 8) & 255) * f)},${Math.round((n & 255) * f)})`;
   }
+  // clareia em direção ao branco — profundidade de cor "64 bits"
+  function claro(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgb(${Math.round(r + (255 - r) * f)},${Math.round(g + (255 - g) * f)},${Math.round(b + (255 - b) * f)})`;
+  }
 
   // humor: 'raiva' | 'neutro' | 'feliz'
   function desenhar(canvas, id, humor, piscar) {
@@ -177,9 +183,42 @@ const Retratos = (() => {
       for (let i = 0; i < 30; i += 3) P(ctx, 17 + i, 2 + (i % 3), 2, 4, i % 2 ? '#7d6b52' : '#5a4a38');
     }
 
-    // moldura
+    // ---------- passe de profundidade ("64 bits"): luz, brilho e volume ----------
+    // luz ambiente vinda da esquerda-superior no rosto
+    P(ctx, 21 - gx, 15, 3, 22, claro(pele, 0.18));
+    P(ctx, 22 - gx, 16, 8, 3, claro(pele, 0.12));
+    // brilho nos olhos (vida no olhar)
+    if (!piscar) { P(ctx, 25, oy, 1, 1, '#ffffff'); P(ctx, 36, oy, 1, 1, '#ffffff'); }
+    // rubor sutil nas bochechas
+    if (f.fem || f.idade === 'jovem') {
+      ctx.fillStyle = 'rgba(216,120,110,.35)';
+      ctx.fillRect(22, 33, 4, 2); ctx.fillRect(38, 33, 4, 2);
+    }
+    // mechas de brilho no cabelo
+    if (f.estilo !== 'careca' && f.estilo !== 'raspado' && f.chapeu !== 'capuz' && f.chapeu !== 'elmo' && f.chapeu !== 'elmo_chifre' && f.chapeu !== 'pelo') {
+      P(ctx, 23 - gx, 11, 6, 1, claro(CABELOS[f.cabelo], 0.25));
+      P(ctx, 33, 12, 5, 1, claro(CABELOS[f.cabelo], 0.18));
+      if (f.estilo === 'longo') { P(ctx, 17 - gx, 18, 2, 10, claro(CABELOS[f.cabelo], 0.15)); }
+    }
+    // brilho na barba clara/trançada
+    if (f.barba === 'gelo') P(ctx, 24, 36, 8, 1, '#ffffff');
+    // volume na roupa: dobras escuras + realce no ombro esquerdo
+    P(ctx, (S - larguraOmbro) / 2 + 4, 51, larguraOmbro - 8, 1, claro(f.roupa, 0.2));
+    P(ctx, 30, 52, 2, 12, esc(f.roupa, 0.85));
+    P(ctx, 22, 54, 1, 10, esc(f.roupa, 0.8)); P(ctx, 41, 54, 1, 10, esc(f.roupa, 0.8));
+    // cintilância no metal (coroa/tiara/elmo)
+    if (f.chapeu === 'coroa') { P(ctx, 22, 7, 3, 1, claro('#c9a227', 0.5)); P(ctx, 36, 3, 1, 2, claro('#c9a227', 0.6)); }
+    if (f.chapeu === 'tiara') P(ctx, 23, 9, 4, 1, '#ffffff');
+    if (f.chapeu === 'elmo' || f.chapeu === 'elmo_chifre') P(ctx, 21, 7, 6, 1, claro('#b0b4ba', 0.4));
+    // vinheta: cantos do fundo mais escuros (profundidade de cena)
+    ctx.fillStyle = 'rgba(0,0,0,.18)';
+    ctx.fillRect(1, 1, 12, 6); ctx.fillRect(51, 1, 12, 6);
+    ctx.fillRect(1, 57, 10, 6); ctx.fillRect(53, 57, 10, 6);
+    // moldura dupla (madeira + ouro)
     P(ctx, 0, 0, S, 1, '#1d1309'); P(ctx, 0, 63, S, 1, '#1d1309');
     P(ctx, 0, 0, 1, S, '#1d1309'); P(ctx, 63, 0, 1, S, '#1d1309');
+    P(ctx, 1, 1, S - 2, 1, 'rgba(201,162,39,.5)'); P(ctx, 1, 62, S - 2, 1, 'rgba(201,162,39,.5)');
+    P(ctx, 1, 1, 1, S - 2, 'rgba(201,162,39,.5)'); P(ctx, 62, 1, 1, S - 2, 'rgba(201,162,39,.5)');
   }
 
   // ---------- registro de retratos vivos (piscar de olhos) ----------
