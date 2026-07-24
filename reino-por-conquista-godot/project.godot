@@ -1,0 +1,26 @@
+; Reino por Conquista — port Godot 4.3
+; Fase 1: núcleo de sistemas portado e testado (headless).
+; Fase 2: cenas visuais (cidade pixel art, conversa, abas).
+
+config_version=5
+
+[application]
+
+config/name="Reino por Conquista"
+config/description="De mercenário sem nome a rei — estratégia medieval offline"
+run/main_scene="res://cenas/principal.tscn"
+config/features=PackedStringArray("4.3")
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=540
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
