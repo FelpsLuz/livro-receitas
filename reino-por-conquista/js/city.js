@@ -21,6 +21,8 @@ const Cidade = (() => {
   let anim = 0;
   let npcs = [], galinhas = [];
   let bg = null, bgKey = '';
+  let luzes = [];          // posições das janelas (brilham à noite)
+  let cicloForcado = null; // para testes: Cidade.forcarCiclo(v)
 
   // ---------- paletas com hue-shifting ----------
   const RAMPAS = {
@@ -88,6 +90,7 @@ const Cidade = (() => {
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const x = cv.getContext('2d');
+    luzes = [];  // recoleta as janelas desta cena (para o brilho noturno)
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
 
     // ---------- céu em degradê suave (interpolação entre as 3 cores) ----------
@@ -103,21 +106,7 @@ const Cidade = (() => {
       const cor = t < 0.5 ? lerpCor(pal.ceu[0], pal.ceu[1], t * 2) : lerpCor(pal.ceu[1], pal.ceu[2], (t - 0.5) * 2);
       P(0, y, W, 4, cor);
     }
-    // sol na DIREITA-SUPERIOR com brilho difuso (glow suave + disco pixelado)
-    const sx = 540, sy = 48, r = 16;
-    const glow = x.createRadialGradient(sx, sy, r * 0.5, sx, sy, r * 4.2);
-    glow.addColorStop(0, 'rgba(255,244,190,.55)');
-    glow.addColorStop(0.4, 'rgba(255,240,180,.18)');
-    glow.addColorStop(1, 'rgba(255,240,180,0)');
-    x.fillStyle = glow;
-    x.fillRect(sx - r * 4.2, sy - r * 4.2, r * 8.4, r * 8.4);
-    for (let dy = -r; dy <= r; dy += 2) for (let dx = -r; dx <= r; dx += 2) {
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d <= r - 6) P(sx + dx, sy + dy, 2, 2, '#fffce8');
-      else if (d <= r - 3) P(sx + dx, sy + dy, 2, 2, pal.sol[1]);
-      else if (d <= r) P(sx + dx, sy + dy, 2, 2, pal.sol[0]);
-      else if (d <= r + 5 && (dx + dy) % 4 === 0) P(sx + dx, sy + dy, 2, 2, pal.sol[0]);
-    }
+    // (o sol agora é DINÂMICO: cruza o céu no ciclo dia/noite — ver astro())
 
     // ---------- montanhas: silhuetas limpas, encosta direita iluminada ----------
     const serra = (base, amp, freq, fase, cor, corLuz) => {
@@ -442,6 +431,7 @@ const Cidade = (() => {
       P(wx + 1, hy + 9, 4, 5, '#f5d060');
       P(wx + 1, hy + 9, 4, 2, '#fdf0a0');
       P(wx - 1, hy + 16, 8, 1, pedra ? '#b5b2a6' : '#f0e2be');
+      luzes.push({ x: wx + 3, y: hy + 11 });
     }
     if (chamine) {
       P(hx + w - 12, hy - alt * 0.7, 6, alt * 0.55, '#8a8d92');
@@ -648,6 +638,7 @@ const Cidade = (() => {
         x.beginPath(); x.moveTo(tx + 11, y - 52); x.lineTo(tx + 26, y - 33); x.lineTo(tx + 15, y - 33); x.fill();
         if (pal.neve) { x.fillStyle = '#eef3f8'; x.beginPath(); x.moveTo(tx - 4, y - 33); x.lineTo(tx + 11, y - 52); x.lineTo(tx + 26, y - 33); x.lineTo(tx + 21, y - 33); x.lineTo(tx + 11, y - 48); x.lineTo(tx + 1, y - 33); x.fill(); }
         P(tx + 8, y - 20, 6, 8, '#2e2418'); P(tx + 9, y - 19, 4, 5, '#f5d060'); P(tx + 9, y - 19, 4, 2, '#fdf0a0');
+        luzes.push({ x: tx + 11, y: y - 17 });
       }
     }
   }
@@ -681,6 +672,7 @@ const Cidade = (() => {
       if (pal.neve) { x.fillStyle = '#eef3f8'; x.beginPath(); x.moveTo(tx - 5, baseY - alt + 1); x.lineTo(tx + 14, baseY - alt - 24); x.lineTo(tx + 33, baseY - alt + 1); x.lineTo(tx + 28, baseY - alt + 1); x.lineTo(tx + 14, baseY - alt - 20); x.lineTo(tx, baseY - alt + 1); x.fill(); }
       P(tx + 10, baseY - alt + 14, 6, 8, '#2e2418'); P(tx + 11, baseY - alt + 15, 4, 5, '#f5d060'); P(tx + 11, baseY - alt + 15, 4, 2, '#fdf0a0');
       P(tx + 10, baseY - alt + 34, 6, 8, '#2e2418'); P(tx + 11, baseY - alt + 35, 4, 5, '#f5d060');
+      luzes.push({ x: tx + 13, y: baseY - alt + 17 }, { x: tx + 13, y: baseY - alt + 37 });
     }
     // torre de menagem central
     P(bx + corpoW / 2 - 20, cy - 22, 40, 44, '#b0b3ab');
@@ -690,12 +682,14 @@ const Cidade = (() => {
     for (let ry = 4; ry < 40; ry += 6) x.fillRect(bx + corpoW / 2 - 16 + (ry % 12 === 4 ? 2 : 9), cy - 22 + ry, 8, 1);
     for (let i = 0; i < 40; i += 9) { P(bx + corpoW / 2 - 20 + i, cy - 28, 6, 6, '#b0b3ab'); P(bx + corpoW / 2 - 16 + i, cy - 28, 2, 6, '#c8c5b8'); }
     P(bx + corpoW / 2 - 4, cy - 14, 8, 10, '#2e2418'); P(bx + corpoW / 2 - 3, cy - 13, 6, 7, '#f5d060'); P(bx + corpoW / 2 - 3, cy - 13, 6, 3, '#fdf0a0');
+    luzes.push({ x: bx + corpoW / 2, y: cy - 10 });
     // janelas do corpo
     for (const wx of [bx + 16, bx + 38, bx + corpoW - 46, bx + corpoW - 24]) {
       P(wx - 1, cy + 32, 9, 12, '#767c88');
       P(wx, cy + 33, 7, 10, '#2e2418');
       P(wx + 1, cy + 34, 5, 8, '#f5d060');
       P(wx + 1, cy + 34, 5, 3, '#fdf0a0');
+      luzes.push({ x: wx + 3, y: cy + 38 });
     }
     // musgo na base
     x.fillStyle = '#4f6b46';
@@ -719,6 +713,7 @@ const Cidade = (() => {
     x.beginPath(); x.moveTo(mx + 15, my - 13); x.lineTo(mx + 32, my + 1); x.lineTo(mx + 20, my + 1); x.fill();
     P(mx + 11, my + 36, 9, 12, '#2e2418'); P(mx + 12, my + 37, 7, 10, '#3d3020');
     P(mx + 12, my + 10, 6, 7, '#2e2418'); P(mx + 13, my + 11, 4, 5, '#f5d060');
+    luzes.push({ x: mx + 15, y: my + 13 });
     x.fillStyle = '#4f6b46';
     for (let rx = 2; rx < 28; rx += 6) x.fillRect(mx + rx, my + 46, 4, 2);
   }
@@ -893,6 +888,169 @@ const Cidade = (() => {
   }
 
   // ============================================================
+  // CICLO DIA/NOITE, ASTROS E CLIMA (o "budget i3" bem gasto)
+  // ============================================================
+
+  // 0 = meia-noite · 0.5 = amanhecer/entardecer · 1 = meio-dia
+  function cicloAtual() {
+    if (cicloForcado !== null) return cicloForcado;
+    return (Math.sin(anim * 0.0009) + 1) / 2;   // dia completo ≈ 2 minutos
+  }
+
+  // sol e lua cruzam o céu conforme o ciclo (antes das nuvens)
+  function astros(ctx, pal, ciclo) {
+    const arco = (t) => ({ x: 80 + t * 480, y: 130 - Math.sin(t * Math.PI) * 100 });
+    if (ciclo > 0.32) { // sol visível
+      const t = Math.min(1, Math.max(0, (ciclo - 0.35) / 0.65));
+      const p = arco(t);
+      const r = 16;
+      const forca = Math.min(1, (ciclo - 0.32) / 0.2);
+      const quente = ciclo < 0.55; // sol baixo = alaranjado
+      const g = ctx.createRadialGradient(p.x, p.y, r * 0.5, p.x, p.y, r * 4.2);
+      g.addColorStop(0, `rgba(255,${quente ? 190 : 244},${quente ? 120 : 190},${0.55 * forca})`);
+      g.addColorStop(1, 'rgba(255,240,180,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(p.x - r * 4.2, p.y - r * 4.2, r * 8.4, r * 8.4);
+      for (let dy = -r; dy <= r; dy += 2) for (let dx = -r; dx <= r; dx += 2) {
+        const d = Math.sqrt(dx * dx + dy * dy);
+        let c = null;
+        if (d <= r - 6) c = quente ? '#ffe8c0' : '#fffce8';
+        else if (d <= r - 3) c = quente ? '#ffc878' : pal.sol[1];
+        else if (d <= r) c = quente ? '#f5a860' : pal.sol[0];
+        else if (d <= r + 5 && (dx + dy) % 4 === 0) c = quente ? '#f5a860' : pal.sol[0];
+        if (c) { ctx.fillStyle = c; ctx.globalAlpha = forca; ctx.fillRect(Math.round(p.x + dx), Math.round(p.y + dy), 2, 2); ctx.globalAlpha = 1; }
+      }
+    }
+    if (ciclo < 0.45) { // lua visível
+      const t = 1 - Math.min(1, ciclo / 0.45);
+      const p = arco(t);
+      const forca = Math.min(1, (0.45 - ciclo) / 0.15);
+      ctx.globalAlpha = forca;
+      const g = ctx.createRadialGradient(p.x, p.y, 6, p.x, p.y, 40);
+      g.addColorStop(0, 'rgba(210,225,255,.35)');
+      g.addColorStop(1, 'rgba(210,225,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(p.x - 40, p.y - 40, 80, 80);
+      for (let dy = -10; dy <= 10; dy += 2) for (let dx = -10; dx <= 10; dx += 2) {
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d <= 10) { ctx.fillStyle = d <= 7 ? '#e8eef8' : '#c8d4e8'; ctx.fillRect(Math.round(p.x + dx), Math.round(p.y + dy), 2, 2); }
+      }
+      ctx.fillStyle = '#aab8d0'; // crateras
+      ctx.fillRect(p.x - 4, p.y - 2, 3, 3); ctx.fillRect(p.x + 2, p.y + 3, 2, 2); ctx.fillRect(p.x + 1, p.y - 5, 2, 2);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // partículas de clima por estação
+  function clima(ctx, est, ciclo) {
+    const chovendo = (est === 'primavera' || est === 'outono') && Math.sin(anim * 0.0004 + 2) > 0.55;
+    if (chovendo) {
+      ctx.fillStyle = 'rgba(180,200,225,.55)';
+      for (let i = 0; i < 90; i++) {
+        const px = (sr(i * 3) * (W + 60) + anim * 1.2) % (W + 60) - 30;
+        const py = (sr(i * 7) * H + anim * 6.5) % H;
+        ctx.fillRect(Math.round(px), Math.round(py), 1, 6);
+      }
+      ctx.fillStyle = 'rgba(200,220,240,.4)'; // respingos no chão
+      for (let i = 0; i < 14; i++) {
+        const px = sr(i * 11 + Math.floor(anim / 8)) * W;
+        const py = 210 + sr(i * 13 + Math.floor(anim / 8)) * 140;
+        ctx.fillRect(Math.round(px), Math.round(py), 2, 1);
+      }
+      ctx.fillStyle = 'rgba(40,55,80,.14)';   // céu fechado
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (est === 'inverno') {
+      ctx.fillStyle = 'rgba(250,252,255,.85)';
+      for (let i = 0; i < 60; i++) {
+        const px = (sr(i * 5) * W + Math.sin(anim * 0.01 + i) * 18 + anim * 0.3) % W;
+        const py = (sr(i * 9) * H + anim * (0.6 + sr(i) * 0.5)) % H;
+        ctx.fillRect(Math.round(px), Math.round(py), 2, 2);
+      }
+    }
+    if (est === 'outono' && !chovendo) { // folhas ao vento
+      for (let i = 0; i < 10; i++) {
+        const px = (sr(i * 17) * W + anim * (0.8 + sr(i) * 0.6)) % W;
+        const py = (sr(i * 19) * 200 + anim * (0.5 + sr(i * 3) * 0.4) + Math.sin(anim * 0.03 + i) * 10) % 300;
+        ctx.fillStyle = ['#bd7a35', '#95542c', '#d9a44a'][i % 3];
+        ctx.fillRect(Math.round(px), Math.round(py + 40), 3, 2);
+      }
+    }
+    if (est === 'verao' && ciclo < 0.4) { // vagalumes nas noites de verão
+      for (let i = 0; i < 12; i++) {
+        const px = 60 + sr(i * 23) * 520 + Math.sin(anim * 0.008 + i * 2.1) * 24;
+        const py = 220 + sr(i * 29) * 110 + Math.cos(anim * 0.011 + i * 1.7) * 14;
+        const pulso = (Math.sin(anim * 0.06 + i * 2.9) + 1) / 2;
+        if (pulso > 0.35) {
+          const g = ctx.createRadialGradient(px, py, 0, px, py, 7);
+          g.addColorStop(0, `rgba(210,255,130,${0.5 * pulso})`);
+          g.addColorStop(1, 'rgba(210,255,130,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(px - 7, py - 7, 14, 14);
+          ctx.fillStyle = `rgba(235,255,170,${0.9 * pulso})`;
+          ctx.fillRect(Math.round(px), Math.round(py), 2, 2);
+        }
+      }
+    }
+    // sombras de nuvens deslizando pelo campo (profundidade barata e elegante)
+    if (!chovendo) {
+      ctx.fillStyle = 'rgba(30,50,42,.07)';
+      for (const [vel, faixaY, wN, hN] of [[0.22, 210, 170, 46], [0.15, 268, 130, 36]]) {
+        const px = (anim * vel) % (W + 300) - 300;
+        ctx.beginPath();
+        ctx.ellipse(px + wN / 2, faixaY + hN / 2, wN / 2, hN / 2, 0, 0, 7);
+        ctx.fill();
+      }
+    }
+  }
+
+  // tonalização ambiente + luzes noturnas + vinheta
+  function ambiente(ctx, ciclo, nivel) {
+    const noite = Math.max(0, (0.42 - ciclo) / 0.42);       // 0..1
+    const tarde = Math.max(0, 1 - Math.abs(ciclo - 0.48) / 0.14);
+    if (tarde > 0) {                                        // hora dourada
+      ctx.fillStyle = `rgba(255,120,45,${0.16 * tarde})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (noite > 0) {                                        // manto azul da noite
+      ctx.fillStyle = `rgba(16,24,58,${0.42 * noite})`;
+      ctx.fillRect(0, 0, W, H);
+      // estrelas
+      ctx.fillStyle = `rgba(240,245,255,${0.85 * noite})`;
+      for (let i = 0; i < 60; i++) {
+        const px = sr(i * 37) * W, py = sr(i * 41) * 150;
+        const cintila = Math.sin(anim * 0.05 + i * 3.3) > -0.4;
+        if (cintila) ctx.fillRect(Math.round(px), Math.round(py), i % 7 === 0 ? 2 : 1, i % 7 === 0 ? 2 : 1);
+      }
+      // janelas acesas com halo quente
+      for (const l of luzes) {
+        const g = ctx.createRadialGradient(l.x, l.y, 1, l.x, l.y, 14);
+        g.addColorStop(0, `rgba(255,190,90,${0.5 * noite})`);
+        g.addColorStop(1, 'rgba(255,190,90,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(l.x - 14, l.y - 14, 28, 28);
+        ctx.fillStyle = `rgba(255,220,130,${0.85 * noite})`;
+        ctx.fillRect(l.x - 2, l.y - 2, 4, 4);
+      }
+      // tochas do portão ganham força na escuridão
+      if (nivel >= 3) {
+        for (const tx of [297, 345]) {
+          const g = ctx.createRadialGradient(tx, 214, 2, tx, 214, 26);
+          g.addColorStop(0, `rgba(255,170,70,${0.4 * noite})`);
+          g.addColorStop(1, 'rgba(255,170,70,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(tx - 26, 188, 52, 52);
+        }
+      }
+    }
+    // vinheta sutil
+    const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.55, W / 2, H / 2, H * 0.95);
+    v.addColorStop(0, 'rgba(20,15,10,0)');
+    v.addColorStop(1, 'rgba(20,15,10,.22)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
+  }
+
   function render(canvas, state) {
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -902,8 +1060,12 @@ const Cidade = (() => {
     const pal = RAMPAS[est];
     const chave = nivel + '|' + est;
     if (bgKey !== chave || !bg) { bg = desenharEstatico(nivel, pal); bgKey = chave; }
+    const ciclo = cicloAtual();
     ctx.drawImage(bg, 0, 0);
+    astros(ctx, pal, ciclo);
     desenharDinamico(ctx, state, pal, nivel);
+    clima(ctx, est, ciclo);
+    ambiente(ctx, ciclo, nivel);
   }
 
   function renderShowcase(canvas) {
@@ -911,5 +1073,7 @@ const Cidade = (() => {
     render(canvas, { terra: { nivel: 5 }, mes: 6 });
   }
 
-  return { render, renderShowcase, seedNpcs };
+  function forcarCiclo(v) { cicloForcado = v; }
+
+  return { render, renderShowcase, seedNpcs, forcarCiclo };
 })();
