@@ -71,6 +71,7 @@ const UI = (() => {
     const loop = () => {
       const canvas = $('#canvas-cidade');
       if (canvas && canvas.offsetParent !== null && Jogo.state) Cidade.render(canvas, Jogo.state);
+      Retratos.tick();
       animTimer = requestAnimationFrame(loop);
     };
     loop();
@@ -103,7 +104,7 @@ const UI = (() => {
     const c = $('#conteudo');
     c.innerHTML = '';
     ({ terra: renderTerra, mapa: renderMapa, mercado: renderMercado, taverna: renderTaverna,
-       corte: renderCorte, exercito: renderExercito, intrigas: renderIntrigas,
+       corte: renderCorte, exercito: renderExercito, clas: renderClas, intrigas: renderIntrigas,
        familia: renderFamilia, cronica: renderCronica }[abaAtual] || renderTerra)(c);
   }
 
@@ -163,14 +164,16 @@ const UI = (() => {
       const tags = s.tags['rei_' + r.id] || { relacao: 0 };
       const rel = Dialogo.nomeRelacao(tags.relacao);
       const cb = s.casusBelli.includes(r.id);
-      const card = el('div', 'card-reino');
+      const card = el('div', 'card-reino com-retrato');
       card.style.borderLeftColor = r.cor;
-      card.innerHTML = `
-        <div><b>${r.nome}</b> — capital ${r.capital}<br>
+      card.appendChild(retratoDe(r.rei.id));
+      const infoReino = el('div', 'npc-info', `
+        <b>${r.nome}</b> — capital ${r.capital}<br>
         <small>${r.rei.nome} · <i>${r.rei.desc}</i></small><br>
         <small>Relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${rel} (${tags.relacao})</b>
         ${cb ? ' · <b class="bom">📜 Casus Belli</b>' : ''}
-        ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}</small></div>`;
+        ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}</small>`);
+      card.appendChild(infoReino);
       const botoes = el('div', 'linha-botoes');
       const bIr = el('button', 'btn mini', s.local === r.id ? '📍 Você está aqui' : '🐴 Viajar');
       bIr.disabled = s.local === r.id;
@@ -184,7 +187,7 @@ const UI = (() => {
           () => { const rel = Intriga.declararGuerra(s, r.id, Jogo.log); mostrarBatalha(rel); });
         botoes.appendChild(bGuerra);
       }
-      card.appendChild(botoes);
+      infoReino.appendChild(botoes);
       painel.appendChild(card);
     }
     c.appendChild(painel);
@@ -256,14 +259,23 @@ const UI = (() => {
     c.appendChild(painel);
   }
 
+  function retratoDe(id, tamanho) {
+    const c = el('canvas', 'retrato' + (tamanho === 'g' ? ' retrato-grande' : ''));
+    Retratos.montar(c, id, Retratos.humorDe(Jogo.state, id));
+    return c;
+  }
+
   function cardNpc(npc) {
     const s = Jogo.state;
     const tags = s.tags[npc.id] || { relacao: 0 };
-    const card = el('div', 'card-npc');
-    card.innerHTML = `<b>${npc.nome}</b> <small>(${Dialogo.nomeRelacao(tags.relacao)} ${tags.relacao})</small><br><small><i>${npc.desc}</i></small>`;
+    const card = el('div', 'card-npc com-retrato');
+    card.appendChild(retratoDe(npc.id));
+    const info = el('div', 'npc-info',
+      `<b>${npc.nome}</b> <small>(${Dialogo.nomeRelacao(tags.relacao)} ${tags.relacao})</small><br><small><i>${npc.desc}</i></small>`);
     const b = el('button', 'btn mini', '💬 Conversar');
     b.onclick = () => { npcAtual = npc; renderTudo(); };
-    card.appendChild(b);
+    info.appendChild(el('div')).appendChild(b);
+    card.appendChild(info);
     return card;
   }
 
@@ -286,7 +298,11 @@ const UI = (() => {
     const tags = Dialogo.tagsDe(s, npc.id);
     const painel = el('div', 'painel conversa');
     const cab = el('div', 'conversa-cab');
-    cab.innerHTML = `<b>${npc.nome}</b> · relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b>`;
+    const lado = el('div', 'conversa-persona');
+    lado.appendChild(retratoDe(npc.id, 'g'));
+    lado.appendChild(el('div', null,
+      `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>`));
+    cab.appendChild(lado);
     const bSair = el('button', 'btn mini', '← Sair da conversa');
     bSair.onclick = () => { npcAtual = null; renderTudo(); };
     cab.appendChild(bSair);
@@ -372,6 +388,58 @@ const UI = (() => {
     bG.onclick = () => { aviso(Jogo.contratarGuardas(2).msg); renderTudo(); };
     painel.appendChild(bG);
     painel.appendChild(el('p', 'flavor ruim', '⚠️ Se o tesouro zerar, tropas desertam — e a guarda de elite pode ser comprada por rivais para abrir seus portões à noite.'));
+    c.appendChild(painel);
+  }
+
+  // ---------- CLÃS MERCENÁRIOS (mensageiros e cartas) ----------
+  function renderClas(c) {
+    const s = Jogo.state;
+    if (!s.cartas) s.cartas = [];
+    const painel = el('div', 'painel mesa');
+    painel.appendChild(el('h2', null, '🐺 Clãs Mercenários'));
+    painel.appendChild(el('p', 'flavor', 'Companhias livres que não servem a rei nenhum — servem a quem paga. Envie um mensageiro com sua oferta de ouro; a resposta chega com a virada do mês. Oferta generosa convence; ninharia ofende.'));
+
+    for (const cla of Clas.CLAS) {
+      const contrato = Clas.ativo(s, cla.id);
+      const naEstrada = Clas.mensageiroPendente(s, cla.id);
+      const rel = (s.tags[cla.id] || { relacao: 0 }).relacao;
+      const card = el('div', 'card-reino com-retrato');
+      card.style.borderLeftColor = '#c9a227';
+      card.appendChild(retratoDe(cla.id));
+      const info = el('div', 'npc-info', `
+        <b>${cla.nome}</b> — ${cla.lider} <small>(${Dialogo.nomeRelacao(rel)} ${rel})</small><br>
+        <small><i>${cla.desc}</i> · ${cla.lema}</small><br>
+        <small>⚔️ ${Clas.resumoContingente(cla.contingente)} · 💰 pede ~${cla.precoBase} + ${cla.soldo}/mês · ⭐ exige ${cla.renomeMin}</small>`);
+      if (contrato) {
+        info.appendChild(el('p', 'flavor bom', `🤝 Sob contrato: restam ${contrato.mesesRestantes} ${contrato.mesesRestantes === 1 ? 'mês' : 'meses'}. Mantenha o soldo em dia.`));
+      } else if (naEstrada) {
+        info.appendChild(el('p', 'flavor', `🐴 Mensageiro na estrada com oferta de ${naEstrada.oferta} de ouro...`));
+      } else {
+        const linha = el('div', 'linha-botoes oferta-linha');
+        const input = el('input', 'input-oferta');
+        input.type = 'number'; input.min = 50; input.step = 50; input.value = cla.precoBase;
+        input.placeholder = 'oferta';
+        const b = el('button', 'btn mini', '✉️ Enviar mensageiro (10 🪙)');
+        b.onclick = () => {
+          const oferta = Math.max(0, parseInt(input.value, 10) || 0);
+          const r = Clas.enviarMensageiro(s, cla.id, oferta);
+          if (r.ok) Sfx.pagina(); else Sfx.alerta();
+          aviso(r.msg); Jogo.salvar(); renderTudo();
+        };
+        linha.appendChild(input); linha.appendChild(b);
+        info.appendChild(linha);
+      }
+      card.appendChild(info);
+      painel.appendChild(card);
+    }
+
+    painel.appendChild(el('h3', null, '✉️ Cartas recebidas'));
+    if (!s.cartas.length) painel.appendChild(el('p', 'flavor', 'Nenhuma carta sobre a mesa. Os mensageiros trazem as respostas — e as más notícias.'));
+    for (const carta of s.cartas.slice(0, 8)) {
+      painel.appendChild(el('div', 'carta' + (carta.tipo === 'ruim' ? ' selada' : ''),
+        `<b>De: ${carta.de}</b> <small>· ${MESES[carta.mes - 1].slice(0, 3)}/A${carta.ano}</small><br>${carta.texto}`));
+    }
+    painel.appendChild(el('p', 'flavor ruim', '⚠️ Clã sem soldo rasga o contrato, pode saquear seus celeiros e espalha sua fama de caloteiro para os outros clãs. Em guerra, mensageiros podem ser interceptados.'));
     c.appendChild(painel);
   }
 

@@ -53,6 +53,7 @@ const Jogo = (() => {
     Economia.tickMercados(state);
     Economia.tickTerra(state, log);
     Economia.tickExercito(state, log);
+    Clas.tick(state, log);
     Intriga.tickFamilia(state, log);
     Intriga.tickAssassinos(state, log);
     state.contratos = Contratos.gerar(state);

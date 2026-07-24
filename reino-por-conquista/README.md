@@ -6,17 +6,19 @@ Protótipo jogável, **100% offline**, feito em HTML5 + JavaScript puro (zero de
 
 ## Como jogar
 
-**Windows (mais fácil, sem instalar nada):** duplo clique em `ReinoPorConquista.bat` — abre em janela própria de aplicativo (usa o Edge/Chrome que já vem no Windows).
+**Windows — instalador:** execute `ReinoPorConquista-Setup.exe`. Instala em segundos (sem pedir administrador), cria atalho na área de trabalho e no menu Iniciar, e registra o desinstalador em "Adicionar ou remover programas". Para recompilar o instalador: `makensis installer.nsi` (NSIS).
+
+**Windows — sem instalar:** duplo clique em `ReinoPorConquista.vbs` (janela de aplicativo, sem console) ou `ReinoPorConquista.bat`.
 
 **Qualquer sistema:** duplo clique em `index.html`.
 
-**Como aplicativo desktop de verdade (Electron):**
+**Aplicativo Electron (opcional):**
 ```
 # requer Node.js (https://nodejs.org)
 cd reino-por-conquista
 npm install
 npm start          # roda como aplicativo desktop
-npm run dist       # gera o INSTALADOR Windows em dist/ (cria atalho na área de trabalho)
+npm run dist       # gera instalador Electron em dist/
 ```
 
 O progresso salva automaticamente a cada mês passado.
@@ -43,6 +45,12 @@ Cada conversa atualiza **tags de memória** — `[Odiado: -50]`, `[InsultouRei �
 - **Contratos e renome:** escoltas, caça a bandidos, queimar vilas (paga bem, mancha a alma e a reputação). Renome desbloqueia terra (25⭐) e casamento real (40⭐).
 - **Combate tático:** formações em pedra-papel-tesoura (Linha ≻ Cunha ≻ Envolvimento ≻ Linha), equipamento, moral e debandada. Baixas são permanentes — **cada soldado conta**.
 - **Casus belli:** atacar sem reivindicação legal une os 6 reinos contra você. Forje documentos, fabrique intrigas, case-se... ou sobreviva a um assassino e use a adaga com selo real como prova.
+
+### Retratos 64×64 — `js/portraits.js`
+Todo personagem tem um **retrato procedural em pixel art 64×64** que aparece nas conversas, no mapa e nos cards: reis com coroa, rainhas com tiara, o espião de capuz com o rosto na sombra, líderes de clã com elmo de chifres e barba trançada. O retrato **muda de humor com a relação** (sobrancelhas de fúria quando te odeiam, meio sorriso quando te estimam) e **pisca os olhos** de tempos em tempos.
+
+### Clãs mercenários via mensageiros — `js/clans.js`
+Quatro companhias livres (Lobos de Ferro, Corvos da Névoa, Filhos da Estepe, Machados do Norte), cada uma com líder, especialidade, preço e personalidade. Contratação **por carta**: você envia um mensageiro com uma oferta de ouro e a resposta chega na virada do mês como carta selada — oferta generosa convence, ninharia ofende, e **em tempos de guerra o mensageiro pode ser interceptado**. Clã contratado marcha sob seu estandarte por 6 meses mediante soldo; **se o tesouro zerar, rasgam o contrato, podem saquear seus celeiros e espalham sua fama de caloteiro** para os outros clãs.
 
 ### 4. Intrigas, família e traições — `js/intrigue.js`
 - **Espionar → segredo → chantagem:** descubra que o rei desvia ouro e diga a ele, em conversa, *"sei o que você fez"*. Ele cede UMA exigência: ouro, **casamento forçado** ou casus belli. Mas passa a te odiar.
@@ -84,13 +92,18 @@ Para empacotar como jogo desktop de verdade: Electron/Tauri + [node-llama-cpp](h
 ```
 reino-por-conquista/
 ├── index.html             # telas e carregamento
-├── ReinoPorConquista.bat  # atalho Windows: abre como aplicativo (Edge/Chrome)
-├── package.json           # app Electron: npm start / npm run dist (instalador)
+├── installer.nsi          # script do instalador Windows (makensis installer.nsi)
+├── icone.ico              # ícone do jogo (coroa, 64×64)
+├── ReinoPorConquista.vbs  # lançador Windows silencioso (janela de app)
+├── ReinoPorConquista.bat  # lançador Windows alternativo
+├── package.json           # app Electron: npm start / npm run dist
 ├── electron-main.js       # janela desktop do Electron
 ├── css/style.css          # UI diegética (pergaminho, madeira, selos)
 └── js/
     ├── data.js       # 6 reinos, NPCs, mercadorias, tropas, formações
     ├── sfx.js        # efeitos sonoros WebAudio (moedas, espadas, fanfarras)
+    ├── portraits.js  # retratos procedurais 64×64 com humor e piscar
+    ├── clans.js      # clãs mercenários: mensageiros, cartas, soldo, traição
     ├── dialogue.js   # motor de diálogo livre + memória por tags + adaptador LLM
     ├── economy.js    # mercados, guerras, colheita, fome, deserção
     ├── combat.js     # batalhas táticas + contratos e renome

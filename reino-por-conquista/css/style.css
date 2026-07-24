@@ -148,6 +148,24 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .titulo-canvas { margin: -36px -36px 18px; border: none; border-bottom: 3px solid var(--ouro); border-radius: 6px 6px 0 0; }
 #canvas-titulo { width: 100%; display: block; image-rendering: pixelated; }
 
+/* ---------- retratos 64×64 ---------- */
+.retrato {
+  width: 52px; height: 52px; flex: none;
+  image-rendering: pixelated;
+  border: 2px solid var(--ouro); border-radius: 3px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,.35);
+  background: #000;
+}
+.retrato-grande { width: 96px; height: 96px; border-width: 3px; }
+.com-retrato { display: flex; gap: 10px; align-items: flex-start; }
+.npc-info { flex: 1; min-width: 0; }
+.conversa-persona { display: flex; gap: 10px; align-items: center; }
+.oferta-linha { display: flex; gap: 6px; align-items: center; }
+.input-oferta {
+  width: 90px; padding: 5px 7px; font-family: inherit; font-size: .85rem;
+  background: #f5ecd4; border: 2px solid var(--madeira-clara); border-radius: 4px; color: var(--tinta);
+}
+
 /* ---------- conversa ---------- */
 .conversa-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .conversa-hist {
