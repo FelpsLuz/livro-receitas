@@ -115,7 +115,7 @@ const UI = (() => {
     painel.appendChild(el('h2', null, t ? `${t.nome} — ${NIVEIS_TERRA[t.nivel].nome}` : 'Acampamento Mercenário'));
     const wrap = el('div', 'canvas-wrap');
     const canvas = el('canvas');
-    canvas.id = 'canvas-cidade'; canvas.width = 480; canvas.height = 270;
+    canvas.id = 'canvas-cidade'; canvas.width = 640; canvas.height = 360;
     wrap.appendChild(canvas);
     painel.appendChild(wrap);
 
