@@ -12,6 +12,12 @@ Protótipo jogável, **100% offline**, feito em HTML5 + JavaScript puro (zero de
 
 **Qualquer sistema:** duplo clique em `index.html`.
 
+**📱 Celular (Android/iPhone):** o jogo é um PWA — hospede a pasta em qualquer serviço de páginas estáticas e abra o link no celular:
+- **itch.io** (recomendado para jogos): crie um projeto "HTML", envie o zip do jogo e marque "This file will be played in the browser". Pronto: link jogável em qualquer celular.
+- **GitHub Pages:** nas configurações do repositório, ative Pages apontando para a pasta do jogo.
+
+No celular, abra o link e use **"Adicionar à tela inicial"**: o jogo vira um aplicativo com ícone próprio, tela cheia e **funciona offline** depois da primeira visita (service worker). A interface tem modo de toque: abas deslizáveis, botões grandes e o NPC "pondera" antes de responder, digitando a resposta letra a letra.
+
 **Aplicativo Electron (opcional):**
 ```
 # requer Node.js (https://nodejs.org)

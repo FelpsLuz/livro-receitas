@@ -8,7 +8,7 @@ const Jogo = (() => {
 
   function novoJogo(nomeJogador) {
     state = {
-      ano: 1, mes: 1,
+      ano: 1, mes: 3, // começa na primavera: campos verdes na primeira impressão
       jogador: {
         nome: nomeJogador || (rnd(NOMES_M) + ' ' + rnd(SOBRENOMES)),
         idade: 22,

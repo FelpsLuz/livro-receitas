@@ -324,28 +324,60 @@ const UI = (() => {
     input.type = 'text'; input.placeholder = 'Diga o que quiser... (ex.: "Vossa sabedoria é lendária, majestade" ou "seu porco covarde")';
     input.maxLength = 200;
     const bFalar = el('button', 'btn', 'Falar');
+    let enviando = false;
+    const rolar = () => { hist.scrollTop = hist.scrollHeight; };
+    const bolha = (de, html) => el('div', 'fala ' + de, html);
+
+    // o NPC "pondera" antes de responder e a fala sai letra a letra
     const enviar = () => {
       const texto = input.value.trim();
-      if (!texto) return;
+      if (!texto || enviando) return;
+      enviando = true;
       input.value = '';
+      input.placeholder = `${npc.nome} está ouvindo...`;
       s.historicoConversa.linhas.push({ de: 'voce', texto });
+      hist.appendChild(bolha('voce', '<b>Você:</b> ' + texto));
+      const tb = bolha('npc digitando',
+        `<b>${npc.nome}</b> <span class="pondera">pondera</span><span class="pontos"><i>.</i><i>.</i><i>.</i></span>`);
+      hist.appendChild(tb);
+      rolar();
+
       const r = Dialogo.falar(s, npc, texto);
-      s.historicoConversa.linhas.push({ de: 'npc', texto: r.resposta, efeitos: r.efeitos });
-      for (const a of r.acoes) {
-        if (a.tipo === 'fim_conversa') { npcAtual = null; }
-        if (a.tipo === 'casamento') Intriga.realizarCasamento(s, a.reino, false);
-        if (a.tipo === 'oferecer_contratos') { abaAtual = 'taverna'; npcAtual = null; }
-      }
-      Jogo.salvar();
-      renderTudo();
-      const h = $('#conversa-hist'); if (h) h.scrollTop = h.scrollHeight;
+      // quanto mais longa e pesada a resposta, mais tempo ele "pensa"
+      const atraso = Math.min(2600, 550 + r.resposta.length * 9) * (0.75 + Math.random() * 0.5);
+      setTimeout(() => {
+        Sfx.pagina();
+        tb.classList.remove('digitando');
+        tb.innerHTML = `<b>${npc.nome}:</b> <span class="tw"></span>`;
+        const alvo = tb.querySelector('.tw');
+        let i = 0;
+        const timer = setInterval(() => {
+          i += 2;
+          alvo.textContent = r.resposta.slice(0, i);
+          rolar();
+          if (i >= r.resposta.length) {
+            clearInterval(timer);
+            if (r.efeitos.length) tb.appendChild(el('div', 'tags-efeito', r.efeitos.join(' ')));
+            s.historicoConversa.linhas.push({ de: 'npc', texto: r.resposta, efeitos: r.efeitos });
+            enviando = false;
+            input.placeholder = 'Diga o que quiser...';
+            for (const a of r.acoes) {
+              if (a.tipo === 'fim_conversa') { npcAtual = null; }
+              if (a.tipo === 'casamento') Intriga.realizarCasamento(s, a.reino, false);
+              if (a.tipo === 'oferecer_contratos') { abaAtual = 'taverna'; npcAtual = null; }
+            }
+            Jogo.salvar();
+            renderTudo();
+          }
+        }, 26);
+      }, atraso);
     };
     bFalar.onclick = enviar;
     input.onkeydown = (e) => { if (e.key === 'Enter') enviar(); };
     form.appendChild(input); form.appendChild(bFalar);
     painel.appendChild(form);
     c.appendChild(painel);
-    setTimeout(() => { const h = $('#conversa-hist'); if (h) h.scrollTop = h.scrollHeight; input.focus(); }, 0);
+    setTimeout(() => { rolar(); if (window.innerWidth > 700) input.focus(); }, 0);
   }
 
   // ---------- EXÉRCITO ----------
