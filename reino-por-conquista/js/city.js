@@ -103,13 +103,20 @@ const Cidade = (() => {
       const cor = t < 0.5 ? lerpCor(pal.ceu[0], pal.ceu[1], t * 2) : lerpCor(pal.ceu[1], pal.ceu[2], (t - 0.5) * 2);
       P(0, y, W, 4, cor);
     }
-    // sol na DIREITA-SUPERIOR (grade de 2px, mesmo grão do resto)
+    // sol na DIREITA-SUPERIOR com brilho difuso (glow suave + disco pixelado)
     const sx = 540, sy = 48, r = 16;
+    const glow = x.createRadialGradient(sx, sy, r * 0.5, sx, sy, r * 4.2);
+    glow.addColorStop(0, 'rgba(255,244,190,.55)');
+    glow.addColorStop(0.4, 'rgba(255,240,180,.18)');
+    glow.addColorStop(1, 'rgba(255,240,180,0)');
+    x.fillStyle = glow;
+    x.fillRect(sx - r * 4.2, sy - r * 4.2, r * 8.4, r * 8.4);
     for (let dy = -r; dy <= r; dy += 2) for (let dx = -r; dx <= r; dx += 2) {
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d <= r - 4) P(sx + dx, sy + dy, 2, 2, pal.sol[1]);
+      if (d <= r - 6) P(sx + dx, sy + dy, 2, 2, '#fffce8');
+      else if (d <= r - 3) P(sx + dx, sy + dy, 2, 2, pal.sol[1]);
       else if (d <= r) P(sx + dx, sy + dy, 2, 2, pal.sol[0]);
-      else if (d <= r + 6 && (dx + dy) % 4 === 0) P(sx + dx, sy + dy, 2, 2, pal.sol[0]); // halo dither
+      else if (d <= r + 5 && (dx + dy) % 4 === 0) P(sx + dx, sy + dy, 2, 2, pal.sol[0]);
     }
 
     // ---------- montanhas: silhuetas limpas, encosta direita iluminada ----------
@@ -126,13 +133,36 @@ const Cidade = (() => {
       }
     };
     serra(150, 26, 0.012, 1.2, pal.montanha[0], pal.montanha[1]);
+    // textura de rocha: salpicos e linhas de cume na cadeia distante
+    for (let i = 0; i < 120; i++) {
+      const mx = sr(i * 13) * W;
+      const topo = 150 + Math.sin(mx * 0.012 + 1.2) * 26 + Math.sin(mx * 0.0324) * 7.8;
+      const my = topo + 4 + sr(i * 17) * (200 - topo) * 0.5;
+      P(mx, my, 2, 1 + (i % 2), i % 3 ? 'rgba(30,40,60,.18)' : 'rgba(230,238,248,.14)');
+    }
     // picos nevados
     x.fillStyle = '#eef3f8';
     for (const px of [90, 250, 420, 590]) {
       const py = 150 + Math.sin(px * 0.012 + 1.2) * 26 + Math.sin(px * 0.0324) * 7.8;
       x.beginPath(); x.moveTo(px - 9, py + 7); x.lineTo(px, py - 2); x.lineTo(px + 9, py + 7); x.fill();
+      x.fillStyle = 'rgba(200,212,228,.6)';
+      x.fillRect(px - 2, py + 5, 6, 2); x.fillRect(px + 3, py + 8, 5, 2);
+      x.fillStyle = '#eef3f8';
     }
+    // perspectiva atmosférica: névoa da cor do céu "empurra" a serra para longe
+    const neblina = x.createLinearGradient(0, 145, 0, 205);
+    neblina.addColorStop(0, 'rgba(190,215,232,.42)');
+    neblina.addColorStop(1, 'rgba(190,215,232,.10)');
+    x.fillStyle = neblina;
+    x.fillRect(0, 145, W, 60);
     serra(176, 14, 0.017, 4.1, pal.montanha[1], pal.montanha[2]);
+    for (let i = 0; i < 60; i++) {
+      const mx = sr(i * 23) * W;
+      const topo = 176 + Math.sin(mx * 0.017 + 4.1) * 14 + Math.sin(mx * 0.0459) * 4.2;
+      P(mx, topo + 3 + sr(i * 29) * 14, 2, 1, 'rgba(30,40,60,.14)');
+    }
+    x.fillStyle = 'rgba(190,215,232,.16)';
+    x.fillRect(0, 168, W, 37);
 
     // ---------- linha de floresta ----------
     for (let i = 0; i < 54; i++) {
@@ -179,6 +209,19 @@ const Cidade = (() => {
       P(rx, topo, 2, 3, pal.neve ? '#cdddea' : '#6fa3c0'); // reflexo do céu na borda
       P(rx, fundo, 2, 2, pal.neve ? '#8fa8ba' : '#244a63'); // fundo escuro
       P(rx, fundo + 2, 2, 2, pal.grama[0]);
+    }
+    // reflexos verticais dos objetos próximos na água (borrados)
+    if (!pal.neve) {
+      x.fillStyle = 'rgba(20,38,54,.25)';
+      for (const [rx, rw] of [[300, 44], [150, 30], [508, 34]]) {
+        for (let i = 0; i < rw; i += 4) {
+          const alt = 8 + sr(rx + i) * 8;
+          x.fillRect(rx + i, margemRio(rx + i) + 3, 3, alt);
+        }
+      }
+      // espuma clara junto às margens
+      x.fillStyle = 'rgba(220,238,248,.35)';
+      for (let rx = 0; rx < W; rx += 9) x.fillRect(rx + (rx % 18 ? 3 : 0), margemRio(rx) + 1, 4, 1);
     }
 
     // ---------- estrada de terra com cascalho ----------
@@ -250,47 +293,93 @@ const Cidade = (() => {
     if (nivel >= 2) {
       moinhoCorpo(x, 52, 208, pal);
       casa(x, 500, 276, 48, 27, false, true, pal);
+      poco(x, 352, 268);
+      barril(x, 118, 272); barril(x, 128, 274);
     }
     if (nivel >= 3) {
       casa(x, 130, 250, 52, 30, true, true, pal);
       casa(x, 430, 258, 48, 28, true, false, pal);
-      barraca(x, 246, 262, '#a04038'); barraca(x, 380, 258, '#3c5a8a');
+      barraca(x, 246, 262, '#a04038', 'frutas'); barraca(x, 380, 258, '#3c5a8a', 'tecidos');
+      caixa(x, 278, 270); caixa(x, 372, 270); barril(x, 486, 268);
     }
     if (nivel >= 4) {
       casa(x, 66, 286, 46, 26, true, false, pal);
-      barraca(x, 210, 284, '#b8862d'); barraca(x, 412, 282, '#3e5f3e');
-      casa(x, 526, 262, 46, 26, true, true, pal);
+      barraca(x, 210, 284, '#b8862d', 'paes'); barraca(x, 412, 282, '#3e5f3e', 'liso');
+      estabulo(x, 524, 244, pal);   // a lavoura da direita virou estrebaria
+      caixa(x, 244, 292); barril(x, 444, 288); caixa(x, 500, 284);
     }
 
-    // ---------- árvores grandes com copa em 3 tons ----------
-    arvore(x, 38, 224, pal); arvore(x, 606, 228, pal);
-    if (nivel < 4) arvore(x, 588, 296, pal);
-    if (nivel < 2) { arvore(x, 170, 218, pal); arvore(x, 480, 222, pal); }
+    // ---------- vegetação: árvores variadas + arbustos ----------
+    arvore(x, 38, 224, pal, 'copa'); arvore(x, 606, 228, pal, 'pinheiro');
+    if (nivel < 4) arvore(x, 588, 296, pal, 'copa');
+    if (nivel < 2) { arvore(x, 170, 218, pal, 'pinheiro'); arvore(x, 480, 222, pal, 'copa'); }
+    for (let i = 0; i < 8; i++) {
+      const bx2 = 20 + sr(i * 61) * 600, by2 = 212 + sr(i * 67) * 84;
+      if (bx2 > 270 && bx2 < 380) continue;   // não obstruir a estrada
+      arbusto(x, bx2, by2, pal);
+    }
+
+    // ---------- atmosfera global: luz quente da direita, sombra fria à esquerda ----------
+    const luzAtm = x.createLinearGradient(W, 0, 0, H);
+    luzAtm.addColorStop(0, 'rgba(255,232,160,.10)');
+    luzAtm.addColorStop(0.5, 'rgba(255,232,160,0)');
+    luzAtm.addColorStop(1, 'rgba(45,65,95,.10)');
+    x.fillStyle = luzAtm;
+    x.fillRect(0, 0, W, H);
 
     return cv;
   }
 
+  function arbusto(x, bx, by, pal) {
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
+    P(bx - 5, by + 4, 12, 2, SOMBRA);
+    P(bx - 6, by - 2, 12, 6, pal.arvore[1]);
+    P(bx - 4, by - 5, 9, 5, pal.arvore[1]);
+    P(bx - 6, by + 1, 5, 3, pal.arvore[0]);
+    P(bx + 1, by - 5, 4, 3, pal.arvore[3]);
+    P(bx + 3, by - 2, 3, 2, pal.arvore[2]);
+  }
+
   // ---------- peças estáticas ----------
-  function arvore(x, tx, ty, pal) {
+  function arvore(x, tx, ty, pal, tipo) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     // sombra projetada (esq-inferior)
     P(tx - 18, ty + 12, 28, 5, SOMBRA);
     P(tx - 3, ty - 6, 6, 20, '#4a3421');
     P(tx + 1, ty - 6, 2, 20, '#6b4f30');                  // lado direito do tronco na luz
+    P(tx - 3, ty - 6, 1, 20, '#332417');                  // veio escuro do tronco
     if (pal.neve) {
       P(tx - 1, ty - 26, 3, 22, '#4a3421');
       P(tx - 12, ty - 16, 10, 2, '#4a3421'); P(tx + 3, ty - 22, 11, 2, '#4a3421');
       P(tx - 12, ty - 18, 10, 2, '#e8eff3'); P(tx + 3, ty - 24, 11, 2, '#e8eff3');
       return;
     }
-    // copa: base escura → média → luz na direita-superior
     const blob = (bx, by, bw, bh, c) => { P(bx - bw / 2, by - bh / 2, bw, bh, c); };
+    if (tipo === 'pinheiro') {
+      // pinheiro em camadas triangulares, face direita clara
+      for (let i = 0; i < 4; i++) {
+        const w = 30 - i * 6, y2 = ty - 6 - i * 9;
+        x.fillStyle = pal.arvore[1];
+        x.beginPath(); x.moveTo(tx - w / 2, y2); x.lineTo(tx, y2 - 12); x.lineTo(tx + w / 2, y2); x.fill();
+        x.fillStyle = pal.arvore[2];
+        x.beginPath(); x.moveTo(tx, y2 - 12); x.lineTo(tx + w / 2, y2); x.lineTo(tx + w / 6, y2); x.fill();
+        x.fillStyle = pal.arvore[0];
+        x.beginPath(); x.moveTo(tx - w / 2, y2); x.lineTo(tx - w / 6, y2); x.lineTo(tx, y2 - 10); x.fill();
+      }
+      return;
+    }
+    // copa redonda: base escura → média → luz na direita-superior + frestas
     blob(tx, ty - 16, 34, 20, pal.arvore[1]);
     blob(tx - 6, ty - 24, 24, 14, pal.arvore[1]);
     blob(tx + 8, ty - 26, 20, 14, pal.arvore[2]);
-    blob(tx - 12, ty - 10, 16, 10, pal.arvore[0]);        // sombra interna esq-inferior
-    blob(tx + 10, ty - 30, 12, 8, pal.arvore[3]);         // brilho dir-superior
+    blob(tx - 12, ty - 10, 16, 10, pal.arvore[0]);
+    blob(tx + 10, ty - 30, 12, 8, pal.arvore[3]);
     blob(tx + 12, ty - 18, 10, 8, pal.arvore[3]);
+    // textura interna: pontos de folha
+    for (let i = 0; i < 14; i++) {
+      const fx = tx - 14 + sr(i * 7 + tx) * 28, fy = ty - 30 + sr(i * 9 + ty) * 20;
+      P(fx, fy, 2, 2, i % 3 ? pal.arvore[0] : pal.arvore[3]);
+    }
   }
 
   function casa(x, hx, hy, w, h, pedra, chamine, pal) {
@@ -372,18 +461,109 @@ const Cidade = (() => {
     P(tx + 10, ty + 9, 8, 11, '#3d3020');
   }
 
-  function barraca(x, bx, by, cor) {
+  // barracas de mercado — cada uma é ÚNICA (toldo, mercadoria e adereço próprios)
+  function barraca(x, bx, by, cor, tipo) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     P(bx - 3, by + 16, 30, 4, SOMBRA);
     P(bx, by, 3, 16, '#5d4428'); P(bx + 23, by, 3, 16, '#6b4f30');
-    for (let i = 0; i < 26; i += 4) {
-      P(bx - 2 + i, by - 6, 4, 7, (i / 4) % 2 ? '#efe6cf' : cor);
-      P(bx - 2 + i, by + 1, 4, 2, (i / 4) % 2 ? '#cfc4a8' : 'rgba(38,54,74,.25)');
+    if (tipo === 'liso') {
+      P(bx - 2, by - 6, 30, 7, cor);
+      P(bx - 2, by - 6, 30, 2, 'rgba(255,240,200,.35)');
+      for (let i = 0; i < 30; i += 5) P(bx - 2 + i, by + 1, 3, 2, 'rgba(38,54,74,.3)'); // barra recortada
+    } else {
+      for (let i = 0; i < 26; i += 4) {
+        P(bx - 2 + i, by - 6, 4, 7, (i / 4) % 2 ? '#efe6cf' : cor);
+        P(bx - 2 + i, by + 1, 4, 2, (i / 4) % 2 ? '#cfc4a8' : 'rgba(38,54,74,.25)');
+      }
     }
     P(bx + 1, by + 8, 24, 7, '#8a6b45');
     P(bx + 1, by + 8, 24, 2, '#a58a5c');
-    P(bx + 4, by + 5, 4, 3, '#c94f4f'); P(bx + 10, by + 5, 4, 3, '#d8a028'); P(bx + 16, by + 5, 4, 3, '#5a8a4a');
+    if (tipo === 'frutas') {
+      P(bx + 3, by + 5, 3, 3, '#c94f4f'); P(bx + 7, by + 5, 3, 3, '#c94f4f'); P(bx + 5, by + 3, 3, 3, '#d86a2d');
+      P(bx + 13, by + 5, 3, 3, '#d8a028'); P(bx + 17, by + 5, 3, 3, '#7aa03a'); P(bx + 15, by + 3, 3, 3, '#d8a028');
+    } else if (tipo === 'tecidos') {
+      P(bx + 3, by + 2, 5, 6, '#8b2635'); P(bx + 9, by + 2, 5, 6, '#3c5a8a'); P(bx + 15, by + 2, 5, 6, '#c9a227');
+      P(bx + 3, by + 2, 5, 1, '#b05060'); P(bx + 9, by + 2, 5, 1, '#5a7ab0'); P(bx + 15, by + 2, 5, 1, '#e0c050');
+    } else if (tipo === 'paes') {
+      P(bx + 4, by + 4, 6, 3, '#b08d3a'); P(bx + 12, by + 4, 6, 3, '#b08d3a'); P(bx + 8, by + 2, 6, 3, '#d0af52');
+      P(bx + 5, by + 4, 4, 1, '#d0af52');
+    } else {
+      P(bx + 4, by + 5, 4, 3, '#c94f4f'); P(bx + 10, by + 5, 4, 3, '#d8a028'); P(bx + 16, by + 5, 4, 3, '#5a8a4a');
+    }
   }
+
+  function barril(x, bx, by) {
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
+    P(bx - 1, by + 9, 10, 2, SOMBRA);
+    P(bx, by, 8, 10, '#8a6b45');
+    P(bx + 6, by, 2, 10, '#a58a5c');
+    P(bx, by, 2, 10, '#5d4428');
+    P(bx, by + 2, 8, 1, '#4a3a26'); P(bx, by + 7, 8, 1, '#4a3a26'); // arcos de ferro
+  }
+
+  function caixa(x, bx, by) {
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
+    P(bx - 1, by + 8, 11, 2, SOMBRA);
+    P(bx, by, 9, 8, '#a58a5c');
+    P(bx, by, 9, 1, '#c4a877'); P(bx, by, 1, 8, '#8a6b45');
+    P(bx, by + 3, 9, 1, '#8a6b45'); P(bx + 4, by, 1, 8, '#8a6b45');
+  }
+
+  function poco(x, px2, py) {
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
+    P(px2 - 3, py + 12, 22, 3, SOMBRA);
+    P(px2, py + 4, 16, 9, '#8a8d92');
+    P(px2, py + 4, 16, 2, '#b5b2a6');
+    x.fillStyle = '#6e737c';
+    for (let i = 1; i < 15; i += 5) x.fillRect(px2 + i, py + 7, 3, 1);
+    P(px2 + 3, py + 6, 10, 4, '#26333d');                 // boca escura
+    P(px2 + 1, py - 8, 2, 12, '#5d4428'); P(px2 + 13, py - 8, 2, 12, '#5d4428');
+    x.fillStyle = '#7d3b3b';
+    x.beginPath(); x.moveTo(px2 - 2, py - 7); x.lineTo(px2 + 8, py - 13); x.lineTo(px2 + 18, py - 7); x.fill();
+    x.fillStyle = '#a05050';
+    x.beginPath(); x.moveTo(px2 + 8, py - 13); x.lineTo(px2 + 18, py - 7); x.lineTo(px2 + 10, py - 7); x.fill();
+    P(px2 + 7, py - 4, 2, 5, '#4a3a26');                  // corda
+    P(px2 + 6, py + 1, 4, 3, '#8a6b45');                  // balde
+  }
+
+  function estabulo(x, ex, ey, pal) {
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
+    P(ex - 5, ey + 24, 56, 4, SOMBRA);
+    // galpão aberto de madeira com veios
+    P(ex, ey, 48, 24, '#7a5c38');
+    for (let i = 3; i < 48; i += 6) P(ex + i, ey, 1, 24, '#5d4428');
+    P(ex + 44, ey, 4, 24, '#8f6d44');
+    x.fillStyle = '#8a6b2d';
+    x.beginPath(); x.moveTo(ex - 5, ey + 2); x.lineTo(ex + 24, ey - 14); x.lineTo(ex + 53, ey + 2); x.fill();
+    x.fillStyle = '#b08d3a';
+    x.beginPath(); x.moveTo(ex + 24, ey - 14); x.lineTo(ex + 53, ey + 2); x.lineTo(ex + 28, ey + 2); x.fill();
+    if (pal.neve) { x.fillStyle = '#eef3f8'; x.beginPath(); x.moveTo(ex - 5, ey); x.lineTo(ex + 24, ey - 15); x.lineTo(ex + 53, ey); x.lineTo(ex + 48, ey + 1); x.lineTo(ex + 24, ey - 11); x.lineTo(ex, ey + 1); x.fill(); }
+    // vão aberto escuro com feno
+    P(ex + 5, ey + 6, 38, 18, '#3a2d1d');
+    P(ex + 7, ey + 18, 12, 6, '#c9a94f'); P(ex + 8, ey + 16, 8, 3, '#d8bc60');
+    // cavalo dentro (cabeça baixa comendo)
+    cavalo(x, ex + 22, ey + 10, '#6b4a2d');
+    // cerquinha do paddock com segundo cavalo
+    for (let i = 0; i <= 40; i += 8) { P(ex + 48 + i, ey + 14, 2, 9, '#6b4f30'); }
+    P(ex + 48, ey + 15, 42, 2, '#8a6b45'); P(ex + 48, ey + 20, 42, 2, '#8a6b45');
+    cavalo(x, ex + 62, ey + 12, '#4a3421');
+  }
+
+  function cavalo(x, cx, cy, cor) {
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
+    P(cx - 1, cy + 12, 18, 2, SOMBRA);
+    P(cx, cy, 14, 8, cor);                                 // corpo
+    P(cx + 12, cy - 2, 4, 5, cor);                         // pescoço
+    P(cx + 14, cy + 1, 5, 4, cor);                         // cabeça baixa
+    P(cx + 17, cy + 4, 2, 2, sombraCor(cor));              // focinho
+    P(cx + 11, cy - 3, 4, 2, '#2d2018');                   // crina
+    P(cx, cy, 14, 2, corClara(cor));                       // lombo na luz
+    P(cx + 1, cy + 8, 2, 5, cor); P(cx + 5, cy + 8, 2, 5, sombraCor(cor));
+    P(cx + 9, cy + 8, 2, 5, cor); P(cx + 12, cy + 8, 2, 5, sombraCor(cor));
+    P(cx - 2, cy + 1, 2, 6, '#2d2018');                    // cauda
+  }
+  function sombraCor(hex) { const n = parseInt(hex.slice(1), 16); return `rgb(${((n >> 16) & 255) * 0.7 | 0},${((n >> 8) & 255) * 0.72 | 0},${(n & 255) * 0.82 | 0})`; }
+  function corClara(hex) { const n = parseInt(hex.slice(1), 16); const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255; return `rgb(${r + (255 - r) * 0.18 | 0},${g + (255 - g) * 0.16 | 0},${b + (255 - b) * 0.1 | 0})`; }
 
   function paliçada(x, y, pal) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
@@ -408,15 +588,35 @@ const Cidade = (() => {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     P(0, y + 20, W, 5, SOMBRA);
     P(0, y, W, 22, '#8a8d92');
+    // pedra desgastada: blocos individuais com tons variados
+    for (let ry = 0; ry < 22; ry += 5) {
+      for (let rx = (ry % 10 === 0 ? 0 : 8); rx < W; rx += 16) {
+        const tom = sr(rx * 7 + ry * 13);
+        if (tom < 0.22) P(rx, y + ry, 14, 4, '#979a9e');
+        else if (tom < 0.4) P(rx, y + ry, 14, 4, '#7f838c');
+        else if (tom > 0.9) P(rx, y + ry, 14, 4, '#94908a'); // bloco amarelado (idade)
+      }
+    }
     P(0, y, W, 3, '#b5b2a6');                              // topo pega luz
     P(0, y + 19, W, 3, '#5c6470');                         // base em sombra fria
-    // tijolos
+    // juntas dos tijolos
     x.fillStyle = '#6e737c';
     for (let ry = 5; ry < 19; ry += 6)
       for (let rx = (ry % 12 === 5 ? 4 : 12); rx < W; rx += 16) x.fillRect(rx, y + ry, 8, 1);
-    // musgo na base
+    // rachaduras e lascas
+    for (let i = 0; i < 26; i++) {
+      const rx = sr(i * 31) * W, ry = y + 3 + sr(i * 37) * 15;
+      P(rx, ry, 1, 2 + (i % 3), 'rgba(60,70,85,.5)');
+      if (i % 4 === 0) P(rx + 1, ry + 2, 2, 1, 'rgba(60,70,85,.4)');
+    }
+    // musgo na base e trepadeiras
     x.fillStyle = '#4f6b46';
     for (let rx = 3; rx < W; rx += 11) x.fillRect(rx, y + 20, 5, 2);
+    for (let i = 0; i < 12; i++) {
+      const rx = sr(i * 41) * W;
+      if (rx > 280 && rx < 364) continue;
+      P(rx, y + 14, 2, 6, '#5d7a4e'); P(rx + 1, y + 10, 2, 5, '#5d7a4e'); P(rx - 1, y + 17, 2, 4, '#466a42');
+    }
     // ameias com face direita clara
     for (let px = 0; px < W; px += 14) {
       if (px > 288 && px < 356) continue;
@@ -545,16 +745,28 @@ const Cidade = (() => {
   function desenharDinamico(ctx, state, pal, nivel) {
     const P = (a, b, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
 
-    // nuvens (acima das montanhas)
-    const nuvem = (nx, ny, s) => {
-      ctx.fillStyle = 'rgba(250,250,246,.95)';
-      P(nx, ny, 52 * s, 10 * s); P(nx + 10 * s, ny - 7 * s, 30 * s, 8 * s); P(nx + 24 * s, ny - 12 * s, 16 * s, 7 * s);
-      ctx.fillStyle = 'rgba(150,165,190,.4)';
-      P(nx + 3 * s, ny + 8 * s, 46 * s, 2 * s);
+    // nuvens variadas em camadas, com borda macia e base sombreada
+    const nuvem = (nx, ny, s, forma) => {
+      ctx.fillStyle = 'rgba(255,255,252,.55)';                        // halo macio
+      P(nx - 4 * s, ny - 2 * s, 60 * s, 14 * s);
+      ctx.fillStyle = 'rgba(252,252,248,.96)';
+      if (forma === 0) {
+        P(nx, ny, 52 * s, 10 * s); P(nx + 10 * s, ny - 7 * s, 30 * s, 8 * s); P(nx + 24 * s, ny - 12 * s, 16 * s, 7 * s);
+      } else if (forma === 1) {
+        P(nx, ny, 40 * s, 9 * s); P(nx + 26 * s, ny - 5 * s, 26 * s, 9 * s); P(nx + 12 * s, ny - 10 * s, 22 * s, 8 * s);
+        P(nx + 44 * s, ny + 2 * s, 14 * s, 6 * s);
+      } else {
+        P(nx, ny, 30 * s, 8 * s); P(nx + 8 * s, ny - 6 * s, 18 * s, 7 * s);
+      }
+      ctx.fillStyle = 'rgba(255,255,255,.9)';                          // topo iluminado
+      P(nx + 12 * s, ny - (forma === 2 ? 8 : 13) * s, 14 * s, 3 * s);
+      ctx.fillStyle = 'rgba(150,165,190,.35)';                         // base sombreada
+      P(nx + 3 * s, ny + 8 * s, (forma === 2 ? 26 : 46) * s, 2 * s);
     };
-    nuvem((anim * 0.10) % (W + 140) - 120, 40, 1.2);
-    nuvem((anim * 0.16 + 260) % (W + 140) - 120, 74, 0.9);
-    nuvem((anim * 0.07 + 460) % (W + 140) - 120, 24, 0.7);
+    nuvem((anim * 0.10) % (W + 160) - 130, 40, 1.2, 0);
+    nuvem((anim * 0.16 + 260) % (W + 160) - 130, 74, 0.9, 1);
+    nuvem((anim * 0.07 + 460) % (W + 160) - 130, 24, 0.7, 2);
+    nuvem((anim * 0.12 + 90) % (W + 160) - 130, 96, 0.6, 1);
 
     // água: linhas de reflexo horizontais em movimento
     for (let i = 0; i < 16; i++) {
@@ -651,6 +863,19 @@ const Cidade = (() => {
       P(n.x + 1, n.y + 10, 6, 1, 'rgba(38,54,74,.3)');    // cinto
       P(n.x + 1 + passo, n.y + 11, 2, 3, '#3d3020');      // pernas
       P(n.x + 5 - passo, n.y + 11, 2, 3, '#3d3020');
+    }
+
+    // tochas acesas nas laterais do portão
+    if (nivel >= 3) {
+      for (const tx of [296, 344]) {
+        P(tx, 218, 2, 8, '#5d4428');
+        const fl = Math.sin(anim * 0.35 + tx) * 1.2;
+        P(tx - 1, 213 + fl * 0.4, 4, 5, '#d86a2d');
+        P(tx, 211 + fl * 0.6, 2, 4, '#f5a03c');
+        P(tx, 210 + fl * 0.7, 1, 2, '#fbd060');
+        ctx.fillStyle = 'rgba(255,190,90,.12)';
+        ctx.fillRect(tx - 6, 206, 14, 18);
+      }
     }
 
     // guardas no portão (estáticos, com lança)
