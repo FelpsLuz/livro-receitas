@@ -2,7 +2,33 @@
 
 Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
 
-## Estado atual: Fase 1 concluída ✅
+## Estado atual: Fases 1 e 2 concluídas ✅ (56 testes passando)
+
+**Fase 2 — o jogo está jogável no Godot:** abra o projeto e aperte F5.
+
+- **Tela de título** com a cidade-vitrine animada em pixel art
+- **Cidade pixel art** (`scripts/cidade_view.gd`): 480×270 via `_draw()`, estações do ano
+  (neve no inverno!), rio animado, moinho girando, muralhas, castelo, fumaça e NPCs passeando
+- **Retratos 64×64** (`scripts/retratos.gd`): gerados pixel a pixel via `Image`, com humor
+  que muda conforme a relação (raiva/neutro/simpatia)
+- **Conversa viva**: o NPC "pondera..." (tempo proporcional à resposta) e **digita letra a
+  letra**; entrada trava enquanto ele fala
+- **10 abas de gestão**: Terra, Mapa, Mercado, Taverna, Corte, Exército, Clãs, Intrigas,
+  Família e Crônica — todas funcionais
+- **Modais**: rebelião, traição da guarda, relatório de batalha por rodadas, fim de jogo
+- **Sons** (`scripts/sfx.gd`): moedas, tambor, fanfarras — WAV gerado em código, zero assets
+- **🧠 IA Local** (`scripts/llm.gd`): botão na Corte configura a URL do llama.cpp rodando
+  no SEU processador; as falas dos NPCs passam a ser geradas pelo modelo GGUF, com
+  fallback automático para o motor interno
+- **Save/load** automático em JSON (`user://save.json`)
+- **Presets de exportação** prontos: Windows .exe, Android .apk e Web (PWA)
+
+Rodar os testes de cena:
+```
+godot --headless --path . res://tests/teste_cenas.tscn
+```
+
+## Fase 1 concluída ✅
 
 Todo o **núcleo de sistemas** foi portado de JavaScript para GDScript e validado
 por uma bateria de **34 testes automatizados** (rodando em Godot headless):
@@ -28,16 +54,22 @@ godot --headless --path . --script res://tests/teste_nucleo.gd
 2. Abra o Godot → **Import** → selecione a pasta `reino-por-conquista-godot`.
 3. F5 roda a cena atual da fase 1 (demonstração do núcleo no console).
 
-## Fase 2 — cenas visuais (roteiro)
+## Como exportar (no seu PC, com o editor Godot)
 
-- [ ] Tela de título + tema medieval (Theme com pergaminho/madeira, fonte pixel)
-- [ ] Cidade em pixel art: portar `city.js` para desenho via `_draw()`/TileMap, com estações
-- [ ] Retratos 64×64: portar `portraits.js` para `Image`/`ImageTexture` geradas em código
-- [ ] Tela de conversa com "ponderar" + máquina de escrever (`Timer` + `RichTextLabel`)
-- [ ] Abas de gestão (Mercado, Exército, Clãs, Intrigas, Família, Crônica) com `TabContainer`
-- [ ] Sons via `AudioStreamGenerator` (port do sfx.js)
-- [ ] Adaptador LLM local: `HTTPRequest` → llama.cpp (prompt já pronto em `dialogo.gd`)
-- [ ] Presets de exportação: **Windows .exe, Android .apk, HTML5** (um projeto → todas as plataformas)
+1. **Editor → Export...** → instale os *export templates* quando o Godot pedir (download único).
+2. Escolha o preset (**Windows**, **Android** ou **Web** — já configurados em `export_presets.cfg`).
+3. **Export Project** → o executável sai em `dist/`.
+   - Windows: `ReinoPorConquista.exe` único (pck embutido).
+   - Android: requer o Android SDK configurado no editor (Editor Settings → Export → Android).
+   - Web: hospede a pasta `dist/web` em qualquer servidor estático (itch.io funciona).
+
+## Fase 3 — ideias de polimento
+
+- [ ] Fonte pixel medieval e ornamentos no tema
+- [ ] Animações de transição entre abas e nos modais
+- [ ] Trilha sonora procedural (harpa/alaúde)
+- [ ] Educação de herdeiros e eventos de assassino na UI
+- [ ] Controles de toque dedicados no Android (gestos, haptics)
 
 ## Por que Godot (e não Unity)
 
