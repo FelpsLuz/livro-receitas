@@ -23,6 +23,24 @@ Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
 - **Save/load** automático em JSON (`user://save.json`)
 - **Presets de exportação** prontos: Windows .exe, Android .apk e Web (PWA)
 
+### Sistema de luz e água (novo)
+
+- **Engine configurada contra mixels**: `default_texture_filter = Nearest`,
+  stretch `canvas_items` com aspect `keep` (pixels nítidos em qualquer janela).
+- **`scripts/luz_do_sol.gd`** — `DirectionalLight2D` com ciclo dia/tarde/noite:
+  hue-shifting automático de cor (quente → laranja → azul-noite), energia e
+  ângulo do sol; sombras suavizadas com `SHADOW_FILTER_PCF5`. Pode rodar em
+  ciclo automático (`velocidade_ciclo`) ou amarrado ao mês do jogo
+  (`definir_pelo_mes` — sol alto no verão, baixo no inverno).
+- **`scripts/cidade_cena.gd`** — empacota a cidade num `SubViewport` para a
+  luz banhar SÓ o cenário (a UI de pergaminho fica fora do alcance), e gera
+  **`LightOccluder2D` nas bases de cada construção** (casas, moinho,
+  estrebaria, muralha, castelo) para sombras projetadas dinâmicas.
+- **`shaders/agua.gdshader`** — água orgânica: distorce o que está desenhado
+  atrás (`hint_screen_texture`), tinge, acrescenta brilhos de sol pelo ruído
+  e desvanece nas bordas para casar com as margens. O `NoiseTexture2D` +
+  `FastNoiseLite` são criados em código — nenhum passo manual no Inspector.
+
 Rodar os testes de cena:
 ```
 godot --headless --path . res://tests/teste_cenas.tscn

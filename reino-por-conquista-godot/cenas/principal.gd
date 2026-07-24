@@ -19,6 +19,7 @@ const Retratos = preload("res://scripts/retratos.gd")
 const Sfx = preload("res://scripts/sfx.gd")
 const Llm = preload("res://scripts/llm.gd")
 const CidadeView = preload("res://scripts/cidade_view.gd")
+const CidadeCena = preload("res://scripts/cidade_cena.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -71,10 +72,10 @@ func _montar_titulo() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	caixa.add_child(v)
-	var vitrine := CidadeView.new()
-	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
+	var vitrine := CidadeCena.new()
 	vitrine.custom_minimum_size = Vector2(480, 270)
 	v.add_child(vitrine)
+	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
 	var titulo := Label.new()
 	titulo.text = "⚔ REINO POR CONQUISTA"
 	titulo.add_theme_font_size_override("font_size", 30)
@@ -164,7 +165,7 @@ func _montar_jogo() -> void:
 		b_mudo.text = "🔇" if Sfx.mudo else "🔊")
 	rodape.add_child(b_mudo)
 
-	cidade_view = CidadeView.new()
+	cidade_view = CidadeCena.new()
 
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")
