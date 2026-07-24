@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reino por Conquista</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- TELA DE TÍTULO -->
+<div id="tela-titulo">
+  <div class="titulo-box">
+    <h1>⚔️ REINO POR CONQUISTA</h1>
+    <p class="subtitulo">De mercenário sem nome a rei — se as intrigas, a fome e as adagas deixarem.</p>
+    <input id="input-nome" type="text" maxlength="24" placeholder="Nome do seu mercenário (opcional)">
+    <button id="btn-novo" class="btn">🗡️ Nova Saga</button>
+    <button id="btn-continuar" class="btn sec">📜 Continuar Saga</button>
+    <div class="titulo-dicas">
+      <p>💬 <b>Fale livremente</b> com reis e taverneiros — eles entendem, reagem e <b>lembram</b> (offline).</p>
+      <p>🌾 <b>Economia viva:</b> guerras queimam campos e disparam preços. Contrabando enriquece... ou mata.</p>
+      <p>👑 <b>Sem casus belli, sem guerra:</b> forje documentos, fabrique intrigas ou case por conveniência.</p>
+      <p>⚰️ <b>Você vai morrer.</b> Eduque um herdeiro, ou sua linhagem morre junto.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TELA DE JOGO -->
+<div id="tela-jogo" style="display:none">
+  <div id="status-bar"></div>
+  <nav id="abas">
+    <button class="aba ativa" data-aba="terra">🏕️ Sua Terra</button>
+    <button class="aba" data-aba="mapa">🗺️ Mapa</button>
+    <button class="aba" data-aba="mercado">📖 Mercado</button>
+    <button class="aba" data-aba="taverna">🍺 Taverna</button>
+    <button class="aba" data-aba="corte">👑 Corte</button>
+    <button class="aba" data-aba="exercito">⚔️ Exército</button>
+    <button class="aba" data-aba="intrigas">🕯️ Intrigas</button>
+    <button class="aba" data-aba="familia">🏰 Família</button>
+    <button class="aba" data-aba="cronica">📜 Crônica</button>
+  </nav>
+  <main id="conteudo"></main>
+  <footer id="rodape">
+    <button id="btn-mes" class="btn destaque">⏳ Passar o mês</button>
+  </footer>
+</div>
+
+<!-- MODAL DE EVENTOS -->
+<div id="modal" style="display:none">
+  <div id="modal-box"></div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/dialogue.js"></script>
+<script src="js/economy.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/intrigue.js"></script>
+<script src="js/city.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
