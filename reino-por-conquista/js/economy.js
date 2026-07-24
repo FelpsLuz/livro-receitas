@@ -31,6 +31,10 @@ const Economia = (() => {
     else if (rel <= -25) preco *= 1.25;  // Hostil
     else if (rel >= 60) preco *= 0.85;   // Leal: tratamento de amigo da coroa
     else if (rel >= 25) preco *= 0.95;
+    if (typeof Politica !== 'undefined') {
+      if (Politica.temComercio(state, reinoId)) preco *= 0.90;   // acordo comercial
+      if (Politica.lealdadeDe(state, reinoId) >= 50) preco *= 0.95; // povo te adora
+    }
     return Math.max(1, Math.round(preco));
   }
 
@@ -61,6 +65,7 @@ const Economia = (() => {
         const m = state.mercados[id];
         m.trigo.oferta = Math.max(0.25, m.trigo.oferta * 0.82);
         m.ferro.demanda = Math.min(3, m.ferro.demanda * 1.08); // guerra consome ferro
+        m.armas.demanda = Math.min(3, m.armas.demanda * 1.12);  // e devora armas
         m.cavalos.demanda = Math.min(3, m.cavalos.demanda * 1.05);
       }
       // guerras longas terminam por exaustão

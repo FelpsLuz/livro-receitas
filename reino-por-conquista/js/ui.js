@@ -120,8 +120,8 @@ const UI = (() => {
     painel.appendChild(wrap);
 
     if (!t) {
-      painel.appendChild(el('p', 'flavor', 'Sem terras, sem raízes. Sua "corte" é uma fogueira e três tendas na beira da estrada. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.'));
-      const b = el('button', 'btn', '🏕️ Comprar terra (300 🪙, requer 25 ⭐)');
+      painel.appendChild(el('p', 'flavor', 'Sem terras, sem raízes. Sua "corte" é uma fogueira e três tendas na beira da estrada. Seja armado CAVALEIRO por um rei (60⭐ + relação 40, na corte) e compre seu primeiro pedaço de chão.'));
+      const b = el('button', 'btn', '🏕️ Comprar terra (300 🪙, requer título de Cavaleiro)');
       b.onclick = () => aviso(Jogo.comprarTerra().msg) || renderTudo();
       painel.appendChild(b);
     } else {
@@ -144,6 +144,26 @@ const UI = (() => {
       const bExp = el('button', 'btn sec', '📦 Exportar 30 de alimento da vila (ouro rápido, povo faminto reclama)');
       bExp.onclick = () => { aviso(Economia.exportarComidaDaTerra(Jogo.state, 30).msg); renderTudo(); };
       painel.appendChild(bExp);
+
+      // ---- edifícios de produção (nível 1 a 30) ----
+      Producao.garantir(s);
+      painel.appendChild(el('h3', null, '🏗️ Produção (edifícios até nível 30)'));
+      const up = t.ultimaProducao;
+      if (up) painel.appendChild(el('p', 'flavor', `Último mês: +${up.alimento} 🌾, +${up.madeira} 🪵, +${up.ferro} ⛏️ ferro, +${up.armas} ⚔️ armas` + (up.eficiencia < 1 ? ` (eficiência ${Math.round(up.eficiencia * 100)}% — faltam braços)` : '')));
+      for (const [idEd, ed] of Object.entries(Producao.EDIFICIOS)) {
+        const nivelEd = t.edificios[idEd];
+        const card = el('div', 'card-npc');
+        card.innerHTML = `<b>${ed.icone} ${ed.nome}</b> — nível <b>${nivelEd}</b>/${Producao.NIVEL_MAX}<br><small><i>${ed.desc}</i>` +
+          (nivelEd > 0 ? ` · produz ${Producao.producaoDe(s, idEd, nivelEd)}/mês` : '') + `</small>`;
+        if (nivelEd < Producao.NIVEL_MAX) {
+          const custoEd = Producao.custo(idEd, nivelEd);
+          const b = el('button', 'btn mini', `Evoluir (${custoEd} 🪙 + ${Math.round(custoEd / 4)} 🪵)`);
+          b.onclick = () => { const r = Producao.construir(s, idEd); if (r.ok) Sfx.moeda(); aviso(r.msg); Jogo.salvar(); renderTudo(); };
+          card.appendChild(b);
+        }
+        painel.appendChild(card);
+      }
+      painel.appendChild(el('p', 'flavor', '💡 Produzir é renda constante; comerciar é lucro rápido. A mina enche sua carga de ferro; o ferreiro forja 2 ferro → 1 arma (⚔️ vale ouro em reinos em guerra) e barateia o equipamento do exército.'));
     }
     c.appendChild(painel);
   }
@@ -172,6 +192,9 @@ const UI = (() => {
         <small>${r.rei.nome} · <i>${r.rei.desc}</i></small><br>
         <small>Relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${rel} (${tags.relacao})</b>
         ${cb ? ' · <b class="bom">📜 Casus Belli</b>' : ''}
+        ${Politica.temComercio(s, r.id) ? ' · <b class="bom">🪙 Comércio</b>' : ''}
+        ${Politica.aliado(s, r.id) ? ' · <b class="bom">🤝 ALIADO</b>' : ''}
+        ${Politica.lealdadeDe(s, r.id) > 0 ? ` · ✊ Povo ${Politica.lealdadeDe(s, r.id)}/100` : ''}
         ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}</small>`);
       card.appendChild(infoReino);
       const botoes = el('div', 'linha-botoes');
@@ -179,6 +202,22 @@ const UI = (() => {
       bIr.disabled = s.local === r.id;
       bIr.onclick = () => { s.local = r.id; Jogo.log(`🐴 Você viaja para ${r.nome}.`); renderTudo(); };
       botoes.appendChild(bIr);
+      const oferta = (s.ofertas || []).find(o => o.reino === r.id);
+      if (oferta) {
+        const bAc = el('button', 'btn mini', `✅ Aceitar ${oferta.tipo === 'comercio' ? 'acordo comercial' : 'ALIANÇA'} proposto`);
+        bAc.onclick = () => { aviso(Politica.aceitarOferta(s, r.id, Jogo.log).msg); Jogo.salvar(); renderTudo(); };
+        botoes.appendChild(bAc);
+      }
+      if (!Politica.temComercio(s, r.id) && !oferta) {
+        const bCom = el('button', 'btn mini', '📜 Propor comércio (100 🪙, rel. 20+)');
+        bCom.onclick = () => { aviso(Politica.proporTratado(s, r.id, 'comercio', Jogo.log).msg); Jogo.salvar(); renderTudo(); };
+        botoes.appendChild(bCom);
+      }
+      if (Politica.temComercio(s, r.id) && !Politica.aliado(s, r.id) && !oferta) {
+        const bAli = el('button', 'btn mini', '🤝 Propor aliança (300 🪙, rel. 50+, ⭐60+)');
+        bAli.onclick = () => { aviso(Politica.proporTratado(s, r.id, 'alianca', Jogo.log).msg); Jogo.salvar(); renderTudo(); };
+        botoes.appendChild(bAli);
+      }
       if (!s.jogador.reiDe) {
         const bGuerra = el('button', 'btn mini ruim-btn', cb ? '⚔️ Guerra de conquista (com CB)' : '⚔️ Atacar SEM casus belli');
         bGuerra.onclick = () => confirmar(
@@ -234,6 +273,34 @@ const UI = (() => {
     if (npcAtual) { renderConversa(c, npcAtual); return; }
     const painel = el('div', 'painel');
     painel.appendChild(el('h2', null, '🍺 Taverna do Javali Manco'));
+
+    if (s.torneio) {
+      const cardT = el('div', 'card-contrato');
+      cardT.innerHTML = `<b>🏟️ TORNEIO DE ${s.torneio.reinoNome.toUpperCase()}</b><br><small>Lanças, glória e a chance de recrutar um CAMPEÃO DE GUERRA. Prazo: ${s.torneio.meses} ${s.torneio.meses === 1 ? 'mês' : 'meses'}. Inscrição: 50 🪙.</small>`;
+      const bT = el('button', 'btn mini', '🐎 Entrar na justa!');
+      bT.onclick = () => {
+        const r = Politica.participarTorneio(s, Jogo.log);
+        if (r.ok) { Sfx.tambor(); if (r.vitorias >= 3) Sfx.vitoria(); }
+        aviso(r.msg); Jogo.salvar(); renderTudo();
+      };
+      cardT.appendChild(bT);
+      painel.appendChild(cardT);
+    }
+    const reinoLocal = s.reinos.find(r => r.id === s.local);
+    const cardM = el('div', 'card-contrato');
+    cardM.innerHTML = `<b>🥊 Desafiar a milícia de ${reinoLocal.capital}</b><br><small>Duelo de companhias na praça. Vitória conquista a LEALDADE do povo (${Politica.lealdadeDe(s, s.local)}/100): preços melhores e, com 60+, a guarnição hesita em lutar contra você numa conquista.</small>`;
+    const bM = el('button', 'btn mini', '⚔️ Desafiar!');
+    bM.onclick = () => {
+      const rel = Politica.desafiarMilicia(s, Jogo.log);
+      Jogo.salvar();
+      if (rel.rodadas) mostrarBatalha(rel); else { aviso(rel.msg); renderTudo(); }
+    };
+    cardM.appendChild(bM);
+    painel.appendChild(cardM);
+
+    if ((s.campeoes || []).length)
+      painel.appendChild(el('p', 'flavor bom', '🏆 Campeões na sua companhia: ' + s.campeoes.map(c => `${c.nome} (+${c.bonus} atq)`).join(', ')));
+
     painel.appendChild(el('h3', null, 'Mural de Contratos'));
     for (const ct of s.contratos) {
       const contratante = s.reinos.find(r => r.id === ct.contratante);
@@ -288,6 +355,13 @@ const UI = (() => {
     painel.appendChild(el('h2', null, `👑 Corte de ${reino.capital}`));
     painel.appendChild(el('p', 'flavor', `Tochas, tapeçarias e sussurros. No trono, ${reino.rei.nome}.`));
     painel.appendChild(cardNpc({ ...reino.rei }));
+    if (Politica.podeSerArmado(s, s.local)) {
+      const bCav = el('button', 'btn', `⚔️ Ajoelhar-se: pedir a ${reino.rei.nome} para ser armado CAVALEIRO`);
+      bCav.onclick = () => { const r = Politica.armarCavaleiro(s, s.local, Jogo.log); if (r.ok) Sfx.vitoria(); aviso(r.msg); Jogo.salvar(); renderTudo(); };
+      painel.appendChild(bCav);
+    } else if (!Politica.eCavaleiro(s)) {
+      painel.appendChild(el('p', 'flavor', `🎖️ Progressão: 60⭐ + relação 40 com um rei → CAVALEIRO (compra terra) → Senhor → Barão (terra 2) → CONDE (terra 4, nobre) → só nobres reivindicam tronos.`));
+    }
     painel.appendChild(el('p', 'flavor', '💡 Na conversa, escreva o que quiser: elogie, insulte, ameace, peça contratos, proponha casamento, pergunte sobre guerras e preços, chantageie com segredos, ofereça suborno, negocie a paz... O NPC entende — e LEMBRA.'));
     c.appendChild(painel);
   }

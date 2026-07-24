@@ -39,8 +39,10 @@ const Combate = (() => {
     let moralJ = 1.0 + (j.atributos.forca - 5) * 0.04;
     let moralI = 1.0;
 
+    const bonusCampeoes = (state.campeoes || []).reduce((a, c) => a + c.bonus, 0);
     for (let rodada = 1; rodada <= 3; rodada++) {
       const pj = poder(j.tropas, j.equip);
+      pj.atq += bonusCampeoes;
       const pi = poder(inimigo.tropas, inimigo.equip);
       if (pj.homens === 0 || pi.homens === 0) break;
 
@@ -159,15 +161,8 @@ const Contratos = (() => {
     return rel;
   }
 
-  // títulos por renome
-  function titulo(state) {
-    const r = state.jogador.renome;
-    if (state.jogador.reiDe) return 'Rei';
-    if (state.terra && state.terra.nivel >= 3) return 'Conde';
-    if (state.terra) return 'Senhor';
-    if (r >= 50) return 'Capitão Mercenário';
-    return 'Mercenário';
-  }
+  // título: a escada de nobreza vive em Politica
+  function titulo(state) { return Politica.titulo(state); }
 
   return { gerar, executar, titulo };
 })();

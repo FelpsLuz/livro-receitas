@@ -11,6 +11,7 @@ const MERCADORIAS = {
   sal:     { nome: 'Sal',     precoBase: 22, icone: '🧂' },
   tecidos: { nome: 'Tecidos', precoBase: 26, icone: '🧵' },
   cavalos: { nome: 'Cavalos', precoBase: 80, icone: '🐴' },
+  armas:   { nome: 'Armas',   precoBase: 45, icone: '⚔️' },
 };
 
 // producao: o que o reino produz bem (oferta alta = preço baixo lá)

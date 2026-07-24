@@ -27,6 +27,7 @@ const Jogo = (() => {
       fim: null,
     };
     Economia.inicializarMercados(state);
+    Politica.garantir(state);
     state.contratos = Contratos.gerar(state);
     log(`⚔️ Ano 1. Você é ${state.jogador.nome}: sem terras, sem título, com ${state.jogador.ouro} moedas de ouro, 5 lanceiros leais e uma ambição do tamanho de um reino.`);
     log(`Aceite contratos na taverna para ganhar ouro e renome. Um dia, esse renome comprará terras — e terras fazem reis.`);
@@ -48,10 +49,12 @@ const Jogo = (() => {
       envelhecer();
       if (state.fim) return;
     }
-    Economia.talvezIniciarGuerra(state, log);
+    Politica.tickReinos(state, log);
+    Politica.tickTorneio(state, log);
     Economia.tickGuerras(state, log);
     Economia.tickMercados(state);
     Economia.tickTerra(state, log);
+    Producao.tick(state, log);
     Economia.tickExercito(state, log);
     Clas.tick(state, log);
     Intriga.tickFamilia(state, log);
@@ -173,12 +176,13 @@ const Jogo = (() => {
   function comprarTerra() {
     const custo = 300;
     if (state.terra) return { ok: false, msg: 'Você já tem terras.' };
-    if (state.jogador.renome < 25) return { ok: false, msg: `Nenhum rei vende terra a um zé-ninguém. Renome ${state.jogador.renome}/25.` };
+    if (!Politica.eCavaleiro(state)) return { ok: false, msg: 'Plebeu não possui terra. Seja armado CAVALEIRO por um rei (renome 60+ e relação 40+; ajoelhe-se na corte).' };
     if (state.jogador.ouro < custo) return { ok: false, msg: `Terra custa ${custo} de ouro.` };
     state.jogador.ouro -= custo;
     state.terra = {
       nome: 'Vale ' + rnd(['Sereno', 'das Pedras', 'do Corvo', 'Dourado', 'Frio']),
       nivel: 0, populacao: 20, alimento: 80, madeira: 20, felicidade: 60, ultimaColeta: null,
+      edificios: { fazenda: 0, serraria: 0, mina: 0, ferreiro: 0 },
     };
     Cidade.seedNpcs(0);
     log(`🏕️ Você comprou ${state.terra.nome}: mato, pedras e vinte camponeses desconfiados. Todo império começa com uma tenda.`);
@@ -228,7 +232,7 @@ const Jogo = (() => {
 
   function melhorarEquip() {
     if (state.jogador.equip >= 3) return { ok: false, msg: 'Equipamento já é o melhor que ferreiros forjam.' };
-    const custo = 200 * (state.jogador.equip + 1);
+    const custo = Math.round(200 * (state.jogador.equip + 1) * (1 - Producao.descontoEquip(state)));
     if (state.jogador.ouro < custo) return { ok: false, msg: `Melhoria custa ${custo} de ouro.` };
     state.jogador.ouro -= custo;
     state.jogador.equip++;
@@ -246,6 +250,8 @@ const Jogo = (() => {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       state = JSON.parse(raw);
+      Politica.garantir(state);
+      Producao.garantir(state);
       Cidade.seedNpcs(state.terra ? state.terra.nivel : -1);
       return true;
     } catch (e) { return false; }

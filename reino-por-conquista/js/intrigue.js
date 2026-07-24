@@ -193,6 +193,7 @@ const Intriga = (() => {
     for (const r of state.reinos) {
       const tags = state.tags['rei_' + r.id];
       if (!tags || !tags.flags.marcadoParaMorte) continue;
+      if (Politica.aliado(state, r.id)) { tags.flags.marcadoParaMorte = false; continue; } // aliados não mandam adagas
       if (Math.random() < 0.15) {
         tags.flags.marcadoParaMorte = false; // tentativa gasta
         const defesa = state.jogador.guardas * 2 + state.jogador.atributos.forca;
@@ -210,6 +211,10 @@ const Intriga = (() => {
   // ---------- guerra de conquista ----------
   function declararGuerra(state, reinoId, log) {
     const reino = state.reinos.find(r => r.id === reinoId);
+    if (!Politica.eNobre(state)) {
+      log(`⚖️ As cortes não reconhecem plebeus em tronos. Torne-se CONDE (terra nível 4) antes de reivindicar uma coroa.`);
+      return { vitoria: false, rodadas: [], contexto: 'Reivindicação rejeitada', baixasJogador: {}, baixasInimigo: {}, bloqueado: true };
+    }
     const temCB = state.casusBelli.includes(reinoId);
     if (!temCB) {
       log(`⚠️ Você atacou ${reino.nome} SEM reivindicação legal! As cortes dos 6 reinos denunciam sua agressão bárbara.`);
@@ -218,7 +223,17 @@ const Intriga = (() => {
     } else {
       log(`⚔️ Com sua reivindicação em punho, você declara guerra a ${reino.nome}. As demais cortes observam — é um assunto legal, dizem.`);
     }
-    const inimigo = Combate.exercitoInimigo(temCB ? 3 : 4);
+    let forcaDefensor = temCB ? 3 : 4;
+    if (Politica.lealdadeDe(state, reinoId) >= 60) {
+      forcaDefensor = Math.max(1, forcaDefensor - 1);
+      log(`✊ O povo de ${reino.nome} te adora: parte da guarnição se recusa a lutar contra você!`);
+    }
+    const aliados = state.tratados.filter(t => t.tipo === 'alianca' && t.reino !== reinoId);
+    if (aliados.length > 0) {
+      state.jogador.tropas.lanceiro = (state.jogador.tropas.lanceiro || 0) + 15;
+      log(`🤝 Um contingente aliado de 15 lanceiros marcha sob sua bandeira!`);
+    }
+    const inimigo = Combate.exercitoInimigo(forcaDefensor);
     const rel = Combate.batalhar(state, inimigo, `Conquista de ${reino.nome}`);
     if (rel.vitoria) {
       state.jogador.reiDe = reinoId;
