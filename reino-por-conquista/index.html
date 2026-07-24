@@ -11,6 +11,9 @@
 <!-- TELA DE TÍTULO -->
 <div id="tela-titulo">
   <div class="titulo-box">
+    <div class="canvas-wrap titulo-canvas">
+      <canvas id="canvas-titulo" width="480" height="270"></canvas>
+    </div>
     <h1>⚔️ REINO POR CONQUISTA</h1>
     <p class="subtitulo">De mercenário sem nome a rei — se as intrigas, a fome e as adagas deixarem.</p>
     <input id="input-nome" type="text" maxlength="24" placeholder="Nome do seu mercenário (opcional)">
@@ -41,7 +44,10 @@
   </nav>
   <main id="conteudo"></main>
   <footer id="rodape">
-    <button id="btn-mes" class="btn destaque">⏳ Passar o mês</button>
+    <div class="rodape-linha">
+      <button id="btn-mes" class="btn destaque">⏳ Passar o mês</button>
+      <button id="btn-mudo" class="btn sec btn-mudo" title="Ligar/desligar sons">🔊</button>
+    </div>
   </footer>
 </div>
 
@@ -51,6 +57,7 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/sfx.js"></script>
 <script src="js/dialogue.js"></script>
 <script src="js/economy.js"></script>
 <script src="js/combat.js"></script>

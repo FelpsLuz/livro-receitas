@@ -142,6 +142,11 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .linha-botoes { margin-top: 6px; }
 
 #rodape { padding: 8px; position: sticky; bottom: 0; background: linear-gradient(0deg, var(--madeira) 70%, transparent); }
+.rodape-linha { display: flex; gap: 8px; align-items: stretch; }
+.rodape-linha .btn.destaque { flex: 1; margin: 0; }
+.btn-mudo { width: 52px; margin: 0; flex: none; }
+.titulo-canvas { margin: -36px -36px 18px; border: none; border-bottom: 3px solid var(--ouro); border-radius: 6px 6px 0 0; }
+#canvas-titulo { width: 100%; display: block; image-rendering: pixelated; }
 
 /* ---------- conversa ---------- */
 .conversa-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }

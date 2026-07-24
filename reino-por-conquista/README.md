@@ -6,17 +6,20 @@ Protótipo jogável, **100% offline**, feito em HTML5 + JavaScript puro (zero de
 
 ## Como jogar
 
-```
-# opção 1: abra o arquivo direto
-duplo clique em index.html
+**Windows (mais fácil, sem instalar nada):** duplo clique em `ReinoPorConquista.bat` — abre em janela própria de aplicativo (usa o Edge/Chrome que já vem no Windows).
 
-# opção 2: servidor local (qualquer um serve)
+**Qualquer sistema:** duplo clique em `index.html`.
+
+**Como aplicativo desktop de verdade (Electron):**
+```
+# requer Node.js (https://nodejs.org)
 cd reino-por-conquista
-python3 -m http.server 8000
-# abra http://localhost:8000
+npm install
+npm start          # roda como aplicativo desktop
+npm run dist       # gera o INSTALADOR Windows em dist/ (cria atalho na área de trabalho)
 ```
 
-O progresso salva automaticamente no navegador (localStorage) a cada mês passado.
+O progresso salva automaticamente a cada mês passado.
 
 **Objetivo:** conquistar um trono e segurá-lo por 12 meses. **Derrota:** morrer sem herdeiro adulto, ou ter a cabeça cortada por uma rebelião.
 
@@ -46,9 +49,12 @@ Cada conversa atualiza **tags de memória** — `[Odiado: -50]`, `[InsultouRei �
 - **Dinastia:** filhos herdam atributos (média dos pais ± sorte) e recebem educação (marcial/cortesã/administrativa/sombras). Pais cruéis criam herdeiros mimados — e **vassalos conspiram contra herdeiros mimados** quando você morre.
 - **Traição por ouro:** tesouro zerado → tropas desertam → sua guarda de elite pode ser comprada para **abrir os portões na calada da noite**.
 
-### 5. Imersão visual — `js/city.js` + `css/style.css`
+### 5. Imersão visual — `js/city.js` + `js/sfx.js` + `css/style.css`
 - **Interface diegética:** livro-razão de pergaminho no mercado, cartas com selo de cera na mesa de intrigas, mural de contratos na taverna.
-- **Cidade em pixel art procedural** que evolui com seus investimentos: mato e tendas → aldeia com paliçada → vila com moinho (de pás girando) → burgo murado → cidade com torres, estandartes e **NPCs andando no mercado** → castelo.
+- **Cidade em pixel art procedural (480×270)** que evolui com seus investimentos: acampamento mercenário → tendas → aldeia com paliçada → vila com moinho de pás girando → burgo murado → cidade com torres e estandartes tremulando → castelo com torre de menagem.
+- **Estações do ano**: primavera, verão dourado, outono alaranjado e inverno com neve nos telhados — a paisagem muda conforme os meses passam.
+- **Vida na cena**: fumaça subindo das chaminés, bando de pássaros cruzando o céu, rio com correnteza, NPCs de capuz e túnica passeando (e parando para conversar), guardas no portão.
+- **Efeitos sonoros** gerados por WebAudio (zero arquivos): moedas, espadas, tambor de batalha, fanfarra de vitória. Botão 🔊/🔇 no rodapé.
 
 ## Plugando uma IA local de verdade (GGUF)
 
@@ -77,15 +83,19 @@ Para empacotar como jogo desktop de verdade: Electron/Tauri + [node-llama-cpp](h
 
 ```
 reino-por-conquista/
-├── index.html        # telas e carregamento
-├── css/style.css     # UI diegética (pergaminho, madeira, selos)
+├── index.html             # telas e carregamento
+├── ReinoPorConquista.bat  # atalho Windows: abre como aplicativo (Edge/Chrome)
+├── package.json           # app Electron: npm start / npm run dist (instalador)
+├── electron-main.js       # janela desktop do Electron
+├── css/style.css          # UI diegética (pergaminho, madeira, selos)
 └── js/
     ├── data.js       # 6 reinos, NPCs, mercadorias, tropas, formações
+    ├── sfx.js        # efeitos sonoros WebAudio (moedas, espadas, fanfarras)
     ├── dialogue.js   # motor de diálogo livre + memória por tags + adaptador LLM
     ├── economy.js    # mercados, guerras, colheita, fome, deserção
     ├── combat.js     # batalhas táticas + contratos e renome
     ├── intrigue.js   # segredos, chantagem, casus belli, dinastia, assassinos
-    ├── city.js       # pixel art procedural do assentamento (6 níveis)
+    ├── city.js       # pixel art 480×270: estações, enxaimel, castelo, NPCs
     ├── game.js       # estado, turno mensal, morte/herança, save/load
     └── ui.js         # abas, conversa, modais, relatórios de batalha
 ```

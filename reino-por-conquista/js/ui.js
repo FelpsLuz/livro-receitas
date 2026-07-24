@@ -40,13 +40,30 @@ const UI = (() => {
     if (!Jogo.temSave()) $('#btn-continuar').style.display = 'none';
 
     document.querySelectorAll('.aba').forEach(b => {
-      b.onclick = () => { abaAtual = b.dataset.aba; npcAtual = null; renderTudo(); };
+      b.onclick = () => { Sfx.pagina(); abaAtual = b.dataset.aba; npcAtual = null; renderTudo(); };
     });
     $('#btn-mes').onclick = () => {
+      Sfx.tique();
       Jogo.passarMes();
       Jogo.salvar();
       renderTudo();
     };
+    const bMudo = $('#btn-mudo');
+    const rotuloMudo = () => { bMudo.textContent = Sfx.mudo ? '🔇' : '🔊'; };
+    bMudo.onclick = () => { Sfx.alternarMudo(); rotuloMudo(); };
+    rotuloMudo();
+
+    // vitrine animada na tela de título
+    const tc = $('#canvas-titulo');
+    if (tc) {
+      const loopTitulo = () => {
+        if ($('#tela-titulo').style.display !== 'none') {
+          Cidade.renderShowcase(tc);
+          requestAnimationFrame(loopTitulo);
+        }
+      };
+      loopTitulo();
+    }
   }
 
   function iniciarAnimacao() {
@@ -97,7 +114,7 @@ const UI = (() => {
     painel.appendChild(el('h2', null, t ? `${t.nome} — ${NIVEIS_TERRA[t.nivel].nome}` : 'Acampamento Mercenário'));
     const wrap = el('div', 'canvas-wrap');
     const canvas = el('canvas');
-    canvas.id = 'canvas-cidade'; canvas.width = 320; canvas.height = 180;
+    canvas.id = 'canvas-cidade'; canvas.width = 480; canvas.height = 270;
     wrap.appendChild(canvas);
     painel.appendChild(wrap);
 
@@ -195,10 +212,10 @@ const UI = (() => {
       tr.innerHTML = `<td>${m.icone} ${m.nome}</td><td><b>${preco}</b>🪙${alerta}</td><td>${carga}</td>`;
       const tdC = el('td'), tdV = el('td');
       const bC = el('button', 'btn mini', 'Comprar 5');
-      bC.onclick = () => { aviso(Economia.comprar(s, s.local, gId, 5).msg); renderTudo(); };
+      bC.onclick = () => { const r = Economia.comprar(s, s.local, gId, 5); if (r.ok) Sfx.moeda(); aviso(r.msg); renderTudo(); };
       const bV = el('button', 'btn mini', 'Vender 5');
       bV.disabled = carga < 5;
-      bV.onclick = () => { aviso(Economia.vender(s, s.local, gId, 5).msg); renderTudo(); };
+      bV.onclick = () => { const r = Economia.vender(s, s.local, gId, 5); if (r.ok) Sfx.moeda(); else Sfx.alerta(); aviso(r.msg); renderTudo(); };
       tdC.appendChild(bC); tdV.appendChild(bV);
       tr.appendChild(tdC); tr.appendChild(tdV);
       tab.appendChild(tr);
@@ -461,6 +478,7 @@ const UI = (() => {
 
   // ---------- eventos modais ----------
   function renderEvento() {
+    Sfx.alerta();
     const s = Jogo.state, ev = s.eventoPendente;
     const modal = $('#modal');
     modal.style.display = 'flex';
@@ -509,6 +527,8 @@ const UI = (() => {
 
   // ---------- relatório de batalha ----------
   function mostrarBatalha(rel) {
+    Sfx.tambor(); Sfx.espada();
+    setTimeout(() => rel.vitoria ? Sfx.vitoria() : Sfx.derrota(), 500);
     const modal = $('#modal');
     modal.style.display = 'flex';
     const box = $('#modal-box');
