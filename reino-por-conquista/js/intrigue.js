@@ -211,6 +211,10 @@ const Intriga = (() => {
   // ---------- guerra de conquista ----------
   function declararGuerra(state, reinoId, log) {
     const reino = state.reinos.find(r => r.id === reinoId);
+    if (state.jogador.vassaloDe) {
+      log(`🛡️ Vassalos não reivindicam tronos. Quebre seu juramento primeiro — e pague o preço.`);
+      return { vitoria: false, rodadas: [], contexto: 'Juramento no caminho', baixasJogador: {}, baixasInimigo: {}, bloqueado: true };
+    }
     if (!Politica.eNobre(state)) {
       log(`⚖️ As cortes não reconhecem plebeus em tronos. Torne-se CONDE (terra nível 4) antes de reivindicar uma coroa.`);
       return { vitoria: false, rodadas: [], contexto: 'Reivindicação rejeitada', baixasJogador: {}, baixasInimigo: {}, bloqueado: true };
@@ -224,6 +228,15 @@ const Intriga = (() => {
       log(`⚔️ Com sua reivindicação em punho, você declara guerra a ${reino.nome}. As demais cortes observam — é um assunto legal, dizem.`);
     }
     let forcaDefensor = temCB ? 3 : 4;
+    if (reino.imperial) {
+      forcaDefensor = 5;   // a legião imperial de Felps é outra categoria
+      log(`🟢 A legião do Império marcha: o Destruidor não conhece derrota. Enfraqueça-o aliciando os 10 nobres dele.`);
+    }
+    const desertores = (state.nobres || []).filter(n => n.reinoOriginal === reinoId && n.reino === 'jogador').length;
+    if (desertores > 0) {
+      forcaDefensor = Math.max(1, forcaDefensor - Math.floor(desertores / 3));
+      log(`🏰 ${desertores} ${desertores === 1 ? 'nobre desertou' : 'nobres desertaram'} para o seu lado: a defesa de ${reino.nome} está minada.`);
+    }
     if (Politica.lealdadeDe(state, reinoId) >= 60) {
       forcaDefensor = Math.max(1, forcaDefensor - 1);
       log(`✊ O povo de ${reino.nome} te adora: parte da guarnição se recusa a lutar contra você!`);
@@ -233,12 +246,33 @@ const Intriga = (() => {
       state.jogador.tropas.lanceiro = (state.jogador.tropas.lanceiro || 0) + 15;
       log(`🤝 Um contingente aliado de 15 lanceiros marcha sob sua bandeira!`);
     }
+    if (reinoId === 'aguias') {
+      forcaDefensor = Math.min(5, forcaDefensor + 1);   // fortificações intransponíveis
+      log(`🦅 As muralhas do Ninho de Prata são lendárias: a defesa das Águias é implacável.`);
+    }
     const inimigo = Combate.exercitoInimigo(forcaDefensor);
+    if (reinoId === 'leoes') {   // falange disciplinada: formação fixa e aço superior
+      inimigo.formacao = 'linha';
+      inimigo.equip = Math.min(3, (inimigo.equip || 0) + 1);
+      log(`🦁 A falange dos Leões Carmesins forma diante de você — disciplina de lei marcial.`);
+    }
+    if (reinoId === 'touros') {  // guerrilha: emboscada antes da batalha
+      inimigo.formacao = 'cerco';
+      const perda = Math.ceil((state.jogador.tropas.lanceiro || 0) * 0.1);
+      if (perda > 0) {
+        state.jogador.tropas.lanceiro -= perda;
+        log(`🐂 Armadilhas e emboscadas nos pântanos: você perdeu ${perda} lanceiros antes de ver o inimigo.`);
+      }
+    }
     const rel = Combate.batalhar(state, inimigo, `Conquista de ${reino.nome}`);
     if (rel.vitoria) {
       state.jogador.reiDe = reinoId;
       state.jogador.renome += 50;
       log(`👑 VITÓRIA! Os portões de ${reino.capital} se abrem. Você depõe ${reino.rei.nome} e toma o trono de ${reino.nome}!`);
+      for (const n of (state.nobres || []).filter(n => n.reino === reinoId)) {
+        n.reino = 'jogador';
+        log(`🏰 ${n.nome} (${n.cidade}) ajoelha-se ao novo soberano.`);
+      }
       if (!temCB) log(`Mas cuidado: os outros 5 reinos veem um usurpador sangrento no trono. Espere assassinos e embargos.`);
     } else {
       state.jogador.renome = Math.max(0, state.jogador.renome - 20);

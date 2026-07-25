@@ -15,12 +15,12 @@ const Retratos = (() => {
 
   // parâmetros curados por personagem
   const FICHAS = {
-    rei_valdria:  { pele: 0, cabelo: 5, estilo: 'curto', barba: 'cheia', chapeu: 'coroa', roupa: '#8b2635', olhos: '#4a6b8a', cicatriz: false, idade: 'velho' },
-    rei_morvane:  { pele: 0, cabelo: 0, estilo: 'longo', barba: null,    chapeu: 'tiara', roupa: '#2d4a6b', olhos: '#3a3a42', fem: true, idade: 'adulto' },
-    rei_soleara:  { pele: 1, cabelo: 2, estilo: 'curto', barba: 'cavanhaque', chapeu: 'coroa', roupa: '#b8862d', olhos: '#5a4228', gordo: true, idade: 'adulto' },
-    rei_thornmar: { pele: 0, cabelo: 2, estilo: 'medio', barba: 'cheia', chapeu: 'coroa', roupa: '#3e5f3e', olhos: '#4a6b4a', idade: 'adulto' },
-    rei_ashkar:   { pele: 2, cabelo: 0, estilo: 'raspado', barba: 'cheia', chapeu: 'coroa_espinho', roupa: '#6b3a2d', olhos: '#2d2018', cicatriz: true, idade: 'adulto' },
-    rei_lysande:  { pele: 0, cabelo: 8, estilo: 'longo', barba: null,    chapeu: 'tiara', roupa: '#5a3a6b', olhos: '#4a6b8a', fem: true, idade: 'jovem' },
+    rei_imperio:   { pele: 0, cabelo: 0, estilo: 'medio', barba: 'cavanhaque', chapeu: 'coroa_espinho', roupa: '#1a4a2a', olhos: '#2d5a2d', cicatriz: true, idade: 'adulto' },
+    rei_touros:    { pele: 2, cabelo: 0, estilo: 'curto', barba: 'rala', chapeu: null, roupa: '#1c1c22', olhos: '#2d2018', cicatriz: true, idade: 'adulto' },
+    rei_alvorecer: { pele: 0, cabelo: 6, estilo: 'medio', barba: null, chapeu: 'elmo', roupa: '#c9a227', olhos: '#5a4a8a', idade: 'adulto' },
+    rei_leoes:     { pele: 1, cabelo: 7, estilo: 'longo', barba: null, chapeu: 'coroa', roupa: '#8b1a1a', olhos: '#8a3a2d', idade: 'adulto' },
+    rei_aguias:    { pele: 0, cabelo: 6, estilo: 'longo', barba: null, chapeu: 'tiara', roupa: '#9aa4ae', olhos: '#4a5a6b', idade: 'adulto' },
+    rei_rosa:      { pele: 0, cabelo: 8, estilo: 'longo', barba: null, chapeu: 'elmo', roupa: '#2d4a8a', olhos: '#4a6b8a', fem: true, idade: 'adulto' },
     taverneiro:   { pele: 1, cabelo: 3, estilo: 'careca', barba: 'bigode', chapeu: null, roupa: '#6b4a2d', olhos: '#4a3421', gordo: true, avental: true, idade: 'adulto' },
     capitao:      { pele: 1, cabelo: 0, estilo: 'coque', barba: null,    chapeu: 'elmo', roupa: '#5a5f66', olhos: '#3a3a42', fem: true, cicatriz: true, idade: 'adulto' },
     espiao:       { pele: 3, cabelo: 0, estilo: 'curto', barba: 'rala',  chapeu: 'capuz', roupa: '#2d2a33', olhos: '#6b6255', sombra: true, idade: 'adulto' },

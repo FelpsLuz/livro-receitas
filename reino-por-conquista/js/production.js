@@ -96,5 +96,8 @@ const Producao = (() => {
       state.terra.ultimaProducao = { alimento, madeira, ferro, armas, eficiencia };
   }
 
-  return { EDIFICIOS, NIVEL_MAX, custo, producaoDe, construir, descontoEquip, tick, garantir };
+  // estágio visual do sprite: muda a cada 5 níveis (0..6)
+  function estagio(nivel) { return Math.min(6, Math.floor(nivel / 5) + (nivel > 0 ? 1 : 0)); }
+
+  return { EDIFICIOS, NIVEL_MAX, custo, producaoDe, construir, descontoEquip, tick, garantir, estagio };
 })();

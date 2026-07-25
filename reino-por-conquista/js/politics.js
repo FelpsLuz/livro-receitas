@@ -22,6 +22,7 @@ const Politica = (() => {
     if (!state.ofertas) state.ofertas = [];
     if (state.torneio === undefined) state.torneio = null;
     if (!state.cartas) state.cartas = [];
+    if (!state.nobres || !state.nobres.length) gerarNobres(state);
   }
 
   function inicializarRelacoes(state) {
@@ -33,9 +34,99 @@ const Politica = (() => {
           state.relReinos[a.id][b.id] = ri(-30, 30);
       }
     }
-    // rivalidades históricas para dar tempero
-    state.relReinos.valdria.ashkar = -45; state.relReinos.ashkar.valdria = -45;
-    state.relReinos.lysande.thornmar = 35; state.relReinos.thornmar.lysande = 35;
+    // o Império pressiona todos; Touros e Alvorecer são rivais de longa data
+    for (const r of state.reinos) {
+      if (r.id === 'imperio') continue;
+      state.relReinos.imperio[r.id] = ri(-55, -25);
+      state.relReinos[r.id].imperio = ri(-55, -25);
+    }
+    state.relReinos.touros.alvorecer = -35; state.relReinos.alvorecer.touros = -35;
+    state.relReinos.leoes.aguias = -25; state.relReinos.aguias.leoes = -25;
+  }
+
+  // ---------- NOBRES: cada um com sua cidade, sorteada a cada jogo ----------
+  function gerarNobres(state) {
+    state.nobres = [];
+    const cidades = NOMES_CIDADES.slice();
+    for (const r of state.reinos) {
+      const qtd = r.nobres || 4;
+      for (let i = 0; i < qtd; i++) {
+        const ci = Math.floor(Math.random() * cidades.length);
+        const cidade = cidades.splice(ci, 1)[0] || ('Aldeia ' + (i + 1));
+        const fem = Math.random() < 0.4;
+        state.nobres.push({
+          id: 'nobre_' + r.id + '_' + i,
+          nome: (fem ? rnd(NOMES_F) : rnd(NOMES_M)) + ' de ' + cidade,
+          cidade, reino: r.id, reinoOriginal: r.id,
+        });
+      }
+    }
+  }
+
+  function nobresDe(state, reinoId) {
+    return (state.nobres || []).filter(n => n.reino === reinoId);
+  }
+
+  // aliciar um nobre de outro reino para o SEU (exige ser rei)
+  function persuadirNobre(state, reinoId, log) {
+    if (!state.jogador.reiDe)
+      return { ok: false, msg: 'Só um REI convence nobres a trocar de bandeira. Conquiste um trono ou proclame seu reino.' };
+    const alvo = nobresDe(state, reinoId)[0];
+    if (!alvo) return { ok: false, msg: 'Não restam nobres nesse reino.' };
+    const custo = 200;
+    if (state.jogador.ouro < custo) return { ok: false, msg: `Cortejar um nobre custa ${custo} de ouro em presentes.` };
+    state.jogador.ouro -= custo;
+    const chance = 0.25 + state.jogador.renome / 300 + lealdadeDe(state, reinoId) / 250
+      + state.jogador.atributos.carisma * 0.02;
+    if (Math.random() < chance) {
+      alvo.reino = 'jogador';
+      log(`🏰 ${alvo.nome} ajoelhou-se diante de você! A cidade de ${alvo.cidade} agora hasteia SUA bandeira (+20 🪙/mês; o reino de origem enfraquece).`);
+      Dialogo.mudarRelacao(state, 'rei_' + reinoId, -15, 'aliciou nobre');
+      return { ok: true, msg: `${alvo.nome} integrou o seu reino!` };
+    }
+    Dialogo.mudarRelacao(state, 'rei_' + reinoId, -10, 'flagrado aliciando');
+    return { ok: true, msg: `${alvo.nome} recusou — e a corte de origem soube da sua investida (relação −10).` };
+  }
+
+  function meusNobres(state) { return nobresDe(state, 'jogador'); }
+
+  // ---------- REINO INDEPENDENTE ----------
+  function podeProclamar(state) {
+    return !state.jogador.reiDe && state.terra && state.terra.nivel >= 5
+      && eNobre(state) && state.jogador.renome >= 80;
+  }
+  function proclamarIndependencia(state, log) {
+    if (!podeProclamar(state))
+      return { ok: false, msg: 'Proclamar um reino exige: ser CONDE, castelo (terra nível 5) e 80 de renome.' };
+    state.jogador.reiDe = 'jogador';
+    state.jogador.reinoNome = 'Reino de ' + state.terra.nome.replace('Vale ', '');
+    state.jogador.mesesReinando = 0;
+    for (const r of state.reinos)
+      Dialogo.mudarRelacao(state, 'rei_' + r.id, r.id === 'imperio' ? -40 : -20, 'proclamou independência');
+    log(`👑 INDEPENDÊNCIA! Você cinge a própria coroa: nasce o ${state.jogador.reinoNome}. As seis cortes tremem — e Felps, o Destruidor, esmaga a taça na mão ao saber. Sobreviva 12 meses no trono.`);
+    return { ok: true, msg: `O ${state.jogador.reinoNome} foi proclamado! Segure o trono por 12 meses.` };
+  }
+
+  // ---------- VASSALAGEM: crescer dentro de um reino ----------
+  function jurarVassalagem(state, reinoId, log) {
+    if (state.jogador.reiDe) return { ok: false, msg: 'Um rei não se ajoelha.' };
+    if (state.jogador.vassaloDe) return { ok: false, msg: 'Você já jurou a um senhor. Quebre o juramento primeiro (na corte dele).' };
+    const rel = (state.tags['rei_' + reinoId] || { relacao: 0 }).relacao;
+    if (rel < 30) return { ok: false, msg: `Jurar vassalagem exige a confiança do rei (relação ${rel}/30).` };
+    state.jogador.vassaloDe = reinoId;
+    const reino = state.reinos.find(r => r.id === reinoId);
+    Dialogo.mudarRelacao(state, 'rei_' + reinoId, 15, 'juramento de vassalagem');
+    log(`🛡️ Você jurou fidelidade a ${reino.rei.nome}. Contratos do ${reino.nome} pagam +30%, e a coroa o protege — mas vassalo não reivindica tronos.`);
+    return { ok: true, msg: `Agora você é vassalo de ${reino.nome}.` };
+  }
+  function quebrarVassalagem(state, log) {
+    if (!state.jogador.vassaloDe) return { ok: false, msg: 'Você não serve a ninguém.' };
+    const reino = state.reinos.find(r => r.id === state.jogador.vassaloDe);
+    Dialogo.mudarRelacao(state, 'rei_' + state.jogador.vassaloDe, -50, 'quebrou juramento');
+    log(`⚡ Você QUEBROU o juramento a ${reino.rei.nome}. A palavra "traidor" corre as seis cortes (relação −50).`);
+    state.jogador.vassaloDe = null;
+    state.jogador.traidorDeJuramento = true;   // os Leões Carmesins não esquecem
+    return { ok: true, msg: 'Juramento quebrado. Você está livre — e marcado.' };
   }
 
   // ---------- títulos: a escada até a coroa ----------
@@ -71,9 +162,100 @@ const Politica = (() => {
     return { ok: true, msg: 'Você foi armado cavaleiro! (+10 renome). Agora pode comprar terras.' };
   }
 
+  // ---------- DOUTRINAS: cada facção age conforme sua mente ----------
+  const DOUTRINAS = {
+    imperio:   'Status quo e tributos: 10 Lordes Comandantes, nenhum com recursos completos. Exige submissão.',
+    touros:    'Guerrilha e saque: proscritos leais só à sobrevivência. Imprevisíveis; acordos são temporários.',
+    alvorecer: 'Guerra econômica: embargos, sabotagem e assassinos pagos. Raramente declara guerra aberta.',
+    leoes:     'Lei marcial e mérito: falange disciplinada. Punem quem quebra tratados ou mostra fraqueza.',
+    aguias:    'Fortaleza isolacionista: quase impossíveis de invadir. Aliança só com tributo pesado.',
+    rosa:      'Equilíbrio de poder: ajuda o mais fraco para frear o mais forte. A diplomacia mais ativa.',
+  };
+
+  function tickDoutrinas(state, log) {
+    if (!state.embargos) state.embargos = {};
+    // embargos expiram
+    for (const k of Object.keys(state.embargos)) {
+      state.embargos[k]--;
+      if (state.embargos[k] <= 0) { delete state.embargos[k]; log(`📦 O embargo de ${k} contra você expirou.`); }
+    }
+    const relJog = (id) => (state.tags['rei_' + id] || { relacao: 0 }).relacao;
+
+    // IMPÉRIO: exige tributo de quem cresce demais
+    if (!state.tributo && state.jogador.renome >= 60 && state.jogador.vassaloDe !== 'imperio'
+        && state.jogador.reiDe !== 'imperio' && Math.random() < 0.08) {
+      const valor = 150 + Math.floor(state.jogador.renome * 2);
+      state.tributo = { valor, meses: 3 };
+      state.cartas.unshift({ de: 'Felps, o Destruidor', tipo: 'ruim', ano: state.ano, mes: state.mes,
+        texto: `"Seu nome cresce, verme. O Império tolera formigas que pagam. ${valor} de ouro em 3 meses — ou aprenderá por que me chamam de Destruidor." (pague no Mapa)` });
+      log(`🟢 O IMPÉRIO exige tributo: ${valor} de ouro em 3 meses. Pague no Mapa — ou desafie o Destruidor.`);
+    }
+    if (state.tributo) {
+      state.tributo.meses--;
+      if (state.tributo.meses <= 0) {
+        Dialogo.mudarRelacao(state, 'rei_imperio', -30, 'tributo ignorado');
+        const tags = Dialogo.tagsDe(state, 'rei_imperio');
+        tags.flags.marcadoParaMorte = true;
+        log(`🟢 Você IGNOROU o tributo imperial. Felps não esquece (relação −30; adagas virão).`);
+        state.tributo = null;
+      }
+    }
+
+    // ALVORECER DOURADO: embargo e sabotagem em vez de guerra
+    if (relJog('alvorecer') <= -25 && !state.embargos.alvorecer && Math.random() < 0.15) {
+      state.embargos.alvorecer = 4;
+      state.cartas.unshift({ de: 'William Vangeance', tipo: 'ruim', ano: state.ano, mes: state.mes,
+        texto: '"Nada pessoal. Apenas... aritmética. Nossos mercados estão fechados para você." (preços +35% no Alvorecer por 4 meses)' });
+      log(`🪙 O Alvorecer Dourado decretou EMBARGO contra você: preços +35% lá por 4 meses.`);
+    }
+    for (const g of state.guerras) {
+      if ((g.a === 'alvorecer' || g.b === 'alvorecer') && Math.random() < 0.3) {
+        const rival = g.a === 'alvorecer' ? g.b : g.a;
+        state.mercados[rival].trigo.oferta = Math.max(0.25, state.mercados[rival].trigo.oferta * 0.85);
+        log(`🔥 Mercenários pagos pelo Alvorecer queimaram colheitas de ${rival} — o trigo dispara lá.`);
+      }
+    }
+
+    // TOUROS NEGROS: saque de comboios de quem não é amigo
+    if (relJog('touros') < 0 && Math.random() < 0.08) {
+      const itens = Object.keys(state.carga).filter(k => state.carga[k] > 0);
+      if (itens.length) {
+        const item = rnd(itens);
+        const perda = Math.max(1, Math.ceil(state.carga[item] * 0.3));
+        state.carga[item] -= perda;
+        log(`🐂 Emboscada dos Touros Negros na estrada! Perdeu ${perda}× ${MERCADORIAS[item].nome}. Yami manda lembranças.`);
+      }
+    }
+
+    // LEÕES CARMESINS: punem traidores de juramento
+    if (state.jogador.traidorDeJuramento && relJog('leoes') > -60 && Math.random() < 0.2) {
+      Dialogo.mudarRelacao(state, 'rei_leoes', -15, 'desprezo por traidores');
+      log(`🦁 Fuegoleon soube da sua quebra de juramento: "Covardia se paga." (Leões −15)`);
+    }
+
+    // ROSA AZUL: freia quem está vencendo (inclusive você)
+    if (state.jogador.reiDe && Math.random() < 0.25) {
+      Dialogo.mudarRelacao(state, 'rei_rosa', -4, 'equilíbrio de poder');
+      if (Math.random() < 0.3)
+        log(`🌹 Charlotte Roselei costura pactos contra o novo poder do continente — você. (Rosa Azul esfria)`);
+    }
+  }
+
+  function pagarTributo(state, log) {
+    if (!state.tributo) return { ok: false, msg: 'Nenhum tributo pendente.' };
+    if (state.jogador.ouro < state.tributo.valor)
+      return { ok: false, msg: `Faltam ${state.tributo.valor - state.jogador.ouro} de ouro.` };
+    state.jogador.ouro -= state.tributo.valor;
+    Dialogo.mudarRelacao(state, 'rei_imperio', 10, 'tributo pago');
+    log(`🟢 Tributo de ${state.tributo.valor} pago ao Império. Felps aceita — por ora — sua existência.`);
+    state.tributo = null;
+    return { ok: true, msg: 'Tributo pago. O Destruidor está... satisfeito.' };
+  }
+
   // ---------- IA dos reinos: relações, guerras e propostas ----------
   function tickReinos(state, log) {
     garantir(state);
+    tickDoutrinas(state, log);
     const R = state.relReinos;
     // deriva das relações entre reinos
     for (const a of state.reinos) for (const b of state.reinos) {
@@ -108,7 +290,8 @@ const Politica = (() => {
       const temAlianca = state.tratados.some(t => t.reino === r.id && t.tipo === 'alianca');
       const jaOfertou = state.ofertas.some(o => o.reino === r.id);
       if (jaOfertou) continue;
-      if (!temComercio && rel >= 25 && Math.random() < 0.10) {
+      const chanceOferta = r.id === 'rosa' ? 0.20 : 0.10;   // Rosa Azul: a diplomacia mais ativa
+      if (!temComercio && rel >= 25 && Math.random() < chanceOferta) {
         state.ofertas.push({ reino: r.id, tipo: 'comercio' });
         state.cartas.unshift({ de: r.rei.nome, tipo: 'bom', ano: state.ano, mes: state.mes,
           texto: `"Nossos mercadores falam bem de você. ${r.nome} propõe um ACORDO COMERCIAL: rotas abertas, taxas reduzidas. Aceite no mapa, se tiver juízo."` });
@@ -136,6 +319,7 @@ const Politica = (() => {
       vivos.push(t);
     }
     state.tratados = vivos;
+    renda += meusNobres(state).length * 20;   // cada cidade nobre rende 20/mês
     if (renda > 0) {
       state.jogador.ouro += renda;
       state.jogador.ultimaRendaTratados = renda;
@@ -161,8 +345,9 @@ const Politica = (() => {
     if (tipo === 'alianca') {
       if (rel < 50) return { ok: false, msg: `Aliança exige confiança profunda (relação ${rel}/50).` };
       if (state.jogador.renome < 60) return { ok: false, msg: `Aliança exige renome 60+ (você tem ${state.jogador.renome}).` };
-      if (state.jogador.ouro < 300) return { ok: false, msg: 'Selar aliança custa 300 de ouro em garantias.' };
-      state.jogador.ouro -= 300;
+      const custoAli = reinoId === 'aguias' ? 600 : 300;   // Nozel cobra tributo absurdo
+      if (state.jogador.ouro < custoAli) return { ok: false, msg: `Selar aliança custa ${custoAli} de ouro em garantias${reinoId === 'aguias' ? ' (as Águias cobram caro pela pureza)' : ''}.` };
+      state.jogador.ouro -= custoAli;
       state.tratados.push({ reino: reinoId, tipo: 'alianca' });
       Dialogo.mudarRelacao(state, 'rei_' + reinoId, 10, 'aliança');
       log(`🤝 ALIANÇA com ${reino.nome}! Tropas aliadas lutarão ao seu lado e os assassinos deles jamais virão atrás de você.`);
@@ -288,5 +473,8 @@ const Politica = (() => {
 
   return { garantir, inicializarRelacoes, tickReinos, proporTratado, aceitarOferta,
            aliado, temComercio, tickTorneio, participarTorneio, desafiarMilicia,
-           lealdadeDe, titulo, eNobre, eCavaleiro, podeSerArmado, armarCavaleiro };
+           lealdadeDe, titulo, eNobre, eCavaleiro, podeSerArmado, armarCavaleiro,
+           gerarNobres, nobresDe, persuadirNobre, meusNobres,
+           podeProclamar, proclamarIndependencia, jurarVassalagem, quebrarVassalagem,
+           DOUTRINAS, pagarTributo };
 })();

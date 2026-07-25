@@ -34,6 +34,7 @@ const Economia = (() => {
     if (typeof Politica !== 'undefined') {
       if (Politica.temComercio(state, reinoId)) preco *= 0.90;   // acordo comercial
       if (Politica.lealdadeDe(state, reinoId) >= 50) preco *= 0.95; // povo te adora
+      if (state.embargos && state.embargos[reinoId]) preco *= 1.35; // embargo do Alvorecer
     }
     return Math.max(1, Math.round(preco));
   }

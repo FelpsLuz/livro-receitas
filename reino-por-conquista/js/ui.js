@@ -140,6 +140,13 @@ const UI = (() => {
         painel.appendChild(el('p', 'flavor', prox.desc));
       } else {
         painel.appendChild(el('p', 'flavor bom', '🏰 Seu castelo domina o horizonte. Falta apenas uma coroa.'));
+        if (Politica.podeProclamar(s)) {
+          const bInd = el('button', 'btn destaque', '👑 PROCLAMAR REINO INDEPENDENTE (Conde + castelo + 80⭐)');
+          bInd.onclick = () => { const r = Politica.proclamarIndependencia(s, Jogo.log); if (r.ok) Sfx.vitoria(); aviso(r.msg); Jogo.salvar(); renderTudo(); };
+          painel.appendChild(bInd);
+        } else if (!s.jogador.reiDe) {
+          painel.appendChild(el('p', 'flavor', `👑 Independência exige 80 de renome (você tem ${s.jogador.renome}).`));
+        }
       }
       const bExp = el('button', 'btn sec', '📦 Exportar 30 de alimento da vila (ouro rápido, povo faminto reclama)');
       bExp.onclick = () => { aviso(Economia.exportarComidaDaTerra(Jogo.state, 30).msg); renderTudo(); };
@@ -152,14 +159,22 @@ const UI = (() => {
       if (up) painel.appendChild(el('p', 'flavor', `Último mês: +${up.alimento} 🌾, +${up.madeira} 🪵, +${up.ferro} ⛏️ ferro, +${up.armas} ⚔️ armas` + (up.eficiencia < 1 ? ` (eficiência ${Math.round(up.eficiencia * 100)}% — faltam braços)` : '')));
       for (const [idEd, ed] of Object.entries(Producao.EDIFICIOS)) {
         const nivelEd = t.edificios[idEd];
-        const card = el('div', 'card-npc');
-        card.innerHTML = `<b>${ed.icone} ${ed.nome}</b> — nível <b>${nivelEd}</b>/${Producao.NIVEL_MAX}<br><small><i>${ed.desc}</i>` +
+        const est = Producao.estagio(nivelEd);
+        const card = el('div', 'card-npc com-retrato');
+        const cv = el('canvas', 'retrato');
+        cv.width = 48; cv.height = 48;
+        desenharEdificio(cv, idEd, est);
+        card.appendChild(cv);
+        const info = el('div', 'npc-info');
+        info.innerHTML = `<b>${ed.icone} ${ed.nome}</b> — nível <b>${nivelEd}</b>/${Producao.NIVEL_MAX} · <small>estágio ${est}/6 (sprite evolui a cada 5 níveis)</small><br><small><i>${ed.desc}</i>` +
           (nivelEd > 0 ? ` · produz ${Producao.producaoDe(s, idEd, nivelEd)}/mês` : '') + `</small>`;
+        card.appendChild(info);
+        const card_alvo = info;
         if (nivelEd < Producao.NIVEL_MAX) {
           const custoEd = Producao.custo(idEd, nivelEd);
           const b = el('button', 'btn mini', `Evoluir (${custoEd} 🪙 + ${Math.round(custoEd / 4)} 🪵)`);
           b.onclick = () => { const r = Producao.construir(s, idEd); if (r.ok) Sfx.moeda(); aviso(r.msg); Jogo.salvar(); renderTudo(); };
-          card.appendChild(b);
+          card_alvo.appendChild(b);
         }
         painel.appendChild(card);
       }
@@ -168,11 +183,55 @@ const UI = (() => {
     c.appendChild(painel);
   }
 
+  // sprite procedural do edifício: cresce a cada estágio (0..6)
+  function desenharEdificio(cv, id, est) {
+    const x = cv.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(a, b, w, h); };
+    P(0, 0, 48, 48, '#5cae31');
+    P(0, 40, 48, 8, '#3f8a44');
+    if (est === 0) { P(20, 30, 8, 8, '#8a6136'); P(18, 36, 12, 2, '#77522c'); return; } // terreno baldio
+    const t = Math.min(est, 6);
+    if (id === 'fazenda') {
+      for (let i = 0; i < t; i++) P(4, 8 + i * 5, 18 + t * 2, 3, i % 2 ? '#8fd14a' : '#7a5433');
+      P(28, 20 - t, 16, 16 + t, '#a3703c');
+      x.fillStyle = '#c9403a';
+      x.beginPath(); x.moveTo(26, 22 - t); x.lineTo(36, 12 - t); x.lineTo(46, 22 - t); x.fill();
+      if (t >= 4) { P(24, 14, 5, 22, '#c2c3c9'); P(23, 12, 7, 4, '#9799a3'); } // silo
+    } else if (id === 'serraria') {
+      for (let i = 0; i < Math.min(t, 4); i++) { P(4 + i * 6, 30, 4, 12, '#6b4423'); x.fillStyle = '#389048'; x.beginPath(); x.moveTo(2 + i * 6, 32); x.lineTo(6 + i * 6, 18 - t); x.lineTo(10 + i * 6, 32); x.fill(); }
+      P(28, 26 - t, 16, 16 + t, '#8a5a2e');
+      for (let i = 0; i < t; i++) P(29, 40 - i * 3, 14, 2, '#c48c4e'); // pilha de toras
+      if (t >= 3) { x.fillStyle = '#c2c3c9'; x.beginPath(); x.arc(36, 22 - t, 4 + t / 2, 0, 7); x.fill(); } // serra
+    } else if (id === 'mina') {
+      P(6, 18 - t, 36, 24 + t, '#7b7e8e');
+      P(18, 30, 12, 12, '#26160e');
+      P(16, 28, 16, 3, '#6b4423'); P(16, 28, 3, 14, '#6b4423'); P(29, 28, 3, 14, '#6b4423');
+      for (let i = 0; i < t; i++) P(8 + i * 5, 22 - t + (i % 2) * 3, 3, 3, '#c2c3c9'); // veios de ferro
+      if (t >= 3) { P(34, 36, 10, 6, '#8a5a2e'); P(35, 42, 3, 3, '#26160e'); P(40, 42, 3, 3, '#26160e'); } // vagonete
+      if (t >= 5) P(4, 12 - t, 8, 30 + t, '#63667a'); // torre do poço
+    } else {
+      P(10, 22 - t, 28, 20 + t, '#8a5a2e');
+      x.fillStyle = '#63667a';
+      x.beginPath(); x.moveTo(6, 24 - t); x.lineTo(24, 12 - t); x.lineTo(42, 24 - t); x.fill();
+      P(30, 14 - t, 6, 10, '#9799a3'); // chaminé
+      P(31, 10 - t, 4, 4, '#e8742e');  // brasa
+      P(14, 34, 8, 8, '#26160e');      // forja
+      P(15, 35, 6, 4, '#f7a63c');
+      if (t >= 3) { P(26, 36, 10, 3, '#c2c3c9'); P(28, 32, 3, 6, '#63667a'); } // bigorna
+      if (t >= 5) for (let i = 0; i < 3; i++) P(38 + i * 3, 28, 2, 10, '#c2c3c9'); // arsenal
+    }
+  }
+
   // ---------- MAPA (reinos, guerras, relações) ----------
   function renderMapa(c) {
     const s = Jogo.state;
     const painel = el('div', 'painel');
     painel.appendChild(el('h2', null, 'Os Seis Reinos'));
+    if (s.jogador.reiDe) {
+      const meus = Politica.meusNobres(s);
+      painel.appendChild(el('p', 'flavor bom', `👑 ${s.jogador.reiDe === 'jogador' ? (s.jogador.reinoNome || 'Seu Reino') : 'Seu trono'} — nobres sob sua bandeira: ${meus.length} (${meus.map(n => n.cidade).join(', ') || 'nenhum ainda'}). Cada um rende 20 🪙/mês e mina o reino de origem.`));
+    }
     if (s.guerras.length) {
       for (const g of s.guerras) {
         const ra = s.reinos.find(r => r.id === g.a), rb = s.reinos.find(r => r.id === g.b);
@@ -195,7 +254,10 @@ const UI = (() => {
         ${Politica.temComercio(s, r.id) ? ' · <b class="bom">🪙 Comércio</b>' : ''}
         ${Politica.aliado(s, r.id) ? ' · <b class="bom">🤝 ALIADO</b>' : ''}
         ${Politica.lealdadeDe(s, r.id) > 0 ? ` · ✊ Povo ${Politica.lealdadeDe(s, r.id)}/100` : ''}
-        ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}</small>`);
+        ${(s.embargos && s.embargos[r.id]) ? ' · <b class="ruim">📦 EMBARGO contra você</b>' : ''}
+        ${s.jogador.vassaloDe === r.id ? ' · <b class="bom">🛡️ SEU SENHOR</b>' : ''}
+        ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}<br>
+        🏰 Nobres: ${Politica.nobresDe(s, r.id).length}${r.imperial ? ' (Lordes Comandantes)' : ''} · <i>${Politica.DOUTRINAS[r.id] || ''}</i></small>`);
       card.appendChild(infoReino);
       const botoes = el('div', 'linha-botoes');
       const bIr = el('button', 'btn mini', s.local === r.id ? '📍 Você está aqui' : '🐴 Viajar');
@@ -214,9 +276,20 @@ const UI = (() => {
         botoes.appendChild(bCom);
       }
       if (Politica.temComercio(s, r.id) && !Politica.aliado(s, r.id) && !oferta) {
-        const bAli = el('button', 'btn mini', '🤝 Propor aliança (300 🪙, rel. 50+, ⭐60+)');
+        const custoAli = r.id === 'aguias' ? 600 : 300;
+        const bAli = el('button', 'btn mini', `🤝 Propor aliança (${custoAli} 🪙, rel. 50+, ⭐60+)`);
         bAli.onclick = () => { aviso(Politica.proporTratado(s, r.id, 'alianca', Jogo.log).msg); Jogo.salvar(); renderTudo(); };
         botoes.appendChild(bAli);
+      }
+      if (r.imperial && s.tributo) {
+        const bTri = el('button', 'btn mini', `🟢 Pagar tributo imperial (${s.tributo.valor} 🪙, ${s.tributo.meses}m restantes)`);
+        bTri.onclick = () => { const rr = Politica.pagarTributo(s, Jogo.log); if (rr.ok) Sfx.moeda(); aviso(rr.msg); Jogo.salvar(); renderTudo(); };
+        botoes.appendChild(bTri);
+      }
+      if (s.jogador.reiDe && Politica.nobresDe(s, r.id).length > 0) {
+        const bNob = el('button', 'btn mini', '🏰 Aliciar nobre (200 🪙)');
+        bNob.onclick = () => { aviso(Politica.persuadirNobre(s, r.id, Jogo.log).msg); Jogo.salvar(); renderTudo(); };
+        botoes.appendChild(bNob);
       }
       if (!s.jogador.reiDe) {
         const bGuerra = el('button', 'btn mini ruim-btn', cb ? '⚔️ Guerra de conquista (com CB)' : '⚔️ Atacar SEM casus belli');
@@ -361,6 +434,16 @@ const UI = (() => {
       painel.appendChild(bCav);
     } else if (!Politica.eCavaleiro(s)) {
       painel.appendChild(el('p', 'flavor', `🎖️ Progressão: 60⭐ + relação 40 com um rei → CAVALEIRO (compra terra) → Senhor → Barão (terra 2) → CONDE (terra 4, nobre) → só nobres reivindicam tronos.`));
+    }
+    if (!s.jogador.reiDe && !s.jogador.vassaloDe) {
+      const relRei = (s.tags['rei_' + s.local] || { relacao: 0 }).relacao;
+      const bVas = el('button', 'btn sec', `🛡️ Jurar vassalagem a ${reino.rei.nome} (relação ${relRei}/30) — proteção e contratos +30%`);
+      bVas.onclick = () => { const r = Politica.jurarVassalagem(s, s.local, Jogo.log); aviso(r.msg); Jogo.salvar(); renderTudo(); };
+      painel.appendChild(bVas);
+    } else if (s.jogador.vassaloDe === s.local) {
+      const bQue = el('button', 'btn sec', '⚡ Quebrar o juramento de vassalagem (relação −50, fama de traidor)');
+      bQue.onclick = () => { const r = Politica.quebrarVassalagem(s, Jogo.log); aviso(r.msg); Jogo.salvar(); renderTudo(); };
+      painel.appendChild(bQue);
     }
     painel.appendChild(el('p', 'flavor', '💡 Na conversa, escreva o que quiser: elogie, insulte, ameace, peça contratos, proponha casamento, pergunte sobre guerras e preços, chantageie com segredos, ofereça suborno, negocie a paz... O NPC entende — e LEMBRA.'));
     c.appendChild(painel);

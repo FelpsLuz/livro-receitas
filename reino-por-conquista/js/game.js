@@ -21,7 +21,7 @@ const Jogo = (() => {
       reinos: JSON.parse(JSON.stringify(REINOS_BASE)),
       npcs: JSON.parse(JSON.stringify(NPCS_BASE)),
       guerras: [], tags: {}, segredos: [], casusBelli: [],
-      carga: {}, terra: null, local: 'valdria',
+      carga: {}, terra: null, local: 'touros', versaoMundo: 2,
       familia: { conjuge: null, filhos: [] },
       contratos: [], cronica: [], eventoPendente: null, chantagemPendente: null,
       fim: null,
@@ -64,8 +64,9 @@ const Jogo = (() => {
       state.jogador.mesesReinando++;
       if (state.jogador.mesesReinando >= 12 && !state.fim) {
         const reino = state.reinos.find(r => r.id === state.jogador.reiDe);
+        const nomeReino = reino ? reino.nome : (state.jogador.reinoNome || 'seu reino');
         state.fim = { tipo: 'vitoria',
-          msg: `👑 Você segurou o trono de ${reino.nome} por um ano inteiro contra assassinos, rebeliões e credores. De mercenário sem nome a REI. Os bardos cantarão a saga de ${state.jogador.nome} por gerações.` };
+          msg: `👑 Você segurou o trono de ${nomeReino} por um ano inteiro contra assassinos, rebeliões e credores. De mercenário sem nome a REI. Os bardos cantarão a saga de ${state.jogador.nome} por gerações.` };
       }
     }
   }
@@ -250,6 +251,7 @@ const Jogo = (() => {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       state = JSON.parse(raw);
+      if (state.versaoMundo !== 2) return false;   // save de mundo antigo: incompatível
       Politica.garantir(state);
       Producao.garantir(state);
       Cidade.seedNpcs(state.terra ? state.terra.nivel : -1);

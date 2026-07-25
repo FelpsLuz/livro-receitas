@@ -15,44 +15,53 @@ const MERCADORIAS = {
 };
 
 // producao: o que o reino produz bem (oferta alta = preço baixo lá)
+// O IMPÉRIO é o mais forte: exército maior e 10 nobres vassalos.
 const REINOS_BASE = [
   {
-    id: 'valdria', nome: 'Valdria', cor: '#8b2635',
-    producao: ['trigo', 'cavalos'], capital: 'Pedravelha',
-    rei: { id: 'rei_valdria', nome: 'Rei Aldric', genero: 'm', personalidade: 'orgulhoso',
-           desc: 'Um veterano de guerra que valoriza honra acima de tudo — e não perdoa insultos.' },
+    id: 'imperio', nome: 'Império de Felps', cor: '#1a4a2a', imperial: true, nobres: 10,
+    producao: ['ferro', 'cavalos'], capital: 'Trono Verde',
+    rei: { id: 'rei_imperio', nome: 'Felps, o Destruidor', genero: 'm', personalidade: 'cruel',
+           desc: 'O Imperador do brasão verde-escuro. Dez nobres governam cidades em seu nome. Nunca perdeu uma guerra — e faz questão de lembrar.' },
   },
   {
-    id: 'morvane', nome: 'Morvane', cor: '#2d4a6b',
-    producao: ['ferro', 'madeira'], capital: 'Forjanegra',
-    rei: { id: 'rei_morvane', nome: 'Rainha Iseld', genero: 'f', personalidade: 'calculista',
-           desc: 'Fria e paciente. Dizem que cada palavra dela é uma peça num tabuleiro.' },
+    id: 'touros', nome: 'Touros Negros', cor: '#1c1c22', nobres: 4,
+    producao: ['madeira', 'sal'], capital: 'Covil Negro',
+    rei: { id: 'rei_touros', nome: 'Yami Sukehiro', genero: 'm', personalidade: 'orgulhoso',
+           desc: 'Bruto, direto e mais forte do que parece. "Supere seus limites. Aqui e agora." Odeia rodeios.' },
   },
   {
-    id: 'soleara', nome: 'Soleara', cor: '#b8862d',
-    producao: ['sal', 'tecidos'], capital: 'Porto do Sol',
-    rei: { id: 'rei_soleara', nome: 'Rei Domenico', genero: 'm', personalidade: 'ganancioso',
-           desc: 'Mercador coroado. Tudo tem um preço para ele — inclusive a lealdade.' },
+    id: 'alvorecer', nome: 'Alvorecer Dourado', cor: '#c9a227', nobres: 4,
+    producao: ['trigo', 'tecidos'], capital: 'Aurora Alta',
+    rei: { id: 'rei_alvorecer', nome: 'William Vangeance', genero: 'm', personalidade: 'calculista',
+           desc: 'Gentil na voz, insondável nos planos. Ninguém sabe o que há atrás da máscara.' },
   },
   {
-    id: 'thornmar', nome: 'Thornmar', cor: '#3e5f3e',
-    producao: ['madeira', 'trigo'], capital: 'Carvalho Alto',
-    rei: { id: 'rei_thornmar', nome: 'Rei Godric', genero: 'm', personalidade: 'honrado',
-           desc: 'Justo e querido pelo povo. Odeia intrigas e quem as fabrica.' },
+    id: 'leoes', nome: 'Leões Carmesins', cor: '#8b1a1a', nobres: 4,
+    producao: ['ferro', 'trigo'], capital: 'Chama Rubra',
+    rei: { id: 'rei_leoes', nome: 'Fuegoleon Vermillion', genero: 'm', personalidade: 'honrado',
+           desc: 'Honra em brasa. Sua irmã Mereoleona comanda a vanguarda — e é ainda mais assustadora.' },
   },
   {
-    id: 'ashkar', nome: 'Ashkar', cor: '#6b3a2d',
-    producao: ['ferro', 'sal'], capital: 'Cinzabruta',
-    rei: { id: 'rei_ashkar', nome: 'Rei Vukan', genero: 'm', personalidade: 'cruel',
-           desc: 'Tomou o trono do irmão à força. Respeita apenas força e teme veneno.' },
+    id: 'aguias', nome: 'Águias Prateadas', cor: '#9aa4ae', nobres: 4,
+    producao: ['tecidos', 'cavalos'], capital: 'Ninho de Prata',
+    rei: { id: 'rei_aguias', nome: 'Nozel Silva', genero: 'm', personalidade: 'orgulhoso',
+           desc: 'Altivo como a prata do brasão. Despreza plebeus — até que provem seu valor.' },
   },
   {
-    id: 'lysande', nome: 'Lysande', cor: '#5a3a6b',
-    producao: ['tecidos', 'cavalos'], capital: 'Torreluz',
-    rei: { id: 'rei_lysande', nome: 'Rainha Elara', genero: 'f', personalidade: 'romantica',
-           desc: 'Jovem e idealista. Sonha com alianças de casamento e teme a guerra.' },
+    id: 'rosa', nome: 'Rosa Azul', cor: '#2d4a8a', nobres: 4,
+    producao: ['sal', 'madeira'], capital: 'Jardim Azul',
+    rei: { id: 'rei_rosa', nome: 'Charlotte Roselei', genero: 'f', personalidade: 'romantica',
+           desc: 'Espinhos por fora, segredos por dentro. Rainha guerreira que ninguém jamais viu corar. Quase ninguém.' },
   },
 ];
+
+// cidades dos nobres: sorteadas a cada novo jogo
+const NOMES_CIDADES = ['Pedraverde', 'Vau do Sol', 'Ravina Alta', 'Porto Cinza', 'Vila das Brumas',
+  'Colina do Falcão', 'Forte Aurora', 'Passo do Lobo', 'Baía Rubra', 'Campo Largo', 'Torre Velha',
+  'Vale Fundo', 'Ponte Queimada', 'Outeiro Real', 'Foz Dourada', 'Serra do Espinho', 'Lago Prata',
+  'Rocha Negra', 'Vinha Alta', 'Charco Frio', 'Encosta Rubra', 'Moinho Velho', 'Cruz do Vento',
+  'Porto das Andorinhas', 'Muralha Baixa', 'Clareira do Cervo', 'Poço Fundo', 'Alto do Trovão',
+  'Ermida Azul', 'Curva do Rio'];
 
 // NPCs menores que aparecem na taverna / corte
 const NPCS_BASE = [

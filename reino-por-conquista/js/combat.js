@@ -27,7 +27,8 @@ const Combate = (() => {
     if (forca <= 1) e.tropas = { campones: ri(8, 14), lanceiro: ri(2, 5) };
     else if (forca === 2) e.tropas = { lanceiro: ri(8, 14), arqueiro: ri(4, 8) };
     else if (forca === 3) e.tropas = { lanceiro: ri(12, 18), arqueiro: ri(8, 12), cavaleiro: ri(2, 4) };
-    else e.tropas = { lanceiro: ri(20, 30), arqueiro: ri(12, 18), cavaleiro: ri(5, 9) };
+    else if (forca === 4) e.tropas = { lanceiro: ri(20, 30), arqueiro: ri(12, 18), cavaleiro: ri(5, 9) };
+    else { e.tropas = { lanceiro: ri(32, 42), arqueiro: ri(18, 26), cavaleiro: ri(9, 13) }; e.equip = 2; } // legião imperial
     return e;
   }
 
