@@ -187,6 +187,9 @@ const UI = (() => {
   function desenharEdificio(cv, id, est) {
     const x = cv.getContext('2d');
     x.imageSmoothingEnabled = false;
+    // arte do designer, se entregue em img/edificios/<id>_<estagio>.png (48×48)
+    if (typeof Assets !== 'undefined' && est > 0
+        && Assets.desenharSeExistir(x, 'edificios/' + id + '_' + Math.min(est, 6), 0, 0, 48, 48)) return;
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(a, b, w, h); };
     P(0, 0, 48, 48, '#5cae31');
     P(0, 40, 48, 8, '#3f8a44');
