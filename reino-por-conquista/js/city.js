@@ -392,7 +392,8 @@ const Cidade = (() => {
   function arbusto(x, bx, by, pal) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     P(bx - 5, by + 4, 12, 2, SOMBRA);
-    if (pal.tiles && estDesenha(x, 'arbusto_' + (1 + (bx % 3)), bx, by + 6, 16 + (bx % 3) * 4)) return;
+    const vb = 1 + (Math.floor(bx) % 3);
+    if (pal.tiles && estDesenha(x, 'arbusto_' + vb, bx, by + 6, 16 + (vb - 1) * 4)) return;
     P(bx - 6, by - 2, 12, 6, pal.arvore[1]);
     P(bx - 4, by - 5, 9, 5, pal.arvore[1]);
     P(bx - 6, by + 1, 5, 3, pal.arvore[0]);

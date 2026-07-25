@@ -24,7 +24,7 @@ const Combate = (() => {
   // gera exército inimigo com força ~alvo
   function exercitoInimigo(forca) {
     const e = { tropas: {}, equip: forca > 2 ? 1 : 0, formacao: rnd(Object.keys(FORMACOES)) };
-    if (forca <= 1) e.tropas = { campones: ri(8, 14), lanceiro: ri(2, 5) };
+    if (forca <= 1) e.tropas = { campones: ri(4, 8), lanceiro: ri(1, 3) };
     else if (forca === 2) e.tropas = { lanceiro: ri(8, 14), arqueiro: ri(4, 8) };
     else if (forca === 3) e.tropas = { lanceiro: ri(12, 18), arqueiro: ri(8, 12), cavaleiro: ri(2, 4) };
     else if (forca === 4) e.tropas = { lanceiro: ri(20, 30), arqueiro: ri(12, 18), cavaleiro: ri(5, 9) };
@@ -106,7 +106,7 @@ const Contratos = (() => {
   const TIPOS = [
     { id: 'escolta', nome: 'Escoltar caravana', forca: 1,
       desc: 'Mercadores pagam por proteção contra bandidos na estrada.',
-      ouro: [60, 120], renome: 5, moral: 0 },
+      ouro: [110, 170], renome: 5, moral: 0 },
     { id: 'bandidos', nome: 'Caçar bandidos', forca: 2,
       desc: 'Um vilarejo sofre com saqueadores. Limpe a região.',
       ouro: [100, 180], renome: 10, moral: 0 },

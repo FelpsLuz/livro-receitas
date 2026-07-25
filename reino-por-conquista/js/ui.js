@@ -17,6 +17,9 @@ const UI = (() => {
     if (html !== undefined) e.innerHTML = html;
     return e;
   };
+  // escapa texto livre do jogador antes de ir para innerHTML (anti-XSS)
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ---------- inicialização ----------
   function iniciar() {
@@ -358,7 +361,7 @@ const UI = (() => {
 
     if (s.torneio) {
       const cardT = el('div', 'card-contrato');
-      cardT.innerHTML = `<b><img src="img/armas/espada_dourada.png" class="ico-arma g" alt=""> TORNEIO DE ${s.torneio.reinoNome.toUpperCase()}</b><br><small>Lanças, glória e a chance de recrutar um CAMPEÃO DE GUERRA. Prazo: ${s.torneio.meses} ${s.torneio.meses === 1 ? 'mês' : 'meses'}. Inscrição: 50 🪙.</small>`;
+      cardT.innerHTML = `<b><img src="img/armas/espada_dourada.png" class="ico-arma g" alt=""> TORNEIO DE ${s.torneio.reinoNome.toUpperCase()}</b><br><small>Lanças, glória e a chance de recrutar um CAMPEÃO DE GUERRA. Prazo: ${s.torneio.meses} ${s.torneio.meses === 1 ? 'mês' : 'meses'}. Inscrição: 100 🪙.</small>`;
       const bT = el('button', 'btn mini', '🐎 Entrar na justa!');
       bT.onclick = () => {
         const r = Politica.participarTorneio(s, Jogo.log);
@@ -482,8 +485,8 @@ const UI = (() => {
       s.historicoConversa = { npc: npc.id, linhas: [{ de: 'npc', texto: '*aguarda você falar*' }] };
     for (const l of s.historicoConversa.linhas) {
       hist.appendChild(el('div', 'fala ' + l.de,
-        (l.de === 'voce' ? '<b>Você:</b> ' : `<b>${npc.nome}:</b> `) + l.texto +
-        (l.efeitos && l.efeitos.length ? `<div class="tags-efeito">${l.efeitos.join(' ')}</div>` : '')));
+        (l.de === 'voce' ? '<b>Você:</b> ' : `<b>${esc(npc.nome)}:</b> `) + esc(l.texto) +
+        (l.efeitos && l.efeitos.length ? `<div class="tags-efeito">${esc(l.efeitos.join(' '))}</div>` : '')));
     }
     painel.appendChild(hist);
 
@@ -504,7 +507,7 @@ const UI = (() => {
       input.value = '';
       input.placeholder = `${npc.nome} está ouvindo...`;
       s.historicoConversa.linhas.push({ de: 'voce', texto });
-      hist.appendChild(bolha('voce', '<b>Você:</b> ' + texto));
+      hist.appendChild(bolha('voce', '<b>Você:</b> ' + esc(texto)));
       const tb = bolha('npc digitando',
         `<b>${npc.nome}</b> <span class="pondera">pondera</span><span class="pontos"><i>.</i><i>.</i><i>.</i></span>`);
       hist.appendChild(tb);
@@ -582,8 +585,11 @@ const UI = (() => {
     painel.appendChild(linhaForm);
     painel.appendChild(el('p', 'flavor', '💡 Linha de Escudos vence Cunha; Cunha rompe Envolvimento; Envolvimento flanqueia a Linha. Escolha pensando no inimigo.'));
 
+    const custoEq = Math.round(200 * (j.equip + 1) * (1 - Producao.descontoEquip(s)));
+    const descEq = Producao.descontoEquip(s);
     const bEq = el('button', 'btn', '');
-    bEq.innerHTML = `<img src="img/armas/martelo.png" class="ico-arma" alt=""> Melhorar equipamento (${200 * (j.equip + 1)} 🪙)`;
+    bEq.innerHTML = `<img src="img/armas/martelo.png" class="ico-arma" alt=""> Melhorar equipamento (${custoEq} 🪙${descEq > 0 ? ` · −${Math.round(descEq * 100)}% do ferreiro` : ''})`;
+    bEq.disabled = j.equip >= 3;
     bEq.onclick = () => { aviso(Jogo.melhorarEquip().msg); renderTudo(); };
     painel.appendChild(bEq);
     const bG = el('button', 'btn sec', '');

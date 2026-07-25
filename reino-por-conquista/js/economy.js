@@ -162,8 +162,17 @@ const Economia = (() => {
 
     if (t.alimento <= 0) {
       t.felicidade = clamp(t.felicidade - 20, 0, 100);
+      const antes = t.populacao;
       t.populacao = Math.max(5, t.populacao - ri(1, 4));
-      log(`💀 FOME em ${t.nome}! O povo passa fome e alguns morrem. Felicidade −20.`);
+      // os mortos saem também das fileiras convocadas (nunca há mais soldado que morador)
+      const mortos = antes - t.populacao;
+      if (mortos > 0 && state.jogador.tropas.campones > 0) {
+        const desertam = Math.min(state.jogador.tropas.campones, Math.ceil(mortos / 2));
+        state.jogador.tropas.campones -= desertam;
+      }
+      if (state.jogador.tropas.campones > t.populacao)
+        state.jogador.tropas.campones = t.populacao;
+      log(`💀 FOME em ${t.nome}! O povo passa fome e alguns morrem${mortos > 0 ? ' (−' + mortos + ' hab.)' : ''}. Felicidade −20.`);
     } else if (t.felicidade < 70) {
       t.felicidade = clamp(t.felicidade + 5, 0, 100);
     }
@@ -195,6 +204,8 @@ const Economia = (() => {
     for (const [tipo, n] of Object.entries(state.jogador.tropas))
       manut += (TROPAS[tipo].manut || 0) * n;
     manut += state.jogador.guardas * 4; // guarda de elite é cara
+    // campeões de guerra cobram soldo (nada é de graça)
+    for (const c of (state.campeoes || [])) manut += (c.soldo || 0);
     state.jogador.ultimaManut = manut;
 
     if (state.jogador.ouro >= manut) {

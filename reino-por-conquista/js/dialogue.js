@@ -62,15 +62,24 @@ const Dialogo = (() => {
       'me arrependo', 'retiro o que disse', 'fui injusto', 'fui injusta', 'errei com voce', 'nao devia ter dito'] },
   ];
 
+  // keywords curtas/ambíguas exigem limite de palavra (evita 'boi'→'oi', 'salsicha'→'sal')
+  const EXATO = new Set(['oi', 'ola', 'sim', 'nao', 'sal', 'paz', 'guerra', 'ferro', 'salve', 'grato']);
+  // ao empatar no peso, intenções hostis vencem a bajulação
+  const PRIORIDADE = { ameaca: 3, insulto: 3, chantagear: 2, subornar: 1 };
+  function casa(t, p) {
+    if (p.includes(' ') || !EXATO.has(p)) return t.includes(p);
+    return new RegExp('(^|\\s)' + p + '($|\\s)').test(t);
+  }
   function detectarIntencoes(texto) {
     const t = norm(texto);
     const achadas = [];
     for (const int of INTENCOES) {
       let peso = 0;
-      for (const p of int.palavras) if (t.includes(p)) peso += p.includes(' ') ? 2 : 1;
+      for (const p of int.palavras) if (casa(t, p)) peso += p.includes(' ') ? 2 : 1;
       if (peso > 0) achadas.push({ id: int.id, peso });
     }
-    achadas.sort((a, b) => b.peso - a.peso);
+    // desempate: maior peso; empate → intenção mais hostil (ameaça não vira elogio)
+    achadas.sort((a, b) => b.peso - a.peso || (PRIORIDADE[b.id] || 0) - (PRIORIDADE[a.id] || 0));
     return achadas;
   }
 
@@ -132,7 +141,8 @@ const Dialogo = (() => {
     orgulhoso: {
       insulto: ['Como OUSA falar assim comigo?! Guardas, memorizem este rosto.',
                 'Palavras de um verme. Minha paciência com você acabou.'],
-      insultoGrave: ['Você acaba de assinar sua sentença. Ninguém me insulta duas vezes e vive para se gabar.'],
+      insultoGrave: ['Você acaba de assinar sua sentença. Ninguém me insulta duas vezes e vive para se gabar.',
+                'Duas vezes. DUAS. Guardas — arranquem esse verme da minha vista.'],
       elogio: ['Hm. Ao menos você reconhece grandeza quando a vê.',
                'Palavras adequadas. Continue assim e talvez eu lembre do seu nome.'],
       ameaca: ['Você? Me ameaçar? *ri* Meus cavaleiros já esmagaram reinos por menos.',
@@ -145,7 +155,8 @@ const Dialogo = (() => {
     calculista: {
       insulto: ['*anota algo num pergaminho* Interessante. Isso terá um custo, sabe.',
                 'Emoções são caras. As suas acabaram de custar minha boa vontade.'],
-      insultoGrave: ['*sorri sem os olhos* As pessoas que falam assim comigo costumam ter... acidentes.'],
+      insultoGrave: ['*sorri sem os olhos* As pessoas que falam assim comigo costumam ter... acidentes.',
+                'Já anotei seu nome duas vezes. A terceira eu risco — junto com você.'],
       elogio: ['Bajulação. Barata, mas registrada. O que você quer de verdade?',
                'Charmoso. Agora me diga o que isso deveria comprar.'],
       ameaca: ['Ameaças são promessas de gente fraca. Você é fraco, ou é uma promessa?'],
@@ -157,7 +168,8 @@ const Dialogo = (() => {
     ganancioso: {
       insulto: ['Insultos não pagam minhas taxas. Mas vão encarecer as suas.',
                 'Ofender quem controla os preços? Péssimo negócio, amigo.'],
-      insultoGrave: ['Você acaba de virar persona non grata no meu mercado. Boa sorte pagando o dobro.'],
+      insultoGrave: ['Você acaba de virar persona non grata no meu mercado. Boa sorte pagando o dobro.',
+                'Insultou o dono do preço duas vezes? Seu crédito acabou. Pague à vista — e caro.'],
       elogio: ['Haha! Gosto de você. Bajuladores ganham... 5% de desconto. Talvez.'],
       ameaca: ['Ameaças? Eu compro lâminas melhores do que as suas com o troco do café.'],
       saudacao: ['Bem-vindo, bem-vindo! Veio gastar ou desperdiçar meu tempo?'],
@@ -168,7 +180,8 @@ const Dialogo = (() => {
     honrado: {
       insulto: ['Palavras rudes dizem mais sobre você do que sobre mim. Estou desapontado.',
                 'Esperava mais de alguém com sua reputação.'],
-      insultoGrave: ['Chega. Você não é bem-vindo aqui até aprender respeito.'],
+      insultoGrave: ['Chega. Você não é bem-vindo aqui até aprender respeito.',
+                'Eu tolerei uma vez. Não tolero duas. Retire-se da minha corte.'],
       elogio: ['Agradeço, mas prefiro ser julgado por meus atos, não por palavras doces.'],
       ameaca: ['Não busco guerra, mas não fugirei de uma. Pense bem no que está começando.'],
       saudacao: ['Seja bem-vindo. Fale com franqueza — é tudo que peço.'],
@@ -179,7 +192,8 @@ const Dialogo = (() => {
     cruel: {
       insulto: ['*silêncio longo* ...Meu irmão disse algo parecido. Pergunte a ele como terminou. Ah, espere.',
                 'Continue. Estou decidindo qual dos seus dedos vai primeiro.'],
-      insultoGrave: ['*sorri* Você tem coragem. Vou arrancá-la de você lentamente.'],
+      insultoGrave: ['*sorri* Você tem coragem. Vou arrancá-la de você lentamente.',
+                '*levanta-se do trono* Duas vezes... você quer mesmo conhecer minha masmorra.'],
       elogio: ['Medo vestido de elogio. Sensato. Continue com medo.'],
       ameaca: ['*inclina-se para frente* Finalmente alguém interessante. Tente. Eu imploro.'],
       saudacao: ['Você tem 30 segundos antes que eu perca o interesse. Use-os.'],
@@ -189,7 +203,8 @@ const Dialogo = (() => {
     },
     romantica: {
       insulto: ['*olhos marejados* Por que tanta crueldade? Achei que pudéssemos ser amigos...'],
-      insultoGrave: ['Até os gentis têm limites. Você acaba de encontrar o meu.'],
+      insultoGrave: ['Até os gentis têm limites. Você acaba de encontrar o meu.',
+                'Eu quis gostar de você. Você tornou isso impossível. Saia.'],
       elogio: ['*sorri* Que gentileza! Palavras assim são raras numa corte cheia de víboras.'],
       ameaca: ['Guerra... sempre a guerra. Meus conselheiros cuidarão de você. Que desperdício.'],
       saudacao: ['Bem-vindo a Torreluz! Conte-me: como está o mundo lá fora?'],
@@ -259,7 +274,7 @@ const Dialogo = (() => {
         const grave = tags.flags.insultou >= 2 || sent <= -6;
         const delta = grave ? -30 : -15;
         efeitos.push(mudarRelacao(state, npc.id, delta, 'insulto').tag);
-        resposta = rnd(grave && voz.insultoGrave ? voz.insultoGrave : voz.insulto);
+        resposta = semRepetir(grave && voz.insultoGrave ? voz.insultoGrave : voz.insulto, tags, grave ? 'insG' : 'ins');
         if (tags.relacao <= -50 && npc.id.startsWith('rei_')) {
           tags.flags.marcadoParaMorte = true;
           efeitos.push('[Marcado: um assassino pode ser enviado atrás de você]');
@@ -277,14 +292,14 @@ const Dialogo = (() => {
         const rendimento = Math.max(2, 10 - (tags.flags.elogiou * 2)
           - (npc.personalidade === 'calculista' ? 4 : 0));
         efeitos.push(mudarRelacao(state, npc.id, rendimento, 'elogio').tag);
-        resposta = memoriaPrefixo() + rnd(voz.elogio);
+        resposta = memoriaPrefixo() + semRepetir(voz.elogio, tags, 'elo');
         break;
       }
       case 'ameaca': {
         tags.flags.ameacou = (tags.flags.ameacou || 0) + 1;
         lembrar(state, npc.id, 'ameaca', textoJogador);
         efeitos.push(mudarRelacao(state, npc.id, -25, 'ameaça').tag);
-        resposta = rnd(voz.ameaca);
+        resposta = semRepetir(voz.ameaca, tags, 'ame');
         if (npc.id.startsWith('rei_')) {
           const reinoId = npc.id.replace('rei_', '');
           if (tags.flags.ameacou >= 2) {
@@ -295,7 +310,7 @@ const Dialogo = (() => {
         break;
       }
       case 'saudacao':
-        resposta = memoriaPrefixo() + rnd(voz.saudacao);
+        resposta = memoriaPrefixo() + semRepetir(voz.saudacao, tags, 'sau');
         if (tags.relacao > -10) efeitos.push(mudarRelacao(state, npc.id, 1, 'cortesia').tag);
         break;
       case 'despedida':
@@ -373,14 +388,14 @@ const Dialogo = (() => {
       }
       case 'agradecer': {
         const gratidoes = {
-          orgulhoso: 'Gratidão é o mínimo. Mas foi notada.',
-          calculista: 'Guarde a gratidão; prefiro favores futuros.',
-          ganancioso: 'Agradecimento não tilinta. Mas aceito.',
-          honrado: 'Não há o que agradecer. Fiz o que era certo.',
-          cruel: 'Agradeça continuando vivo. É um privilégio revogável.',
-          romantica: 'Ora! Cortesia é rara por aqui. Fico feliz.',
+          orgulhoso: ['Gratidão é o mínimo. Mas foi notada.', 'Hm. Reconhecimento. Comece a me agradar.'],
+          calculista: ['Guarde a gratidão; prefiro favores futuros.', 'Agradecer é barato. Lembre-se disso quando eu cobrar.'],
+          ganancioso: ['Agradecimento não tilinta. Mas aceito.', 'De nada. A próxima cortesia vem com desconto... talvez.'],
+          honrado: ['Não há o que agradecer. Fiz o que era certo.', 'Guarde o agradecimento para quem precisar mais que eu.'],
+          cruel: ['Agradeça continuando vivo. É um privilégio revogável.', 'Gratidão... que novidade tediosa. Continue útil.'],
+          romantica: ['Ora! Cortesia é rara por aqui. Fico feliz.', 'Que doçura! Palavras assim iluminam a corte.'],
         };
-        resposta = gratidoes[npc.personalidade] || gratidoes.honrado;
+        resposta = semRepetir(gratidoes[npc.personalidade] || gratidoes.honrado, tags, 'agr');
         if (tags.relacao < 60) efeitos.push(mudarRelacao(state, npc.id, 2, 'cortesia').tag);
         break;
       }
@@ -476,6 +491,15 @@ const Dialogo = (() => {
     return { resposta, efeitos, acoes, intencao: principal };
   }
 
+  // anti-repetição por CATEGORIA: a mesma fala nunca sai 2x seguidas
+  function semRepetir(arr, tags, chave) {
+    if (!arr || arr.length <= 1) return arr ? arr[0] : '';
+    if (!tags.flags.ultimoIdx) tags.flags.ultimoIdx = {};
+    let idx = Math.floor(Math.random() * arr.length);
+    if (idx === tags.flags.ultimoIdx[chave]) idx = (idx + 1) % arr.length;
+    tags.flags.ultimoIdx[chave] = idx;
+    return arr[idx];
+  }
   // evita repetir a mesma fala neutra duas vezes seguidas
   function rndDiferente(arr, tags) {
     if (arr.length <= 1) return arr[0];

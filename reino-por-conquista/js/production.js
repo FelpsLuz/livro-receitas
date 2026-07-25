@@ -28,15 +28,15 @@ const Producao = (() => {
   }
 
   function custo(id, nivel) {
-    // exponencial suave: nível 1 ≈ base, nível 10 ≈ 4x, nível 30 ≈ 90x
-    return Math.round(EDIFICIOS[id].base * Math.pow(1.165, nivel));
+    // exponencial mais suave: nível 10 ≈ 3x, nível 30 ≈ 26x (payback viável)
+    return Math.round(EDIFICIOS[id].base * Math.pow(1.12, nivel));
   }
 
   function producaoDe(state, id, nivel) {
     switch (id) {
-      case 'fazenda': return nivel * 5;                       // alimento/mês
-      case 'serraria': return nivel * 3;                      // madeira/mês
-      case 'mina': return Math.floor(nivel / 2);              // ferro/mês (valioso)
+      case 'fazenda': return nivel * 7;                       // alimento/mês
+      case 'serraria': return nivel * 4;                      // madeira/mês
+      case 'mina': return nivel;                              // ferro/mês (valioso → carga)
       case 'ferreiro': return Math.floor(nivel / 2);          // máx. de armas forjadas/mês
     }
     return 0;
@@ -48,7 +48,7 @@ const Producao = (() => {
     const nivel = state.terra.edificios[id];
     if (nivel >= NIVEL_MAX) return { ok: false, msg: `${EDIFICIOS[id].nome} já está no nível máximo (${NIVEL_MAX}).` };
     const ouro = custo(id, nivel);
-    const madeira = Math.round(ouro / 4);
+    const madeira = Math.round(ouro / 12);
     if (state.jogador.ouro < ouro) return { ok: false, msg: `Faltam ${ouro - state.jogador.ouro} de ouro (custa ${ouro}).` };
     if (state.terra.madeira < madeira) return { ok: false, msg: `Falta madeira: ${state.terra.madeira}/${madeira}.` };
     state.jogador.ouro -= ouro;
@@ -83,11 +83,11 @@ const Producao = (() => {
     state.terra.madeira += madeira;
     if (ferro > 0) state.carga.ferro = (state.carga.ferro || 0) + ferro;
 
-    // ferreiro forja: consome 2 ferro da carga por arma
+    // ferreiro forja: consome 1 ferro da carga por arma (arma vale mais que o ferro)
     let armas = 0;
     const capacidade = Math.round(producaoDe(state, 'ferreiro', ed.ferreiro) * eficiencia);
-    while (armas < capacidade && (state.carga.ferro || 0) >= 2) {
-      state.carga.ferro -= 2;
+    while (armas < capacidade && (state.carga.ferro || 0) >= 1) {
+      state.carga.ferro -= 1;
       armas++;
     }
     if (armas > 0) state.carga.armas = (state.carga.armas || 0) + armas;

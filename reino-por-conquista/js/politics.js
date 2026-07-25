@@ -198,7 +198,9 @@ const Politica = (() => {
     // IMPÉRIO: exige tributo de quem cresce demais
     if (!state.tributo && state.jogador.renome >= 60 && state.jogador.vassaloDe !== 'imperio'
         && state.jogador.reiDe !== 'imperio' && Math.random() < 0.08) {
-      const valor = 150 + Math.floor(state.jogador.renome * 2);
+      // o tributo taxa fortunas, não só a fama: 10% do tesouro se for maior (teto 2000)
+      const base = 150 + Math.floor(state.jogador.renome * 2);
+      const valor = Math.min(2000, Math.max(base, Math.floor(state.jogador.ouro * 0.10)));
       state.tributo = { valor, meses: 3 };
       state.cartas.unshift({ de: 'Felps, o Destruidor', tipo: 'ruim', ano: state.ano, mes: state.mes,
         texto: `"Seu nome cresce, verme. O Império tolera formigas que pagam. ${valor} de ouro em 3 meses — ou aprenderá por que me chamam de Destruidor." (pague no Mapa)` });
@@ -336,6 +338,8 @@ const Politica = (() => {
     }
     state.tratados = vivos;
     renda += meusNobres(state).length * 20;   // cada cidade nobre rende 20/mês
+    // renda de COROA: fundar o próprio reino passa a valer o tesouro investido
+    if (state.jogador.reiDe === 'jogador') renda += 400 + (state.terra ? state.terra.nivel * 30 : 0);
     if (renda > 0) {
       state.jogador.ouro += renda;
       state.jogador.ultimaRendaTratados = renda;
@@ -423,12 +427,12 @@ const Politica = (() => {
   function participarTorneio(state, log) {
     garantir(state);
     if (!state.torneio) return { ok: false, msg: 'Não há torneio aberto.' };
-    if (state.jogador.ouro < 50) return { ok: false, msg: 'A inscrição custa 50 de ouro.' };
-    state.jogador.ouro -= 50;
+    if (state.jogador.ouro < 100) return { ok: false, msg: 'A inscrição custa 100 de ouro.' };
+    state.jogador.ouro -= 100;
     const forca = state.jogador.atributos.forca + state.jogador.equip * 2;
     const rodadas = [];
     let vitorias = 0;
-    for (const dificuldade of [10, 13, 16]) {
+    for (const dificuldade of [12, 15, 18]) {
       const rolagem = ri(1, 20) + forca;
       const venceu = rolagem >= dificuldade;
       rodadas.push({ dificuldade, rolagem, venceu });
@@ -443,8 +447,8 @@ const Politica = (() => {
       state.jogador.renome += 25;
       const nome = rnd(NOMES_CAMPEOES.filter(n => !state.campeoes.some(c => c.nome === n)));
       if (nome) {
-        state.campeoes.push({ nome, bonus: 15 });
-        msg = `🏆 CAMPEÃO DO TORNEIO DE ${reinoNome.toUpperCase()}! +${premio} ouro, +25 renome. E o vice, ${nome}, ajoelhou-se: "Minha lâmina é sua." (+15 de ataque permanente no exército!)`;
+        state.campeoes.push({ nome, bonus: 12, soldo: 12 });
+        msg = `🏆 CAMPEÃO DO TORNEIO DE ${reinoNome.toUpperCase()}! +${premio} ouro, +25 renome. E o vice, ${nome}, ajoelhou-se: "Minha lâmina é sua." (+12 de ataque permanente; soldo 12 🪙/mês)`;
       } else {
         msg = `🏆 Campeão de novo! +${premio} ouro, +25 renome. Os bardos já compõem.`;
       }

@@ -298,7 +298,7 @@ const Intriga = (() => {
         g ? `Ouvi que a guerra entre ${state.reinos.find(r => r.id === g.a).nome} e ${state.reinos.find(r => r.id === g.b).nome} fez o trigo triplicar de preço por lá. Quem levar comida fica rico — se as patrulhas não pegarem.`
           : 'Os reinos estão em paz... o que significa que os preços estão baixos e os espiões, ocupados.',
         'Dizem que todo rei tem um segredo que vale mais que ouro. Mande espiões e descubra você mesmo.',
-        `O Rei Vukan de Ashkar dorme com um provador de venenos ao lado da cama. Medo tem cheiro, sabia?`,
+        `Fred Prateado dorme com um provador de venenos ao lado da cama. Medo tem cheiro, sabia?`,
         'Guarda de elite sem soldo é portão aberto. Nunca deixe o tesouro zerar, é o que eu digo.',
       ];
       return { resposta: `*abaixa a voz* ...${rnd(dicas)}`, efeitos: [`[−${custo} ouro]`] };
