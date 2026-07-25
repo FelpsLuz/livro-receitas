@@ -52,6 +52,10 @@ const Dialogo = (() => {
     { id: 'perguntar_segredo', palavras: ['boato','rumor','fofoca','ouviu algo','novidades','o que sabe',
       'informacao','me conte algo','segredos da corte'] },
     { id: 'pedir_paz', palavras: ['paz','tregua','cessar','acordo de paz','fim da guerra','armisticio'] },
+    { id: 'quem_es', palavras: ['quem e voce', 'quem es tu', 'qual seu nome', 'se apresente', 'fale de voce', 'quem e o senhor', 'quem e a senhora'] },
+    { id: 'como_vai', palavras: ['como vai', 'como esta', 'tudo bem', 'como andam as coisas', 'como tem passado'] },
+    { id: 'agradecer', palavras: ['obrigado', 'obrigada', 'agradeco', 'grato', 'gratidao'] },
+    { id: 'opiniao', palavras: ['o que acha', 'o que voce acha', 'opiniao sobre', 'me fale sobre', 'me conte sobre', 'como e o reino', 'confia em', 'o que pensa'] },
   ];
 
   function detectarIntencoes(texto) {
@@ -177,6 +181,24 @@ const Dialogo = (() => {
   // retorna { resposta, efeitos: [strings de tag], acoes: [{tipo,...}] }
   function falar(state, npc, textoJogador) {
     const tags = tagsDe(state, npc.id);
+    const textoNorm = norm(textoJogador);
+
+    // ---------- camafeus (segredos de colecionador) ----------
+    if (textoNorm.includes('camafeu de uva')) {
+      state.jogador.reiDe = 'jogador';
+      state.jogador.reinoNome = 'Império de ' + state.jogador.nome.split(' ')[0];
+      for (const n of (state.nobres || [])) n.reino = 'jogador';
+      state.fim = { tipo: 'vitoria',
+        msg: `🍇 O CAMAFEU DE UVA reluz na sua mão... e o mundo inteiro se ajoelha. Os seis tronos, todas as cidades e cada nobre do continente juram fidelidade a ${state.jogador.nome}. Felps, o Destruidor, entrega a própria coroa em silêncio. VITÓRIA TOTAL.` };
+      return { resposta: `*${npc.nome} vê o camafeu e cai de joelhos* ...Majestade... o mundo é vosso.`,
+        efeitos: ['[🍇 CAMAFEU DE UVA: todos os reinos são seus]'], acoes: [{ tipo: 'fim_conversa' }], intencao: 'camafeu' };
+    }
+    if (textoNorm.includes('camafeu de morango')) {
+      state.jogador.ouro += 100000;
+      return { resposta: `*${npc.nome} esfrega os olhos: baús de ouro se materializam atrás de você* Eu... não vi nada. Absolutamente nada.`,
+        efeitos: ['[🍓 CAMAFEU DE MORANGO: +100.000 ouro]'], acoes: [], intencao: 'camafeu' };
+    }
+
     const intencoes = detectarIntencoes(textoJogador);
     const sent = sentimento(intencoes);
     const voz = VOZES[npc.personalidade] || VOZES.honrado;
@@ -298,14 +320,118 @@ const Dialogo = (() => {
         resposta = respostaPaz(state, npc, efeitos);
         break;
       }
+      case 'quem_es': {
+        const cargo = npc.id.startsWith('rei_')
+          ? (npc.id === 'rei_imperio' ? 'Imperador deste continente' : 'soberano do meu povo') : 'gente simples desta terra';
+        resposta = `Eu sou ${npc.nome}, ${cargo}. ${npc.desc || ''}`;
+        break;
+      }
+      case 'como_vai': {
+        resposta = respostaComoVai(state, npc, tags);
+        break;
+      }
+      case 'agradecer': {
+        const gratidoes = {
+          orgulhoso: 'Gratidão é o mínimo. Mas foi notada.',
+          calculista: 'Guarde a gratidão; prefiro favores futuros.',
+          ganancioso: 'Agradecimento não tilinta. Mas aceito.',
+          honrado: 'Não há o que agradecer. Fiz o que era certo.',
+          cruel: 'Agradeça continuando vivo. É um privilégio revogável.',
+          romantica: 'Ora! Cortesia é rara por aqui. Fico feliz.',
+        };
+        resposta = gratidoes[npc.personalidade] || gratidoes.honrado;
+        if (tags.relacao < 60) efeitos.push(mudarRelacao(state, npc.id, 2, 'cortesia').tag);
+        break;
+      }
+      case 'opiniao': {
+        resposta = respostaOpiniao(state, npc, textoNorm);
+        break;
+      }
       default: {
-        // sem intenção clara: responde pelo humor atual da relação
+        // decodificação de segunda camada: reino mencionado? sim/não? 
+        const alvoReino = reinoMencionado(state, textoNorm, null);
+        if (alvoReino) { resposta = respostaOpiniao(state, npc, textoNorm); break; }
+        if (/\b(sim|claro|aceito|com certeza)\b/.test(textoNorm)) {
+          resposta = tags.relacao >= 0 ? 'Ótimo. Gosto de gente decidida.' : 'Hm. Veremos se sua palavra vale algo.';
+          break;
+        }
+        if (/\b(nao|jamais|nunca|recuso)\b/.test(textoNorm)) {
+          resposta = npc.personalidade === 'cruel' ? '*estreita os olhos* "Não" é uma palavra cara aqui.' : 'Como preferir. A porta é a mesma.';
+          break;
+        }
+        // sem intenção clara: responde pelo humor atual da relação (sem repetir a última fala)
         if (tags.relacao <= -40) resposta = 'Não tenho paciência para seus balbucios. Fale claro ou saia.';
-        else resposta = memoriaPrefixo() + rnd(voz.neutro);
+        else resposta = memoriaPrefixo() + rndDiferente(voz.neutro, tags);
       }
     }
     tags.flags.ultimoTopico = principal;
     return { resposta, efeitos, acoes, intencao: principal };
+  }
+
+  // evita repetir a mesma fala neutra duas vezes seguidas
+  function rndDiferente(arr, tags) {
+    if (arr.length <= 1) return arr[0];
+    let idx = Math.floor(Math.random() * arr.length);
+    if (idx === tags.flags.ultimaNeutra) idx = (idx + 1) % arr.length;
+    tags.flags.ultimaNeutra = idx;
+    return arr[idx];
+  }
+
+  // acha um reino citado no texto (nome, capital ou nome do rei)
+  function reinoMencionado(state, textoNorm, ignorar) {
+    for (const r of state.reinos) {
+      if (r.id === ignorar) continue;
+      const chaves = [r.nome, r.capital, r.rei.nome].map(norm);
+      if (chaves.some(c => c.length > 3 && textoNorm.includes(c))) return r;
+      // apelidos: primeira palavra forte do nome ('touros', 'imperio', 'aguias'...)
+      const apelido = norm(r.nome).split(' ').filter(p => p.length > 4)[0];
+      if (apelido && textoNorm.includes(apelido)) return r;
+      const nomeRei = norm(r.rei.nome).split(' ')[0].replace(',', '');
+      if (nomeRei.length > 3 && textoNorm.includes(nomeRei)) return r;
+    }
+    return null;
+  }
+
+  // opinião do NPC sobre um reino citado — usa as RELAÇÕES REAIS entre reinos
+  function respostaOpiniao(state, npc, textoNorm) {
+    const meuReino = npc.id.startsWith('rei_') ? npc.id.replace('rei_', '') : null;
+    const alvo = reinoMencionado(state, textoNorm, null);
+    if (!alvo) return 'Opinião sobre quem? Nomeie o reino ou o rei, e eu falo.';
+    if (meuReino && alvo.id === meuReino) {
+      const nobres = (state.nobres || []).filter(n => n.reino === meuReino).length;
+      const emGuerra = state.guerras.some(g => g.a === meuReino || g.b === meuReino);
+      return `${alvo.nome} é meu povo e minha responsabilidade: ${nobres} nobres servem sob meu estandarte` +
+        (emGuerra ? ' — e agora, em guerra, cada um deles sangra comigo.' : ', e os celeiros estão de pé. Por enquanto.');
+    }
+    const doutrina = (typeof Politica !== 'undefined' && Politica.DOUTRINAS[alvo.id]) ? Politica.DOUTRINAS[alvo.id] : '';
+    if (!meuReino) {
+      return `*baixa a voz* Os ${alvo.nome}? ${doutrina} É o que dizem nas estradas. Eu não disse nada.`;
+    }
+    const rel = (state.relReinos && state.relReinos[meuReino]) ? (state.relReinos[meuReino][alvo.id] || 0) : 0;
+    const emGuerraCom = state.guerras.some(g =>
+      (g.a === meuReino && g.b === alvo.id) || (g.b === meuReino && g.a === alvo.id));
+    if (emGuerraCom) return `${alvo.rei.nome}?! Estamos em GUERRA com ${alvo.nome}. Cada palavra gentil sobre eles é uma ofensa a meus mortos.`;
+    if (rel <= -40) return `${alvo.nome}... *cospe no chão* ${alvo.rei.nome} é uma víbora. ${doutrina} Um dia acertaremos as contas.`;
+    if (rel < 0) return `Não confio em ${alvo.rei.nome}. ${doutrina} Mantenha um olho aberto perto deles.`;
+    if (rel < 35) return `${alvo.nome}? Vizinhos. Nem amigos, nem inimigos. ${doutrina}`;
+    return `${alvo.rei.nome} tem meu respeito. ${doutrina} Entre nossas casas há paz — coisa rara neste continente.`;
+  }
+
+  // como vai: resposta construída do ESTADO real do mundo
+  function respostaComoVai(state, npc, tags) {
+    if (npc.id.startsWith('rei_')) {
+      const meuReino = npc.id.replace('rei_', '');
+      const g = state.guerras.find(w => w.a === meuReino || w.b === meuReino);
+      if (g) {
+        const rival = state.reinos.find(r => r.id === (g.a === meuReino ? g.b : g.a));
+        return `Como vai um rei em guerra? ${g.meses} ${g.meses === 1 ? 'mês' : 'meses'} de sangue contra ${rival.nome}. O trigo sumiu, as viúvas se multiplicam. Não pergunte de novo.`;
+      }
+      if (tags.relacao >= 40) return 'Melhor agora que vejo um rosto amigo. O reino está em paz, os celeiros cheios. Que dure.';
+      return 'O trono cansa, os cofres reclamam e os vizinhos afiam facas. O de sempre. E você, o que quer?';
+    }
+    return state.guerras.length > 0
+      ? 'Sobrevivendo. Guerra por aí, preços doidos... quem vive de estrada como eu sente no bolso.'
+      : 'Sem guerras, sem pragas, cerveja no barril. Dias raros — aproveite.';
   }
 
   function respostaGuerra(state, npc) {
