@@ -209,6 +209,14 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .ico-arma { width: 32px; height: 32px; image-rendering: pixelated; vertical-align: -10px; }
 .ico-arma.g { width: 40px; height: 40px; vertical-align: -13px; }
 
+/* ---------- cena de duelo animada nos relatórios de batalha ---------- */
+.duelo-canvas {
+  display: block; width: 100%; max-width: 460px; margin: 8px auto;
+  image-rendering: pixelated;
+  border: 3px solid var(--ouro); background: #241a12;
+  box-shadow: 3px 3px 0 0 rgba(0,0,0,.35);
+}
+
 /* ---------- barras ornamentadas do HUD ---------- */
 .barra-hud {
   position: relative; display: inline-block; width: 112px; height: 29px; max-width: 100%;

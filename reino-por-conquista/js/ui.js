@@ -798,6 +798,12 @@ const UI = (() => {
     const box = $('#modal-box');
     box.innerHTML = '';
     box.appendChild(el('h2', null, (rel.vitoria ? '🏆 VITÓRIA — ' : '☠️ DERROTA — ') + (rel.contexto || 'Batalha')));
+    // cena animada do duelo (sprites do pacote de cavaleiros)
+    const cvD = el('canvas', 'duelo-canvas');
+    cvD.width = 340; cvD.height = 130;
+    box.appendChild(cvD);
+    const eImperial = /imp[eé]rio|felps|legi[aã]o|trono|rei /i.test(rel.contexto || '');
+    Duelo.iniciar(cvD, !!rel.vitoria, eImperial ? 'rei' : 'guerreiro');
     for (const r of rel.rodadas) {
       const vant = r.ventJ > 1 ? ' (sua formação venceu a deles!)' : r.ventI > 1 ? ' (a formação DELES venceu a sua!)' : '';
       box.appendChild(el('p', 'linha-cronica',
@@ -807,7 +813,7 @@ const UI = (() => {
     const totalJ = Object.values(rel.baixasJogador).reduce((a, x) => a + x, 0);
     box.appendChild(el('p', null, `Cada soldado conta: você perdeu <b>${totalJ}</b> homens nesta ação.`));
     const b = el('button', 'btn', 'Continuar');
-    b.onclick = () => { Jogo.salvar(); renderTudo(); };
+    b.onclick = () => { Duelo.parar(); Jogo.salvar(); renderTudo(); };
     box.appendChild(b);
   }
 

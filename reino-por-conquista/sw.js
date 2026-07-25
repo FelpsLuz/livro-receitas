@@ -1,9 +1,9 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v15';
+const CACHE = 'reino-v16';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',
-  './js/data.js', './js/assets.js', './js/sfx.js', './js/portraits.js', './js/clans.js', './js/production.js', './js/politics.js',
+  './js/data.js', './js/assets.js', './js/duelo.js', './js/sfx.js', './js/portraits.js', './js/clans.js', './js/production.js', './js/politics.js',
   './js/dialogue.js', './js/economy.js', './js/combat.js', './js/intrigue.js',
   './js/city.js', './js/game.js', './js/ui.js',
   './icons/icon-192.png', './icons/icon-512.png',
@@ -12,6 +12,17 @@ const ARQUIVOS = [
   './img/armas/lanca.png', './img/armas/arco.png', './img/armas/espada.png', './img/armas/espada_dourada.png',
   './img/armas/claymore.png', './img/armas/adaga.png', './img/armas/machado.png', './img/armas/machado_grande.png',
   './img/armas/martelo.png', './img/armas/escudo.png', './img/armas/escudo_redondo.png',
+  './img/retratos/rei_imperio.png', './img/retratos/rei_touros.png', './img/retratos/rei_alvorecer.png',
+  './img/retratos/rei_leoes.png', './img/retratos/rei_aguias.png', './img/retratos/rei_rosa.png',
+  './img/retratos/taverneiro.png', './img/retratos/capitao.png', './img/retratos/espiao.png',
+  './img/retratos/nobre_1.png', './img/retratos/nobre_2.png', './img/retratos/nobre_3.png',
+  './img/retratos/nobre_4.png', './img/retratos/nobre_5.png', './img/retratos/nobre_6.png',
+  './img/retratos/nobre_7.png', './img/retratos/nobre_8.png',
+  './img/duelo/heroi_idle.png', './img/duelo/heroi_run.png', './img/duelo/heroi_atk.png',
+  './img/duelo/heroi_hit.png', './img/duelo/heroi_morte.png',
+  './img/duelo/guerreiro_idle.png', './img/duelo/guerreiro_atk.png', './img/duelo/guerreiro_hit.png',
+  './img/duelo/guerreiro_morte.png',
+  './img/duelo/rei_idle.png', './img/duelo/rei_atk.png', './img/duelo/rei_hit.png', './img/duelo/rei_morte.png',
 ];
 
 self.addEventListener('install', (e) => {
