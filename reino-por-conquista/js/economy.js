@@ -168,6 +168,15 @@ const Economia = (() => {
       t.felicidade = clamp(t.felicidade + 5, 0, 100);
     }
 
+    // fartura atrai gente: população cresce até o teto do assentamento
+    const teto = 40 + t.nivel * 40;
+    if (t.alimento > t.populacao * 2 && t.felicidade >= 60 && t.populacao < teto) {
+      const cresc = Math.max(1, Math.round(t.populacao * 0.02));
+      t.populacao = Math.min(teto, t.populacao + cresc);
+      if (Math.random() < 0.2)
+        log(`👨‍👩‍👧 Celeiros cheios atraem famílias: ${t.nome} cresce (+${cresc}, ${t.populacao}/${teto}).`);
+    }
+
     // impostos
     const impostos = Math.round(trabalhando * 0.8 * (1 + t.nivel * 0.2));
     state.jogador.ouro += impostos;

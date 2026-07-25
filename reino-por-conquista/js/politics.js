@@ -99,7 +99,7 @@ const Politica = (() => {
     if (!podeProclamar(state))
       return { ok: false, msg: 'Proclamar um reino exige: ser CONDE, castelo (terra nível 5) e 80 de renome.' };
     state.jogador.reiDe = 'jogador';
-    state.jogador.reinoNome = 'Reino de ' + state.terra.nome.replace('Vale ', '');
+    state.jogador.reinoNome = 'Reino do ' + state.terra.nome;
     state.jogador.mesesReinando = 0;
     for (const r of state.reinos)
       Dialogo.mudarRelacao(state, 'rei_' + r.id, r.id === 'imperio' ? -40 : -20, 'proclamou independência');
@@ -292,17 +292,19 @@ const Politica = (() => {
       if (jaOfertou) continue;
       const chanceOferta = r.id === 'rosa' ? 0.20 : 0.10;   // Rosa Azul: a diplomacia mais ativa
       if (!temComercio && rel >= 25 && Math.random() < chanceOferta) {
-        state.ofertas.push({ reino: r.id, tipo: 'comercio' });
+        state.ofertas.push({ reino: r.id, tipo: 'comercio', meses: 6 });
         state.cartas.unshift({ de: r.rei.nome, tipo: 'bom', ano: state.ano, mes: state.mes,
           texto: `"Nossos mercadores falam bem de você. ${r.nome} propõe um ACORDO COMERCIAL: rotas abertas, taxas reduzidas. Aceite no mapa, se tiver juízo."` });
         log(`✉️ ${r.rei.nome} propôs um acordo comercial! Aceite na aba Mapa.`);
       } else if (temComercio && !temAlianca && rel >= 55 && state.jogador.renome >= 60 && Math.random() < 0.08) {
-        state.ofertas.push({ reino: r.id, tipo: 'alianca' });
+        state.ofertas.push({ reino: r.id, tipo: 'alianca', meses: 6 });
         state.cartas.unshift({ de: r.rei.nome, tipo: 'bom', ano: state.ano, mes: state.mes,
           texto: `"Tempos sombrios pedem espadas amigas. ${r.nome} oferece ALIANÇA: nossos soldados nas suas guerras, nossos muros contra seus inimigos. Aceite no mapa."` });
         log(`🤝 ${r.rei.nome} ofereceu uma ALIANÇA! Aceite na aba Mapa.`);
       }
     }
+    for (const o of state.ofertas) o.meses = (o.meses === undefined ? 6 : o.meses) - 1;
+    state.ofertas = state.ofertas.filter(o => o.meses > 0);
     if (state.ofertas.length > 3) state.ofertas.length = 3;
 
     // renda e quebra de tratados

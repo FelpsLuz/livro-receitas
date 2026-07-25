@@ -144,10 +144,15 @@ const Contratos = (() => {
     const rel = Combate.batalhar(state, inimigo, contrato.nome);
     const contratante = state.reinos.find(r => r.id === contrato.contratante);
     if (rel.vitoria) {
-      state.jogador.ouro += contrato.pagamento;
+      let pagamento = contrato.pagamento;
+      if (state.jogador.vassaloDe === contrato.contratante) {
+        pagamento = Math.round(pagamento * 1.3);   // a coroa paga melhor aos seus juramentados
+        log(`🛡️ Bônus de vassalo: seu senhor paga 30% a mais.`);
+      }
+      state.jogador.ouro += pagamento;
       state.jogador.renome += contrato.renome;
       Dialogo.mudarRelacao(state, 'rei_' + contrato.contratante, 8, 'contrato cumprido');
-      log(`✅ Contrato cumprido para ${contratante.nome}: +${contrato.pagamento} ouro, +${contrato.renome} renome.`);
+      log(`✅ Contrato cumprido para ${contratante.nome}: +${pagamento} ouro, +${contrato.renome} renome.`);
       if (contrato.id === 'incursao' && contrato.alvo) {
         Dialogo.mudarRelacao(state, 'rei_' + contrato.alvo, -25, 'queimou vila');
         const alvo = state.reinos.find(r => r.id === contrato.alvo);

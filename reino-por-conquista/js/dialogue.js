@@ -205,7 +205,9 @@ const Dialogo = (() => {
     const efeitos = [];
     const acoes = [];
     let resposta = null;
-    const principal = intencoes[0] ? intencoes[0].id : null;
+    let principal = intencoes[0] ? intencoes[0].id : null;
+    // saudação acompanhada de pedido real: responde ao pedido (a cortesia fica implícita)
+    if (principal === 'saudacao' && intencoes.length > 1) principal = intencoes[1].id;
 
     const memoriaPrefixo = () => {
       if ((tags.flags.insultou || 0) >= 2 && tags.relacao < -20)
@@ -359,6 +361,37 @@ const Dialogo = (() => {
           resposta = npc.personalidade === 'cruel' ? '*estreita os olhos* "Não" é uma palavra cara aqui.' : 'Como preferir. A porta é a mesma.';
           break;
         }
+        // confusão com ECO: assimila o absurdo e devolve no tom da personalidade
+        const palavras = textoJogador.trim().replace(/[?!.]+$/, '').split(/\s+/);
+        if (palavras.length >= 2 && Math.random() < 0.75) {
+          const eco = palavras.slice(0, 4).join(' ');
+          const CONFUSOES = {
+            orgulhoso: [`"${eco}"...? Meça as palavras diante de um trono, criatura.`,
+              `Disseram "${eco}" nesta corte. Os bardos não vão acreditar.`,
+              `*olha em volta* Alguém entendeu "${eco}"? Ninguém? Pois é.`],
+            calculista: [`"${eco}". Anotado. Ainda calculo o que você ganha falando isso.`,
+              `Interessante... "${eco}". Todo disparate esconde uma intenção. Qual é a sua?`,
+              `Vou fingir que "${eco}" foi um código. Meus espiões vão decifrar.`],
+            ganancioso: [`"${eco}"? Se isso for mercadoria, não tem preço de tabela.`,
+              `Perdi dois minutos ouvindo "${eco}". Vou cobrar.`,
+              `"${eco}", é? Se vende, eu compro barato. Se não vende, não me interessa.`],
+            honrado: [`"${eco}"... Perdoe-me, mas não compreendi. Fale simples, que eu ouço.`,
+              `Não sei o que é "${eco}", amigo. Mas sente-se e explique com calma.`,
+              `Juro pela minha espada que nunca ouvi "${eco}" em batalha alguma.`],
+            cruel: [`"${eco}"... *silêncio* Você tem sorte de eu ter achado engraçado.`,
+              `Diga "${eco}" de novo. Devagar. Quero decidir se rio ou se chamo o carrasco.`,
+              `O último que disse "${eco}" aqui está pendurado na muralha. Prossiga.`],
+            romantica: [`"${eco}"? *ri* Você é estranho. Gosto de gente estranha.`,
+              `Nunca ouvi falar de "${eco}" nos meus livros. Me conte mais!`,
+              `"${eco}"... soa como poesia ruim. E eu ADORO poesia ruim.`],
+          };
+          const opcoes = CONFUSOES[npc.personalidade] || CONFUSOES.honrado;
+          let ci = Math.floor(Math.random() * opcoes.length);
+          if (ci === tags.flags.ultimaConfusao) ci = (ci + 1) % opcoes.length;
+          tags.flags.ultimaConfusao = ci;
+          resposta = opcoes[ci];
+          break;
+        }
         // sem intenção clara: responde pelo humor atual da relação (sem repetir a última fala)
         if (tags.relacao <= -40) resposta = 'Não tenho paciência para seus balbucios. Fale claro ou saia.';
         else resposta = memoriaPrefixo() + rndDiferente(voz.neutro, tags);
@@ -487,6 +520,14 @@ const Dialogo = (() => {
   // 2. defina Dialogo.llmAdapter = async (prompt) => { ...fetch('http://localhost:8080/completion')... }
   // O motor continua extraindo intenções/tags do texto do jogador (a "memória"),
   // e o LLM gera apenas a superfície do texto do NPC com o contexto abaixo.
+  // reforço de variedade nas falas neutras
+  VOZES.orgulhoso.neutro.push('Há fila para falar comigo. Aproveite sua vez.', 'Se isso vai a algum lugar, chegue logo lá.');
+  VOZES.calculista.neutro.push('Silêncio também é informação. O seu diz muito.', 'Continue. Os números ainda não fecham.');
+  VOZES.ganancioso.neutro.push('Enquanto você fala, o ouro não circula.', 'Isso vai virar negócio ou é só conversa?');
+  VOZES.honrado.neutro.push('Estou ouvindo com atenção. Prossiga.', 'Diga o que pesa no coração.');
+  VOZES.cruel.neutro.push('*afia a lâmina enquanto ouve*', 'Cada segundo meu que você gasta tem juros.');
+  VOZES.romantica.neutro.push('Continue! As tardes aqui são tão longas...', 'Você tem um jeito curioso de falar. Vá em frente.');
+
   let llmAdapter = null;
 
   function montarPromptLLM(state, npc, textoJogador, resultado) {

@@ -193,7 +193,7 @@ const Intriga = (() => {
     for (const r of state.reinos) {
       const tags = state.tags['rei_' + r.id];
       if (!tags || !tags.flags.marcadoParaMorte) continue;
-      if (Politica.aliado(state, r.id)) { tags.flags.marcadoParaMorte = false; continue; } // aliados não mandam adagas
+      if (Politica.aliado(state, r.id) || state.jogador.vassaloDe === r.id) { tags.flags.marcadoParaMorte = false; continue; } // aliados e seu senhor não mandam adagas
       if (Math.random() < 0.15) {
         tags.flags.marcadoParaMorte = false; // tentativa gasta
         const defesa = state.jogador.guardas * 2 + state.jogador.atributos.forca;
@@ -218,6 +218,11 @@ const Intriga = (() => {
     if (!Politica.eNobre(state)) {
       log(`⚖️ As cortes não reconhecem plebeus em tronos. Torne-se CONDE (terra nível 4) antes de reivindicar uma coroa.`);
       return { vitoria: false, rodadas: [], contexto: 'Reivindicação rejeitada', baixasJogador: {}, baixasInimigo: {}, bloqueado: true };
+    }
+    if (Politica.aliado(state, reinoId)) {
+      state.tratados = state.tratados.filter(t => !(t.reino === reinoId && t.tipo === 'alianca'));
+      Dialogo.mudarRelacao(state, 'rei_' + reinoId, -40, 'traiu aliança');
+      log(`💔 Você marcha contra um ALIADO. O pacto vira cinzas e a palavra 'traidor' corre o continente (relação −40).`);
     }
     const temCB = state.casusBelli.includes(reinoId);
     if (!temCB) {
