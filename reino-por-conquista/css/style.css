@@ -184,7 +184,7 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .titulo-canvas { margin: -36px -36px 18px; border: none; border-bottom: 3px solid var(--ouro); border-radius: 6px 6px 0 0; }
 #canvas-titulo { width: 100%; display: block; image-rendering: pixelated; }
 
-/* ---------- retratos 64×64 ---------- */
+/* ---------- retratos 64×64 (com moldura de dragão do HUD) ---------- */
 .retrato {
   width: 52px; height: 52px; flex: none;
   image-rendering: pixelated;
@@ -193,6 +193,38 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
   background: #000;
 }
 .retrato-grande { width: 96px; height: 96px; border-width: 3px; }
+.moldura-retrato { position: relative; flex: none; line-height: 0; align-self: flex-start; }
+.moldura-retrato .retrato { border: none; box-shadow: none; }
+.moldura-retrato::after {
+  content: ''; position: absolute; inset: -16%;
+  background: url('../img/hud/moldura.png') center / 100% 100% no-repeat;
+  image-rendering: pixelated; pointer-events: none;
+}
+
+/* ---------- logo bitmap do título ---------- */
+.titulo-logo { margin: 10px 0 2px; }
+.logo-titulo { width: min(86%, 430px); image-rendering: pixelated; display: inline-block; }
+
+/* ---------- ícones de arma (renderizados dos modelos 3D) ---------- */
+.ico-arma { width: 32px; height: 32px; image-rendering: pixelated; vertical-align: -10px; }
+.ico-arma.g { width: 40px; height: 40px; vertical-align: -13px; }
+
+/* ---------- barras ornamentadas do HUD ---------- */
+.barra-hud {
+  position: relative; display: inline-block; width: 112px; height: 29px; max-width: 100%;
+  background: url('../img/hud/barra_vazia.png') center / 100% 100% no-repeat;
+  image-rendering: pixelated; vertical-align: middle;
+}
+.barra-fill {
+  position: absolute; inset: 0;
+  background: url('../img/hud/barra_vida.png') center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+.barra-fill.ouro { background-image: url('../img/hud/barra_ouro.png'); }
+.barra-valor {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: #fff; text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+}
 .com-retrato { display: flex; gap: 10px; align-items: flex-start; }
 .npc-info { flex: 1; min-width: 0; }
 .conversa-persona { display: flex; gap: 10px; align-items: center; }

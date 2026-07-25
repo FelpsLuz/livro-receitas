@@ -130,7 +130,7 @@ const UI = (() => {
         <div class="celula">👥 População<br><b>${t.populacao}</b></div>
         <div class="celula">🌾 Alimento<br><b>${t.alimento}</b>${col ? ` <small>(+${col.producao}/−${col.consumo})</small>` : ''}</div>
         <div class="celula">🪵 Madeira<br><b>${t.madeira}</b></div>
-        <div class="celula">😊 Felicidade<br><b class="${t.felicidade <= 30 ? 'ruim' : t.felicidade >= 60 ? 'bom' : ''}">${t.felicidade}</b></div>`));
+        <div class="celula">😊 Felicidade<br><span class="barra-hud"><span class="barra-fill ${t.felicidade >= 60 ? 'ouro' : ''}" style="clip-path:inset(0 ${100 - clamp(t.felicidade, 0, 100)}% 0 0)"></span><b class="barra-valor">${t.felicidade}</b></span></div>`));
       if (t.felicidade <= 30) painel.appendChild(el('p', 'flavor ruim', '⚠️ O povo murmura nas tavernas. Felicidade baixa demais termina em foices e tochas na sua porta.'));
       if (t.nivel < 5) {
         const prox = NIVEIS_TERRA[t.nivel + 1];
@@ -327,7 +327,8 @@ const UI = (() => {
       const carga = s.carga[gId] || 0;
       const tr = el('tr');
       const alerta = preco > m.precoBase * 1.5 ? ' 📈' : preco < m.precoBase * 0.8 ? ' 📉' : '';
-      tr.innerHTML = `<td>${m.icone} ${m.nome}</td><td><b>${preco}</b>🪙${alerta}</td><td>${carga}</td>`;
+      const icoM = gId === 'armas' ? '<img src="img/armas/claymore.png" class="ico-arma" alt="">' : m.icone;
+      tr.innerHTML = `<td>${icoM} ${m.nome}</td><td><b>${preco}</b>🪙${alerta}</td><td>${carga}</td>`;
       const tdC = el('td'), tdV = el('td');
       const bC = el('button', 'btn mini', 'Comprar 5');
       bC.onclick = () => { const r = Economia.comprar(s, s.local, gId, 5); if (r.ok) Sfx.moeda(); aviso(r.msg); renderTudo(); };
@@ -352,7 +353,7 @@ const UI = (() => {
 
     if (s.torneio) {
       const cardT = el('div', 'card-contrato');
-      cardT.innerHTML = `<b>🏟️ TORNEIO DE ${s.torneio.reinoNome.toUpperCase()}</b><br><small>Lanças, glória e a chance de recrutar um CAMPEÃO DE GUERRA. Prazo: ${s.torneio.meses} ${s.torneio.meses === 1 ? 'mês' : 'meses'}. Inscrição: 50 🪙.</small>`;
+      cardT.innerHTML = `<b><img src="img/armas/espada_dourada.png" class="ico-arma g" alt=""> TORNEIO DE ${s.torneio.reinoNome.toUpperCase()}</b><br><small>Lanças, glória e a chance de recrutar um CAMPEÃO DE GUERRA. Prazo: ${s.torneio.meses} ${s.torneio.meses === 1 ? 'mês' : 'meses'}. Inscrição: 50 🪙.</small>`;
       const bT = el('button', 'btn mini', '🐎 Entrar na justa!');
       bT.onclick = () => {
         const r = Politica.participarTorneio(s, Jogo.log);
@@ -364,7 +365,7 @@ const UI = (() => {
     }
     const reinoLocal = s.reinos.find(r => r.id === s.local);
     const cardM = el('div', 'card-contrato');
-    cardM.innerHTML = `<b>🥊 Desafiar a milícia de ${reinoLocal.capital}</b><br><small>Duelo de companhias na praça. Vitória conquista a LEALDADE do povo (${Politica.lealdadeDe(s, s.local)}/100): preços melhores e, com 60+, a guarnição hesita em lutar contra você numa conquista.</small>`;
+    cardM.innerHTML = `<b><img src="img/armas/escudo.png" class="ico-arma g" alt=""> Desafiar a milícia de ${reinoLocal.capital}</b><br><small>Duelo de companhias na praça. Vitória conquista a LEALDADE do povo (${Politica.lealdadeDe(s, s.local)}/100): preços melhores e, com 60+, a guarnição hesita em lutar contra você numa conquista.</small>`;
     const bM = el('button', 'btn mini', '⚔️ Desafiar!');
     bM.onclick = () => {
       const rel = Politica.desafiarMilicia(s, Jogo.log);
@@ -403,9 +404,11 @@ const UI = (() => {
   }
 
   function retratoDe(id, tamanho) {
+    const wrap = el('div', 'moldura-retrato' + (tamanho === 'g' ? ' grande' : ''));
     const c = el('canvas', 'retrato' + (tamanho === 'g' ? ' retrato-grande' : ''));
     Retratos.montar(c, id, Retratos.humorDe(Jogo.state, id));
-    return c;
+    wrap.appendChild(c);
+    return wrap;
   }
 
   function cardNpc(npc) {
@@ -552,7 +555,8 @@ const UI = (() => {
     tab.innerHTML = '<tr><th>Tropa</th><th>Você tem</th><th>Custo</th><th>Manut.</th><th></th></tr>';
     for (const [tipo, t] of Object.entries(TROPAS)) {
       const tr = el('tr');
-      tr.innerHTML = `<td>${t.icone} ${t.nome}</td><td><b>${j.tropas[tipo] || 0}</b></td><td>${t.custo}🪙</td><td>${t.manut}🪙/mês</td>`;
+      const armaDe = { campones: 'machado', lanceiro: 'lanca', arqueiro: 'arco', cavaleiro: 'espada' };
+      tr.innerHTML = `<td><img src="img/armas/${armaDe[tipo] || 'espada'}.png" class="ico-arma" alt=""> ${t.nome}</td><td><b>${j.tropas[tipo] || 0}</b></td><td>${t.custo}🪙</td><td>${t.manut}🪙/mês</td>`;
       const td = el('td');
       const b = el('button', 'btn mini', 'Recrutar 5');
       b.onclick = () => { aviso(Jogo.recrutar(tipo, 5).msg); renderTudo(); };
