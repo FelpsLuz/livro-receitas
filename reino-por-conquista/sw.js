@@ -1,5 +1,5 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v12';
+const CACHE = 'reino-v13';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',

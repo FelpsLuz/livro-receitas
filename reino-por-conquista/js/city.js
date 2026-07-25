@@ -33,7 +33,7 @@ const Cidade = (() => {
       flor: ['#f5f0fa', '#f7d94c', '#f2a0c0'],
       arvore: ['#2e7a45', '#3f9a4e', '#54b558', '#7fd166'],
       agua: ['#2b55b0', '#3a6fd8', '#6fa9f0', '#cfe8ff'],
-      terra: '#b98a4e', terraEscura: '#8a6136', pedrisco: '#d3a968',
+      terra: '#b98a4e', terraEscura: '#8a6136', pedrisco: '#d3a968', areia: '#d8c48a',
       campo: '#7a5433', broto: '#8fd14a',
     },
     verao: {
@@ -41,7 +41,7 @@ const Cidade = (() => {
       flor: ['#f7d94c', '#f09048', '#f5f0fa'],
       arvore: ['#28703f', '#389048', '#4daa50', '#74c65e'],
       agua: ['#2b55b0', '#3a6fd8', '#6fa9f0', '#cfe8ff'],
-      terra: '#b3824a', terraEscura: '#855c34', pedrisco: '#cfa261',
+      terra: '#b3824a', terraEscura: '#855c34', pedrisco: '#cfa261', areia: '#d4bd7f',
       campo: '#74502f', broto: '#e3c04a',
     },
     outono: {
@@ -49,7 +49,7 @@ const Cidade = (() => {
       flor: ['#c25a2e', '#a8442e', '#d98e35'],
       arvore: ['#8a3b26', '#b0562e', '#ce7a35', '#e8a844'],
       agua: ['#2b4d9e', '#3763c4', '#6698e0', '#c4dcf5'],
-      terra: '#a3743f', terraEscura: '#77522c', pedrisco: '#c49355',
+      terra: '#a3743f', terraEscura: '#77522c', pedrisco: '#c49355', areia: '#c7a86a',
       campo: '#6b4a2c', broto: '#b0722e',
     },
     inverno: {
@@ -57,7 +57,7 @@ const Cidade = (() => {
       flor: ['#c8d8e4', '#dde8ee', '#b6c9d6'],
       arvore: ['#4a4a45', '#5d5a50', '#6f6b5e', '#eef4f8'],
       agua: ['#5a7ba8', '#7295bd', '#a9c4dd', '#e8f2fa'],
-      terra: '#a99a88', terraEscura: '#83766a', pedrisco: '#c6bab0',
+      terra: '#a99a88', terraEscura: '#83766a', pedrisco: '#c6bab0', areia: '#c9cdd4',
       campo: '#8f96a3', broto: '#dde8ee',
     },
   };
@@ -95,6 +95,19 @@ const Cidade = (() => {
         cabelo: cabelos[i % cabelos.length], fem: sr(i * 13) < 0.45,
       });
     }
+    // afasta aldeões que nasceram grudados (nada de gente empilhada)
+    for (let passo = 0; passo < 6; passo++) {
+      for (let i = 0; i < npcs.length; i++) for (let j = i + 1; j < npcs.length; j++) {
+        const a = npcs[i], b = npcs[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        if (d < 34) {
+          const emp = (34 - d) / 2, ux = dx / d, uy = dy / d;
+          a.x = clamp(a.x - ux * emp, 40, 590); a.y = clamp(a.y - uy * emp, 110, 345);
+          b.x = clamp(b.x + ux * emp, 40, 590); b.y = clamp(b.y + uy * emp, 110, 345);
+        }
+      }
+    }
     if (nivel >= 1) for (let i = 0; i < 4; i++) {
       galinhas.push({ x: 70 + sr(i * 17) * 90, y: 250 + sr(i * 19) * 30, t: sr(i * 23) * 100, vx: 0.1 });
     }
@@ -109,10 +122,17 @@ const Cidade = (() => {
     const x = cv.getContext('2d');
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
 
-    // --- grama em tiles 16×16 (duas variações de base, sem ruído) ---
+    // --- grama: base única + manchas orgânicas que atravessam a grade (sem xadrez) ---
+    P(0, 0, W, H, pal.gramaA);
     for (let ty = 0; ty < H; ty += T) {
       for (let tx = 0; tx < W; tx += T) {
-        P(tx, ty, T, T, sr(tx * 7 + ty * 13) < 0.5 ? pal.gramaA : pal.gramaB);
+        if (sr(tx * 7 + ty * 13) < 0.42) {
+          const bx = tx + Math.floor(sr(tx + ty * 5) * 6) - 2, by = ty + Math.floor(sr(tx * 5 + ty) * 6) - 2;
+          const bw = 9 + Math.floor(sr(tx * 2 + ty) * 9), bh = 9 + Math.floor(sr(tx + ty * 2) * 9);
+          P(bx, by, bw, bh, pal.gramaB);
+          P(bx + 2, by - 2, Math.max(4, bw - 6), 2, pal.gramaB);
+          P(bx - 2, by + 2, 2, Math.max(4, bh - 6), pal.gramaB);
+        }
       }
     }
     // tufos estratégicos (clusters de 3-4 px) e flores — ~1 a cada 6 tiles
@@ -124,9 +144,13 @@ const Cidade = (() => {
           P(ox, oy, 2, 2, pal.gramaEscuro); P(ox + 2, oy - 1, 1, 2, pal.gramaEscuro);
           P(ox - 1, oy + 1, 1, 1, pal.tufo);
         } else if (r > 0.94 && !dentroDoRio(tx, ty)) {
+          // flor em cruz: 4 pétalas + miolo claro + caule
           const ox = tx + 4 + Math.floor(sr(tx * 9 + ty) * 7), oy = ty + 4 + Math.floor(sr(tx + ty * 9) * 7);
-          P(ox, oy, 2, 2, pal.flor[Math.floor(sr(tx * ty + 1) * 3)]);
-          P(ox, oy + 2, 1, 1, pal.gramaEscuro);
+          const cor = pal.flor[Math.floor(sr(tx * ty + 1) * 3)];
+          P(ox - 1, oy, 1, 1, cor); P(ox + 1, oy, 1, 1, cor);
+          P(ox, oy - 1, 1, 1, cor); P(ox, oy + 1, 1, 1, cor);
+          P(ox, oy, 1, 1, claraDe(cor));
+          P(ox, oy + 2, 1, 2, pal.gramaEscuro);
         }
       }
     }
@@ -140,6 +164,19 @@ const Cidade = (() => {
       }
       P(x0, y0, 1, y1 - y0, pal.terraEscura); P(x1 - 1, y0, 1, y1 - y0, pal.terraEscura);
       P(x0, y0, x1 - x0, 1, pal.terraEscura); P(x0, y1 - 1, x1 - x0, 1, pal.terraEscura);
+      // borda denteada: a grama "morde" a estrada e a terra esfarela para fora
+      for (let py = y0; py < y1; py += 4) {
+        if (sr(py * 7 + x0) < 0.45) P(x0, py, 2, 2, pal.gramaEscuro);
+        if (sr(py * 5 + x1) < 0.45) P(x1 - 2, py + 2, 2, 2, pal.gramaEscuro);
+        if (sr(py * 3 + x0) < 0.25) P(x0 - 2, py + 1, 2, 2, pal.terra);
+        if (sr(py * 11 + x1) < 0.25) P(x1, py + 3, 2, 2, pal.terra);
+      }
+      for (let px = x0; px < x1; px += 4) {
+        if (sr(px * 7 + y0) < 0.45) P(px, y0, 2, 2, pal.gramaEscuro);
+        if (sr(px * 5 + y1) < 0.45) P(px + 2, y1 - 2, 2, 2, pal.gramaEscuro);
+        if (sr(px * 13 + y0) < 0.22) P(px + 1, y0 - 2, 2, 2, pal.terra);
+        if (sr(px * 17 + y1) < 0.22) P(px + 3, y1, 2, 2, pal.terra);
+      }
     };
     // estrada principal: do portão ao sul da tela
     trilha(RUA_X0, nivel >= 1 ? 88 : 64, RUA_X1, H);
@@ -165,11 +202,23 @@ const Cidade = (() => {
     // --- rio (2 tiles, serpenteia; margens escuras, SEM contorno preto) ---
     for (let px = 0; px < W; px += 2) {
       const topo = rioTopo(px);
+      if (sr(px * 13) < 0.6) P(px, topo - 4, 2, 2, pal.areia);
       P(px, topo - 2, 2, 2, pal.gramaEscuro);
       P(px, topo, 2, 3, pal.agua[2]);
       P(px, topo + 3, 2, RIO_ALT - 8, pal.agua[1]);
       P(px, topo + RIO_ALT - 5, 2, 3, pal.agua[0]);
       P(px, topo + RIO_ALT - 2, 2, 2, pal.gramaEscuro);
+      if (sr(px * 17) < 0.5) P(px, topo + RIO_ALT, 2, 2, pal.areia);
+    }
+    // juncos e taboas nas margens (fora da ponte)
+    for (let px = 8; px < W; px += 14) {
+      if (naPonte(px) || sr(px * 29) > 0.42) continue;
+      const topo = rioTopo(px);
+      const base = sr(px) < 0.5 ? topo - 4 : topo + RIO_ALT + 2;
+      P(px, base - 6, 1, 6, pal.gramaEscuro);
+      P(px + 2, base - 9, 1, 9, pal.tufo);
+      P(px + 2, base - 11, 2, 3, pal.terraEscura);
+      P(px + 4, base - 5, 1, 5, pal.gramaEscuro);
     }
 
     // --- ponte de madeira sobre o rio ---
@@ -727,6 +776,19 @@ const Cidade = (() => {
         const py = (sr(i * 19) * H + anim * (0.5 + sr(i * 3) * 0.4) + Math.sin(anim * 0.03 + i) * 10) % H;
         ctx.fillStyle = ['#ce7a35', '#b0562e', '#e8a844'][i % 3];
         ctx.fillRect(Math.round(px), Math.round(py), 3, 2);
+      }
+    }
+    if ((est === 'primavera' || est === 'verao') && ciclo >= 0.45 && !chovendo) {
+      // borboletas de dia: 2 asas batendo, esvoaçam entre as flores
+      for (let i = 0; i < 6; i++) {
+        const px = 60 + sr(i * 41) * 520 + Math.sin(anim * 0.02 + i * 2.3) * 30;
+        const py = 120 + sr(i * 43) * 200 + Math.cos(anim * 0.017 + i * 1.9) * 18;
+        const bat = Math.floor(anim / 6 + i) % 2;
+        ctx.fillStyle = ['#f5f0fa', '#f7d94c', '#f2a0c0'][i % 3];
+        ctx.fillRect(Math.round(px - 1 - bat), Math.round(py), 2, 2);
+        ctx.fillRect(Math.round(px + 1 + bat), Math.round(py), 2, 2);
+        ctx.fillStyle = '#3a2416';
+        ctx.fillRect(Math.round(px), Math.round(py), 1, 2);
       }
     }
     if (est === 'verao' && ciclo < 0.4) {

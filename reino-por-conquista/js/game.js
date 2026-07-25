@@ -51,6 +51,7 @@ const Jogo = (() => {
     }
     Politica.tickReinos(state, log);
     Politica.tickTorneio(state, log);
+    Dialogo.tickMemorias(state, log);
     Economia.tickGuerras(state, log);
     Economia.tickMercados(state);
     Economia.tickTerra(state, log);

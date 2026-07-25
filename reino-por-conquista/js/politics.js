@@ -155,6 +155,11 @@ const Politica = (() => {
   function armarCavaleiro(state, reinoId, log) {
     if (!podeSerArmado(state, reinoId))
       return { ok: false, msg: 'Um rei só arma cavaleiro quem tem 60+ de renome e a confiança dele (relação 40+).' };
+    const rancorArmar = Dialogo.memoriasDe(state, 'rei_' + reinoId, ['insulto', 'ameaca']);
+    if (rancorArmar.length) {
+      const m = rancorArmar[rancorArmar.length - 1];
+      return { ok: false, msg: `Ele baixa a espada sem tocar seus ombros: "Armar cavaleiro quem me disse '${m.frase}'? Peça desculpas primeiro — e que sejam sinceras."` };
+    }
     state.jogador.cavaleiro = true;
     const reino = state.reinos.find(r => r.id === reinoId);
     state.jogador.renome += 10;
@@ -346,6 +351,11 @@ const Politica = (() => {
     }
     if (tipo === 'alianca') {
       if (rel < 50) return { ok: false, msg: `Aliança exige confiança profunda (relação ${rel}/50).` };
+      const rancorAli = Dialogo.memoriasDe(state, 'rei_' + reinoId, ['ameaca']);
+      if (rancorAli.length) {
+        const m = rancorAli[rancorAli.length - 1];
+        return { ok: false, msg: `${reino.rei.nome} recua: "Aliança? Você me disse '${m.frase}'. Quem ameaça um trono não dorme sob o mesmo estandarte. Retrate-se primeiro."` };
+      }
       if (state.jogador.renome < 60) return { ok: false, msg: `Aliança exige renome 60+ (você tem ${state.jogador.renome}).` };
       const custoAli = reinoId === 'aguias' ? 600 : 300;   // Nozel cobra tributo absurdo
       if (state.jogador.ouro < custoAli) return { ok: false, msg: `Selar aliança custa ${custoAli} de ouro em garantias${reinoId === 'aguias' ? ' (as Águias cobram caro pela pureza)' : ''}.` };

@@ -27,7 +27,9 @@ const Dialogo = (() => {
     { id: 'insulto', palavras: ['idiota','burro','burra','covarde','porco','porca','verme','inutil',
       'tolo','tola','patetico','patetica','gordo','gorda','feio','feia','fraco','fraca','lixo',
       'nojento','nojenta','imbecil','canalha','rato','vaca','cachorro','miseravel','tirano','tirana',
-      'usurpador','usurpadora','ladrao de trono','bastardo','bastarda'] },
+      'usurpador','usurpadora','ladrao de trono','bastardo','bastarda','chiqueiro','imundo','imunda',
+      'ridiculo','ridicula','desprezivel','palhaco','palhaca','fede','fedorento','fedorenta','podre',
+      'incompetente','mentiroso','mentirosa','farsante','vergonha'] },
     { id: 'elogio', palavras: ['sabio','sabia','sabedoria','forte','grande','magnifico','magnifica',
       'honrado','honrada','bela','belo','glorioso','gloriosa','admiro','respeito','corajoso','corajosa',
       'justo','justa','generoso','generosa','lendario','lendaria','brilhante','poderoso','poderosa',
@@ -56,6 +58,8 @@ const Dialogo = (() => {
     { id: 'como_vai', palavras: ['como vai', 'como esta', 'tudo bem', 'como andam as coisas', 'como tem passado'] },
     { id: 'agradecer', palavras: ['obrigado', 'obrigada', 'agradeco', 'grato', 'gratidao'] },
     { id: 'opiniao', palavras: ['o que acha', 'o que voce acha', 'opiniao sobre', 'me fale sobre', 'me conte sobre', 'como e o reino', 'confia em', 'o que pensa'] },
+    { id: 'desculpar', palavras: ['desculpa', 'desculpe', 'perdao', 'me perdoe', 'perdoe me', 'sinto muito',
+      'me arrependo', 'retiro o que disse', 'fui injusto', 'fui injusta', 'errei com voce', 'nao devia ter dito'] },
   ];
 
   function detectarIntencoes(texto) {
@@ -103,6 +107,24 @@ const Dialogo = (() => {
     if (r < 25) return 'Neutro';
     if (r < 60) return 'Amistoso';
     return 'Leal';
+  }
+
+  // ---------- memória de longo prazo: citações literais com data ----------
+  // O NPC guarda O QUE você disse e QUANDO — e cobra depois, em conversas,
+  // cartas e decisões (armar cavaleiro, aliança). Desculpas podem enterrar rancores.
+  function lembrar(state, npcId, tipo, frase) {
+    const t = tagsDe(state, npcId);
+    if (!t.memorias) t.memorias = [];
+    t.memorias.push({ tipo, frase: String(frase).trim().slice(0, 70), ano: state.ano, mes: state.mes });
+    if (t.memorias.length > 8) t.memorias.shift();
+  }
+  function memoriasDe(state, npcId, tipos) {
+    const t = tagsDe(state, npcId);
+    return (t.memorias || []).filter(m => (!tipos || tipos.includes(m.tipo)) && !m.perdoada);
+  }
+  function quando(m, state) {
+    const nome = MESES[(m.mes || 1) - 1];
+    return m.ano === state.ano ? `em ${nome}` : `no ${nome} do Ano ${m.ano}`;
   }
 
   // ---------- geração de resposta (por personalidade) ----------
@@ -210,6 +232,19 @@ const Dialogo = (() => {
     if (principal === 'saudacao' && intencoes.length > 1) principal = intencoes[1].id;
 
     const memoriaPrefixo = () => {
+      // cita as PALAVRAS EXATAS de conversas antigas (sem repetir toda vez)
+      if (Math.random() < 0.45) {
+        const rancor = memoriasDe(state, npc.id, ['insulto', 'ameaca']);
+        if (rancor.length && tags.relacao < -15) {
+          const m = rancor[rancor.length - 1];
+          return `"${m.frase}" — foram suas palavras, ${quando(m, state)}. Eu não esqueci. `;
+        }
+        const doce = memoriasDe(state, npc.id, ['elogio']);
+        if (doce.length && tags.relacao > 20) {
+          const m = doce[doce.length - 1];
+          return `Ainda guardo o que me disse ${quando(m, state)}: "${m.frase}". `;
+        }
+      }
       if ((tags.flags.insultou || 0) >= 2 && tags.relacao < -20)
         return 'De novo você. Ainda lembro das suas palavras venenosas. ';
       if ((tags.flags.elogiou || 0) >= 2 && tags.relacao > 20)
@@ -220,6 +255,7 @@ const Dialogo = (() => {
     switch (principal) {
       case 'insulto': {
         tags.flags.insultou = (tags.flags.insultou || 0) + 1;
+        lembrar(state, npc.id, 'insulto', textoJogador);
         const grave = tags.flags.insultou >= 2 || sent <= -6;
         const delta = grave ? -30 : -15;
         efeitos.push(mudarRelacao(state, npc.id, delta, 'insulto').tag);
@@ -236,6 +272,7 @@ const Dialogo = (() => {
       }
       case 'elogio': {
         tags.flags.elogiou = (tags.flags.elogiou || 0) + 1;
+        if (tags.flags.elogiou <= 3) lembrar(state, npc.id, 'elogio', textoJogador);
         // bajulação repetida perde efeito; calculistas dão menos valor
         const rendimento = Math.max(2, 10 - (tags.flags.elogiou * 2)
           - (npc.personalidade === 'calculista' ? 4 : 0));
@@ -245,6 +282,7 @@ const Dialogo = (() => {
       }
       case 'ameaca': {
         tags.flags.ameacou = (tags.flags.ameacou || 0) + 1;
+        lembrar(state, npc.id, 'ameaca', textoJogador);
         efeitos.push(mudarRelacao(state, npc.id, -25, 'ameaça').tag);
         resposta = rnd(voz.ameaca);
         if (npc.id.startsWith('rei_')) {
@@ -292,6 +330,7 @@ const Dialogo = (() => {
           efeitos.push(`[−${custo} ouro]`);
           efeitos.push(mudarRelacao(state, npc.id, 15, 'suborno').tag);
           tags.flags.subornou = (tags.flags.subornou || 0) + 1;
+          lembrar(state, npc.id, 'suborno', textoJogador);
           resposta = rnd(voz.suborno_aceito);
         } else {
           resposta = rnd(voz.suborno_recusado) + ` (Você precisaria de ${custo} de ouro.)`;
@@ -347,6 +386,42 @@ const Dialogo = (() => {
       }
       case 'opiniao': {
         resposta = respostaOpiniao(state, npc, textoNorm);
+        break;
+      }
+      case 'desculpar': {
+        const rancores = memoriasDe(state, npc.id, ['insulto', 'ameaca']);
+        if (!rancores.length) {
+          resposta = npc.personalidade === 'cruel'
+            ? 'Desculpas por quê? *sorri* Se me deve algo, eu saberia.'
+            : 'Não há o que perdoar entre nós. Ainda.';
+          break;
+        }
+        const m = rancores[rancores.length - 1];
+        const CHANCE_PERDAO = { honrado: 0.9, romantica: 0.85, ganancioso: 0.6,
+          calculista: 0.5, orgulhoso: 0.35, cruel: 0.25 };
+        if (Math.random() < (CHANCE_PERDAO[npc.personalidade] ?? 0.6)) {
+          for (const r of rancores) r.perdoada = true;
+          const ganho = 8 + Math.min(10, rancores.length * 3);
+          efeitos.push(mudarRelacao(state, npc.id, ganho, 'perdão').tag);
+          efeitos.push('[Rancor enterrado: suas palavras antigas foram perdoadas]');
+          const PERDOES = {
+            orgulhoso: `Hm. "${m.frase}"... doeu mais no seu joelho dobrado do que em mim. Levante-se. Está perdoado — desta vez.`,
+            calculista: `Perdão concedido. Mas saiba: "${m.frase}" continua nos meus registros. Riscado, não apagado.`,
+            ganancioso: `*suspira* "${m.frase}", você disse. Palavras custam caro... mas desculpas sinceras são moeda rara. Aceito.`,
+            honrado: `Você disse "${m.frase}" ${quando(m, state)} — e hoje teve a coragem de se retratar. Isso vale mais que o insulto. Enterrado.`,
+            cruel: `*silêncio longo* ..."${m.frase}". Eu ia cobrar isso com juros. Considere-se... anistiado. Não me faça arrepender.`,
+            romantica: `*sorri aliviada* Eu lembrava de "${m.frase}" toda vez que te via... Que bom que veio. Recomeçemos!`,
+          };
+          resposta = PERDOES[npc.personalidade] || PERDOES.honrado;
+        } else {
+          efeitos.push(mudarRelacao(state, npc.id, 2, 'tentativa de desculpa').tag);
+          const NEGADOS = {
+            orgulhoso: `Palavras não desdizem palavras. "${m.frase}" — isso fica. Prove com ATOS.`,
+            calculista: `Desculpas têm valor de mercado zero. "${m.frase}" segue no seu débito. Traga algo concreto.`,
+            cruel: `*ri baixo* Você disse "${m.frase}" e acha que "desculpa" fecha a conta? Eu escolho quando a conta fecha.`,
+          };
+          resposta = NEGADOS[npc.personalidade] || `Ainda ouço "${m.frase}" quando você fala. Vai precisar de mais que palavras.`;
+        }
         break;
       }
       default: {
@@ -528,6 +603,51 @@ const Dialogo = (() => {
   VOZES.cruel.neutro.push('*afia a lâmina enquanto ouve*', 'Cada segundo meu que você gasta tem juros.');
   VOZES.romantica.neutro.push('Continue! As tardes aqui são tão longas...', 'Você tem um jeito curioso de falar. Vá em frente.');
 
+  // ---------- consequências de longo prazo: o passado volta em cartas e eventos ----------
+  // Chamado a cada mês. No máximo 1 evento de memória por mês, para não virar spam.
+  function tickMemorias(state, log) {
+    if (!state.cartas) state.cartas = [];
+    const reis = state.reinos.map(r => r.rei);
+    // embaralha para não privilegiar sempre o mesmo rei
+    const ordem = reis.slice().sort(() => Math.random() - 0.5);
+    for (const rei of ordem) {
+      const tags = tagsDe(state, rei.id);
+      const rancor = memoriasDe(state, rei.id, ['insulto', 'ameaca']);
+      const doce = memoriasDe(state, rei.id, ['elogio', 'suborno']);
+      // rancor antigo fermenta: carta ácida citando SUAS palavras
+      if (rancor.length && tags.relacao <= -25 && Math.random() < 0.10) {
+        const m = rancor[rancor.length - 1];
+        const idade = (state.ano - m.ano) * 12 + (state.mes - m.mes);
+        if (idade >= 2) {
+          mudarRelacao(state, rei.id, -3, 'rancor antigo');
+          state.cartas.unshift({ de: rei.nome, tipo: 'ruim', ano: state.ano, mes: state.mes,
+            texto: `"Minha corte ainda repete o que você me disse ${quando(m, state)}: '${m.frase}'. Palavras viajam, ${state.jogador.nome}. As consequências também." (relação −3)` });
+          log(`✉️ ${rei.nome} não esqueceu o que você disse ${quando(m, state)} — a carta que chegou é puro fel. (relação −3)`);
+          return;
+        }
+      }
+      // gentileza antiga rende frutos: presente citando suas palavras
+      if (doce.length && tags.relacao >= 40 && Math.random() < 0.07) {
+        const m = doce[doce.length - 1];
+        const idade = (state.ano - m.ano) * 12 + (state.mes - m.mes);
+        if (idade >= 2) {
+          const presente = ri(30, 80);
+          state.jogador.ouro += presente;
+          m.perdoada = true;   // cada gentileza rende presente só uma vez
+          state.cartas.unshift({ de: rei.nome, tipo: 'bom', ano: state.ano, mes: state.mes,
+            texto: `"Lembrei-me do que você me disse ${quando(m, state)}: '${m.frase}'. Poucos falam assim a um trono. Aceite esta lembrança." (+${presente} 🪙)` });
+          log(`🎁 ${rei.nome} lembrou das suas palavras gentis ${quando(m, state)} e enviou ${presente} de ouro!`);
+          return;
+        }
+      }
+      // taverneiro comenta: rancores viram fofoca de estrada
+      if (rancor.length >= 2 && Math.random() < 0.04) {
+        log(`🍺 Na taverna, murmura-se que ${rei.nome} guarda uma lista com o seu nome — e frases suas, palavra por palavra.`);
+        return;
+      }
+    }
+  }
+
   let llmAdapter = null;
 
   function montarPromptLLM(state, npc, textoJogador, resultado) {
@@ -554,5 +674,6 @@ const Dialogo = (() => {
   }
 
   return { falar, falarAsync, tagsDe, mudarRelacao, nomeRelacao, detectarIntencoes,
+           lembrar, memoriasDe, tickMemorias,
            set llmAdapter(fn) { llmAdapter = fn; }, get llmAdapter() { return llmAdapter; } };
 })();
