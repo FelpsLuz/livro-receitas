@@ -24,6 +24,26 @@ const Cidade = (() => {
   let luzes = [];          // posições das janelas (brilham à noite)
   let cicloForcado = null; // para testes: Cidade.forcarCiclo(v)
 
+  // ---------- estruturas do tileset (img/estruturas/*.png) ----------
+  // Quando carregadas, substituem casas/poço/props procedurais.
+  const EST = {};
+  const EST_LISTA = ['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco'];
+  function estImg(nome) {
+    if (!EST[nome]) { const im = new Image(); im.src = 'img/estruturas/' + nome + '.png'; EST[nome] = im; }
+    return EST[nome];
+  }
+  function estPronta(nome) { const im = estImg(nome); return (im.complete && im.naturalWidth) ? im : null; }
+  function estOk() { return EST_LISTA.every(n => estPronta(n)); }
+  // desenha bottom-anchored com largura alvo, preservando proporção
+  function estDesenha(x, nome, cx, baseY, larg) {
+    const im = estPronta(nome);
+    if (!im) return false;
+    const alt = Math.round(larg * im.naturalHeight / im.naturalWidth);
+    x.imageSmoothingEnabled = false;
+    x.drawImage(im, Math.round(cx - larg / 2), Math.round(baseY - alt), Math.round(larg), alt);
+    return true;
+  }
+
   // ---------- paletas com hue-shifting ----------
   const RAMPAS = {
     primavera: {
@@ -279,22 +299,32 @@ const Cidade = (() => {
       casa(x, 430, 258, 48, 28, false, false, pal);
       casa(x, 196, 284, 46, 26, false, false, pal);
     }
+    if (nivel >= 1) {
+      // entrada da vila: arco de pedra sobre a estrada + placa
+      if (nivel < 3) estDesenha(x, 'arco', 320, 300, 58);
+      estDesenha(x, 'placa', 282, 300, 14);
+    }
     if (nivel >= 2) {
       moinhoCorpo(x, 52, 208, pal);
       casa(x, 500, 276, 48, 27, false, true, pal);
       poco(x, 352, 268);
       barril(x, 118, 272); barril(x, 128, 274);
+      estDesenha(x, 'banco', 372, 284, 20);
+      estDesenha(x, 'feno', 96, 300, 22);
+      estDesenha(x, 'poste', 288, 268, 18); estDesenha(x, 'poste', 352, 246, 18);
     }
     if (nivel >= 3) {
       casa(x, 130, 250, 52, 30, true, true, pal);
       casa(x, 430, 258, 48, 28, true, false, pal);
       barraca(x, 246, 262, '#a04038', 'frutas'); barraca(x, 380, 258, '#3c5a8a', 'tecidos');
       caixa(x, 278, 270); caixa(x, 372, 270); barril(x, 486, 268);
+      estDesenha(x, 'mural', 262, 300, 22);
     }
     if (nivel >= 4) {
       casa(x, 66, 286, 46, 26, true, false, pal);
+      // solar rural à direita (tileset) — sem a imagem, fica a estrebaria procedural
+      if (!estDesenha(x, 'casa_3', 560, 300, 92)) estabulo(x, 524, 244, pal);
       barraca(x, 210, 284, '#b8862d', 'paes'); barraca(x, 412, 282, '#3e5f3e', 'liso');
-      estabulo(x, 524, 244, pal);   // a lavoura da direita virou estrebaria
       caixa(x, 244, 292); barril(x, 444, 288); caixa(x, 500, 284);
     }
 
@@ -375,6 +405,12 @@ const Cidade = (() => {
     const P = (a, b, ww, hh, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(ww), Math.round(hh)); };
     // sombra projetada para a esquerda-inferior
     P(hx - 6, hy + h, w + 6, 5, SOMBRA);
+    // estrutura do tileset, se carregada (variante estável por posição)
+    const variante = pedra ? 'casa_2' : (['casa_1', 'casa_4', 'casa_1'][hx % 3]);
+    if (estDesenha(x, variante, hx + w / 2, hy + h + 2, w + 14)) {
+      luzes.push({ x: hx + w / 2 - 6, y: hy + h - 10 }, { x: hx + w / 2 + 8, y: hy + h - 10 });
+      return;
+    }
     const parede = pedra ? '#8a8d92' : '#dcc9a0';
     const paredeEsq = pedra ? '#5c6470' : '#b09a6e';      // face esquerda em sombra (hue-shift frio)
     const paredeDir = pedra ? '#b5b2a6' : '#f0e2be';      // face direita na luz
@@ -502,6 +538,7 @@ const Cidade = (() => {
   function poco(x, px2, py) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     P(px2 - 3, py + 12, 22, 3, SOMBRA);
+    if (estDesenha(x, 'poco', px2 + 8, py + 14, 26)) return;
     P(px2, py + 4, 16, 9, '#8a8d92');
     P(px2, py + 4, 16, 2, '#b5b2a6');
     x.fillStyle = '#6e737c';
@@ -1058,7 +1095,7 @@ const Cidade = (() => {
     const nivel = state.terra ? state.terra.nivel : -1;
     const est = estacao(state.mes || 6);
     const pal = RAMPAS[est];
-    const chave = nivel + '|' + est;
+    const chave = nivel + '|' + est + '|' + (estOk() ? 'tiles' : 'proc');
     if (bgKey !== chave || !bg) { bg = desenharEstatico(nivel, pal); bgKey = chave; }
     const ciclo = cicloAtual();
     ctx.drawImage(bg, 0, 0);
