@@ -209,6 +209,12 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .ico-arma { width: 32px; height: 32px; image-rendering: pixelated; vertical-align: -10px; }
 .ico-arma.g { width: 40px; height: 40px; vertical-align: -13px; }
 
+/* ---------- tela de fim de saga ---------- */
+.fim-banner { text-align: center; margin: 6px 0 10px; }
+.fim-logo { width: min(70%, 300px); image-rendering: pixelated; opacity: .85; }
+.fim-titulo { width: min(88%, 380px); image-rendering: pixelated; margin-top: 10px; }
+.fim-titulo.derrota { filter: grayscale(.7) brightness(.8); }
+
 /* ---------- bandeiras dos reinos e fundação ---------- */
 .bandeira { width: 34px; height: 22px; image-rendering: pixelated; vertical-align: -5px; border: 1px solid #26160e; }
 .lordes-lista span { cursor: help; border-bottom: 1px dotted rgba(120,90,50,.6); }

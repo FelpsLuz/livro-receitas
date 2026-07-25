@@ -582,10 +582,12 @@ const UI = (() => {
     painel.appendChild(linhaForm);
     painel.appendChild(el('p', 'flavor', '💡 Linha de Escudos vence Cunha; Cunha rompe Envolvimento; Envolvimento flanqueia a Linha. Escolha pensando no inimigo.'));
 
-    const bEq = el('button', 'btn', `🛠️ Melhorar equipamento (${200 * (j.equip + 1)} 🪙)`);
+    const bEq = el('button', 'btn', '');
+    bEq.innerHTML = `<img src="img/armas/martelo.png" class="ico-arma" alt=""> Melhorar equipamento (${200 * (j.equip + 1)} 🪙)`;
     bEq.onclick = () => { aviso(Jogo.melhorarEquip().msg); renderTudo(); };
     painel.appendChild(bEq);
-    const bG = el('button', 'btn sec', '🛡️ Contratar 2 guardas de elite (120 🪙, 4🪙/mês cada)');
+    const bG = el('button', 'btn sec', '');
+    bG.innerHTML = '<img src="img/armas/escudo_celta.png" class="ico-arma" alt=""> Contratar 2 guardas de elite (120 🪙, 4🪙/mês cada)';
     bG.onclick = () => { aviso(Jogo.contratarGuardas(2).msg); renderTudo(); };
     painel.appendChild(bG);
     painel.appendChild(el('p', 'flavor ruim', '⚠️ Se o tesouro zerar, tropas desertam — e a guarda de elite pode ser comprada por rivais para abrir seus portões à noite.'));
@@ -648,7 +650,9 @@ const UI = (() => {
   function renderIntrigas(c) {
     const s = Jogo.state;
     const painel = el('div', 'painel mesa');
-    painel.appendChild(el('h2', null, '🕯️ Mesa de Intrigas'));
+    const h2Int = el('h2', null, '');
+    h2Int.innerHTML = '<img src="img/armas/adaga.png" class="ico-arma g" alt=""> Mesa de Intrigas';
+    painel.appendChild(h2Int);
 
     if (s.chantagemPendente) {
       const reino = s.reinos.find(r => r.id === s.chantagemPendente.reino);
@@ -707,7 +711,10 @@ const UI = (() => {
 
     if (f.conjuge) {
       const reino = s.reinos.find(r => r.id === f.conjuge.reino);
-      painel.appendChild(el('p', null, `💍 Casado com <b>${f.conjuge.nome}</b> (${reino.nome}${f.conjuge.forcado ? ', união... negociada sob pressão' : ''}) — ${attrs(f.conjuge.atributos)}`));
+      const cardConj = el('div', 'card-npc com-retrato');
+      cardConj.appendChild(retratoDe('conjuge_' + f.conjuge.nome.replace(/\s+/g, '_')));
+      cardConj.appendChild(el('div', 'npc-info', `💍 Casado com <b>${f.conjuge.nome}</b> (${reino.nome}${f.conjuge.forcado ? ', união... negociada sob pressão' : ''})<br><small>${attrs(f.conjuge.atributos)}</small>`));
+      painel.appendChild(cardConj);
     } else {
       painel.appendChild(el('p', 'flavor', 'Solteiro. Casamento com casa real exige 40+ de renome e boa relação com o rei — ou um segredo sujo dele. Peça a mão em conversa na corte.'));
     }
@@ -782,14 +789,22 @@ const UI = (() => {
   }
 
   function renderFim() {
-    const s = Jogo.state;
+    const s = Jogo.state, j = s.jogador;
     const modal = $('#modal');
     modal.style.display = 'flex';
     const box = $('#modal-box');
     box.innerHTML = '';
-    box.appendChild(el('h2', null, s.fim.tipo === 'vitoria' ? '👑 REINO POR CONQUISTA' : '💀 FIM DA SAGA'));
+    const vit = s.fim.tipo === 'vitoria';
+    const banner = el('div', 'fim-banner');
+    banner.innerHTML = `<img src="img/hud/logo.png" class="fim-logo" alt=""><br>
+      <img src="img/hud/banner_${vit ? 'vitoria' : 'derrota'}.png" class="fim-titulo ${vit ? '' : 'derrota'}" alt="${vit ? 'VITÓRIA' : 'FIM DA SAGA'}">`;
+    box.appendChild(banner);
     box.appendChild(el('p', null, s.fim.msg));
-    const b = el('button', 'btn', 'Nova saga');
+    // resumo da saga
+    const anos = s.ano - 1, tit = Politica.titulo(s);
+    const jornada = anos <= 0 ? 'menos de um ano' : `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
+    box.appendChild(el('p', 'flavor', `📜 A saga de <b>${j.nome}</b>: ${jornada} de jornada · título final: <b>${tit}</b> · ⭐ ${j.renome} de renome · 🪙 ${Math.max(0, j.ouro).toLocaleString('pt-BR')} no tesouro · 🏰 ${Politica.meusNobres(s).length} lordes sob sua bandeira.`));
+    const b = el('button', 'btn destaque', '🗡️ Nova saga');
     b.onclick = () => { Jogo.apagarSave(); location.reload(); };
     box.appendChild(b);
   }
@@ -807,8 +822,10 @@ const UI = (() => {
     const cvD = el('canvas', 'duelo-canvas');
     cvD.width = 340; cvD.height = 130;
     box.appendChild(cvD);
-    const eImperial = /imp[eé]rio|felps|legi[aã]o|trono|rei /i.test(rel.contexto || '');
-    Duelo.iniciar(cvD, !!rel.vitoria, eImperial ? 'rei' : 'guerreiro');
+    const ctx = rel.contexto || '';
+    const inimigo = /rebeli|mil[ií]cia|bandid|saque|touros|caravana|estrada/i.test(ctx) ? 'bandido'
+      : /imp[eé]rio|felps|legi[aã]o|trono|rei /i.test(ctx) ? 'rei' : 'guerreiro';
+    Duelo.iniciar(cvD, !!rel.vitoria, inimigo);
     for (const r of rel.rodadas) {
       const vant = r.ventJ > 1 ? ' (sua formação venceu a deles!)' : r.ventI > 1 ? ' (a formação DELES venceu a sua!)' : '';
       box.appendChild(el('p', 'linha-cronica',

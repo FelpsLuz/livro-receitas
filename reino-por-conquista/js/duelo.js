@@ -14,6 +14,7 @@ const Duelo = (() => {
       run: { arq: 'heroi_run', frames: 8, fw: 128 },
       atk: { arq: 'heroi_atk', frames: 7, fw: 128 },
       hit: { arq: 'heroi_hit', frames: 3, fw: 128 },
+      parry: { arq: 'heroi_parry', frames: 6, fw: 128 },
       morte: { arq: 'heroi_morte', frames: 7, fw: 128 },
     } },
     guerreiro: { fh: 150, alvoH: 150, anims: {
@@ -29,6 +30,13 @@ const Duelo = (() => {
       atk: { arq: 'rei_atk', frames: 4, fw: 160 },
       hit: { arq: 'rei_hit', frames: 4, fw: 160 },
       morte: { arq: 'rei_morte', frames: 6, fw: 160 },
+    } },
+    bandido: { fh: 48, alvoH: 66, anims: {
+      idle: { arq: 'bandido_idle', frames: 3, fw: 50 },
+      run: { arq: 'bandido_idle', frames: 3, fw: 50 },
+      atk: { arq: 'bandido_atk', frames: 6, fw: 50 },
+      hit: { arq: 'bandido_hit', frames: 3, fw: 50 },
+      morte: { arq: 'bandido_morte', frames: 5, fw: 50 },
     } },
   };
 
@@ -54,10 +62,12 @@ const Duelo = (() => {
     const fx = { tipo: 'heroi', x: 46, flip: false, anim: 'run', f: 0 };
     const fy = { tipo: inimigo || 'guerreiro', x: W / 2 + 62, flip: true, anim: 'idle', f: 0 };
     // roteiro: [duração em ticks, animHeroi, animInimigo]
+    // se o herói vence, ele APARA a resposta inimiga; se perde, sofre o golpe
     const roteiro = [
       [26, 'run', 'idle'],                                     // herói se aproxima
       [16, 'atk', 'idle'], [10, 'idle', 'hit'],                // 1º golpe
-      [14, 'idle', 'atk'], [8, 'hit', 'idle'],                 // resposta
+      vitoria ? [14, 'parry', 'atk'] : [14, 'hit', 'atk'],     // resposta inimiga
+      [8, 'idle', 'idle'],
       [16, 'atk', 'idle'], [10, 'idle', 'hit'],                // 2º golpe
       vitoria ? [30, 'idle', 'morte'] : [30, 'morte', 'idle'], // desfecho
     ];

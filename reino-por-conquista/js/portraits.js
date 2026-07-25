@@ -65,7 +65,8 @@ const Retratos = (() => {
     // Qualquer outro id de nobre cai nos 8 retratos genéricos por hash.
     const mLorde = id.match(/^nobre_([a-z]+)_(\d+)$/);
     const caminhoArte = mLorde ? 'retratos/lorde_' + mLorde[1] + '_' + (parseInt(mLorde[2], 10) + 1)
-      : id.startsWith('nobre') ? 'retratos/nobre_' + (1 + hash(id) % 8) : 'retratos/' + id;
+      : (id.startsWith('nobre') || id.startsWith('conjuge') || id.startsWith('campeao'))
+        ? 'retratos/nobre_' + (1 + hash(id) % 8) : 'retratos/' + id;
     if (typeof Assets !== 'undefined' && Assets.desenharSeExistir(ctx, caminhoArte, 0, 0, S, S)) return;
     const pele = PELES[f.pele], cab = CABELOS[f.cabelo];
     const sombraPele = esc(pele, 0.8);

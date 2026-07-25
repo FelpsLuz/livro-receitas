@@ -1,5 +1,5 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v19';
+const CACHE = 'reino-v20';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',
@@ -23,13 +23,20 @@ const ARQUIVOS = [
   './img/duelo/guerreiro_idle.png', './img/duelo/guerreiro_atk.png', './img/duelo/guerreiro_hit.png',
   './img/duelo/guerreiro_morte.png',
   './img/duelo/rei_idle.png', './img/duelo/rei_atk.png', './img/duelo/rei_hit.png', './img/duelo/rei_morte.png',
+  './img/duelo/bandido_idle.png', './img/duelo/bandido_atk.png', './img/duelo/bandido_hit.png',
+  './img/duelo/bandido_morte.png', './img/duelo/heroi_parry.png',
+  './img/hud/banner_vitoria.png', './img/hud/banner_derrota.png',
+  './img/retratos/cla_lobos.png', './img/retratos/cla_corvos.png', './img/retratos/cla_estepe.png',
+  './img/retratos/cla_machados.png',
+  './img/armas/foice.png', './img/armas/arco_dourado.png', './img/armas/escudo_celta.png',
   ...['imperio', 'touros', 'alvorecer', 'leoes', 'aguias', 'rosa', 'jogador_1', 'jogador_2', 'jogador_3']
     .map((b) => './img/bandeiras/' + b + '.png'),
   ...[['imperio', 10], ['touros', 3], ['alvorecer', 6], ['leoes', 5], ['aguias', 4], ['rosa', 5]]
     .flatMap(([r, n]) => Array.from({ length: n }, (_, i) => './img/retratos/lorde_' + r + '_' + (i + 1) + '.png')),
   ...['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco',
       'arvore_1', 'arvore_2', 'arvore_3', 'arvore_4', 'arbusto_1', 'arbusto_2', 'arbusto_3',
-      'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c']
+      'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c',
+      'fogueira', 'pedra_1', 'pedra_2', 'pedra_3']
     .map((e) => './img/estruturas/' + e + '.png'),
 ];
 

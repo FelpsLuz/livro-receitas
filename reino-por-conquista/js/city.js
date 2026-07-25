@@ -29,7 +29,7 @@ const Cidade = (() => {
   const EST = {};
   const EST_LISTA = ['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco',
     'arvore_1', 'arvore_2', 'arvore_3', 'arvore_4', 'arbusto_1', 'arbusto_2', 'arbusto_3',
-    'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c'];
+    'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c', 'fogueira', 'pedra_1', 'pedra_2', 'pedra_3'];
   function estImg(nome) {
     if (!EST[nome]) { const im = new Image(); im.src = 'img/estruturas/' + nome + '.png'; EST[nome] = im; }
     return EST[nome];
@@ -370,6 +370,12 @@ const Cidade = (() => {
       const bx2 = 20 + sr(i * 61) * 600, by2 = 212 + sr(i * 67) * 84;
       if (bx2 > 270 && bx2 < 380) continue;   // não obstruir a estrada
       arbusto(x, bx2, by2, pal);
+    }
+    // pedras do tileset espalhadas (neutras em todas as estações)
+    for (let i = 0; i < 5; i++) {
+      const px2 = 30 + sr(i * 97) * 580, py2 = 216 + sr(i * 101) * 120;
+      if (px2 > 270 && px2 < 380) continue;
+      estDesenha(x, 'pedra_' + (1 + (i % 3)), px2, py2 + 6, 14 + (i % 3) * 5);
     }
 
     // ---------- atmosfera global: luz quente da direita, sombra fria à esquerda ----------
@@ -891,11 +897,19 @@ const Cidade = (() => {
     if (nivel >= 4) fumaca(563, 246, 3);
     if (nivel === 0 || nivel < 0) {
       const fx = nivel < 0 ? 300 : 260, fy = nivel < 0 ? 270 : 262;
-      P(fx - 5, fy + 4, 7, 3, '#5d4428'); P(fx + 3, fy + 4, 7, 3, '#6b4f30');
-      const fl = Math.sin(anim * 0.3) * 2;
-      P(fx, fy - 3 + fl * 0.3, 5, 6, '#d86a2d');
-      P(fx + 1, fy - 6 + fl * 0.5, 3, 5, '#f5a03c');
-      P(fx + 2, fy - 8 + fl * 0.6, 1, 3, '#fbd060');
+      const sheetFogo = estPronta('fogueira');
+      if (sheetFogo) {
+        // fogueira animada do tileset (8 quadros de 32×32)
+        const q = Math.floor(anim / 7) % 8;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sheetFogo, q * 32, 0, 32, 32, fx - 9, fy - 17, 26, 26);
+      } else {
+        P(fx - 5, fy + 4, 7, 3, '#5d4428'); P(fx + 3, fy + 4, 7, 3, '#6b4f30');
+        const fl = Math.sin(anim * 0.3) * 2;
+        P(fx, fy - 3 + fl * 0.3, 5, 6, '#d86a2d');
+        P(fx + 1, fy - 6 + fl * 0.5, 3, 5, '#f5a03c');
+        P(fx + 2, fy - 8 + fl * 0.6, 1, 3, '#fbd060');
+      }
       fumaca(fx + 2, fy - 8, 5);
     }
 

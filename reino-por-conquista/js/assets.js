@@ -34,5 +34,14 @@ const Assets = (() => {
     return true;
   }
 
+  // pré-aquecimento: retratos usados nas primeiras telas carregam no boot,
+  // evitando o primeiro paint com a arte procedural
+  const AQUECER = [
+    'retratos/rei_imperio', 'retratos/rei_touros', 'retratos/rei_alvorecer', 'retratos/rei_leoes',
+    'retratos/rei_aguias', 'retratos/rei_rosa', 'retratos/taverneiro', 'retratos/capitao', 'retratos/espiao',
+    'retratos/cla_lobos', 'retratos/cla_corvos', 'retratos/cla_estepe', 'retratos/cla_machados',
+  ];
+  for (const a of AQUECER) img(a);
+
   return { img, desenharSeExistir };
 })();
