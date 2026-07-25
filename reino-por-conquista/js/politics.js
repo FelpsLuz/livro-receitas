@@ -44,19 +44,22 @@ const Politica = (() => {
     state.relReinos.leoes.aguias = -25; state.relReinos.aguias.leoes = -25;
   }
 
-  // ---------- NOBRES: cada um com sua cidade, sorteada a cada jogo ----------
+  // ---------- LORDES nomeados: elenco fixo, cidade sorteada a cada jogo ----------
   function gerarNobres(state) {
     state.nobres = [];
     const cidades = NOMES_CIDADES.slice();
     for (const r of state.reinos) {
-      const qtd = r.nobres || 4;
+      const elenco = (typeof LORDES_BASE !== 'undefined' && LORDES_BASE[r.id]) || [];
+      const qtd = elenco.length || r.nobres || 4;
       for (let i = 0; i < qtd; i++) {
         const ci = Math.floor(Math.random() * cidades.length);
         const cidade = cidades.splice(ci, 1)[0] || ('Aldeia ' + (i + 1));
-        const fem = Math.random() < 0.4;
+        const lorde = elenco[i];
         state.nobres.push({
           id: 'nobre_' + r.id + '_' + i,
-          nome: (fem ? rnd(NOMES_F) : rnd(NOMES_M)) + ' de ' + cidade,
+          nome: lorde ? lorde.nome : ((Math.random() < 0.4 ? rnd(NOMES_F) : rnd(NOMES_M)) + ' de ' + cidade),
+          papel: lorde ? lorde.papel : '',
+          fem: lorde ? lorde.fem : false,
           cidade, reino: r.id, reinoOriginal: r.id,
         });
       }
@@ -95,15 +98,21 @@ const Politica = (() => {
     return !state.jogador.reiDe && state.terra && state.terra.nivel >= 5
       && eNobre(state) && state.jogador.renome >= 80;
   }
-  function proclamarIndependencia(state, log) {
+  // Fundar um reino: além dos títulos, custa um TESOURO (coroa, corte,
+  // selo, arautos e o suborno de meia nobreza do continente).
+  function proclamarIndependencia(state, log, nomeReino, bandeiraId) {
     if (!podeProclamar(state))
-      return { ok: false, msg: 'Proclamar um reino exige: ser CONDE, castelo (terra nível 5) e 80 de renome.' };
+      return { ok: false, msg: 'Proclamar um reino exige: ser CONDE, castelo (terra nível 5), 80 de renome e ' + CUSTO_FUNDAR_REINO.toLocaleString('pt-BR') + ' de ouro.' };
+    if (state.jogador.ouro < CUSTO_FUNDAR_REINO)
+      return { ok: false, msg: `Fundar um reino custa ${CUSTO_FUNDAR_REINO.toLocaleString('pt-BR')} 🪙 (você tem ${state.jogador.ouro.toLocaleString('pt-BR')}). Coroa, corte e arautos não são baratos.` };
+    state.jogador.ouro -= CUSTO_FUNDAR_REINO;
     state.jogador.reiDe = 'jogador';
-    state.jogador.reinoNome = 'Reino do ' + state.terra.nome;
+    state.jogador.reinoNome = (nomeReino && nomeReino.trim()) ? nomeReino.trim().slice(0, 30) : ('Reino do ' + state.terra.nome);
+    state.jogador.bandeira = BANDEIRAS_JOGADOR.some(b => b.id === bandeiraId) ? bandeiraId : 'jogador_1';
     state.jogador.mesesReinando = 0;
     for (const r of state.reinos)
       Dialogo.mudarRelacao(state, 'rei_' + r.id, r.id === 'imperio' ? -40 : -20, 'proclamou independência');
-    log(`👑 INDEPENDÊNCIA! Você cinge a própria coroa: nasce o ${state.jogador.reinoNome}. As seis cortes tremem — e Felps, o Destruidor, esmaga a taça na mão ao saber. Sobreviva 12 meses no trono.`);
+    log(`👑 INDEPENDÊNCIA! Você cinge a própria coroa: nasce o ${state.jogador.reinoNome}, sob a bandeira ${BANDEIRAS_JOGADOR.find(b => b.id === state.jogador.bandeira).nome}. As seis cortes tremem — e Felps, o Destruidor, esmaga a taça na mão ao saber. Sobreviva 12 meses no trono.`);
     return { ok: true, msg: `O ${state.jogador.reinoNome} foi proclamado! Segure o trono por 12 meses.` };
   }
 
@@ -209,7 +218,7 @@ const Politica = (() => {
     // ALVORECER DOURADO: embargo e sabotagem em vez de guerra
     if (relJog('alvorecer') <= -25 && !state.embargos.alvorecer && Math.random() < 0.15) {
       state.embargos.alvorecer = 4;
-      state.cartas.unshift({ de: 'William Vangeance', tipo: 'ruim', ano: state.ano, mes: state.mes,
+      state.cartas.unshift({ de: 'Enzo Noites', tipo: 'ruim', ano: state.ano, mes: state.mes,
         texto: '"Nada pessoal. Apenas... aritmética. Nossos mercados estão fechados para você." (preços +35% no Alvorecer por 4 meses)' });
       log(`🪙 O Alvorecer Dourado decretou EMBARGO contra você: preços +35% lá por 4 meses.`);
     }
@@ -228,21 +237,21 @@ const Politica = (() => {
         const item = rnd(itens);
         const perda = Math.max(1, Math.ceil(state.carga[item] * 0.3));
         state.carga[item] -= perda;
-        log(`🐂 Emboscada dos Touros Negros na estrada! Perdeu ${perda}× ${MERCADORIAS[item].nome}. Yami manda lembranças.`);
+        log(`🐂 Emboscada dos Touros Negros na estrada! Perdeu ${perda}× ${MERCADORIAS[item].nome}. Touro Bill manda lembranças.`);
       }
     }
 
     // LEÕES CARMESINS: punem traidores de juramento
     if (state.jogador.traidorDeJuramento && relJog('leoes') > -60 && Math.random() < 0.2) {
       Dialogo.mudarRelacao(state, 'rei_leoes', -15, 'desprezo por traidores');
-      log(`🦁 Fuegoleon soube da sua quebra de juramento: "Covardia se paga." (Leões −15)`);
+      log(`🦁 Fogo no Leão soube da sua quebra de juramento: "Covardia se paga." (Leões −15)`);
     }
 
     // ROSA AZUL: freia quem está vencendo (inclusive você)
     if (state.jogador.reiDe && Math.random() < 0.25) {
       Dialogo.mudarRelacao(state, 'rei_rosa', -4, 'equilíbrio de poder');
       if (Math.random() < 0.3)
-        log(`🌹 Charlotte Roselei costura pactos contra o novo poder do continente — você. (Rosa Azul esfria)`);
+        log(`🌹 Eva Rosada costura pactos contra o novo poder do continente — você. (Rosa Azul esfria)`);
     }
   }
 
@@ -357,7 +366,7 @@ const Politica = (() => {
         return { ok: false, msg: `${reino.rei.nome} recua: "Aliança? Você me disse '${m.frase}'. Quem ameaça um trono não dorme sob o mesmo estandarte. Retrate-se primeiro."` };
       }
       if (state.jogador.renome < 60) return { ok: false, msg: `Aliança exige renome 60+ (você tem ${state.jogador.renome}).` };
-      const custoAli = reinoId === 'aguias' ? 600 : 300;   // Nozel cobra tributo absurdo
+      const custoAli = reinoId === 'aguias' ? 600 : 300;   // Fred Prateado cobra tributo absurdo
       if (state.jogador.ouro < custoAli) return { ok: false, msg: `Selar aliança custa ${custoAli} de ouro em garantias${reinoId === 'aguias' ? ' (as Águias cobram caro pela pureza)' : ''}.` };
       state.jogador.ouro -= custoAli;
       state.tratados.push({ reino: reinoId, tipo: 'alianca' });

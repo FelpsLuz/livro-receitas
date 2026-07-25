@@ -1,5 +1,5 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v16';
+const CACHE = 'reino-v17';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',
@@ -23,6 +23,10 @@ const ARQUIVOS = [
   './img/duelo/guerreiro_idle.png', './img/duelo/guerreiro_atk.png', './img/duelo/guerreiro_hit.png',
   './img/duelo/guerreiro_morte.png',
   './img/duelo/rei_idle.png', './img/duelo/rei_atk.png', './img/duelo/rei_hit.png', './img/duelo/rei_morte.png',
+  ...['imperio', 'touros', 'alvorecer', 'leoes', 'aguias', 'rosa', 'jogador_1', 'jogador_2', 'jogador_3']
+    .map((b) => './img/bandeiras/' + b + '.png'),
+  ...[['imperio', 10], ['touros', 3], ['alvorecer', 6], ['leoes', 5], ['aguias', 4], ['rosa', 5]]
+    .flatMap(([r, n]) => Array.from({ length: n }, (_, i) => './img/retratos/lorde_' + r + '_' + (i + 1) + '.png')),
 ];
 
 self.addEventListener('install', (e) => {

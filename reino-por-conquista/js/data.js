@@ -15,45 +15,104 @@ const MERCADORIAS = {
 };
 
 // producao: o que o reino produz bem (oferta alta = preço baixo lá)
-// O IMPÉRIO é o mais forte: exército maior e 10 nobres vassalos.
+// ERA DO AÇO, SEM MAGIA. O IMPÉRIO é o mais forte: 10 Lordes Comandantes,
+// nenhum com recursos completos (um tem o ferro, outro o grão, outro os rios).
 const REINOS_BASE = [
   {
-    id: 'imperio', nome: 'Império de Felps', cor: '#1a4a2a', imperial: true, nobres: 10,
+    id: 'imperio', nome: 'Império Central', cor: '#1a4a2a', imperial: true, nobres: 10,
     producao: ['ferro', 'cavalos'], capital: 'Trono Verde',
     rei: { id: 'rei_imperio', nome: 'Felps, o Destruidor', genero: 'm', personalidade: 'cruel',
-           desc: 'O Imperador do brasão verde-escuro. Dez nobres governam cidades em seu nome. Nunca perdeu uma guerra — e faz questão de lembrar.' },
+           desc: 'Gênio da logística e do direito de conquista. Expandiu a ferro (trabucos e balistas) e a tinta (tratados de anexação que sufocam antes da batalha). Dez Lordes Comandantes governam em seu nome — nenhum com recursos completos.' },
   },
   {
-    id: 'touros', nome: 'Touros Negros', cor: '#1c1c22', nobres: 4,
+    id: 'touros', nome: 'Touros Negros', cor: '#1c1c22', nobres: 3,
     producao: ['madeira', 'sal'], capital: 'Covil Negro',
-    rei: { id: 'rei_touros', nome: 'Yami Sukehiro', genero: 'm', personalidade: 'orgulhoso',
-           desc: 'Bruto, direto e mais forte do que parece. "Supere seus limites. Aqui e agora." Odeia rodeios.' },
+    rei: { id: 'rei_touros', nome: 'Touro Bill', genero: 'm', personalidade: 'orgulhoso',
+           desc: 'Não é um rei: é um senhor do crime e líder de proscritos dos pântanos. Veterano desiludido que acolhe desertores e camponeses arruinados. Não liga para leis dinásticas — só lealdade e sobrevivência.' },
   },
   {
-    id: 'alvorecer', nome: 'Alvorecer Dourado', cor: '#c9a227', nobres: 4,
+    id: 'alvorecer', nome: 'Alvorecer Dourado', cor: '#c9a227', nobres: 6,
     producao: ['trigo', 'tecidos'], capital: 'Aurora Alta',
-    rei: { id: 'rei_alvorecer', nome: 'William Vangeance', genero: 'm', personalidade: 'calculista',
-           desc: 'Gentil na voz, insondável nos planos. Ninguém sabe o que há atrás da máscara.' },
+    rei: { id: 'rei_alvorecer', nome: 'Enzo Noites', genero: 'm', personalidade: 'calculista',
+           desc: 'Mestre da guerra econômica e da espionagem. Não tem o maior exército — tem os cofres mais cheios. Sorri em jantares diplomáticos enquanto financia mercenários para queimar as colheitas dos rivais.' },
   },
   {
-    id: 'leoes', nome: 'Leões Carmesins', cor: '#8b1a1a', nobres: 4,
+    id: 'leoes', nome: 'Leões Carmesins', cor: '#8b1a1a', nobres: 5,
     producao: ['ferro', 'trigo'], capital: 'Chama Rubra',
-    rei: { id: 'rei_leoes', nome: 'Fuegoleon Vermillion', genero: 'm', personalidade: 'honrado',
-           desc: 'Honra em brasa. Sua irmã Mereoleona comanda a vanguarda — e é ainda mais assustadora.' },
+    rei: { id: 'rei_leoes', nome: 'Fogo no Leão', genero: 'm', personalidade: 'honrado',
+           desc: 'Arquiteto de campanhas: estuda terreno, clima e moral. Governa em diarquia com a irmã, Leoa Vermelha, comandante da vanguarda. Lei marcial estrita: covardia é morte, mérito faz plebeu virar nobre.' },
   },
   {
     id: 'aguias', nome: 'Águias Prateadas', cor: '#9aa4ae', nobres: 4,
     producao: ['tecidos', 'cavalos'], capital: 'Ninho de Prata',
-    rei: { id: 'rei_aguias', nome: 'Nozel Silva', genero: 'm', personalidade: 'orgulhoso',
-           desc: 'Altivo como a prata do brasão. Despreza plebeus — até que provem seu valor.' },
+    rei: { id: 'rei_aguias', nome: 'Fred Prateado', genero: 'm', personalidade: 'orgulhoso',
+           desc: 'Monarca absolutista das montanhas de prata e ferro, paranoico com a pureza da linhagem. Arrogante e isolacionista: vê os outros reinos como bárbaros que acabarão se destruindo sozinhos.' },
   },
   {
-    id: 'rosa', nome: 'Rosa Azul', cor: '#2d4a8a', nobres: 4,
+    id: 'rosa', nome: 'Rosa Azul', cor: '#2d4a8a', nobres: 5,
     producao: ['sal', 'madeira'], capital: 'Jardim Azul',
-    rei: { id: 'rei_rosa', nome: 'Charlotte Roselei', genero: 'f', personalidade: 'romantica',
-           desc: 'Espinhos por fora, segredos por dentro. Rainha guerreira que ninguém jamais viu corar. Quase ninguém.' },
+    rei: { id: 'rei_rosa', nome: 'Eva Rosada', genero: 'f', personalidade: 'calculista',
+           desc: 'Governa uma sociedade matriarcal das planícies fluviais. Estrategista cínica: casamentos e diplomacia são armas. Sempre ajuda o reino mais fraco — para que o mais forte jamais vença.' },
   },
 ];
+
+// LORDES nomeados de cada reino (profundidade de personagem).
+// Cada um recebe uma cidade sorteada a cada novo jogo.
+const LORDES_BASE = {
+  imperio: [
+    { nome: 'Armando Golpes', fem: false, papel: 'Estrategista-chefe: táticas de pinça e flanqueamento nas planícies.' },
+    { nome: 'Geraldo Dano', fem: false, papel: 'General de artilharia pesada: mestre de trabucos e balistas de cerco.' },
+    { nome: 'Gil Tine', fem: false, papel: 'Juiz e executor imperial: sufoca rebeliões pela raiz.' },
+    { nome: 'Rolando Ladeira', fem: false, papel: 'Comandante da cavalaria de choque: atropela do terreno elevado.' },
+    { nome: 'Sara Cura', fem: true, papel: 'Intendente geral: logística de suprimentos, bandagens e rações.' },
+    { nome: 'Mário Netos', fem: false, papel: 'Mestre espião: manipula prefeitos como marionetes via chantagem.' },
+    { nome: 'Décio Teto', fem: false, papel: 'Engenheiro de fortificações: túneis de sapadores colapsam muralhas.' },
+    { nome: 'Lino Coro', fem: false, papel: 'Mestre de armas: treina recrutas a chicote e disciplina de ferro.' },
+    { nome: 'Simas Prato', fem: false, papel: 'Feitor de terras: tributos de grão que esvaziam os pratos do povo.' },
+    { nome: 'César K. Beca', fem: false, papel: 'Interrogador-chefe: extrai segredos de desertores e espiões.' },
+  ],
+  touros: [
+    { nome: 'Zeca Peta', fem: false, papel: 'Guerrilheiro brutal: emboscadas incendiárias em florestas densas.' },
+    { nome: 'Tina Tralha', fem: true, papel: 'Engenheira de sucata: transforma ferro-velho em armadilhas mortais.' },
+    { nome: 'Beto Mando', fem: false, papel: 'Capitão de saques: invade rotas logísticas dos reinos maiores.' },
+  ],
+  alvorecer: [
+    { nome: 'Grana Dobre', fem: false, papel: 'Banqueiro-mor: multiplica o tesouro com juros sobre reinos menores.' },
+    { nome: 'Oscar Lote', fem: false, papel: 'Diplomata astuto: alianças falsas e calotes militares na hora H.' },
+    { nome: 'Ana Lise', fem: true, papel: 'Chefe de inteligência: prevê a economia inimiga por dados de colheita.' },
+    { nome: 'Ed Dívida', fem: false, papel: 'Cobrador mercenário: asfixia cidades neutras com taxas de "segurança".' },
+    { nome: 'Hélio Lucro', fem: false, papel: 'Mercador monopolista: infla o preço de ferro e madeira no inverno.' },
+    { nome: 'Lara Pido', fem: true, papel: 'Falsificadora real: forja selos militares para desviar tropas do alvo.' },
+  ],
+  leoes: [
+    { nome: 'Armando Guerra', fem: false, papel: 'Veterano das falanges: vive exclusivamente para o combate aberto.' },
+    { nome: 'Marco Bate', fem: false, papel: 'Campeão da vanguarda: quebra a linha de escudos nos primeiros minutos.' },
+    { nome: 'Vitor Ioso', fem: false, papel: 'Estrategista pragmático: calcula baixas aceitáveis pelo território.' },
+    { nome: 'Bárbara Dano', fem: true, papel: 'Líder dos invasores de choque: rompe portões com aríetes.' },
+    { nome: 'Hugo Piar', fem: false, papel: 'Instrutor de combate: lanceiros de precisão em formação fechada.' },
+  ],
+  aguias: [
+    { nome: 'Altair Fino', fem: false, papel: 'Aristocrata das altitudes: arqueiros de longo alcance nas encostas.' },
+    { nome: 'Muro Forte', fem: false, papel: 'Arquiteto militar: desfiladeiros bloqueados por fortalezas.' },
+    { nome: 'Nando Joias', fem: false, papel: 'Controlador das minas de prata: compra o melhor aço do continente.' },
+    { nome: 'Paty Cínica', fem: true, papel: 'Diplomata defensiva: recusa propostas com desdém elitista.' },
+  ],
+  rosa: [
+    { nome: 'Eva Ziva', fem: true, papel: 'Comandante de bater e correr: recuos falsos que atraem para o pântano.' },
+    { nome: 'Vera Cida', fem: true, papel: 'Mestra dos batedores: nenhuma informação falsa passa por ela.' },
+    { nome: 'Rita Tática', fem: true, papel: 'Estrategista de flancos: cerca suprimentos, ignora a tropa principal.' },
+    { nome: 'Gina Ginete', fem: true, papel: 'A melhor amazona do reino: cavalaria ultrarrápida na retaguarda.' },
+    { nome: 'Bela Dona', fem: true, papel: 'Sabotadora silenciosa: envenena poços e celeiros de fortes sitiados.' },
+  ],
+};
+
+// bandeiras que o jogador pode escolher ao fundar o próprio reino
+const BANDEIRAS_JOGADOR = [
+  { id: 'jogador_1', nome: 'Martelo e Atalaia', desc: 'Verde-escuro com picareta e martelo cruzados sob a torre de vigia. Para quem construiu tudo do zero.' },
+  { id: 'jogador_2', nome: 'Balança de Ouro e Grão', desc: 'Púrpura com a balança pesando moeda e trigo. Para quem venceu pelo comércio.' },
+  { id: 'jogador_3', nome: 'Âncora Acorrentada', desc: 'Rubro e branco esquartelado com âncora e corrente. Para quem domina rios e rotas.' },
+];
+const CUSTO_FUNDAR_REINO = 50000;
 
 // cidades dos nobres: sorteadas a cada novo jogo
 const NOMES_CIDADES = ['Pedraverde', 'Vau do Sol', 'Ravina Alta', 'Porto Cinza', 'Vila das Brumas',

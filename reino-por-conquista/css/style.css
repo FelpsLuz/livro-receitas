@@ -209,6 +209,18 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .ico-arma { width: 32px; height: 32px; image-rendering: pixelated; vertical-align: -10px; }
 .ico-arma.g { width: 40px; height: 40px; vertical-align: -13px; }
 
+/* ---------- bandeiras dos reinos e fundação ---------- */
+.bandeira { width: 34px; height: 22px; image-rendering: pixelated; vertical-align: -5px; border: 1px solid #26160e; }
+.lordes-lista span { cursor: help; border-bottom: 1px dotted rgba(120,90,50,.6); }
+.linha-bandeiras { display: flex; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+.card-bandeira {
+  flex: 1; min-width: 120px; text-align: center; padding: 8px; cursor: pointer;
+  border: 2px solid rgba(120,90,50,.5); background: rgba(0,0,0,.12);
+}
+.card-bandeira img { width: 96px; height: 62px; image-rendering: pixelated; border: 1px solid #26160e; }
+.card-bandeira.ativa { border-color: var(--ouro); background: rgba(201,162,39,.15); box-shadow: 0 0 0 1px var(--ouro); }
+.input-reino { width: 100%; box-sizing: border-box; margin: 6px 0; }
+
 /* ---------- cena de duelo animada nos relatórios de batalha ---------- */
 .duelo-canvas {
   display: block; width: 100%; max-width: 460px; margin: 8px auto;

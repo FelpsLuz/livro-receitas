@@ -21,7 +21,7 @@ const Jogo = (() => {
       reinos: JSON.parse(JSON.stringify(REINOS_BASE)),
       npcs: JSON.parse(JSON.stringify(NPCS_BASE)),
       guerras: [], tags: {}, segredos: [], casusBelli: [],
-      carga: {}, terra: null, local: 'touros', versaoMundo: 2,
+      carga: {}, terra: null, local: 'touros', versaoMundo: 3,
       familia: { conjuge: null, filhos: [] },
       contratos: [], cronica: [], eventoPendente: null, chantagemPendente: null,
       fim: null,
@@ -252,7 +252,7 @@ const Jogo = (() => {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       state = JSON.parse(raw);
-      if (state.versaoMundo !== 2) return false;   // save de mundo antigo: incompatível
+      if (state.versaoMundo !== 3) return false;   // save de mundo antigo: incompatível
       Politica.garantir(state);
       Producao.garantir(state);
       Cidade.seedNpcs(state.terra ? state.terra.nivel : -1);

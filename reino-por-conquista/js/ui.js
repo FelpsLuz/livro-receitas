@@ -141,11 +141,11 @@ const UI = (() => {
       } else {
         painel.appendChild(el('p', 'flavor bom', '🏰 Seu castelo domina o horizonte. Falta apenas uma coroa.'));
         if (Politica.podeProclamar(s)) {
-          const bInd = el('button', 'btn destaque', '👑 PROCLAMAR REINO INDEPENDENTE (Conde + castelo + 80⭐)');
-          bInd.onclick = () => { const r = Politica.proclamarIndependencia(s, Jogo.log); if (r.ok) Sfx.vitoria(); aviso(r.msg); Jogo.salvar(); renderTudo(); };
+          const bInd = el('button', 'btn destaque', `👑 FUNDAR REINO INDEPENDENTE (${CUSTO_FUNDAR_REINO.toLocaleString('pt-BR')} 🪙)`);
+          bInd.onclick = () => modalFundarReino();
           painel.appendChild(bInd);
         } else if (!s.jogador.reiDe) {
-          painel.appendChild(el('p', 'flavor', `👑 Independência exige 80 de renome (você tem ${s.jogador.renome}).`));
+          painel.appendChild(el('p', 'flavor', `👑 Independência exige 80 de renome (você tem ${s.jogador.renome}) e ${CUSTO_FUNDAR_REINO.toLocaleString('pt-BR')} 🪙 de tesouro.`));
         }
       }
       const bExp = el('button', 'btn sec', '📦 Exportar 30 de alimento da vila (ouro rápido, povo faminto reclama)');
@@ -233,7 +233,9 @@ const UI = (() => {
     painel.appendChild(el('h2', null, 'Os Seis Reinos'));
     if (s.jogador.reiDe) {
       const meus = Politica.meusNobres(s);
-      painel.appendChild(el('p', 'flavor bom', `👑 ${s.jogador.reiDe === 'jogador' ? (s.jogador.reinoNome || 'Seu Reino') : 'Seu trono'} — nobres sob sua bandeira: ${meus.length} (${meus.map(n => n.cidade).join(', ') || 'nenhum ainda'}). Cada um rende 20 🪙/mês e mina o reino de origem.`));
+      const bandeiraMinha = s.jogador.reiDe === 'jogador' && s.jogador.bandeira
+        ? `<img src="img/bandeiras/${s.jogador.bandeira}.png" class="bandeira" alt=""> ` : '👑 ';
+      painel.appendChild(el('p', 'flavor bom', `${bandeiraMinha}${s.jogador.reiDe === 'jogador' ? (s.jogador.reinoNome || 'Seu Reino') : 'Seu trono'} — lordes sob sua bandeira: ${meus.length} (${meus.map(n => n.nome).join(', ') || 'nenhum ainda'}). Cada um rende 20 🪙/mês e mina o reino de origem.`));
     }
     if (s.guerras.length) {
       for (const g of s.guerras) {
@@ -249,8 +251,10 @@ const UI = (() => {
       const card = el('div', 'card-reino com-retrato');
       card.style.borderLeftColor = r.cor;
       card.appendChild(retratoDe(r.rei.id));
+      const lordes = Politica.nobresDe(s, r.id);
+      const listaLordes = lordes.map(n => `<span title="${(n.papel || '').replace(/"/g, '&quot;')} (${n.cidade})">${n.nome}</span>`).join(' · ');
       const infoReino = el('div', 'npc-info', `
-        <b>${r.nome}</b> — capital ${r.capital}<br>
+        <img src="img/bandeiras/${r.id}.png" class="bandeira" alt=""> <b>${r.nome}</b> — capital ${r.capital}<br>
         <small>${r.rei.nome} · <i>${r.rei.desc}</i></small><br>
         <small>Relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${rel} (${tags.relacao})</b>
         ${cb ? ' · <b class="bom">📜 Casus Belli</b>' : ''}
@@ -260,7 +264,8 @@ const UI = (() => {
         ${(s.embargos && s.embargos[r.id]) ? ' · <b class="ruim">📦 EMBARGO contra você</b>' : ''}
         ${s.jogador.vassaloDe === r.id ? ' · <b class="bom">🛡️ SEU SENHOR</b>' : ''}
         ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}<br>
-        🏰 Nobres: ${Politica.nobresDe(s, r.id).length}${r.imperial ? ' (Lordes Comandantes)' : ''} · <i>${Politica.DOUTRINAS[r.id] || ''}</i></small>`);
+        🏰 ${r.imperial ? 'Lordes Comandantes' : 'Lordes'} (${lordes.length}): <i class="lordes-lista">${listaLordes || '—'}</i><br>
+        📜 <i>${Politica.DOUTRINAS[r.id] || ''}</i></small>`);
       card.appendChild(infoReino);
       const botoes = el('div', 'linha-botoes');
       const bIr = el('button', 'btn mini', s.local === r.id ? '📍 Você está aqui' : '🐴 Viajar');
@@ -824,6 +829,44 @@ const UI = (() => {
     document.body.appendChild(a);
     setTimeout(() => a.classList.add('show'), 10);
     setTimeout(() => { a.classList.remove('show'); setTimeout(() => a.remove(), 400); }, 3500);
+  }
+
+  // ---------- fundação do reino: nome + escolha de bandeira ----------
+  function modalFundarReino() {
+    const s = Jogo.state;
+    const modal = $('#modal');
+    modal.style.display = 'flex';
+    const box = $('#modal-box');
+    box.innerHTML = '';
+    box.appendChild(el('h2', null, '👑 Fundar o seu Reino'));
+    box.appendChild(el('p', null, `Coroa, corte, selo real e arautos custam <b>${CUSTO_FUNDAR_REINO.toLocaleString('pt-BR')} 🪙</b> (você tem ${s.jogador.ouro.toLocaleString('pt-BR')}). Escolha o nome e a bandeira que o continente vai aprender a temer.`));
+    const inp = el('input');
+    inp.type = 'text'; inp.maxLength = 30; inp.placeholder = 'Nome do reino (ex.: Reino de ' + (s.jogador.nome.split(' ')[0] || 'Aço') + ')';
+    inp.className = 'input-reino';
+    box.appendChild(inp);
+    box.appendChild(el('p', 'flavor', '🏴 Escolha sua bandeira:'));
+    let escolhida = BANDEIRAS_JOGADOR[0].id;
+    const linha = el('div', 'linha-bandeiras');
+    const cartoes = [];
+    for (const b of BANDEIRAS_JOGADOR) {
+      const cardB = el('div', 'card-bandeira' + (b.id === escolhida ? ' ativa' : ''));
+      cardB.innerHTML = `<img src="img/bandeiras/${b.id}.png" alt="${b.nome}"><br><b>${b.nome}</b><br><small>${b.desc}</small>`;
+      cardB.onclick = () => { escolhida = b.id; cartoes.forEach(cc => cc.classList.remove('ativa')); cardB.classList.add('ativa'); };
+      cartoes.push(cardB);
+      linha.appendChild(cardB);
+    }
+    box.appendChild(linha);
+    const bOk = el('button', 'btn destaque', '👑 PROCLAMAR');
+    bOk.onclick = () => {
+      const r = Politica.proclamarIndependencia(s, Jogo.log, inp.value, escolhida);
+      if (r.ok) Sfx.vitoria(); else Sfx.alerta();
+      aviso(r.msg);
+      modal.style.display = 'none';
+      Jogo.salvar(); renderTudo();
+    };
+    const bNao = el('button', 'btn sec', 'Ainda não');
+    bNao.onclick = () => { modal.style.display = 'none'; };
+    box.appendChild(bOk); box.appendChild(bNao);
   }
 
   function confirmar(msg, fn) {
