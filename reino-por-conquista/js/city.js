@@ -27,7 +27,9 @@ const Cidade = (() => {
   // ---------- estruturas do tileset (img/estruturas/*.png) ----------
   // Quando carregadas, substituem casas/poço/props procedurais.
   const EST = {};
-  const EST_LISTA = ['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco'];
+  const EST_LISTA = ['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco',
+    'arvore_1', 'arvore_2', 'arvore_3', 'arvore_4', 'arbusto_1', 'arbusto_2', 'arbusto_3',
+    'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c'];
   function estImg(nome) {
     if (!EST[nome]) { const im = new Image(); im.src = 'img/estruturas/' + nome + '.png'; EST[nome] = im; }
     return EST[nome];
@@ -51,14 +53,14 @@ const Cidade = (() => {
       grama: ['#3c6b52', '#579050', '#74a94c', '#9cc45e'],
       arvore: ['#2e5b45', '#3f7a4a', '#5b9a50', '#8bbf62'],
       campo: ['#5d4a30', '#77603c', '#8fba55'],
-      montanha: ['#5e6b85', '#7c88a0', '#a3adc0'], neve: false,
+      montanha: ['#5e6b85', '#7c88a0', '#a3adc0'], neve: false, tiles: true,
     },
     verao: {
       ceu: ['#6fb0e0', '#a5cfe0', '#ead9a8'], sol: ['#fff6c8', '#ffdf78'],
       grama: ['#41684a', '#5f8c48', '#7fa746', '#a8c258'],
       arvore: ['#31593f', '#457546', '#63954a', '#93b85c'],
       campo: ['#5d4a30', '#77603c', '#d0af52'],
-      montanha: ['#606d86', '#7e8aa2', '#a5afc2'], neve: false,
+      montanha: ['#606d86', '#7e8aa2', '#a5afc2'], neve: false, tiles: true,
     },
     outono: {
       ceu: ['#8998b5', '#b3b3c0', '#e3cfa5'], sol: ['#fdf2c8', '#f5cf78'],
@@ -192,6 +194,21 @@ const Cidade = (() => {
       P(dx + (dx % 12 ? 0 : 3), 224, 3, 3, pal.grama[3]);
       P(dx + (dx % 12 ? 3 : 0), 298, 3, 3, pal.grama[2]);
     }
+    // manchas orgânicas do tileset (decalques suaves, só nas estações verdes)
+    if (pal.tiles) {
+      const decalques = ['grama_a', 'grama_b', 'grama_c'].map(estPronta);
+      if (decalques.every(Boolean)) {
+        x.imageSmoothingEnabled = false;
+        for (let i = 0; i < 16; i++) {
+          const gx = sr(i * 71) * (W - 24), gy = 214 + sr(i * 73) * 130;
+          const im = decalques[i % 3];
+          x.globalAlpha = 0.22 + sr(i * 79) * 0.12;
+          const tam = 18 + sr(i * 83) * 16;
+          x.drawImage(im, Math.round(gx), Math.round(gy), Math.round(tam), Math.round(tam));
+          x.globalAlpha = 1;
+        }
+      }
+    }
     // tufos de grama (3 tons), pedrinhas e flores
     for (let i = 0; i < 240; i++) {
       const gx = sr(i * 5) * W, gy = 206 + sr(i * 5 + 1) * 148;
@@ -233,7 +250,7 @@ const Cidade = (() => {
       for (let rx = 0; rx < W; rx += 9) x.fillRect(rx + (rx % 18 ? 3 : 0), margemRio(rx) + 1, 4, 1);
     }
 
-    // ---------- estrada de terra com cascalho ----------
+    // ---------- estrada de terra com cascalho (textura do tileset quando carregada) ----------
     const rua = (x0, y0, x1, y1, larg) => {
       const passos = Math.max(1, Math.floor((y1 - y0) / 2));
       for (let i = 0; i <= passos; i++) {
@@ -244,6 +261,23 @@ const Cidade = (() => {
         P(cx - l / 2, cy, l, 2.2, '#8a6a42');
         P(cx - l / 2, cy, 2, 2.2, '#6b5334');             // borda esquerda sombreada
         P(cx + l / 2 - 2, cy, 2, 2.2, '#a58a5c');         // borda direita na luz
+      }
+      // carimbos de cascalho do tileset por cima do leito
+      const pedras = ['estrada_a', 'estrada_b', 'estrada_c'].map(estPronta);
+      if (pedras.every(Boolean) && larg >= 20) {
+        x.imageSmoothingEnabled = false;
+        x.globalAlpha = 0.8;
+        for (let i = 0; i <= passos; i += 6) {
+          const t = i / passos;
+          const cx = x0 + (x1 - x0) * t + Math.sin(t * 5) * 3;
+          const cy = y0 + (y1 - y0) * t;
+          const l = larg * (0.72 + t * 0.28) - 4;
+          for (let sx = -l / 2; sx < l / 2 - 6; sx += 12) {
+            const im = pedras[Math.floor(sr(i * 11 + sx) * 3)];
+            x.drawImage(im, Math.round(cx + sx), Math.round(cy), 12, 12);
+          }
+        }
+        x.globalAlpha = 1;
       }
       for (let i = 0; i < passos; i += 2) {
         const t = i / passos;
@@ -352,6 +386,7 @@ const Cidade = (() => {
   function arbusto(x, bx, by, pal) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     P(bx - 5, by + 4, 12, 2, SOMBRA);
+    if (pal.tiles && estDesenha(x, 'arbusto_' + (1 + (bx % 3)), bx, by + 6, 16 + (bx % 3) * 4)) return;
     P(bx - 6, by - 2, 12, 6, pal.arvore[1]);
     P(bx - 4, by - 5, 9, 5, pal.arvore[1]);
     P(bx - 6, by + 1, 5, 3, pal.arvore[0]);
@@ -364,6 +399,11 @@ const Cidade = (() => {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
     // sombra projetada (esq-inferior)
     P(tx - 18, ty + 12, 28, 5, SOMBRA);
+    // árvores Emerald do tileset nas estações verdes (variante estável por posição)
+    if (pal.tiles) {
+      const v = tipo === 'pinheiro' ? (3 + (tx % 2)) : (1 + (tx % 2));
+      if (estDesenha(x, 'arvore_' + v, tx, ty + 15, v >= 3 ? 38 : 46)) return;
+    }
     P(tx - 3, ty - 6, 6, 20, '#4a3421');
     P(tx + 1, ty - 6, 2, 20, '#6b4f30');                  // lado direito do tronco na luz
     P(tx - 3, ty - 6, 1, 20, '#332417');                  // veio escuro do tronco
