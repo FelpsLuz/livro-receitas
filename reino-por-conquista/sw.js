@@ -1,5 +1,5 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v23';
+const CACHE = 'reino-v24';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',
@@ -33,6 +33,8 @@ const ARQUIVOS = [
     .map((b) => './img/bandeiras/' + b + '.png'),
   ...[['imperio', 10], ['touros', 3], ['alvorecer', 6], ['leoes', 5], ['aguias', 4], ['rosa', 5]]
     .flatMap(([r, n]) => Array.from({ length: n }, (_, i) => './img/retratos/lorde_' + r + '_' + (i + 1) + '.png')),
+  ...['terra', 'mapa', 'mercado', 'taverna', 'corte', 'exercito', 'clas', 'intrigas', 'familia', 'cronica']
+    .map((i) => './img/icones/' + i + '.png'),
   ...['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco',
       'arvore_1', 'arvore_2', 'arvore_3', 'arvore_4', 'arbusto_1', 'arbusto_2', 'arbusto_3',
       'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c',

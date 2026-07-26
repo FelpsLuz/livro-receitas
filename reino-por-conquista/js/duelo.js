@@ -73,6 +73,19 @@ const Duelo = (() => {
     ];
     let etapa = 0, tick = 0, quadro = 0;
 
+    // game feel: tremida de câmera, clarão e números de dano flutuantes
+    let treme = 0, flash = 0;
+    const flutuantes = [];
+    function impacto(l, doHeroi, fatal) {
+      treme = fatal ? 12 : doHeroi ? 6 : 9;
+      flash = fatal ? 6 : 3;
+      flutuantes.push({
+        x: l.x + (Math.random() * 12 - 6), y: CHAO - 74, vida: 30,
+        texto: fatal ? '☠' : '-' + (6 + Math.floor(Math.random() * 12)),
+        cor: doHeroi ? '#ffd75e' : '#ff6b5e',
+      });
+    }
+
     function desenhar(l) {
       const ficha = FICHAS[l.tipo];
       const a = ficha.anims[l.anim];
@@ -89,23 +102,58 @@ const Duelo = (() => {
     }
 
     function passo() {
-      // fundo: fim de tarde de campo de batalha
+      // câmera treme após impactos
+      if (treme > 0) treme--;
+      const dx = treme ? (Math.random() * 2 - 1) * treme * 0.7 : 0;
+      const dy = treme ? (Math.random() * 2 - 1) * treme * 0.4 : 0;
+      ctx.save();
+      ctx.translate(dx, dy);
+
+      // fundo: fim de tarde de campo de batalha (com folga para a tremida)
       const g = ctx.createLinearGradient(0, 0, 0, H);
       g.addColorStop(0, '#3c2f3e'); g.addColorStop(0.7, '#6b4a3c'); g.addColorStop(1, '#2e2018');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#241a12'; ctx.fillRect(0, CHAO, W, H - CHAO);
+      ctx.fillStyle = g; ctx.fillRect(-12, -12, W + 24, H + 24);
+      ctx.fillStyle = '#241a12'; ctx.fillRect(-12, CHAO, W + 24, H - CHAO + 12);
       ctx.fillStyle = '#3a2a1c';
       for (let i = 0; i < 12; i++) ctx.fillRect((i * 47 + 13) % W, CHAO + 3 + (i % 3) * 3, 8, 2);
 
       const [dur, aH, aI] = roteiro[etapa];
-      if (fx.anim !== aH) { fx.anim = aH; fx.f = 0; }
-      if (fy.anim !== aI) { fy.anim = aI; fy.f = 0; }
+      if (fx.anim !== aH) {
+        fx.anim = aH; fx.f = 0;
+        if (aH === 'hit') impacto(fx, false, false);
+        if (aH === 'morte') impacto(fx, false, true);
+      }
+      if (fy.anim !== aI) {
+        fy.anim = aI; fy.f = 0;
+        if (aI === 'hit') impacto(fy, true, false);
+        if (aI === 'morte') impacto(fy, true, true);
+      }
       if (fx.anim === 'run' && fx.x < W / 2 - 44) fx.x += 3;
 
       // sombras
       ctx.fillStyle = 'rgba(0,0,0,.35)';
       for (const l of [fx, fy]) { ctx.beginPath(); ctx.ellipse(l.x, CHAO + 4, 24, 5, 0, 0, 7); ctx.fill(); }
       desenhar(fy); desenhar(fx);
+
+      // números de dano sobem e somem
+      ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+      for (let i = flutuantes.length - 1; i >= 0; i--) {
+        const p = flutuantes[i];
+        p.y -= 0.8; p.vida--;
+        ctx.globalAlpha = Math.min(1, p.vida / 12);
+        ctx.fillStyle = '#1a0e08'; ctx.fillText(p.texto, p.x + 1, p.y + 1);
+        ctx.fillStyle = p.cor; ctx.fillText(p.texto, p.x, p.y);
+        ctx.globalAlpha = 1;
+        if (p.vida <= 0) flutuantes.splice(i, 1);
+      }
+      ctx.restore();
+
+      // clarão branco no instante do impacto
+      if (flash > 0) {
+        ctx.fillStyle = 'rgba(255,240,220,' + (flash * 0.045).toFixed(3) + ')';
+        ctx.fillRect(0, 0, W, H);
+        flash--;
+      }
 
       if (++quadro % 6 === 0) { fx.f++; fy.f++; }
       if (++tick >= dur) {

@@ -43,7 +43,11 @@ const UI = (() => {
     if (!Jogo.temSave()) $('#btn-continuar').style.display = 'none';
 
     document.querySelectorAll('.aba').forEach(b => {
-      b.onclick = () => { Sfx.pagina(); abaAtual = b.dataset.aba; npcAtual = null; renderTudo(); };
+      b.onclick = () => {
+        Sfx.pagina(); abaAtual = b.dataset.aba; npcAtual = null; renderTudo();
+        const c = $('#conteudo'); // fade curto ao trocar de aba (game feel)
+        c.classList.remove('trocando'); void c.offsetWidth; c.classList.add('trocando');
+      };
     });
     $('#btn-mes').onclick = () => {
       Sfx.tique();
@@ -66,6 +70,7 @@ const UI = (() => {
         }
       };
       loopTitulo();
+      requestAnimationFrame(reajustarCanvases);
     }
   }
 
@@ -79,6 +84,31 @@ const UI = (() => {
     };
     loop();
   }
+
+  // ---------- escala inteira (pixel perfect) ----------
+  // Se um múltiplo inteiro de pixels do aparelho ocupar ≥70% da largura,
+  // trava nele (pixels uniformes, sem tremida); senão usa a largura toda.
+  function ajustarPixelPerfeito(canvas) {
+    const wrap = canvas && canvas.parentElement;
+    if (!wrap || !wrap.clientWidth) return;
+    const dpr = window.devicePixelRatio || 1;
+    const disp = Math.floor(wrap.clientWidth * dpr);
+    const esc = Math.floor(disp / canvas.width);
+    if (esc >= 1 && canvas.width * esc >= disp * 0.7) {
+      canvas.style.width = (canvas.width * esc / dpr) + 'px';
+      canvas.style.height = (canvas.height * esc / dpr) + 'px';
+      canvas.style.margin = '0 auto';
+    } else {
+      canvas.style.width = ''; canvas.style.height = ''; canvas.style.margin = '';
+    }
+  }
+  function reajustarCanvases() {
+    ['#canvas-cidade', '#canvas-titulo'].forEach((id) => {
+      const cv = $(id);
+      if (cv) ajustarPixelPerfeito(cv);
+    });
+  }
+  window.addEventListener('resize', () => requestAnimationFrame(reajustarCanvases));
 
   // ---------- barra de status ----------
   function renderStatus() {
@@ -109,6 +139,7 @@ const UI = (() => {
     ({ terra: renderTerra, mapa: renderMapa, mercado: renderMercado, taverna: renderTaverna,
        corte: renderCorte, exercito: renderExercito, clas: renderClas, intrigas: renderIntrigas,
        familia: renderFamilia, cronica: renderCronica }[abaAtual] || renderTerra)(c);
+    requestAnimationFrame(reajustarCanvases);
   }
 
   // ---------- SUA TERRA (pixel art + gestão) ----------
@@ -485,7 +516,8 @@ const UI = (() => {
     const painel = el('div', 'painel conversa');
     const cab = el('div', 'conversa-cab');
     const lado = el('div', 'conversa-persona');
-    lado.appendChild(retratoDe(npc.id, 'g', npc.retratoId));
+    const retratoConversa = retratoDe(npc.id, 'g', npc.retratoId);
+    lado.appendChild(retratoConversa);
     lado.appendChild(el('div', null,
       `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>`));
     cab.appendChild(lado);
@@ -534,6 +566,7 @@ const UI = (() => {
       setTimeout(() => {
         Sfx.pagina();
         tb.classList.remove('digitando');
+        retratoConversa.classList.add('falando'); // retrato balança enquanto fala
         tb.innerHTML = `<b>${npc.nome}:</b> <span class="tw"></span>`;
         const alvo = tb.querySelector('.tw');
         let i = 0;
@@ -543,6 +576,7 @@ const UI = (() => {
           rolar();
           if (i >= r.resposta.length) {
             clearInterval(timer);
+            retratoConversa.classList.remove('falando');
             if (r.efeitos.length) tb.appendChild(el('div', 'tags-efeito', r.efeitos.join(' ')));
             s.historicoConversa.linhas.push({ de: 'npc', texto: r.resposta, efeitos: r.efeitos });
             enviando = false;

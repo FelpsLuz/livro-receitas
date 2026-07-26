@@ -45,10 +45,10 @@ const Dialogo = (() => {
       'sal','madeira','tecidos','cavalos','quanto custa','negocio','mercadoria'] },
     { id: 'pedir_contrato', palavras: ['contrato','trabalho','servico','missao','emprego','mercenario',
       'escolta','me contrate','preciso de ouro','tarefa'] },
-    { id: 'subornar', palavras: ['ouro para voce','te pago','suborno','presente','uma oferta','moedas para',
+    { id: 'subornar', palavras: ['ouro para voce','te pago','suborno','propina','presente','uma oferta','moedas para',
       'te dou ouro','recompensa se'] },
     { id: 'pedir_casamento', palavras: ['casamento','casar','mao de sua','mao da sua','aliança de sangue',
-      'aliancra','noivado','matrimonio','unir nossas casas','herdeiro se case'] },
+      'alianca','noivado','matrimonio','unir nossas casas','herdeiro se case'] },
     { id: 'chantagear', palavras: ['sei o que voce fez','segredo','todos vao saber','chantagem','revelar',
       'contarei a todos','desvio de ouro','seu segredo','eu sei sobre'] },
     { id: 'perguntar_segredo', palavras: ['boato','rumor','fofoca','ouviu algo','novidades','o que sabe',
@@ -66,20 +66,72 @@ const Dialogo = (() => {
   const EXATO = new Set(['oi', 'ola', 'sim', 'nao', 'sal', 'paz', 'guerra', 'ferro', 'salve', 'grato']);
   // ao empatar no peso, intenções hostis vencem a bajulação
   const PRIORIDADE = { ameaca: 3, insulto: 3, chantagear: 2, subornar: 1 };
+  // gírias e abreviações pt-BR viram a forma canônica antes da detecção
+  const GIRIAS = { vc: 'voce', vcs: 'voces', eh: 'e', mto: 'muito', mt: 'muito', blz: 'beleza',
+    tlgd: 'entendeu', pq: 'porque', q: 'que', tb: 'tambem', tbm: 'tambem', obg: 'obrigado',
+    vlw: 'valeu', n: 'nao', naum: 'nao', ñ: 'nao', cmg: 'comigo', ctg: 'contigo' };
+  const NEGACOES = new Set(['nao', 'nunca', 'jamais', 'nem']);
+  function expandeGirias(t) {
+    return t.split(' ').map(w => GIRIAS[w] || w).join(' ');
+  }
+  // distância de Levenshtein limitada a 1 (barata: aborta cedo)
+  function lev1(a, b) {
+    if (a === b) return true;
+    const la = a.length, lb = b.length;
+    if (Math.abs(la - lb) > 1) return false;
+    let i = 0, j = 0, edits = 0;
+    while (i < la && j < lb) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++edits > 1) return false;
+      if (la > lb) i++; else if (lb > la) j++; else { i++; j++; }
+    }
+    return edits + (la - i) + (lb - j) <= 1;
+  }
   function casa(t, p) {
     if (p.includes(' ') || !EXATO.has(p)) return t.includes(p);
     return new RegExp('(^|\\s)' + p + '($|\\s)').test(t);
   }
+  // a keyword está NEGADA se uma negação aparece até 4 palavras antes dela
+  // ("não acho você um idiota" → 'nao' a 4 tokens de 'idiota')
+  function negada(tokens, idx) {
+    for (let k = 1; k <= 4; k++) if (idx - k >= 0 && NEGACOES.has(tokens[idx - k])) return true;
+    return false;
+  }
   function detectarIntencoes(texto) {
-    const t = norm(texto);
+    const t = expandeGirias(norm(texto));
+    const tokens = t.split(' ');
     const achadas = [];
     for (const int of INTENCOES) {
       let peso = 0;
-      for (const p of int.palavras) if (casa(t, p)) peso += p.includes(' ') ? 2 : 1;
+      for (const p of int.palavras) {
+        if (p.includes(' ')) { if (t.includes(p)) peso += 2; continue; }
+        // busca por token: exato, com limite de palavra p/ curtas, e typo-tolerante p/ 5+ letras
+        for (let idx = 0; idx < tokens.length; idx++) {
+          const tok = tokens[idx];
+          const bate = EXATO.has(p) ? tok === p
+            : (tok.includes(p) || (p.length >= 5 && tok.length >= 5 && lev1(tok, p)));
+          if (!bate) continue;
+          // "não acho você um idiota" ≠ insulto: negação anula (e conta a favor do oposto? não — só anula)
+          if ((int.id === 'insulto' || int.id === 'elogio' || int.id === 'ameaca') && negada(tokens, idx)) continue;
+          peso += 1;
+          break;
+        }
+      }
       if (peso > 0) achadas.push({ id: int.id, peso });
+    }
+    // "te dou 200 de ouro": verbo de dar + número + ouro = oferta de suborno
+    if (/\b(dou|dar|pago|pagar|ofereco|oferto)\b/.test(t) && /\b\d{2,6}\b/.test(t) && /\bouro\b/.test(t)) {
+      const j = achadas.find(a => a.id === 'subornar');
+      if (j) j.peso += 2; else achadas.push({ id: 'subornar', peso: 2 });
     }
     // desempate: maior peso; empate → intenção mais hostil (ameaça não vira elogio)
     achadas.sort((a, b) => b.peso - a.peso || (PRIORIDADE[b.id] || 0) - (PRIORIDADE[a.id] || 0));
+    // "como vai a guerra?": small talk cede a vez ao TÓPICO da pergunta
+    const iCV = achadas.findIndex(a => a.id === 'como_vai');
+    if (iCV !== -1) {
+      const iTop = achadas.findIndex(a => a.id !== 'como_vai' && a.id !== 'saudacao');
+      if (iTop > iCV) achadas.splice(iCV, 0, achadas.splice(iTop, 1)[0]);
+    }
     return achadas;
   }
 
@@ -337,9 +389,30 @@ const Dialogo = (() => {
       case 'subornar': {
         const honesto = npc.personalidade === 'honrado';
         const custo = 50 + Math.max(0, -tags.relacao) * 2;
+        // NEGOCIAÇÃO REAL: se o jogador citou um valor ("te dou 200 de ouro"), ele vale
+        const mValor = textoNorm.match(/\b(\d{2,6})\b/);
+        const oferta = mValor ? Math.min(state.jogador.ouro, parseInt(mValor[1], 10)) : null;
         if (honesto) {
           efeitos.push(mudarRelacao(state, npc.id, -20, 'tentativa de suborno').tag);
           resposta = rnd(voz.suborno_recusado);
+        } else if (oferta !== null) {
+          if (parseInt(mValor[1], 10) > state.jogador.ouro) {
+            resposta = `Você promete ${mValor[1]} de ouro... com ${state.jogador.ouro} na bolsa? Volte quando a promessa couber nela.`;
+          } else if (oferta < Math.ceil(custo * 0.6)) {
+            // ninharia OFENDE (a mecânica dos clãs, agora na conversa)
+            efeitos.push(mudarRelacao(state, npc.id, -8, 'oferta insultuosa').tag);
+            resposta = `${oferta} de ouro? *empurra as moedas de volta* Isso é esmola, não proposta. Minha atenção custa mais que ${custo}.`;
+          } else {
+            state.jogador.ouro -= oferta;
+            const ganho = clamp(Math.round(8 + (oferta / Math.max(custo, 1)) * 8), 8, 30);
+            efeitos.push(`[−${oferta} ouro]`);
+            efeitos.push(mudarRelacao(state, npc.id, ganho, 'suborno negociado').tag);
+            tags.flags.subornou = (tags.flags.subornou || 0) + 1;
+            lembrar(state, npc.id, 'suborno', textoJogador);
+            resposta = oferta >= custo * 2
+              ? `*pesa a bolsa, ergue a sobrancelha* ${oferta} de ouro... Generosidade assim abre portas que nem sabia que eu tinha.`
+              : rnd(voz.suborno_aceito) + ` (${oferta} de ouro aceitos.)`;
+          }
         } else if (state.jogador.ouro >= custo) {
           state.jogador.ouro -= custo;
           efeitos.push(`[−${custo} ouro]`);
@@ -440,14 +513,31 @@ const Dialogo = (() => {
         break;
       }
       default: {
-        // decodificação de segunda camada: reino mencionado? sim/não? 
+        // decodificação de segunda camada: reino mencionado? sim/não?
         const alvoReino = reinoMencionado(state, textoNorm, null);
         if (alvoReino) { resposta = respostaOpiniao(state, npc, textoNorm); break; }
-        if (/\b(sim|claro|aceito|com certeza)\b/.test(textoNorm)) {
+        const disseSim = /\b(sim|claro|aceito|com certeza)\b/.test(textoNorm);
+        const disseNao = /\b(nao|jamais|nunca|recuso)\b/.test(textoNorm);
+        // MULTI-TURNO: se o NPC fez uma pergunta, o sim/não responde a ELA
+        if (tags.flags.perguntaPendente === 'recrutamento' && (disseSim || disseNao)) {
+          tags.flags.perguntaPendente = null;
+          if (disseSim) {
+            efeitos.push(mudarRelacao(state, npc.id, 8, 'aceitou lutar').tag);
+            acoes.push({ tipo: 'oferecer_contratos' });
+            resposta = 'Palavra de soldado! O mural de contratos tem trabalho de guerra — e minha corte lembrará de quem marchou conosco.';
+          } else {
+            efeitos.push(mudarRelacao(state, npc.id, -5, 'recusou lutar').tag);
+            resposta = npc.personalidade === 'cruel'
+              ? '*anota mentalmente* Neutralidade também é uma escolha. Uma escolha... lembrável.'
+              : 'Entendo. Cada um escolhe suas guerras. Mas não espere as recompensas de quem lutou.';
+          }
+          break;
+        }
+        if (disseSim) {
           resposta = tags.relacao >= 0 ? 'Ótimo. Gosto de gente decidida.' : 'Hm. Veremos se sua palavra vale algo.';
           break;
         }
-        if (/\b(nao|jamais|nunca|recuso)\b/.test(textoNorm)) {
+        if (disseNao) {
           resposta = npc.personalidade === 'cruel' ? '*estreita os olhos* "Não" é uma palavra cara aqui.' : 'Como preferir. A porta é a mesma.';
           break;
         }
@@ -573,8 +663,10 @@ const Dialogo = (() => {
       const g = guerras.find(w => w.a === meuReino || w.b === meuReino);
       if (g) {
         const inimigo = state.reinos.find(r => r.id === (g.a === meuReino ? g.b : g.a));
+        // MULTI-TURNO: o rei devolve uma pergunta; o próximo sim/não responde a ELA
+        tagsDe(state, npc.id).flags.perguntaPendente = 'recrutamento';
         return `Estamos em guerra com ${inimigo.nome}. Os campos queimam e o trigo custa ouro. ` +
-               `Se você trouxer comida — ou espadas — falaremos de recompensas.`;
+               `E você — lutaria sob a minha bandeira, mercenário? Sim ou não?`;
       }
       return 'Meu reino está em paz. Por enquanto. Mas paz é apenas a pausa entre duas guerras.';
     }
@@ -674,26 +766,56 @@ const Dialogo = (() => {
 
   let llmAdapter = null;
 
+  // PROMPT RICO: memórias literais com data, estado do mundo e few-shot da
+  // personalidade. REGRA DE PROJETO: o LLM é só a SUPERFÍCIE do texto —
+  // intenções, deltas de relação, ouro e ações vêm SEMPRE do motor.
   function montarPromptLLM(state, npc, textoJogador, resultado) {
     const tags = tagsDe(state, npc.id);
+    const voz = VOZES[npc.personalidade] || VOZES.honrado;
+    const memorias = (tags.memorias || []).slice(-4)
+      .map(m => `- [${m.tipo}${m.perdoada ? ', perdoado' : ''}] "${m.frase}" (${quando(m, state)})`);
+    const guerras = (state.guerras || [])
+      .map(g => `${state.reinos.find(r => r.id === g.a).nome} × ${state.reinos.find(r => r.id === g.b).nome}`);
+    const meuReino = npc.id.startsWith('rei_')
+      ? state.reinos.find(r => r.id === npc.id.replace('rei_', '')) : null;
+    const exemplos = [...(voz.saudacao || []), ...(voz.neutro || [])].slice(0, 3);
     return [
-      `Você é ${npc.nome}, personalidade: ${npc.personalidade}. ${npc.desc}`,
-      `Relação com o jogador: ${nomeRelacao(tags.relacao)} (${tags.relacao}).`,
-      `Memória: insultos=${tags.flags.insultou || 0}, elogios=${tags.flags.elogiou || 0}, ameaças=${tags.flags.ameacou || 0}.`,
-      `Intenção detectada na fala do jogador: ${resultado.intencao || 'nenhuma'}.`,
-      `Jogador disse: "${textoJogador}"`,
-      `Responda em 1-3 frases, em português, no tom da personalidade. Não invente fatos do mundo.`,
-    ].join('\n');
+      `Você é ${npc.nome} — personalidade: ${npc.personalidade}. ${npc.desc || ''}`,
+      meuReino ? `Seu reino: ${meuReino.nome} (capital ${meuReino.capital}). Doutrina: ${(typeof Politica !== 'undefined' && Politica.DOUTRINAS[meuReino.id]) || ''}` : '',
+      `Relação com o jogador (${state.jogador.nome}): ${nomeRelacao(tags.relacao)} (${tags.relacao}/100).`,
+      memorias.length ? `Você LEMBRA literalmente do que o jogador já disse:\n${memorias.join('\n')}` : 'Vocês nunca conversaram nada marcante.',
+      guerras.length ? `Guerras em curso no continente: ${guerras.join('; ')}.` : 'O continente está em paz.',
+      `Exemplos do seu jeito de falar (imite o TOM, não repita):\n${exemplos.map(e => `- "${e}"`).join('\n')}`,
+      `O jogador disse agora: "${textoJogador}"`,
+      `O motor do jogo já decidiu a mecânica — intenção: ${resultado.intencao || 'nenhuma'}; efeitos: ${resultado.efeitos.join(' ') || 'nenhum'}. NÃO os contradiga.`,
+      `Responda APENAS com JSON válido: {"fala": "1-3 frases em português no seu tom", "emocao": "neutro|feliz|raiva"}. Não invente fatos, nomes ou números que não estão acima.`,
+    ].filter(Boolean).join('\n');
   }
 
-  async function falarAsync(state, npc, textoJogador) {
+  // Aceita adaptadores que retornam: string, {fala, emocao}, ou async-iterável
+  // de pedaços de texto (streaming — os tokens alimentam onPedaco em tempo real).
+  async function falarAsync(state, npc, textoJogador, onPedaco) {
     const resultado = falar(state, npc, textoJogador);
-    if (llmAdapter) {
-      try {
-        const gerado = await llmAdapter(montarPromptLLM(state, npc, textoJogador, resultado));
-        if (gerado && gerado.trim()) resultado.resposta = gerado.trim();
-      } catch (e) { /* offline ou sem servidor: mantém resposta do motor interno */ }
-    }
+    if (!llmAdapter) return resultado;
+    try {
+      const bruto = await llmAdapter(montarPromptLLM(state, npc, textoJogador, resultado));
+      let texto = '';
+      if (bruto && typeof bruto[Symbol.asyncIterator] === 'function') {
+        for await (const pedaco of bruto) {
+          texto += pedaco;
+          if (onPedaco) onPedaco(texto);
+        }
+      } else if (typeof bruto === 'string') texto = bruto;
+      else if (bruto && bruto.fala) { resultado.resposta = bruto.fala; resultado.emocao = bruto.emocao || null; return resultado; }
+      if (texto && texto.trim()) {
+        // tenta o contrato JSON {fala, emocao}; texto puro também serve
+        try {
+          const j = JSON.parse(texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1));
+          if (j.fala) { resultado.resposta = j.fala; resultado.emocao = j.emocao || null; return resultado; }
+        } catch (e) { /* não era JSON: usa como fala direta */ }
+        resultado.resposta = texto.trim();
+      }
+    } catch (e) { /* offline ou sem servidor: o motor interno é a fonte da verdade */ }
     return resultado;
   }
 
