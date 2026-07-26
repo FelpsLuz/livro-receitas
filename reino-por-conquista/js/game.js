@@ -16,12 +16,12 @@ const Jogo = (() => {
         renome: 0, ouro: 150, crueldade: 0,
         tropas: { campones: 0, lanceiro: 5, arqueiro: 0, cavaleiro: 0 },
         equip: 0, formacao: 'linha', guardas: 0,
-        reiDe: null, mesesReinando: 0, mesesSemPagar: 0,
+        reiDe: null, mesesReinando: 0, mesesSemPagar: 0, tronos: [], mesesImperador: 0,
       },
       reinos: JSON.parse(JSON.stringify(REINOS_BASE)),
       npcs: JSON.parse(JSON.stringify(NPCS_BASE)),
       guerras: [], tags: {}, segredos: [], casusBelli: [],
-      carga: {}, terra: null, local: 'touros', versaoMundo: 3,
+      carga: {}, terra: null, local: 'touros', versaoMundo: 4,
       familia: { conjuge: null, filhos: [] },
       contratos: [], cronica: [], eventoPendente: null, chantagemPendente: null,
       fim: null,
@@ -50,6 +50,7 @@ const Jogo = (() => {
       if (state.fim) return;
     }
     Politica.tickReinos(state, log);
+    Politica.tickSucessao(state, log);
     Politica.tickTorneio(state, log);
     Dialogo.tickMemorias(state, log);
     Economia.tickGuerras(state, log);
@@ -61,14 +62,21 @@ const Jogo = (() => {
     Intriga.tickFamilia(state, log);
     Intriga.tickAssassinos(state, log);
     state.contratos = Contratos.gerar(state);
-    if (state.jogador.reiDe) {
-      state.jogador.mesesReinando++;
-      if (state.jogador.mesesReinando >= 12 && !state.fim) {
-        const reino = state.reinos.find(r => r.id === state.jogador.reiDe);
-        const nomeReino = reino ? reino.nome : (state.jogador.reinoNome || 'seu reino');
+    if (state.jogador.reiDe) state.jogador.mesesReinando++;
+    // VITÓRIA: ser suserano de TODOS os reinos por 12 meses consecutivos
+    const dominados = state.reinos.filter(r => r.dominadoPor === 'jogador').length;
+    if (dominados >= state.reinos.length && state.reinos.length > 0) {
+      state.jogador.mesesImperador = (state.jogador.mesesImperador || 0) + 1;
+      const faltam = 12 - state.jogador.mesesImperador;
+      if (faltam === 3 || faltam === 1)
+        log(`👑 Você reina sobre TODO o continente. Segure a coroa por mais ${faltam} ${faltam === 1 ? 'mês' : 'meses'} para vencer.`);
+      if (state.jogador.mesesImperador >= 12 && !state.fim) {
         state.fim = { tipo: 'vitoria',
-          msg: `👑 Você segurou o trono de ${nomeReino} por um ano inteiro contra assassinos, rebeliões e credores. De mercenário sem nome a REI. Os bardos cantarão a saga de ${state.jogador.nome} por gerações.` };
+          msg: `👑 UNIFICAÇÃO! Por um ano inteiro, ${state.jogador.nome} reinou como suserano absoluto de todos os ${state.reinos.length} reinos do continente. De mercenário sem nome a IMPERADOR. Nenhuma coroa restou livre. Os bardos cantarão esta saga por mil anos.` };
       }
+    } else {
+      if (state.jogador.mesesImperador) log(`⚠️ Um trono escapou do seu domínio — a contagem para a unificação recomeça do zero.`);
+      state.jogador.mesesImperador = 0;
     }
   }
 
@@ -252,7 +260,7 @@ const Jogo = (() => {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       state = JSON.parse(raw);
-      if (state.versaoMundo !== 3) return false;   // save de mundo antigo: incompatível
+      if (state.versaoMundo !== 4) return false;   // save de mundo antigo: incompatível
       Politica.garantir(state);
       Producao.garantir(state);
       Cidade.seedNpcs(state.terra ? state.terra.nivel : -1);

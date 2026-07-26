@@ -74,13 +74,13 @@ func _ready() -> void:
 		tentativas += 1
 	ok(not jogo.digitando, "resposta concluída")
 	ok(jogo.conversa_hist.text.length() > 60, "resposta digitada no histórico")
-	ok(jogo.state["tags"]["rei_valdria"]["relacao"] < 0, "insulto derrubou a relação")
+	ok(jogo.state["tags"]["rei_touros"]["relacao"] < 0, "insulto derrubou a relação")
 	jogo.fechar_conversa()
 	await get_tree().process_frame
 
 	# retrato muda de humor com relação negativa
-	jogo.state["tags"]["rei_valdria"]["relacao"] = -50
-	var tex_raiva = jogo.Retratos.textura("rei_valdria", "raiva")
+	jogo.state["tags"]["rei_touros"]["relacao"] = -50
+	var tex_raiva = jogo.Retratos.textura("rei_touros", "raiva")
 	ok(tex_raiva != null, "retrato com humor de raiva gerado")
 
 	# passar 6 meses

@@ -25,11 +25,11 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 			"renome": 0, "ouro": 150, "crueldade": 0,
 			"tropas": {"campones": 0, "lanceiro": 5, "arqueiro": 0, "cavaleiro": 0},
 			"equip": 0, "formacao": "linha", "guardas": 0,
-			"rei_de": "", "meses_reinando": 0, "meses_sem_pagar": 0,
+			"rei_de": "", "meses_reinando": 0, "meses_sem_pagar": 0, "meses_imperador": 0,
 		},
 		"reinos": Dados.REINOS_BASE.duplicate(true),
 		"guerras": [], "tags": {}, "segredos": [], "casus_belli": [],
-		"carga": {}, "terra": null, "local": "valdria",
+		"carga": {}, "terra": null, "local": "touros",
 		"familia": {"conjuge": null, "filhos": []},
 		"mensageiros": [], "clas_ativos": [], "cartas": [],
 		"cronica": [], "contratos": [], "evento_pendente": null, "chantagem_pendente": null,
@@ -69,8 +69,17 @@ static func passar_mes(state: Dictionary) -> void:
 	state["contratos"] = Contratos.gerar(state)
 	if state["jogador"]["rei_de"] != "":
 		state["jogador"]["meses_reinando"] += 1
-		if state["jogador"]["meses_reinando"] >= 12:
+	# VITÓRIA: ser suserano de TODOS os reinos por 12 meses (conquista via guerra)
+	var dominados := 0
+	for r in state["reinos"]:
+		if r.get("dominado_por", "") == "jogador":
+			dominados += 1
+	if dominados >= state["reinos"].size() and state["reinos"].size() > 0:
+		state["jogador"]["meses_imperador"] = state["jogador"].get("meses_imperador", 0) + 1
+		if state["jogador"]["meses_imperador"] >= 12:
 			state["fim"] = {"tipo": "vitoria"}
+	else:
+		state["jogador"]["meses_imperador"] = 0
 
 static func _envelhecer(state: Dictionary, log: Callable) -> void:
 	state["jogador"]["idade"] += 1

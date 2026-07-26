@@ -14,19 +14,26 @@ const MERCADORIAS := {
 	"cavalos": {"nome": "Cavalos", "preco_base": 80},
 }
 
+# Mundo oficial (Era do Aço, sem magia) — em paridade com a build HTML5.
 const REINOS_BASE := [
-	{"id": "valdria", "nome": "Valdria", "producao": ["trigo", "cavalos"], "capital": "Pedravelha",
-	 "rei": {"id": "rei_valdria", "nome": "Rei Aldric", "genero": "m", "personalidade": "orgulhoso"}},
-	{"id": "morvane", "nome": "Morvane", "producao": ["ferro", "madeira"], "capital": "Forjanegra",
-	 "rei": {"id": "rei_morvane", "nome": "Rainha Iseld", "genero": "f", "personalidade": "calculista"}},
-	{"id": "soleara", "nome": "Soleara", "producao": ["sal", "tecidos"], "capital": "Porto do Sol",
-	 "rei": {"id": "rei_soleara", "nome": "Rei Domenico", "genero": "m", "personalidade": "ganancioso"}},
-	{"id": "thornmar", "nome": "Thornmar", "producao": ["madeira", "trigo"], "capital": "Carvalho Alto",
-	 "rei": {"id": "rei_thornmar", "nome": "Rei Godric", "genero": "m", "personalidade": "honrado"}},
-	{"id": "ashkar", "nome": "Ashkar", "producao": ["ferro", "sal"], "capital": "Cinzabruta",
-	 "rei": {"id": "rei_ashkar", "nome": "Rei Vukan", "genero": "m", "personalidade": "cruel"}},
-	{"id": "lysande", "nome": "Lysande", "producao": ["tecidos", "cavalos"], "capital": "Torreluz",
-	 "rei": {"id": "rei_lysande", "nome": "Rainha Elara", "genero": "f", "personalidade": "romantica"}},
+	{"id": "imperio", "nome": "Império Central", "cor": "#1a4a2a", "imperial": true, "nobres": 10,
+	 "producao": ["ferro", "cavalos"], "capital": "Trono Verde",
+	 "rei": {"id": "rei_imperio", "nome": "Felps, o Destruidor", "genero": "m", "personalidade": "cruel"}},
+	{"id": "touros", "nome": "Touros Negros", "cor": "#1c1c22", "nobres": 3,
+	 "producao": ["madeira", "sal"], "capital": "Covil Negro",
+	 "rei": {"id": "rei_touros", "nome": "Touro Bill", "genero": "m", "personalidade": "orgulhoso"}},
+	{"id": "alvorecer", "nome": "Alvorecer Dourado", "cor": "#c9a227", "nobres": 6,
+	 "producao": ["trigo", "tecidos"], "capital": "Aurora Alta",
+	 "rei": {"id": "rei_alvorecer", "nome": "Enzo Noites", "genero": "m", "personalidade": "calculista"}},
+	{"id": "leoes", "nome": "Leões Carmesins", "cor": "#8b1a1a", "nobres": 5,
+	 "producao": ["ferro", "trigo"], "capital": "Chama Rubra",
+	 "rei": {"id": "rei_leoes", "nome": "Fogo no Leão", "genero": "m", "personalidade": "honrado"}},
+	{"id": "aguias", "nome": "Águias Prateadas", "cor": "#9aa4ae", "nobres": 4,
+	 "producao": ["tecidos", "cavalos"], "capital": "Ninho de Prata",
+	 "rei": {"id": "rei_aguias", "nome": "Fred Prateado", "genero": "m", "personalidade": "orgulhoso"}},
+	{"id": "rosa", "nome": "Rosa Azul", "cor": "#2d4a8a", "nobres": 5,
+	 "producao": ["sal", "madeira"], "capital": "Jardim Azul",
+	 "rei": {"id": "rei_rosa", "nome": "Eva Rosada", "genero": "f", "personalidade": "calculista"}},
 ]
 
 const TROPAS := {

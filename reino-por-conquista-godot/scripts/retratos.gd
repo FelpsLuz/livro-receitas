@@ -8,12 +8,12 @@ const PELES := ["e8c39a", "d9a97c", "c68e5e", "a86f47", "8a5632"]
 const CABELOS := ["2d2018", "4a3421", "6b4a2d", "8a6b45", "b0925f", "c9c2b8", "e8e2d4", "7d3b2d", "d8b040"]
 
 const FICHAS := {
-	"rei_valdria":  {"pele": 0, "cabelo": 5, "estilo": "curto", "barba": "cheia", "chapeu": "coroa", "roupa": "8b2635"},
-	"rei_morvane":  {"pele": 0, "cabelo": 0, "estilo": "longo", "barba": "", "chapeu": "tiara", "roupa": "2d4a6b"},
-	"rei_soleara":  {"pele": 1, "cabelo": 2, "estilo": "curto", "barba": "cavanhaque", "chapeu": "coroa", "roupa": "b8862d", "gordo": true},
-	"rei_thornmar": {"pele": 0, "cabelo": 2, "estilo": "medio", "barba": "cheia", "chapeu": "coroa", "roupa": "3e5f3e"},
-	"rei_ashkar":   {"pele": 2, "cabelo": 0, "estilo": "raspado", "barba": "cheia", "chapeu": "coroa_espinho", "roupa": "6b3a2d", "cicatriz": true},
-	"rei_lysande":  {"pele": 0, "cabelo": 8, "estilo": "longo", "barba": "", "chapeu": "tiara", "roupa": "5a3a6b"},
+	"rei_imperio":   {"pele": 2, "cabelo": 0, "estilo": "curto", "barba": "cheia", "chapeu": "coroa_espinho", "roupa": "1a4a2a", "cicatriz": true},
+	"rei_touros":    {"pele": 2, "cabelo": 0, "estilo": "curto", "barba": "rala", "chapeu": "", "roupa": "1c1c22"},
+	"rei_alvorecer": {"pele": 0, "cabelo": 2, "estilo": "medio", "barba": "", "chapeu": "coroa", "roupa": "c9a227"},
+	"rei_leoes":     {"pele": 0, "cabelo": 4, "estilo": "longo", "barba": "cheia", "chapeu": "coroa", "roupa": "8b1a1a"},
+	"rei_aguias":    {"pele": 0, "cabelo": 8, "estilo": "longo", "barba": "", "chapeu": "coroa", "roupa": "9aa4ae"},
+	"rei_rosa":      {"pele": 0, "cabelo": 3, "estilo": "longo", "barba": "", "chapeu": "tiara", "roupa": "2d4a8a"},
 	"taverneiro":   {"pele": 1, "cabelo": 3, "estilo": "careca", "barba": "bigode", "chapeu": "", "roupa": "6b4a2d", "gordo": true},
 	"capitao":      {"pele": 1, "cabelo": 0, "estilo": "coque", "barba": "", "chapeu": "elmo", "roupa": "5a5f66", "cicatriz": true},
 	"espiao":       {"pele": 3, "cabelo": 0, "estilo": "curto", "barba": "rala", "chapeu": "capuz", "roupa": "2d2a33"},

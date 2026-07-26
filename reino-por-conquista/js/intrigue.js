@@ -255,6 +255,10 @@ const Intriga = (() => {
       forcaDefensor = Math.min(5, forcaDefensor + 1);   // fortificações intransponíveis
       log(`🦅 As muralhas do Ninho de Prata são lendárias: a defesa das Águias é implacável.`);
     }
+    if (reino.emCrise) {
+      forcaDefensor = Math.max(1, forcaDefensor - 2);   // rei morto sem herdeiro: guarnição em frangalhos
+      log(`🏚️ ${reino.nome} vive uma crise de sucessão: a guarnição está dividida e desmoralizada.`);
+    }
     const inimigo = Combate.exercitoInimigo(forcaDefensor);
     if (reinoId === 'leoes') {   // falange disciplinada: formação fixa e aço superior
       inimigo.formacao = 'linha';
@@ -271,14 +275,22 @@ const Intriga = (() => {
     }
     const rel = Combate.batalhar(state, inimigo, `Conquista de ${reino.nome}`);
     if (rel.vitoria) {
-      state.jogador.reiDe = reinoId;
+      // conquista ACUMULA tronos: o objetivo é dominar TODOS os reinos
+      reino.dominadoPor = 'jogador';
+      reino.deposto = true;
+      if (!state.jogador.reiDe || state.jogador.reiDe === 'jogador') state.jogador.reiDe = reinoId;
+      if (!state.jogador.tronos) state.jogador.tronos = [];
+      if (!state.jogador.tronos.includes(reinoId)) state.jogador.tronos.push(reinoId);
       state.jogador.renome += 50;
       log(`👑 VITÓRIA! Os portões de ${reino.capital} se abrem. Você depõe ${reino.rei.nome} e toma o trono de ${reino.nome}!`);
       for (const n of (state.nobres || []).filter(n => n.reino === reinoId)) {
         n.reino = 'jogador';
         log(`🏰 ${n.nome} (${n.cidade}) ajoelha-se ao novo soberano.`);
       }
-      if (!temCB) log(`Mas cuidado: os outros 5 reinos veem um usurpador sangrento no trono. Espere assassinos e embargos.`);
+      const faltam = state.reinos.filter(r => r.dominadoPor !== 'jogador').length;
+      if (faltam > 0)
+        log(`🗺️ Você domina ${state.reinos.length - faltam}/${state.reinos.length} reinos. Faltam ${faltam} tronos para unificar o continente e vencer.`);
+      if (!temCB) log(`Mas cuidado: os reinos livres veem um usurpador sangrento. Espere assassinos e embargos.`);
     } else {
       state.jogador.renome = Math.max(0, state.jogador.renome - 20);
       log(`❌ Seu exército foi despedaçado diante dos muros de ${reino.capital}. Renome −20. Reagrupe-se... se sobrar alguém.`);

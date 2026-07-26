@@ -233,7 +233,18 @@ const UI = (() => {
   function renderMapa(c) {
     const s = Jogo.state;
     const painel = el('div', 'painel');
-    painel.appendChild(el('h2', null, 'Os Seis Reinos'));
+    painel.appendChild(el('h2', null, 'O Continente'));
+    // barra de progresso da UNIFICAÇÃO (nova condição de vitória)
+    const dominados = s.reinos.filter(r => r.dominadoPor === 'jogador').length;
+    const total = s.reinos.length;
+    const pct = Math.round(dominados / total * 100);
+    const objetivo = el('div', 'objetivo-vitoria');
+    objetivo.innerHTML = `<b>👑 Objetivo: unificar o continente</b> — domine os <b>${total}</b> tronos e reine sobre todos por 12 meses.
+      <div class="barra-unificacao"><span style="width:${pct}%"></span><i>${dominados}/${total} reinos</i></div>` +
+      (dominados >= total
+        ? `<div class="flavor bom">🏆 Todos os tronos são seus! Segure a coroa por mais ${Math.max(0, 12 - (s.jogador.mesesImperador || 0))} meses.</div>`
+        : `<div class="flavor">Reivindique cada trono pela guerra (aba de cada reino). Alicie lordes e explore crises de sucessão para enfraquecer as defesas.</div>`);
+    painel.appendChild(objetivo);
     if (s.jogador.reiDe) {
       const meus = Politica.meusNobres(s);
       const bandeiraMinha = s.jogador.reiDe === 'jogador' && s.jogador.bandeira
@@ -253,7 +264,7 @@ const UI = (() => {
       const cb = s.casusBelli.includes(r.id);
       const card = el('div', 'card-reino com-retrato');
       card.style.borderLeftColor = r.cor;
-      card.appendChild(retratoDe(r.rei.id));
+      card.appendChild(retratoDe(r.rei.id, null, r.rei.retratoId));
       const lordes = Politica.nobresDe(s, r.id);
       const listaLordes = lordes.map(n => `<span title="${(n.papel || '').replace(/"/g, '&quot;')} (${n.cidade})">${n.nome}</span>`).join(' · ');
       const infoReino = el('div', 'npc-info', `
@@ -266,7 +277,8 @@ const UI = (() => {
         ${Politica.lealdadeDe(s, r.id) > 0 ? ` · ✊ Povo ${Politica.lealdadeDe(s, r.id)}/100` : ''}
         ${(s.embargos && s.embargos[r.id]) ? ' · <b class="ruim">📦 EMBARGO contra você</b>' : ''}
         ${s.jogador.vassaloDe === r.id ? ' · <b class="bom">🛡️ SEU SENHOR</b>' : ''}
-        ${s.jogador.reiDe === r.id ? ' · <b class="bom">👑 SEU TRONO</b>' : ''}<br>
+        ${r.dominadoPor === 'jogador' ? ' · <b class="bom">👑 SOB SEU DOMÍNIO</b>' : ''}
+        ${r.emCrise ? ' · <b class="ruim">🏚️ CRISE DE SUCESSÃO</b>' : ''}<br>
         🏰 ${r.imperial ? 'Lordes Comandantes' : 'Lordes'} (${lordes.length}): <i class="lordes-lista">${listaLordes || '—'}</i><br>
         📜 <i>${Politica.DOUTRINAS[r.id] || ''}</i></small>`);
       card.appendChild(infoReino);
@@ -297,16 +309,19 @@ const UI = (() => {
         bTri.onclick = () => { const rr = Politica.pagarTributo(s, Jogo.log); if (rr.ok) Sfx.moeda(); aviso(rr.msg); Jogo.salvar(); renderTudo(); };
         botoes.appendChild(bTri);
       }
-      if (s.jogador.reiDe && Politica.nobresDe(s, r.id).length > 0) {
-        const bNob = el('button', 'btn mini', '🏰 Aliciar nobre (200 🪙)');
+      if (Politica.eNobre(s) && r.dominadoPor !== 'jogador' && Politica.nobresDe(s, r.id).length > 0) {
+        const bNob = el('button', 'btn mini', '🏰 Aliciar lorde (200 🪙, enfraquece a defesa)');
         bNob.onclick = () => { aviso(Politica.persuadirNobre(s, r.id, Jogo.log).msg); Jogo.salvar(); renderTudo(); };
         botoes.appendChild(bNob);
       }
-      if (!s.jogador.reiDe) {
-        const bGuerra = el('button', 'btn mini ruim-btn', cb ? '⚔️ Guerra de conquista (com CB)' : '⚔️ Atacar SEM casus belli');
+      // reivindicar o trono pela guerra — em qualquer reino ainda não dominado
+      if (r.dominadoPor !== 'jogador' && !s.jogador.vassaloDe) {
+        const podeNobre = Politica.eNobre(s);
+        const bGuerra = el('button', 'btn mini ruim-btn', cb ? '⚔️ Reivindicar o trono (com CB)' : '⚔️ Conquistar SEM casus belli');
+        if (!podeNobre) { bGuerra.disabled = true; bGuerra.title = 'Torne-se Conde (terra nível 4) para reivindicar tronos.'; }
         bGuerra.onclick = () => confirmar(
-          cb ? `Marchar sobre ${r.capital} com sua reivindicação legal?`
-             : `Atacar ${r.nome} SEM justificativa legal? Os 6 reinos se voltarão contra você!`,
+          cb ? `Marchar sobre ${r.capital} com sua reivindicação legal e tomar o trono?`
+             : `Atacar ${r.nome} SEM justificativa legal? Os reinos livres se voltarão contra você!`,
           () => { const rel = Intriga.declararGuerra(s, r.id, Jogo.log); mostrarBatalha(rel); });
         botoes.appendChild(bGuerra);
       }
@@ -411,10 +426,10 @@ const UI = (() => {
     c.appendChild(painel);
   }
 
-  function retratoDe(id, tamanho) {
+  function retratoDe(id, tamanho, artId) {
     const wrap = el('div', 'moldura-retrato' + (tamanho === 'g' ? ' grande' : ''));
     const c = el('canvas', 'retrato' + (tamanho === 'g' ? ' retrato-grande' : ''));
-    Retratos.montar(c, id, Retratos.humorDe(Jogo.state, id));
+    Retratos.montar(c, id, Retratos.humorDe(Jogo.state, id), artId);
     wrap.appendChild(c);
     return wrap;
   }
@@ -423,7 +438,7 @@ const UI = (() => {
     const s = Jogo.state;
     const tags = s.tags[npc.id] || { relacao: 0 };
     const card = el('div', 'card-npc com-retrato');
-    card.appendChild(retratoDe(npc.id));
+    card.appendChild(retratoDe(npc.id, null, npc.retratoId));
     const info = el('div', 'npc-info',
       `<b>${npc.nome}</b> <small>(${Dialogo.nomeRelacao(tags.relacao)} ${tags.relacao})</small><br><small><i>${npc.desc}</i></small>`);
     const b = el('button', 'btn mini', '💬 Conversar');
@@ -470,7 +485,7 @@ const UI = (() => {
     const painel = el('div', 'painel conversa');
     const cab = el('div', 'conversa-cab');
     const lado = el('div', 'conversa-persona');
-    lado.appendChild(retratoDe(npc.id, 'g'));
+    lado.appendChild(retratoDe(npc.id, 'g', npc.retratoId));
     lado.appendChild(el('div', null,
       `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>`));
     cab.appendChild(lado);

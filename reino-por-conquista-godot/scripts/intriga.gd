@@ -111,7 +111,11 @@ static func declarar_guerra(state: Dictionary, reino_id: String, log: Callable) 
 	var inimigo := Combate.exercito_inimigo(3 if tem_cb else 4)
 	var rel := Combate.batalhar(state, inimigo, "Conquista de " + reino_id)
 	if rel["vitoria"]:
-		state["jogador"]["rei_de"] = reino_id
+		for r in state["reinos"]:
+			if r["id"] == reino_id:
+				r["dominado_por"] = "jogador"
+		if state["jogador"]["rei_de"] == "":
+			state["jogador"]["rei_de"] = reino_id
 		state["jogador"]["renome"] += 50
 		log.call("VITÓRIA! Você toma o trono de %s!" % reino_id)
 	else:

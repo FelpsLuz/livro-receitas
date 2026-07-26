@@ -72,8 +72,8 @@ const Politica = (() => {
 
   // aliciar um nobre de outro reino para o SEU (exige ser rei)
   function persuadirNobre(state, reinoId, log) {
-    if (!state.jogador.reiDe)
-      return { ok: false, msg: 'Só um REI convence nobres a trocar de bandeira. Conquiste um trono ou proclame seu reino.' };
+    if (!eNobre(state))
+      return { ok: false, msg: 'Só um CONDE (terra nível 4+) tem prestígio para aliciar lordes de outra corte.' };
     const alvo = nobresDe(state, reinoId)[0];
     if (!alvo) return { ok: false, msg: 'Não restam nobres nesse reino.' };
     const custo = 200;
@@ -254,6 +254,37 @@ const Politica = (() => {
       Dialogo.mudarRelacao(state, 'rei_rosa', -4, 'equilíbrio de poder');
       if (Math.random() < 0.3)
         log(`🌹 Eva Rosada costura pactos contra o novo poder do continente — você. (Rosa Azul esfria)`);
+    }
+  }
+
+  // ---------- SUCESSÃO: reis morrem; lordes reivindicam o trono vago ----------
+  function tickSucessao(state, log) {
+    garantir(state);
+    for (const r of state.reinos) {
+      if (r.dominadoPor === 'jogador') continue;      // trono já é seu
+      if (Math.random() >= 0.014) continue;           // morte rara
+      const causa = rnd(['de velhice', 'de uma febre súbita', 'numa caçada', 'por uma faca no escuro', 'de um coração fraco', 'envenenado num banquete']);
+      const antigo = r.rei.nome;
+      const lordes = nobresDe(state, r.id);
+      if (lordes.length) {
+        const novo = rnd(lordes);
+        // o lorde sobe ao trono: retrato muda, MAS a relação (keyed por rei.id) segue
+        r.rei = { id: r.rei.id, retratoId: novo.id, nome: novo.nome,
+          genero: novo.fem ? 'f' : 'm', personalidade: r.rei.personalidade,
+          desc: (novo.papel ? novo.papel + ' ' : '') + `Coroou-se soberano de ${r.nome} após a morte de ${antigo}.` };
+        state.nobres = state.nobres.filter(n => n.id !== novo.id);   // deixa de ser lorde
+        const tg = state.tags['rei_' + r.id];
+        if (tg) tg.relacao = clamp(Math.round(tg.relacao * 0.5) + ri(-8, 8), -100, 100);  // corte nova, relação esfria
+        log(`⚰️ ${antigo}, soberano de ${r.nome}, morreu ${causa}. ${novo.nome} — antes Lorde de ${novo.cidade} — cinge a coroa.`);
+        state.cartas.unshift({ de: novo.nome, tipo: 'neutro', ano: state.ano, mes: state.mes,
+          texto: `"O trono de ${r.nome} tem novo dono: eu. Nossos antigos acertos com meu antecessor... talvez precisem ser renegociados."` });
+      } else {
+        // sem lordes (você aliciou todos): o reino mergulha no caos e vira presa fácil
+        r.emCrise = true;
+        const tg = state.tags['rei_' + r.id];
+        if (tg) tg.relacao = clamp(tg.relacao - 10, -100, 100);
+        log(`⚰️ ${antigo} de ${r.nome} morreu ${causa} — e sem um único lorde para suceder, a corte afunda em guerra civil. O trono está fraco: reivindique-o.`);
+      }
     }
   }
 
@@ -501,5 +532,5 @@ const Politica = (() => {
            lealdadeDe, titulo, eNobre, eCavaleiro, podeSerArmado, armarCavaleiro,
            gerarNobres, nobresDe, persuadirNobre, meusNobres,
            podeProclamar, proclamarIndependencia, jurarVassalagem, quebrarVassalagem,
-           DOUTRINAS, pagarTributo };
+           DOUTRINAS, pagarTributo, tickSucessao };
 })();

@@ -34,46 +34,46 @@ func _init() -> void:
 	ok(s["jogador"]["ouro"] == 150, "ouro inicial 150")
 	ok(s["jogador"]["tropas"]["lanceiro"] == 5, "5 lanceiros iniciais")
 	ok(s["reinos"].size() == 6, "6 reinos")
-	ok(s["mercados"].has("valdria"), "mercados inicializados")
+	ok(s["mercados"].has("touros"), "mercados inicializados")
 
 	# ---------- diálogo: insulto derruba relação e sobe preços ----------
-	var rei: Dictionary = s["reinos"][0]["rei"]
-	var preco_antes := Economia.preco_de(s, "valdria", "trigo")
+	var rei: Dictionary = s["reinos"][1]["rei"]
+	var preco_antes := Economia.preco_de(s, "touros", "trigo")
 	var r1 := Dialogo.falar(s, rei, "seu porco covarde e idiota")
 	ok(r1["intencao"] == "insulto", "intenção de insulto detectada")
-	ok(Dialogo.tags_de(s, "rei_valdria")["relacao"] < 0, "relação caiu após insulto")
+	ok(Dialogo.tags_de(s, "rei_touros")["relacao"] < 0, "relação caiu após insulto")
 	var r2 := Dialogo.falar(s, rei, "seu verme patetico")
-	ok(Dialogo.tags_de(s, "rei_valdria")["relacao"] <= -40, "insulto repetido agrava (grave)")
+	ok(Dialogo.tags_de(s, "rei_touros")["relacao"] <= -40, "insulto repetido agrava (grave)")
 	ok(r2["resposta"].length() > 10, "resposta gerada")
 	# hostil => preço sobe para o jogador
-	var preco_depois := Economia.preco_de(s, "valdria", "trigo")
+	var preco_depois := Economia.preco_de(s, "touros", "trigo")
 	ok(preco_depois > preco_antes, "preço subiu para o odiado (%d > %d)" % [preco_depois, preco_antes])
 
 	# ---------- diálogo: elogio com retorno decrescente ----------
 	var s2 := Jogo.novo_jogo("B")
-	var rei2: Dictionary = s2["reinos"][0]["rei"]
+	var rei2: Dictionary = s2["reinos"][1]["rei"]
 	Dialogo.falar(s2, rei2, "vossa sabedoria é lendária e gloriosa")
-	var rel1: int = Dialogo.tags_de(s2, "rei_valdria")["relacao"]
+	var rel1: int = Dialogo.tags_de(s2, "rei_touros")["relacao"]
 	Dialogo.falar(s2, rei2, "sois magnífico e brilhante")
 	Dialogo.falar(s2, rei2, "que rei tão nobre e poderoso")
-	var rel3: int = Dialogo.tags_de(s2, "rei_valdria")["relacao"]
+	var rel3: int = Dialogo.tags_de(s2, "rei_touros")["relacao"]
 	ok(rel1 > 0, "elogio sobe relação")
 	ok(rel3 - rel1 < rel1 * 2, "bajulação tem retorno decrescente")
 
 	# ---------- economia: compra/venda e guerra ----------
 	var s3 := Jogo.novo_jogo("C")
 	s3["jogador"]["ouro"] = 1000
-	var rc := Economia.comprar(s3, "valdria", "trigo", 5)
+	var rc := Economia.comprar(s3, "touros", "trigo", 5)
 	ok(rc["ok"] and s3["carga"]["trigo"] == 5, "compra adiciona carga")
-	var rv := Economia.vender(s3, "valdria", "trigo", 5)
+	var rv := Economia.vender(s3, "touros", "trigo", 5)
 	ok(rv["ok"] or s3["carga"]["trigo"] < 5, "venda executa (ou patrulha em guerra)")
 	# guerra queima campos: oferta de trigo cai => preço sobe
-	s3["guerras"].append({"a": "valdria", "b": "morvane", "meses": 0})
-	var p_antes := Economia.preco_de(s3, "valdria", "trigo")
+	s3["guerras"].append({"a": "touros", "b": "alvorecer", "meses": 0})
+	var p_antes := Economia.preco_de(s3, "touros", "trigo")
 	var log3 := Jogo.log_para(s3)
 	for i in 3:
 		Economia.tick_guerras(s3, log3)
-	var p_guerra := Economia.preco_de(s3, "valdria", "trigo")
+	var p_guerra := Economia.preco_de(s3, "touros", "trigo")
 	ok(p_guerra > p_antes, "guerra dispara preço do trigo (%d > %d)" % [p_guerra, p_antes])
 
 	# ---------- fadiga de guerra: convocados demais => fome ----------
@@ -116,18 +116,18 @@ func _init() -> void:
 
 	# ---------- intriga: renome baixo bloqueia; casamento dá casus belli ----------
 	var s7 := Jogo.novo_jogo("G")
-	Intriga.realizar_casamento(s7, "lysande", false)
+	Intriga.realizar_casamento(s7, "rosa", false)
 	ok(s7["familia"]["conjuge"] != null, "casamento realizado")
-	ok(s7["casus_belli"].has("lysande"), "casamento gera reivindicação dinástica")
+	ok(s7["casus_belli"].has("rosa"), "casamento gera reivindicação dinástica")
 	# chantagem sem segredo = blefe
-	var rch := Intriga.chantagear(s7, s7["reinos"][0]["rei"])
+	var rch := Intriga.chantagear(s7, s7["reinos"][1]["rei"])
 	ok(rch["efeitos"].has("[Blefe falhou]"), "chantagem sem segredo falha")
 	# com segredo funciona
-	s7["segredos"].append({"reino": "valdria", "usado": false})
-	var rch2 := Intriga.chantagear(s7, s7["reinos"][0]["rei"])
+	s7["segredos"].append({"reino": "touros", "usado": false})
+	var rch2 := Intriga.chantagear(s7, s7["reinos"][1]["rei"])
 	ok(s7["chantagem_pendente"] != null, "chantagem com segredo abre exigência")
 	Intriga.resolver_chantagem(s7, "casusbelli")
-	ok(s7["casus_belli"].has("valdria"), "exigência de casus belli atendida")
+	ok(s7["casus_belli"].has("touros"), "exigência de casus belli atendida")
 
 	# ---------- dinastia: herdeiro assume ----------
 	var s8 := Jogo.novo_jogo("H")
@@ -156,9 +156,9 @@ func _init() -> void:
 	var s11 := Jogo.novo_jogo("K")
 	s11["jogador"]["tropas"] = {"campones": 0, "lanceiro": 60, "arqueiro": 40, "cavaleiro": 20}
 	s11["jogador"]["equip"] = 3
-	s11["casus_belli"].append("valdria")
-	var rg := Intriga.declarar_guerra(s11, "valdria", Jogo.log_para(s11))
-	ok(rg["vitoria"] and s11["jogador"]["rei_de"] == "valdria", "conquista com exército esmagador")
+	s11["casus_belli"].append("touros")
+	var rg := Intriga.declarar_guerra(s11, "touros", Jogo.log_para(s11))
+	ok(rg["vitoria"] and s11["jogador"]["rei_de"] == "touros", "conquista com exército esmagador")
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

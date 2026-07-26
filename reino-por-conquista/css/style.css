@@ -209,6 +209,24 @@ main#conteudo { flex: 1; padding: 0 8px 8px; }
 .ico-arma { width: 32px; height: 32px; image-rendering: pixelated; vertical-align: -10px; }
 .ico-arma.g { width: 40px; height: 40px; vertical-align: -13px; }
 
+/* ---------- objetivo de vitória (unificação) ---------- */
+.objetivo-vitoria {
+  border: 2px solid var(--ouro); background: rgba(201,162,39,.10);
+  padding: 8px 12px; margin: 4px 0 12px; border-radius: 3px;
+}
+.barra-unificacao {
+  position: relative; height: 20px; margin: 6px 0 2px;
+  background: rgba(0,0,0,.28); border: 1px solid #26160e; overflow: hidden;
+}
+.barra-unificacao > span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #8a1a1a, #c9a227); transition: width .4s;
+}
+.barra-unificacao > i {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-style: normal; font-size: 14px; color: #fff; text-shadow: 1px 1px 0 #000;
+}
+
 /* ---------- tela de fim de saga ---------- */
 .fim-banner { text-align: center; margin: 6px 0 10px; }
 .fim-logo { width: min(70%, 300px); image-rendering: pixelated; opacity: .85; }
@@ -354,5 +372,27 @@ body { overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent;
   .tabela { font-size: .78rem; }
   .tabela th, .tabela td { padding: 6px 2px; }
   #rodape { padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
-  #modal-box { padding: 16px; }
+  #modal-box { padding: 16px; max-height: 88vh; overflow-y: auto; }
+  /* cards de reino/npc: retrato em cima, texto e botões abaixo (portrait) */
+  .com-retrato { gap: 8px; }
+  .card-reino .npc-info, .card-npc .npc-info { min-width: 0; }
+  .linha-botoes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .linha-botoes .btn { flex: 1 1 auto; }
+  .card-bandeira { min-width: 92px; }
+  .card-bandeira img { width: 76px; height: 49px; }
+  .objetivo-vitoria { padding: 8px 10px; }
+  .ico-arma { width: 26px; height: 26px; vertical-align: -7px; }
+  .ico-arma.g { width: 32px; height: 32px; vertical-align: -9px; }
+  .duelo-canvas { max-width: 100%; }
+  .barra-hud { width: 96px; }
+}
+
+/* telas muito estreitas: uma coluna, tap targets generosos */
+@media (max-width: 400px) {
+  body { font-size: 18px; }
+  .grade { grid-template-columns: 1fr 1fr; gap: 5px; }
+  .aba { font-size: .74rem; padding: 10px 9px; }
+  .btn.mini { flex-basis: 100%; }
+  .titulo-box h1 { font-size: 1.2rem; }
+  .logo-titulo { width: 94%; }
 }

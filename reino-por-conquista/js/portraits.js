@@ -238,10 +238,12 @@ const Retratos = (() => {
     return rel <= -25 ? 'raiva' : rel >= 25 ? 'feliz' : 'neutro';
   }
 
-  function montar(canvas, id, humor) {
+  // artId: quando um lorde assume o trono, o retrato muda mas a relação
+  // (keyed por rei.id) permanece — por isso o desenho usa um id separado.
+  function montar(canvas, id, humor, artId) {
     canvas.width = S; canvas.height = S;
-    vivos.set(canvas, { id, humor });
-    desenhar(canvas, id, humor, false);
+    vivos.set(canvas, { id: artId || id, humor });
+    desenhar(canvas, artId || id, humor, false);
   }
 
   // chamado pelo rAF global da UI
