@@ -262,7 +262,7 @@ const Politica = (() => {
     garantir(state);
     for (const r of state.reinos) {
       if (r.dominadoPor === 'jogador') continue;      // trono já é seu
-      if (Math.random() >= 0.014) continue;           // morte rara
+      if (Math.random() >= 0.006) continue;           // morte rara (~1 a cada ~14 anos por reino)
       const causa = rnd(['de velhice', 'de uma febre súbita', 'numa caçada', 'por uma faca no escuro', 'de um coração fraco', 'envenenado num banquete']);
       const antigo = r.rei.nome;
       const lordes = nobresDe(state, r.id);

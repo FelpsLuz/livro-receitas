@@ -36,6 +36,30 @@ const Cidade = (() => {
   }
   function estPronta(nome) { const im = estImg(nome); return (im.complete && im.naturalWidth) ? im : null; }
   function estOk() { return EST_LISTA.every(n => estPronta(n)); }
+
+  // ---------- sprites de personagem animados (folhas do pacote) ----------
+  const PERS = {};
+  function persImg(arq) {
+    if (!PERS[arq]) { const im = new Image(); im.src = 'img/duelo/' + arq + '.png'; PERS[arq] = im; }
+    return PERS[arq];
+  }
+  // desenha um quadro recortado (só o corpo) da folha, ancorado embaixo-centro
+  function desenhaFrame(x, arq, fw, frames, quadro, cx, baseY, altAlvo, flip) {
+    const im = persImg(arq);
+    if (!im.complete || !im.naturalWidth) return false;
+    const fh = im.naturalHeight;
+    const rec = RECORTE[arq] || [0, 1];
+    const sy = Math.round(fh * rec[0]), sh = Math.round(fh * (rec[1] - rec[0]));
+    const esc = altAlvo / sh, w = fw * esc, h = altAlvo;
+    const fi = ((quadro % frames) + frames) % frames;
+    x.imageSmoothingEnabled = false;
+    x.save();
+    x.translate(Math.round(cx - w / 2), Math.round(baseY - h));
+    if (flip) { x.translate(w, 0); x.scale(-1, 1); }
+    x.drawImage(im, fi * fw, sy, fw, sh, 0, 0, w, h);
+    x.restore();
+    return true;
+  }
   // desenha bottom-anchored com largura alvo, preservando proporção
   function estDesenha(x, nome, cx, baseY, larg) {
     const im = estPronta(nome);
@@ -1143,6 +1167,93 @@ const Cidade = (() => {
     ctx.fillRect(0, 0, W, H);
   }
 
+  // ---------- andarilhos: guardas/soldados animados com sprites reais ----------
+  let andarilhos = [];
+  // as folhas têm muito espaço vazio: recorte vertical aproximado do corpo (topo%..base%)
+  const RECORTE = { guerreiro_idle: [0.30, 0.98], heroi_idle: [0.18, 0.95], heroi_run: [0.18, 0.95] };
+  function seedAndarilhos(nivel) {
+    andarilhos = [];
+    if (nivel < 1) { andarilhos.push({ x: 300, y: 300, vx: 0.28, arq: 'guerreiro_idle', fw: 150, frames: 8, alt: 60 }); return; }
+    const n = nivel >= 4 ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      andarilhos.push({
+        x: 120 + i * 170, y: 300 + (i % 2) * 8,
+        vx: (i % 2 ? 0.34 : -0.30),
+        arq: i % 2 ? 'guerreiro_idle' : 'heroi_idle',
+        fw: i % 2 ? 150 : 128, frames: i % 2 ? 8 : 5, alt: i % 2 ? 62 : 56,
+      });
+    }
+  }
+  function desenharAndarilhos(ctx) {
+    for (const a of andarilhos) {
+      a.x += a.vx;
+      if (a.x < 90) a.vx = Math.abs(a.vx);
+      if (a.x > 545) a.vx = -Math.abs(a.vx);
+      // sombra suave sob o personagem
+      ctx.fillStyle = 'rgba(24,38,54,.30)';
+      ctx.beginPath(); ctx.ellipse(a.x, a.y + 2, 12, 3.5, 0, 0, 7); ctx.fill();
+      const quadro = Math.floor(anim / 8);
+      if (!desenhaFrame(ctx, a.arq, a.fw, a.frames, quadro, a.x, a.y, a.alt, a.vx < 0)) {
+        // enquanto a folha não carrega, um vulto discreto marca a posição
+        ctx.fillStyle = '#3a2a1c'; ctx.fillRect(Math.round(a.x - 4), Math.round(a.y - a.alt + 8), 8, a.alt - 8);
+      }
+    }
+  }
+
+  // ---------- atmosfera cinematográfica: raios de sol, pó, pássaros ----------
+  function atmosfera(ctx, pal, ciclo, est) {
+    const dia = Math.max(0, Math.min(1, (ciclo - 0.32) / 0.4));
+    // raios de sol (god rays) descendo da direita-superior, mais fortes de manhã/tarde
+    if (dia > 0.15 && !pal.neve) {
+      const t = 1 - Math.abs(ciclo - 0.55) / 0.45;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 4; i++) {
+        const gx = 470 + i * 42;
+        const g = ctx.createLinearGradient(gx, 0, gx - 120, 240);
+        g.addColorStop(0, `rgba(255,240,190,${0.05 * t})`);
+        g.addColorStop(1, 'rgba(255,240,190,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(gx, 0); ctx.lineTo(gx + 26, 0);
+        ctx.lineTo(gx - 94, 250); ctx.lineTo(gx - 130, 250);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+    // partículas de pó/pólen flutuando na luz (dia) — profundidade barata
+    if (dia > 0.25) {
+      for (let i = 0; i < 26; i++) {
+        const px = (sr(i * 12.3) * W + anim * (0.15 + sr(i) * 0.25)) % W;
+        const py = 120 + sr(i * 7.7) * 210 + Math.sin(anim * 0.02 + i) * 8;
+        const brilho = 0.10 + 0.14 * ((Math.sin(anim * 0.05 + i * 2.1) + 1) / 2);
+        ctx.fillStyle = `rgba(255,248,210,${brilho * dia})`;
+        ctx.fillRect(Math.round(px), Math.round(py), sr(i) < 0.3 ? 2 : 1, sr(i) < 0.3 ? 2 : 1);
+      }
+    }
+    // pássaros planando no céu (silhuetas em V que batem asas)
+    const nAves = 3;
+    for (let i = 0; i < nAves; i++) {
+      const ax = (60 + i * 90 + anim * (0.4 + i * 0.1)) % (W + 40) - 20;
+      const ay = 40 + i * 16 + Math.sin(anim * 0.01 + i) * 6;
+      const bat = Math.sin(anim * 0.18 + i * 1.7) * 3;
+      ctx.strokeStyle = `rgba(40,44,54,${0.5 * (0.4 + dia * 0.6)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ax - 4, ay + bat); ctx.lineTo(ax, ay - 1); ctx.lineTo(ax + 4, ay + bat);
+      ctx.stroke();
+    }
+    // color grade cinematográfico: realce quente + sombras frias sutis
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    const grade = ctx.createLinearGradient(0, 0, 0, H);
+    grade.addColorStop(0, `rgba(255,226,170,${0.10 + 0.06 * dia})`);
+    grade.addColorStop(0.6, 'rgba(255,255,255,0)');
+    grade.addColorStop(1, 'rgba(30,45,80,.12)');
+    ctx.fillStyle = grade; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
   function render(canvas, state) {
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -1151,17 +1262,21 @@ const Cidade = (() => {
     const est = estacao(state.mes || 6);
     const pal = RAMPAS[est];
     const chave = nivel + '|' + est + '|' + (estOk() ? 'tiles' : 'proc');
-    if (bgKey !== chave || !bg) { bg = desenharEstatico(nivel, pal); bgKey = chave; }
+    if (bgKey !== chave || !bg) { bg = desenharEstatico(nivel, pal); bgKey = chave; andarilhos = []; }
+    if (!andarilhos.length) seedAndarilhos(nivel);
     const ciclo = cicloAtual();
     ctx.drawImage(bg, 0, 0);
     astros(ctx, pal, ciclo);
     desenharDinamico(ctx, state, pal, nivel);
+    desenharAndarilhos(ctx);
+    atmosfera(ctx, pal, ciclo, est);
     clima(ctx, est, ciclo);
     ambiente(ctx, ciclo, nivel);
   }
 
   function renderShowcase(canvas) {
     if (!npcs.length) seedNpcs(5);
+    if (!andarilhos.length) seedAndarilhos(5);
     render(canvas, { terra: { nivel: 5 }, mes: 6 });
   }
 
