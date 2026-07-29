@@ -759,6 +759,17 @@
         <i class="fab fa-whatsapp group-hover:rotate-12 transition-transform duration-300"></i>
     </a>
 
+    <!-- Barra fixa de CTA (mobile) -->
+    <div class="mobile-cta-bar">
+        <a href="https://wa.me/5515988090910?text=Ol%C3%A1%2C%20Dra.%20Juliana%21%20Vim%20pelo%20site%20sobre%20Pens%C3%A3o%20Aliment%C3%ADcia%20e%20gostaria%20de%20uma%20an%C3%A1lise%20do%20meu%20caso.%20%5BOrigem%3A%20Site%20%E2%80%A2%20Pens%C3%A3o%5D" rel="noopener noreferrer" onclick="return gtag_report_conversion(this.href);" class="btn-green-wa py-3 px-4 rounded shadow-lg flex items-center justify-center gap-3 w-full">
+            <i class="fab fa-whatsapp text-2xl"></i>
+            <div class="flex flex-col items-start leading-none">
+                <span class="text-[10px] font-normal normal-case opacity-90">Análise do seu caso pelo WhatsApp</span>
+                <span class="text-base">FALAR COM A DRA. JULIANA</span>
+            </div>
+        </a>
+    </div>
+
     <!-- EXIT INTENT POPUP -->
     <div id="exit-popup">
         <div class="bg-white p-6 md:p-10 rounded-xl shadow-2xl max-w-sm md:max-w-md w-[90%] relative border-t-4 border-brand-bronze text-center animate-fade-in-up">
@@ -889,6 +900,21 @@
                 nav.classList.remove('shadow-md');
             }
         });
+    </script>
+
+    <!-- Links de WhatsApp contextuais (mensagem específica por situação + conversão) -->
+    <script>
+    (function() {
+        var WPP = 'https://wa.me/5515988090910?text=';
+        var SUFIXO = ' [Origem: Site • Pensão]';
+        document.querySelectorAll('a[data-wa-msg]').forEach(function(a) {
+            a.href = WPP + encodeURIComponent(a.getAttribute('data-wa-msg') + SUFIXO);
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                gtag_report_conversion(a.href);
+            });
+        });
+    })();
     </script>
 </body>
 </html>
