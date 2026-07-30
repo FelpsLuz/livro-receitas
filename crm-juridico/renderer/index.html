@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>CRM Jurídico - Alertas de Prazos</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>CRM Jurídico</h1>
+    <nav>
+      <button class="tab-btn active" data-tab="prazos">Prazos</button>
+      <button class="tab-btn" data-tab="config">Configurações</button>
+    </nav>
+  </header>
+
+  <main id="tab-prazos" class="tab-content active">
+    <div class="toolbar">
+      <button id="btn-novo-prazo">+ Novo Prazo</button>
+      <button id="btn-verificar-agora">Verificar prazos agora</button>
+      <span id="status-verificacao"></span>
+    </div>
+
+    <table id="tabela-prazos">
+      <thead>
+        <tr>
+          <th>Processo</th>
+          <th>Cliente</th>
+          <th>Ação</th>
+          <th>Responsável</th>
+          <th>Vencimento</th>
+          <th>Dias</th>
+          <th>Situação</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="corpo-tabela-prazos"></tbody>
+    </table>
+  </main>
+
+  <main id="tab-config" class="tab-content">
+    <h2>Configurações de Alerta (Telegram)</h2>
+    <p class="ajuda">
+      1. No Telegram, converse com <b>@BotFather</b> e envie <code>/newbot</code> para criar seu bot e obter o token.<br />
+      2. Converse com o seu bot criado (mande qualquer mensagem) e depois abra
+      <code>https://api.telegram.org/bot&lt;SEU_TOKEN&gt;/getUpdates</code> no navegador para descobrir o
+      <b>chat_id</b> (ou use o bot <b>@userinfobot</b>).
+    </p>
+    <form id="form-config">
+      <label>Token do Bot Telegram
+        <input type="text" id="cfg-token" placeholder="123456:ABC-DEF..." />
+      </label>
+      <label>Chat ID
+        <input type="text" id="cfg-chatid" placeholder="123456789" />
+      </label>
+      <label>Horário da verificação diária
+        <input type="time" id="cfg-horario" value="08:00" />
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="cfg-ativas" checked />
+        Notificações ativas
+      </label>
+      <div class="botoes">
+        <button type="submit">Salvar</button>
+        <button type="button" id="btn-testar-telegram">Testar conexão</button>
+      </div>
+      <span id="status-config"></span>
+    </form>
+  </main>
+
+  <div id="modal-prazo" class="modal oculto">
+    <div class="modal-conteudo">
+      <h2 id="modal-titulo">Novo Prazo</h2>
+      <form id="form-prazo">
+        <input type="hidden" id="prazo-id" />
+        <label>Processo
+          <input type="text" id="prazo-processo" required />
+        </label>
+        <label>Cliente
+          <input type="text" id="prazo-cliente" required />
+        </label>
+        <label>Ação
+          <input type="text" id="prazo-acao" required placeholder="Ex: Réplica à Contestação" />
+        </label>
+        <label>Advogado responsável
+          <input type="text" id="prazo-advogado" required />
+        </label>
+        <label>Data de vencimento
+          <input type="date" id="prazo-data" required />
+        </label>
+        <div class="botoes">
+          <button type="submit">Salvar</button>
+          <button type="button" id="btn-cancelar-prazo">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
