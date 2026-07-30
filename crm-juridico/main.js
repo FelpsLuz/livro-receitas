@@ -1,10 +1,12 @@
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, dialog, shell } = require('electron');
 const path = require('path');
 const cron = require('node-cron');
 
 const { makeStore } = require('./src/store');
 const { prazosParaAlertar, formatarMensagem, situacao, diasRestantes } = require('./src/prazos');
 const { enviarMensagemTelegram, testarConexaoTelegram } = require('./src/telegram');
+const { detectarTags } = require('./src/docxTemplate');
+const { gerarContrato } = require('./src/geradorContratos');
 
 let mainWindow;
 let store;
@@ -83,6 +85,7 @@ function agendarVerificacaoDiaria() {
 
 app.whenReady().then(() => {
   store = makeStore(app.getPath('userData'));
+  store.garantirTemplatePadrao(path.join(__dirname, 'assets', 'templates', 'modelo-padrao.docx'));
   criarJanela();
   agendarVerificacaoDiaria();
 
@@ -130,3 +133,84 @@ ipcMain.handle('config:testarTelegram', async (_event, { telegramBotToken, teleg
 });
 
 ipcMain.handle('prazos:verificarAgora', () => verificarPrazos());
+
+// ----- Clientes -----
+
+ipcMain.handle('clientes:listar', () => store.listClientes());
+
+ipcMain.handle('clientes:adicionar', (_event, cliente) => store.addCliente(cliente));
+
+ipcMain.handle('clientes:atualizar', (_event, { id, changes }) => store.updateCliente(id, changes));
+
+ipcMain.handle('clientes:excluir', (_event, id) => {
+  store.deleteCliente(id);
+  return true;
+});
+
+// ----- Modelos de contrato -----
+
+ipcMain.handle('templates:listar', () => {
+  return store.listTemplates().map((t) => ({ ...t, tags: detectarTags(t.arquivo) }));
+});
+
+ipcMain.handle('templates:importar', async () => {
+  const resultado = await dialog.showOpenDialog(mainWindow, {
+    title: 'Selecionar modelo de contrato (.docx)',
+    filters: [{ name: 'Documento Word', extensions: ['docx'] }],
+    properties: ['openFile'],
+  });
+  if (resultado.canceled || !resultado.filePaths[0]) return null;
+
+  const caminho = resultado.filePaths[0];
+  const nome = path.basename(caminho, path.extname(caminho));
+  const template = store.addTemplateFromFile(caminho, nome);
+  return { ...template, tags: detectarTags(template.arquivo) };
+});
+
+ipcMain.handle('templates:excluir', (_event, id) => {
+  store.deleteTemplate(id);
+  return true;
+});
+
+// ----- Contratos -----
+
+ipcMain.handle('contratos:gerar', async (_event, { clienteId, templateId }) => {
+  const cliente = store.listClientes().find((c) => c.id === clienteId);
+  const template = store.listTemplates().find((t) => t.id === templateId);
+  if (!cliente) throw new Error('Cliente nao encontrado');
+  if (!template) throw new Error('Modelo de contrato nao encontrado');
+
+  const { caminhoDocx, caminhoPdf } = await gerarContrato({
+    cliente,
+    template: { nome: template.nome, caminhoAbsoluto: template.arquivo },
+    pastaBaseContratos: store.contratosDir,
+    timestamp: new Date(),
+  });
+
+  return store.addContratoHistorico({
+    clienteId,
+    templateId,
+    templateNome: template.nome,
+    arquivoDocx: caminhoDocx,
+    arquivoPdf: caminhoPdf,
+    geradoEm: new Date().toISOString(),
+  });
+});
+
+ipcMain.handle('contratos:listarPorCliente', (_event, clienteId) =>
+  store.listContratosPorCliente(clienteId)
+);
+
+// ----- Sistema (arquivos / WhatsApp) -----
+
+ipcMain.handle('sistema:abrirCaminho', (_event, caminho) => {
+  shell.showItemInFolder(caminho);
+  return true;
+});
+
+ipcMain.handle('sistema:abrirWhatsapp', (_event, { telefone, mensagem }) => {
+  const numero = (telefone || '').replace(/\D/g, '');
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem || '')}`;
+  shell.openExternal(url);
+  return true;
+});

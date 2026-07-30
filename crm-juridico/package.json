@@ -1,24 +1,28 @@
 {
   "name": "crm-juridico",
   "version": "0.1.0",
-  "description": "CRM juridico local - Modulo de Alertas de Prazos (com Google Ads e Gerador de Contratos planejados)",
+  "description": "CRM juridico local - Alertas de Prazos e Gerador de Contratos (Google Ads planejado)",
   "main": "main.js",
   "author": "",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/scheduler.test.js",
+    "test": "node test/scheduler.test.js && node test/contratos.test.js",
+    "gerar-modelo-padrao": "node scripts/gerar-modelo-padrao.js",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux AppImage"
   },
   "devDependencies": {
+    "docx": "^8.5.0",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "node-cron": "^3.0.3"
+    "docxtemplater": "^3.50.0",
+    "node-cron": "^3.0.3",
+    "pizzip": "^3.1.7"
   },
   "build": {
     "appId": "com.escritorio.crmjuridico",
@@ -29,7 +33,7 @@
       "preload.js",
       "src/**/*",
       "renderer/**/*",
-      "build/**/*"
+      "assets/**/*"
     ],
     "directories": {
       "output": "dist"

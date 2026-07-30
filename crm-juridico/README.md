@@ -1,14 +1,13 @@
-# CRM Jurídico — Módulo 3: Alertas de Prazos
+# CRM Jurídico
 
-App desktop (Electron) instalável no Windows/Mac/Linux para controlar prazos processuais e
-disparar alertas automáticos por Telegram + notificação nativa do sistema.
+App desktop (Electron) instalável no Windows/Mac/Linux para escritórios de advocacia.
 
-Este é o primeiro de 3 módulos planejados:
-- ✅ **Módulo 3 — Alertas de Prazos** (este projeto)
-- ⏳ Módulo 2 — Gerador de Contratos
+Módulos:
+- ✅ **Módulo 3 — Alertas de Prazos**
+- ✅ **Módulo 2 — Gerador de Contratos**
 - ⏳ Módulo 1 — CRM + Conversões Offline do Google Ads
 
-## Funcionalidades
+## Módulo 3 — Alertas de Prazos
 
 - Cadastro de prazos: processo, cliente, ação, advogado responsável, data de vencimento.
 - Painel colorido por situação: vencido, vence hoje, urgente (≤3 dias), atenção (≤7 dias), em dia.
@@ -17,8 +16,33 @@ Este é o primeiro de 3 módulos planejados:
   - Notificação nativa do sistema operacional.
   - Mensagem no Telegram (via bot próprio, grátis).
 - Botão "Verificar agora" para testar sem esperar o horário agendado.
-- Todos os dados ficam salvos localmente no seu computador (nenhuma nuvem/servidor externo é
-  necessário para o CRM em si).
+
+## Módulo 2 — Gerador de Contratos
+
+- Cadastro de clientes: nome, CPF, telefone, endereço, valor dos honorários, forma de pagamento.
+- Modelos de contrato são arquivos `.docx` comuns com tags como `{{NOME_CLIENTE}}`, `{{CPF}}`,
+  `{{ENDERECO}}`, `{{VALOR_HONORARIOS}}`, `{{FORMA_PAGAMENTO}}` e `{{DATA_GERACAO}}` — o app já vem
+  com um modelo padrão de contrato de honorários pronto para uso, e você pode importar seus
+  próprios modelos (aba **Modelos de Contrato**).
+- Botão "Gerar Contrato" no cadastro do cliente: preenche as tags automaticamente e salva o
+  arquivo `.docx` numa pasta própria do cliente (dentro dos dados do app). Se o **LibreOffice**
+  estiver instalado no computador, o app também gera o `.pdf` automaticamente; caso contrário, o
+  `.docx` pode ser aberto/exportado manualmente no Word ou LibreOffice.
+- Histórico de contratos gerados por cliente, com botão para abrir a pasta do arquivo.
+- Botão "Enviar por WhatsApp": abre o WhatsApp Web/Desktop já com uma mensagem pronta para o
+  cliente (o anexo do arquivo precisa ser feito manualmente, pois o WhatsApp não permite anexar
+  arquivos automaticamente via link).
+
+Todos os dados (prazos, clientes, modelos, contratos gerados) ficam salvos localmente no seu
+computador — nenhuma nuvem/servidor externo é necessária.
+
+## Botões de atualizar (sincronizar dados)
+
+Cada aba (Prazos, Clientes, Modelos) tem um botão **🔄 Atualizar**, que recarrega os dados salvos
+em disco (útil se os arquivos de dados forem alterados por fora do app, ou só para conferir que
+tudo foi salvo). Salvar um formulário (Novo Prazo, Novo Cliente, Importar Modelo, etc.) já grava os
+dados imediatamente — o botão Atualizar serve para "puxar" o estado mais recente do disco para a
+tela a qualquer momento.
 
 ## Como rodar em modo desenvolvimento
 
@@ -55,25 +79,42 @@ O instalador fica em `crm-juridico/dist/`.
 4. No app, aba **Configurações**, cole o token e o chat_id, defina o horário e clique em
    "Testar conexão".
 
+## Como gerar PDF automaticamente (opcional)
+
+Instale o [LibreOffice](https://www.libreoffice.org/download/download/) (gratuito) no computador
+onde o app roda. O gerador de contratos detecta automaticamente o `soffice`/`libreoffice`
+instalado e converte o `.docx` gerado para `.pdf`. Sem o LibreOffice, o app ainda funciona
+normalmente — só não gera o PDF automático.
+
 ## Testes
 
 ```bash
 npm test
 ```
 
-Roda os testes da lógica de cálculo de dias/situação/disparo de alertas (sem precisar abrir o
-Electron).
+Roda os testes da lógica de prazos/alertas e do gerador de contratos (formatação, slugify,
+substituição de tags, fluxo completo de geração) sem precisar abrir o Electron.
+
+Para regenerar o modelo padrão de contrato (caso queira editar `scripts/gerar-modelo-padrao.js`):
+
+```bash
+npm run gerar-modelo-padrao
+```
 
 ## Estrutura
 
 ```
 crm-juridico/
-  main.js          # processo principal do Electron (janela, IPC, agendamento diário)
-  preload.js        # ponte segura entre main e renderer
+  main.js               # processo principal do Electron (janela, IPC, agendamento diário)
+  preload.js             # ponte segura entre main e renderer
   src/
-    store.js         # persistência local em JSON (userData)
-    prazos.js         # regras de negócio: dias restantes, situação, quais alertas disparar
-    telegram.js        # envio de mensagens via Telegram Bot API
-  renderer/          # interface (HTML/CSS/JS)
-  test/               # testes da lógica de prazos
+    store.js              # persistência local em JSON (userData): prazos, clientes, modelos, contratos
+    prazos.js              # regras de negócio: dias restantes, situação, quais alertas disparar
+    telegram.js             # envio de mensagens via Telegram Bot API
+    docxTemplate.js          # preenchimento de tags {{...}} em .docx e detecção de tags
+    geradorContratos.js       # formatação de dados, geração do contrato e conversão para PDF
+  assets/templates/        # modelo padrão de contrato (.docx) incluído no app
+  scripts/                 # script para (re)gerar o modelo padrão
+  renderer/                # interface (HTML/CSS/JS)
+  test/                    # testes automatizados
 ```
