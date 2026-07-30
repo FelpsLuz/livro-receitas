@@ -1,4 +1,9 @@
-const LIMIARES_ALERTA = [7, 3, 0];
+// Limiares de alerta, do mais distante ao mais proximo.
+const LIMIARES_ALERTA = [7, 3, 1, 0];
+
+// Prazos ja vencidos e ainda nao concluidos continuam cobrando todo dia,
+// ate que alguem conclua ou remova o prazo.
+const ALERTA_VENCIDO = 'vencido';
 
 function inicioDoDia(date) {
   const d = new Date(date);
@@ -6,11 +11,16 @@ function inicioDoDia(date) {
   return d;
 }
 
+function diaISO(date) {
+  const d = inicioDoDia(date);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function diasRestantes(dataVencimento, hoje = new Date()) {
   const venc = inicioDoDia(dataVencimento);
   const base = inicioDoDia(hoje);
-  const diffMs = venc.getTime() - base.getTime();
-  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  return Math.round((venc.getTime() - base.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function situacao(prazo, hoje = new Date()) {
@@ -23,46 +33,93 @@ function situacao(prazo, hoje = new Date()) {
   return 'ok';
 }
 
-// Retorna os prazos que devem disparar alerta hoje (7, 3 ou 0 dias restantes),
-// ignorando os que ja receberam alerta para aquele limiar especifico hoje.
+/**
+ * Decide quais alertas devem ser disparados agora.
+ *
+ * A regra e "menor OU IGUAL ao limiar, ainda nao alertado" - e nao igualdade
+ * exata. Isso e o que garante o catch-up: se o computador ficou desligado no
+ * dia em que faltavam exatamente 3 dias, o alerta de 3 dias ainda dispara na
+ * primeira vez que o app abrir (faltando 2 dias), em vez de se perder para
+ * sempre. Cada limiar dispara no maximo uma vez por prazo.
+ */
 function prazosParaAlertar(prazos, hoje = new Date()) {
-  const hojeStr = inicioDoDia(hoje).toISOString().slice(0, 10);
+  const hojeStr = diaISO(hoje);
   const alertas = [];
 
   for (const prazo of prazos) {
     if (prazo.status === 'Concluido') continue;
+
     const dias = diasRestantes(prazo.dataVencimento, hoje);
-    if (!LIMIARES_ALERTA.includes(dias)) continue;
+    const enviados = prazo.alertasEnviados || [];
 
-    const jaEnviado = (prazo.alertasEnviados || []).some(
-      (a) => a.limiar === dias && a.data === hojeStr
+    if (dias < 0) {
+      // Vencido: cobra uma vez por dia, sem parar.
+      const jaHoje = enviados.some((a) => a.limiar === ALERTA_VENCIDO && a.data === hojeStr);
+      if (!jaHoje) {
+        alertas.push({ prazo, dias, limiar: ALERTA_VENCIDO, hojeStr });
+      }
+      continue;
+    }
+
+    // Dispara o limiar mais urgente ainda pendente, para nao mandar 3 mensagens
+    // de uma vez quando o app ficou dias sem abrir.
+    const pendentes = LIMIARES_ALERTA.filter(
+      (limiar) => dias <= limiar && !enviados.some((a) => a.limiar === limiar)
     );
-    if (jaEnviado) continue;
+    if (pendentes.length === 0) continue;
 
-    alertas.push({ prazo, dias, hojeStr });
+    const limiar = Math.min(...pendentes);
+    alertas.push({ prazo, dias, limiar, hojeStr, limiaresCobertos: pendentes });
   }
 
   return alertas;
 }
 
+function descreverPrazo(dias) {
+  if (dias < 0) {
+    const atraso = Math.abs(dias);
+    return `VENCIDO há ${atraso} dia${atraso === 1 ? '' : 's'}`;
+  }
+  if (dias === 0) return 'VENCE HOJE';
+  return `Vence em ${dias} dia${dias === 1 ? '' : 's'}`;
+}
+
 function formatarMensagem({ prazo, dias }) {
-  const linhaPrazo =
-    dias === 0
-      ? 'VENCE HOJE'
-      : `Vence em ${dias} dia${dias === 1 ? '' : 's'}`;
-  return (
-    `⚠️ ALERTA DE PRAZO (${linhaPrazo}):\n` +
-    `Processo: ${prazo.processo}\n` +
-    `Acao: ${prazo.acao}\n` +
-    `Cliente: ${prazo.cliente}\n` +
-    `Responsavel: ${prazo.advogadoResponsavel}`
-  );
+  const icone = dias < 0 ? '🚨' : '⚠️';
+  const linhas = [
+    `${icone} ALERTA DE PRAZO (${descreverPrazo(dias)})`,
+    '',
+    `Processo: ${prazo.processo}`,
+    `Ação: ${prazo.acao}`,
+  ];
+  if (prazo.cliente) linhas.push(`Cliente: ${prazo.cliente}`);
+  if (prazo.advogadoResponsavel) linhas.push(`Responsável: ${prazo.advogadoResponsavel}`);
+  return linhas.join('\n');
+}
+
+// Marca no proprio prazo quais limiares ja foram alertados, para nao repetir.
+function registrarAlertaEnviado(prazo, alerta, telegramOk) {
+  const enviados = [...(prazo.alertasEnviados || [])];
+  const limiares = alerta.limiaresCobertos || [alerta.limiar];
+
+  for (const limiar of limiares) {
+    if (limiar === ALERTA_VENCIDO) {
+      enviados.push({ limiar, data: alerta.hojeStr, telegramOk });
+    } else if (!enviados.some((a) => a.limiar === limiar)) {
+      enviados.push({ limiar, data: alerta.hojeStr, telegramOk });
+    }
+  }
+  return enviados;
 }
 
 module.exports = {
   LIMIARES_ALERTA,
+  ALERTA_VENCIDO,
+  diaISO,
   diasRestantes,
   situacao,
   prazosParaAlertar,
   formatarMensagem,
+  descreverPrazo,
+  registrarAlertaEnviado,
 };

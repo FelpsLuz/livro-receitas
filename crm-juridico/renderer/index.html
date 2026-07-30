@@ -2,195 +2,282 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<title>CRM Jurídico - Alertas de Prazos</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;" />
+<title>CRM Jurídico</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
-    <h1>CRM Jurídico</h1>
+    <div class="marca">
+      <span class="logo">⚖️</span>
+      <h1>CRM Jurídico</h1>
+    </div>
     <nav>
-      <button class="tab-btn active" data-tab="prazos">Prazos</button>
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="prazos">Prazos</button>
       <button class="tab-btn" data-tab="clientes">Clientes</button>
-      <button class="tab-btn" data-tab="modelos">Modelos de Contrato</button>
+      <button class="tab-btn" data-tab="modelos">Modelos</button>
       <button class="tab-btn" data-tab="config">Configurações</button>
     </nav>
   </header>
 
-  <main id="tab-prazos" class="tab-content active">
+  <!-- ============ DASHBOARD ============ -->
+  <main id="tab-dashboard" class="tab-content active">
     <div class="toolbar">
-      <button id="btn-novo-prazo">+ Novo Prazo</button>
-      <button id="btn-verificar-agora">Verificar prazos agora</button>
-      <button id="btn-atualizar-prazos" class="btn-secundario">🔄 Atualizar</button>
-      <span id="status-verificacao"></span>
+      <label class="inline">Período
+        <select id="dash-periodo">
+          <option value="7">Últimos 7 dias</option>
+          <option value="30" selected>Últimos 30 dias</option>
+          <option value="90">Últimos 90 dias</option>
+        </select>
+      </label>
+      <button id="btn-atualizar-dashboard" class="secundario">🔄 Atualizar</button>
+      <button id="btn-sincronizar-ads">Sincronizar custos do Google Ads</button>
+      <span id="status-dashboard" class="status"></span>
     </div>
 
-    <table id="tabela-prazos">
-      <thead>
-        <tr>
-          <th>Processo</th>
-          <th>Cliente</th>
-          <th>Ação</th>
-          <th>Responsável</th>
-          <th>Vencimento</th>
-          <th>Dias</th>
-          <th>Situação</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody id="corpo-tabela-prazos"></tbody>
-    </table>
+    <div id="dash-aviso-custos" class="aviso oculto">
+      Conecte o Google Ads em <b>Configurações</b> e clique em "Sincronizar custos" para ver
+      investimento, ROI e desempenho por campanha. Sem isso o painel mostra apenas os dados do CRM.
+    </div>
+
+    <div class="cards" id="dash-cards"></div>
+
+    <section class="painel">
+      <h2>Funil de vendas</h2>
+      <div id="dash-funil" class="funil"></div>
+    </section>
+
+    <section class="painel">
+      <h2>Desempenho por campanha</h2>
+      <div class="tabela-rolavel">
+        <table>
+          <thead>
+            <tr>
+              <th>Campanha</th><th class="num">Investido</th><th class="num">Cliques</th>
+              <th class="num">Leads</th><th class="num">Contratos</th><th class="num">Receita</th>
+              <th class="num">CAC</th><th class="num">ROI</th>
+            </tr>
+          </thead>
+          <tbody id="dash-campanhas"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="painel">
+      <h2>Palavras-chave que geraram contrato</h2>
+      <div class="tabela-rolavel">
+        <table>
+          <thead>
+            <tr><th>Palavra-chave</th><th class="num">Leads</th><th class="num">Contratos</th><th class="num">Receita</th></tr>
+          </thead>
+          <tbody id="dash-palavras"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="painel">
+      <h2>Saúde do envio de conversões</h2>
+      <div id="dash-conversoes" class="linha-saude"></div>
+      <button id="btn-reprocessar-conversoes" class="secundario">Reenviar conversões pendentes</button>
+    </section>
   </main>
 
+  <!-- ============ PRAZOS ============ -->
+  <main id="tab-prazos" class="tab-content">
+    <div class="toolbar">
+      <button id="btn-novo-prazo">+ Novo Prazo</button>
+      <button id="btn-verificar-agora" class="secundario">Verificar prazos agora</button>
+      <button id="btn-atualizar-prazos" class="secundario">🔄 Atualizar</button>
+      <input type="search" id="busca-prazos" placeholder="Buscar processo, cliente, ação..." />
+      <label class="inline">
+        <input type="checkbox" id="filtro-ocultar-concluidos" checked /> Ocultar concluídos
+      </label>
+      <span id="status-verificacao" class="status"></span>
+    </div>
+
+    <div class="tabela-rolavel">
+      <table>
+        <thead>
+          <tr>
+            <th>Processo</th><th>Cliente</th><th>Ação</th><th>Responsável</th>
+            <th>Vencimento</th><th class="num">Dias</th><th>Situação</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="corpo-tabela-prazos"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ============ CLIENTES ============ -->
   <main id="tab-clientes" class="tab-content">
     <div class="toolbar">
       <button id="btn-novo-cliente">+ Novo Cliente</button>
-      <button id="btn-atualizar-clientes" class="btn-secundario">🔄 Atualizar</button>
-      <span id="status-clientes"></span>
+      <button id="btn-atualizar-clientes" class="secundario">🔄 Atualizar</button>
+      <input type="search" id="busca-clientes" placeholder="Buscar nome, CPF, telefone..." />
+      <label class="inline">Etapa
+        <select id="filtro-etapa"><option value="">Todas</option></select>
+      </label>
+      <span id="status-clientes" class="status"></span>
     </div>
 
-    <table id="tabela-clientes">
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>CPF</th>
-          <th>Telefone</th>
-          <th>Honorários</th>
-          <th>Forma de Pagamento</th>
-          <th>Status</th>
-          <th>Conversão Ads</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody id="corpo-tabela-clientes"></tbody>
-    </table>
+    <div class="tabela-rolavel">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th><th>Telefone</th><th class="num">Honorários</th>
+            <th>Etapa do funil</th><th>Origem</th><th>Conversão Ads</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="corpo-tabela-clientes"></tbody>
+      </table>
+    </div>
   </main>
 
+  <!-- ============ MODELOS ============ -->
   <main id="tab-modelos" class="tab-content">
     <div class="toolbar">
       <button id="btn-importar-modelo">+ Importar Modelo (.docx)</button>
-      <button id="btn-atualizar-modelos" class="btn-secundario">🔄 Atualizar</button>
-      <span id="status-modelos"></span>
+      <button id="btn-atualizar-modelos" class="secundario">🔄 Atualizar</button>
+      <span id="status-modelos" class="status"></span>
     </div>
     <p class="ajuda">
-      Um modelo de contrato é um arquivo <code>.docx</code> comum, com tags como
+      Um modelo é um <code>.docx</code> comum com tags no texto:
       <code>{{NOME_CLIENTE}}</code>, <code>{{CPF}}</code>, <code>{{ENDERECO}}</code>,
-      <code>{{VALOR_HONORARIOS}}</code>, <code>{{FORMA_PAGAMENTO}}</code> e
-      <code>{{DATA_GERACAO}}</code> no texto. Ao gerar o contrato, essas tags são substituídas
-      automaticamente pelos dados do cliente. Já vem um modelo padrão pronto para uso.
+      <code>{{TELEFONE}}</code>, <code>{{VALOR_HONORARIOS}}</code>,
+      <code>{{FORMA_PAGAMENTO}}</code>, <code>{{DATA_GERACAO}}</code>.
+      Ao gerar o contrato elas são substituídas pelos dados do cliente.
     </p>
-
-    <table id="tabela-modelos">
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>Tags detectadas</th>
-          <th>Importado em</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody id="corpo-tabela-modelos"></tbody>
-    </table>
+    <div class="tabela-rolavel">
+      <table>
+        <thead><tr><th>Nome</th><th>Tags detectadas</th><th>Importado em</th><th>Ações</th></tr></thead>
+        <tbody id="corpo-tabela-modelos"></tbody>
+      </table>
+    </div>
   </main>
 
+  <!-- ============ CONFIGURAÇÕES ============ -->
   <main id="tab-config" class="tab-content">
-    <h2>Configurações de Alerta (Telegram)</h2>
-    <p class="ajuda">
-      1. No Telegram, converse com <b>@BotFather</b> e envie <code>/newbot</code> para criar seu bot e obter o token.<br />
-      2. Converse com o seu bot criado (mande qualquer mensagem) e depois abra
-      <code>https://api.telegram.org/bot&lt;SEU_TOKEN&gt;/getUpdates</code> no navegador para descobrir o
-      <b>chat_id</b> (ou use o bot <b>@userinfobot</b>).
-    </p>
-    <form id="form-config">
-      <label>Token do Bot Telegram
-        <input type="text" id="cfg-token" placeholder="123456:ABC-DEF..." />
-      </label>
-      <label>Chat ID
-        <input type="text" id="cfg-chatid" placeholder="123456789" />
-      </label>
-      <label>Horário da verificação diária
-        <input type="time" id="cfg-horario" value="08:00" />
-      </label>
-      <label class="checkbox">
-        <input type="checkbox" id="cfg-ativas" checked />
-        Notificações ativas
-      </label>
-      <div class="botoes">
-        <button type="submit">Salvar</button>
-        <button type="button" id="btn-testar-telegram">Testar conexão</button>
-      </div>
-      <span id="status-config"></span>
-    </form>
+    <div class="colunas-config">
+      <section class="painel">
+        <h2>Alertas de Prazo</h2>
+        <p class="ajuda">
+          1. No Telegram, fale com <b>@BotFather</b>, envie <code>/newbot</code> e guarde o token.<br />
+          2. Mande uma mensagem para o bot criado.<br />
+          3. Descubra seu <b>chat_id</b> com o bot <b>@userinfobot</b>.
+        </p>
+        <form id="form-config">
+          <label>Token do Bot Telegram
+            <input type="password" id="cfg-token" placeholder="123456:ABC-DEF..." />
+          </label>
+          <label>Chat ID
+            <input type="text" id="cfg-chatid" placeholder="123456789" />
+          </label>
+          <label>Horário da verificação diária
+            <input type="time" id="cfg-horario" value="08:00" />
+          </label>
+          <label class="checkbox"><input type="checkbox" id="cfg-ativas" /> Notificações ativas</label>
+          <label class="checkbox"><input type="checkbox" id="cfg-autostart" /> Iniciar junto com o Windows</label>
+          <p class="nota">
+            Os alertas disparam faltando 7, 3, 1 e 0 dias, e todo dia depois de vencido.
+            Se o computador estiver desligado no dia do alerta, ele é recuperado assim que o app abrir.
+          </p>
+          <div class="botoes">
+            <button type="submit">Salvar</button>
+            <button type="button" id="btn-testar-telegram" class="secundario">Testar conexão</button>
+          </div>
+          <span id="status-config" class="status"></span>
+        </form>
+      </section>
 
-    <h2>Google Ads — Conversões Offline</h2>
-    <p class="ajuda">
-      1. Peça o <b>Developer Token</b> no Google Ads API Center da sua conta Google Ads (Ferramentas
-      &gt; Configuração &gt; API Center). A aprovação pode levar alguns dias.<br />
-      2. No <a href="#" id="link-google-cloud-console">Google Cloud Console</a>, crie um projeto, ative a
-      "Google Ads API" e crie uma credencial OAuth do tipo <b>Aplicativo para computador (Desktop
-      app)</b> — isso te dá o Client ID e o Client Secret.<br />
-      3. Pegue o <b>Customer ID</b> (10 dígitos, sem hífen) no canto superior da sua conta Google Ads.<br />
-      4. Crie a conversão em Google Ads &gt; Metas &gt; Conversões &gt; Nova ação de conversão &gt;
-      Importar &gt; "Outras fontes de dados ou CRM" &gt; "Rastrear conversões a partir de cliques" e
-      pegue o <b>ID da ação de conversão</b> (aparece na URL/detalhes da conversão criada).<br />
-      5. Preencha os campos abaixo e clique em <b>Conectar com Google</b> — uma aba do navegador vai
-      abrir para você autorizar o acesso; volte para o app depois de autorizar.
-    </p>
-    <form id="form-google-ads">
-      <label>Developer Token
-        <input type="text" id="ga-developer-token" />
-      </label>
-      <label>Client ID (OAuth)
-        <input type="text" id="ga-client-id" />
-      </label>
-      <label>Client Secret (OAuth)
-        <input type="text" id="ga-client-secret" />
-      </label>
-      <label>Customer ID
-        <input type="text" id="ga-customer-id" placeholder="1234567890" />
-      </label>
-      <label>ID da Ação de Conversão
-        <input type="text" id="ga-conversion-action-id" />
-      </label>
-      <label>Nome da conversão (rótulo interno)
-        <input type="text" id="ga-nome-conversao" placeholder="Contrato_Fechado" />
-      </label>
-      <label>Moeda
-        <input type="text" id="ga-moeda" placeholder="BRL" />
-      </label>
-      <p>Status da conexão: <b id="ga-status-conexao">Não conectado</b></p>
-      <div class="botoes">
-        <button type="submit">Salvar dados</button>
-        <button type="button" id="btn-conectar-google">Conectar com Google</button>
-        <button type="button" id="btn-testar-google-ads" class="btn-secundario">Testar conexão</button>
-        <button type="button" id="btn-desconectar-google" class="btn-secundario">Desconectar</button>
-      </div>
-      <span id="status-google-ads"></span>
-    </form>
+      <section class="painel">
+        <h2>Google Ads — Conversões Offline</h2>
+        <p class="ajuda">
+          1. <b>Developer Token</b>: conta Google Ads &gt; Ferramentas &gt; API Center.<br />
+          2. <b>Client ID/Secret</b>: <a href="#" id="link-google-cloud">Google Cloud Console</a> &gt;
+             ative a "Google Ads API" &gt; credencial OAuth do tipo <b>Desktop app</b>.<br />
+          3. <b>Customer ID</b>: os 10 dígitos no topo da conta Google Ads.<br />
+          4. Crie as ações de conversão em Metas &gt; Conversões &gt; Importar &gt;
+             "Outras fontes de dados ou CRM" e cole os IDs abaixo.
+        </p>
+        <form id="form-google-ads">
+          <label>Developer Token <input type="password" id="ga-developer-token" /></label>
+          <label>Client ID (OAuth) <input type="text" id="ga-client-id" /></label>
+          <label>Client Secret (OAuth) <input type="password" id="ga-client-secret" /></label>
+          <label>Customer ID <input type="text" id="ga-customer-id" placeholder="1234567890" /></label>
+          <label>Login Customer ID (só se usar conta MCC/agência)
+            <input type="text" id="ga-login-customer-id" placeholder="opcional" />
+          </label>
+
+          <h3>Ações de conversão por etapa do funil</h3>
+          <p class="nota">
+            Enviar o funil inteiro (e não só o contrato) dá muito mais sinal ao algoritmo:
+            um escritório fecha poucos contratos por mês, mas gera dezenas de leads qualificados.
+            Deixe em branco as etapas que não quiser enviar.
+          </p>
+          <label>ID — Contrato Fechado <input type="text" id="ga-acao-contrato" /></label>
+          <label>ID — Lead Qualificado <input type="text" id="ga-acao-qualificado" /></label>
+          <label>Valor estimado do Lead Qualificado (R$)
+            <input type="number" id="ga-valor-qualificado" min="0" step="0.01" />
+          </label>
+          <label>ID — Reunião Agendada <input type="text" id="ga-acao-reuniao" /></label>
+          <label>Valor estimado da Reunião (R$)
+            <input type="number" id="ga-valor-reuniao" min="0" step="0.01" />
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="ga-funil-completo" />
+            Ao avançar uma etapa, enviar também as etapas anteriores
+          </label>
+          <label>Moeda <input type="text" id="ga-moeda" placeholder="BRL" /></label>
+          <label>Versão da API
+            <input type="text" id="ga-api-version" placeholder="v21" />
+            <small>Troque aqui se o Google descontinuar a versão atual.</small>
+          </label>
+
+          <p>Status da conexão: <b id="ga-status-conexao">Não conectado</b></p>
+          <div class="botoes">
+            <button type="submit">Salvar dados</button>
+            <button type="button" id="btn-conectar-google">Conectar com Google</button>
+            <button type="button" id="btn-testar-google-ads" class="secundario">Testar conexão</button>
+            <button type="button" id="btn-desconectar-google" class="secundario">Desconectar</button>
+          </div>
+          <span id="status-google-ads" class="status"></span>
+        </form>
+      </section>
+
+      <section class="painel">
+        <h2>Dados e Backup</h2>
+        <div id="info-sistema" class="nota"></div>
+        <div class="botoes">
+          <button type="button" id="btn-exportar-backup">Exportar backup</button>
+          <button type="button" id="btn-abrir-pasta-dados" class="secundario">Abrir pasta de dados</button>
+        </div>
+        <p class="nota">
+          Os dados ficam só neste computador. Exporte um backup periodicamente e guarde em outro
+          lugar — se o HD falhar, é o que permite recuperar clientes, prazos e contratos.
+          O backup <b>não</b> inclui tokens de acesso, por segurança.
+        </p>
+      </section>
+    </div>
   </main>
 
+  <!-- ============ MODAIS ============ -->
   <div id="modal-prazo" class="modal oculto">
     <div class="modal-conteudo">
       <h2 id="modal-titulo">Novo Prazo</h2>
       <form id="form-prazo">
         <input type="hidden" id="prazo-id" />
-        <label>Processo
-          <input type="text" id="prazo-processo" required />
-        </label>
+        <label>Processo <input type="text" id="prazo-processo" required /></label>
         <label>Cliente
-          <input type="text" id="prazo-cliente" required />
+          <select id="prazo-cliente-id"><option value="">— Sem cliente vinculado —</option></select>
+          <small>Vincular ao cadastro liga o prazo ao histórico e ao ROI daquele cliente.</small>
         </label>
-        <label>Ação
-          <input type="text" id="prazo-acao" required placeholder="Ex: Réplica à Contestação" />
-        </label>
-        <label>Advogado responsável
-          <input type="text" id="prazo-advogado" required />
-        </label>
-        <label>Data de vencimento
-          <input type="date" id="prazo-data" required />
-        </label>
+        <label>Ação <input type="text" id="prazo-acao" required placeholder="Ex: Réplica à Contestação" /></label>
+        <label>Advogado responsável <input type="text" id="prazo-advogado" /></label>
+        <label>Data de vencimento <input type="date" id="prazo-data" required /></label>
         <div class="botoes">
           <button type="submit">Salvar</button>
-          <button type="button" id="btn-cancelar-prazo">Cancelar</button>
+          <button type="button" id="btn-cancelar-prazo" class="secundario">Cancelar</button>
         </div>
       </form>
     </div>
@@ -201,32 +288,33 @@
       <h2 id="modal-cliente-titulo">Novo Cliente</h2>
       <form id="form-cliente">
         <input type="hidden" id="cliente-id" />
-        <label>Nome completo
-          <input type="text" id="cliente-nome" required />
-        </label>
-        <label>CPF
-          <input type="text" id="cliente-cpf" placeholder="000.000.000-00" required />
-        </label>
-        <label>Telefone (WhatsApp)
-          <input type="text" id="cliente-telefone" placeholder="11999999999" />
-        </label>
-        <label>Endereço
-          <input type="text" id="cliente-endereco" required />
-        </label>
+        <label>Nome completo <input type="text" id="cliente-nome" required /></label>
+        <label>CPF <input type="text" id="cliente-cpf" placeholder="000.000.000-00" /></label>
+        <label>Telefone (WhatsApp) <input type="text" id="cliente-telefone" placeholder="11999999999" /></label>
+        <label>Endereço <input type="text" id="cliente-endereco" /></label>
         <label>Valor dos honorários (R$)
-          <input type="number" id="cliente-honorarios" min="0" step="0.01" required />
+          <input type="number" id="cliente-honorarios" min="0" step="0.01" />
         </label>
-        <label>Forma de pagamento
-          <input type="text" id="cliente-forma-pagamento" placeholder="Ex: à vista, 3x no cartão" />
-        </label>
+        <label>Forma de pagamento <input type="text" id="cliente-forma-pagamento" placeholder="Ex: à vista, 3x" /></label>
         <label>GCLID (Google Click ID)
-          <input type="text" id="cliente-gclid" placeholder="Colado da mensagem do WhatsApp, ex: GCLID:abc123" />
+          <input type="text" id="cliente-gclid" placeholder="Cole a mensagem do WhatsApp com GCLID:..." />
+          <small>Pode colar o texto inteiro — o app extrai o código sozinho.</small>
         </label>
         <div class="botoes">
           <button type="submit">Salvar</button>
-          <button type="button" id="btn-cancelar-cliente">Cancelar</button>
+          <button type="button" id="btn-cancelar-cliente" class="secundario">Cancelar</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="modal-ficha" class="modal oculto">
+    <div class="modal-conteudo modal-larga">
+      <h2 id="ficha-nome"></h2>
+      <div id="ficha-conteudo"></div>
+      <div class="botoes">
+        <button type="button" id="btn-fechar-ficha" class="secundario">Fechar</button>
+      </div>
     </div>
   </div>
 
@@ -239,15 +327,13 @@
       </div>
       <p id="contrato-resultado" class="ajuda oculto"></p>
       <div id="contrato-resultado-acoes" class="botoes oculto">
-        <button id="btn-abrir-pasta-contrato" class="btn-secundario">Abrir pasta</button>
-        <button id="btn-abrir-whatsapp-contrato" class="btn-secundario">Enviar por WhatsApp</button>
+        <button id="btn-abrir-pasta-contrato" class="secundario">Abrir pasta</button>
+        <button id="btn-abrir-whatsapp-contrato" class="secundario">Enviar por WhatsApp</button>
       </div>
-
-      <h3>Contratos já gerados para este cliente</h3>
-      <ul id="lista-historico-contratos"></ul>
-
+      <h3>Contratos já gerados</h3>
+      <ul id="lista-historico-contratos" class="lista"></ul>
       <div class="botoes">
-        <button type="button" id="btn-fechar-contrato">Fechar</button>
+        <button type="button" id="btn-fechar-contrato" class="secundario">Fechar</button>
       </div>
     </div>
   </div>

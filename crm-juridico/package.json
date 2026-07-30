@@ -1,6 +1,6 @@
 {
   "name": "crm-juridico",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "CRM juridico local - Alertas de Prazos, Gerador de Contratos e Conversões Offline do Google Ads",
   "main": "main.js",
   "author": "",
@@ -8,20 +8,22 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/scheduler.test.js && node test/contratos.test.js && node test/googleAds.test.js",
+    "test": "node test/index.test.js",
     "gerar-modelo-padrao": "node scripts/gerar-modelo-padrao.js",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux AppImage"
+    "dist:linux": "electron-builder --linux AppImage",
+    "test:app": "xvfb-run -a node test/app.e2e.js"
   },
   "devDependencies": {
     "docx": "^8.5.0",
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "playwright": "^1.62.1"
   },
   "dependencies": {
     "docxtemplater": "^3.50.0",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.6.0",
     "pizzip": "^3.1.7"
   },
   "build": {
@@ -39,18 +41,24 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/icone.ico"
     },
     "linux": {
       "target": "AppImage",
-      "category": "Office"
+      "category": "Office",
+      "icon": "assets/icone.png"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "assets/icone.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CRM Juridico"
     }
   }
 }

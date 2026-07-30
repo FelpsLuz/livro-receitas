@@ -1,417 +1,870 @@
-const corpoTabela = document.getElementById('corpo-tabela-prazos');
-const modal = document.getElementById('modal-prazo');
-const formPrazo = document.getElementById('form-prazo');
-const formConfig = document.getElementById('form-config');
-const statusVerificacao = document.getElementById('status-verificacao');
-const statusConfig = document.getElementById('status-config');
+'use strict';
+
+// ---------------------------------------------------------------
+// Utilitarios
+// ---------------------------------------------------------------
+
+/**
+ * Cria elementos via DOM em vez de montar HTML por concatenacao de texto.
+ * Com textContent/setAttribute o navegador nunca interpreta o conteudo como
+ * markup, entao nome de cliente com "<" ou mensagem de erro da API com aspas
+ * simplesmente aparecem como texto - a classe inteira de bug de escape some.
+ */
+function el(tag, props = {}, ...filhos) {
+  const node = document.createElement(tag);
+  for (const [chave, valor] of Object.entries(props)) {
+    if (valor === null || valor === undefined) continue;
+    if (chave === 'class') node.className = valor;
+    else if (chave === 'text') node.textContent = valor;
+    else if (chave.startsWith('on') && typeof valor === 'function') {
+      node.addEventListener(chave.slice(2).toLowerCase(), valor);
+    } else if (chave === 'style') {
+      // O CSP da pagina bloqueia atributo style inline; aplicar via CSSOM e
+      // permitido e evita ter que afrouxar a politica de seguranca.
+      for (const regra of String(valor).split(';')) {
+        const [prop, ...resto] = regra.split(':');
+        if (prop && resto.length) node.style.setProperty(prop.trim(), resto.join(':').trim());
+      }
+    } else node.setAttribute(chave, valor);
+  }
+  for (const filho of filhos.flat()) {
+    if (filho === null || filho === undefined || filho === false) continue;
+    node.append(typeof filho === 'object' ? filho : document.createTextNode(String(filho)));
+  }
+  return node;
+}
+
+const $ = (id) => document.getElementById(id);
+
+const brl = (v) =>
+  (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const brlExato = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const numero = (v) => (Number(v) || 0).toLocaleString('pt-BR');
+const pct = (v) => (v === null || v === undefined ? '—' : `${Number(v).toFixed(0)}%`);
+
+function dataBR(iso) {
+  if (!iso) return '—';
+  const [ano, mes, dia] = String(iso).slice(0, 10).split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+function dataHoraBR(iso) {
+  return iso ? new Date(iso).toLocaleString('pt-BR') : '—';
+}
+
+function mostrarStatus(elemento, texto, ehErro = false, limpaApos = 4000) {
+  elemento.textContent = texto;
+  elemento.classList.toggle('erro', ehErro);
+  if (limpaApos) setTimeout(() => { elemento.textContent = ''; }, limpaApos);
+}
+
+function linhaVazia(colunas, texto) {
+  return el('tr', {}, el('td', { colspan: colunas, class: 'vazio', text: texto }));
+}
+
+async function comErro(elementoStatus, mensagemOcupado, fn) {
+  try {
+    if (mensagemOcupado) mostrarStatus(elementoStatus, mensagemOcupado, false, 0);
+    const resultado = await fn();
+    return { ok: true, resultado };
+  } catch (e) {
+    mostrarStatus(elementoStatus, e.message, true, 8000);
+    return { ok: false, erro: e };
+  }
+}
+
+// ---------------------------------------------------------------
+// Navegacao entre abas
+// ---------------------------------------------------------------
+
+const recarregadoresPorAba = {};
 
 document.querySelectorAll('.tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    $(`tab-${btn.dataset.tab}`).classList.add('active');
+    const recarregar = recarregadoresPorAba[btn.dataset.tab];
+    if (recarregar) recarregar();
   });
 });
 
-function rotuloSituacao(situacao) {
-  const rotulos = {
-    vencido: 'Vencido',
-    hoje: 'Vence hoje',
-    urgente: 'Urgente',
-    atencao: 'Atenção',
-    ok: 'Em dia',
-    concluido: 'Concluído',
-  };
-  return rotulos[situacao] || situacao;
+let ETAPAS = [];
+let clientesCache = [];
+
+// ===============================================================
+// DASHBOARD
+// ===============================================================
+
+const statusDashboard = $('status-dashboard');
+
+function montarCard({ rotulo, valor, sub, classe, classeValor }) {
+  return el(
+    'div',
+    { class: `card ${classe || ''}` },
+    el('div', { class: 'rotulo', text: rotulo }),
+    el('div', { class: `valor ${classeValor || ''}`, text: valor }),
+    sub ? el('div', { class: 'sub', text: sub }) : null
+  );
+}
+
+function renderizarCards(d) {
+  const { resumo } = d;
+  const cards = $('dash-cards');
+  cards.replaceChildren();
+
+  if (resumo.temDadosDeCusto) {
+    cards.append(
+      montarCard({ rotulo: 'Investido em anúncios', valor: brl(resumo.investimento), classe: 'destaque' })
+    );
+  }
+  cards.append(
+    montarCard({
+      rotulo: 'Receita em contratos',
+      valor: brl(resumo.receita),
+      sub: `${resumo.contratosFechados} contrato(s) fechado(s)`,
+      classe: 'positivo',
+    })
+  );
+
+  if (resumo.temDadosDeCusto) {
+    cards.append(
+      montarCard({
+        rotulo: 'Lucro',
+        valor: brl(resumo.lucro),
+        classe: resumo.lucro >= 0 ? 'positivo' : 'negativo',
+        classeValor: resumo.lucro >= 0 ? 'positivo' : 'negativo',
+      }),
+      montarCard({
+        rotulo: 'ROI',
+        valor: pct(resumo.roi),
+        sub: resumo.roas ? `${resumo.roas.toFixed(2)}x de retorno` : null,
+        classe: (resumo.roi || 0) >= 0 ? 'positivo' : 'negativo',
+        classeValor: (resumo.roi || 0) >= 0 ? 'positivo' : 'negativo',
+      }),
+      montarCard({
+        rotulo: 'Custo por contrato',
+        valor: resumo.cac === null ? '—' : brl(resumo.cac),
+      })
+    );
+  }
+
+  cards.append(
+    montarCard({ rotulo: 'Novos leads', valor: numero(resumo.novosLeads) }),
+    montarCard({ rotulo: 'Ticket médio', valor: brl(resumo.ticketMedio) }),
+    montarCard({
+      rotulo: 'Taxa de conversão',
+      valor: pct(resumo.taxaConversao),
+      sub: 'lead → contrato',
+    })
+  );
+}
+
+function renderizarFunil(d) {
+  const container = $('dash-funil');
+  container.replaceChildren();
+  const maximo = Math.max(...d.funil.map((f) => f.quantidade), 1);
+
+  if (d.funil.every((f) => f.quantidade === 0)) {
+    container.append(el('p', { class: 'nota', text: 'Nenhum movimento no funil neste período.' }));
+    return;
+  }
+
+  for (const etapa of d.funil) {
+    container.append(
+      el(
+        'div',
+        { class: 'funil-etapa' },
+        el('div', { class: 'nome', text: etapa.rotulo }),
+        el(
+          'div',
+          { class: 'funil-barra-fundo' },
+          el('div', { class: 'funil-barra', style: `width:${(etapa.quantidade / maximo) * 100}%` })
+        ),
+        el('div', {
+          class: 'qtd',
+          text: `${etapa.quantidade}${etapa.valor ? ` · ${brl(etapa.valor)}` : ''}`,
+        })
+      )
+    );
+  }
+}
+
+function renderizarCampanhas(d) {
+  const tbody = $('dash-campanhas');
+  tbody.replaceChildren();
+  if (!d.campanhas.length) {
+    tbody.append(linhaVazia(8, 'Sincronize os custos do Google Ads para ver esta análise.'));
+    return;
+  }
+  for (const c of d.campanhas) {
+    tbody.append(
+      el(
+        'tr',
+        {},
+        el('td', { text: c.campanha }),
+        el('td', { class: 'num', text: c.custo ? brl(c.custo) : '—' }),
+        el('td', { class: 'num', text: numero(c.cliques) }),
+        el('td', { class: 'num', text: numero(c.leads) }),
+        el('td', { class: 'num', text: numero(c.contratos) }),
+        el('td', { class: 'num', text: brl(c.receita) }),
+        el('td', { class: 'num', text: c.cac === null ? '—' : brl(c.cac) }),
+        el(
+          'td',
+          { class: 'num' },
+          c.roi === null
+            ? '—'
+            : el('span', { class: `pill ${c.roi >= 0 ? 'ok' : 'vencido'}`, text: pct(c.roi) })
+        )
+      )
+    );
+  }
+}
+
+function renderizarPalavras(d) {
+  const tbody = $('dash-palavras');
+  tbody.replaceChildren();
+  if (!d.palavrasChave.length) {
+    tbody.append(
+      linhaVazia(4, 'Sem atribuição de palavra-chave ainda. Requer GCLID nos clientes + sincronização do Google Ads.')
+    );
+    return;
+  }
+  for (const p of d.palavrasChave) {
+    tbody.append(
+      el(
+        'tr',
+        {},
+        el('td', { text: p.palavraChave }),
+        el('td', { class: 'num', text: numero(p.leads) }),
+        el('td', { class: 'num', text: numero(p.contratos) }),
+        el('td', { class: 'num', text: brl(p.receita) })
+      )
+    );
+  }
+}
+
+function renderizarSaudeConversoes(d) {
+  const c = d.conversoes;
+  $('dash-conversoes').replaceChildren(
+    el('div', {}, el('b', { text: numero(c.enviadas) }), 'Enviadas ao Google'),
+    el('div', {}, el('b', { text: numero(c.pendentes) }), 'Na fila'),
+    el('div', {}, el('b', { text: numero(c.falhas) }), 'Falharam'),
+    el(
+      'div',
+      {},
+      el('b', { text: d.metricasSincronizadasEm ? '✅' : '—' }),
+      d.metricasSincronizadasEm ? `Custos de ${dataHoraBR(d.metricasSincronizadasEm)}` : 'Custos não sincronizados'
+    )
+  );
+}
+
+async function carregarDashboard() {
+  const dias = Number($('dash-periodo').value);
+  const { ok, resultado } = await comErro(statusDashboard, null, () => window.api.obterDashboard(dias));
+  if (!ok) return;
+
+  renderizarCards(resultado);
+  renderizarFunil(resultado);
+  renderizarCampanhas(resultado);
+  renderizarPalavras(resultado);
+  renderizarSaudeConversoes(resultado);
+  $('dash-aviso-custos').classList.toggle('oculto', resultado.resumo.temDadosDeCusto);
+}
+
+$('dash-periodo').addEventListener('change', carregarDashboard);
+$('btn-atualizar-dashboard').addEventListener('click', carregarDashboard);
+
+$('btn-sincronizar-ads').addEventListener('click', async () => {
+  const dias = Number($('dash-periodo').value);
+  const { ok } = await comErro(statusDashboard, 'Buscando dados no Google Ads...', () =>
+    window.api.sincronizarAds(dias)
+  );
+  if (ok) mostrarStatus(statusDashboard, 'Custos sincronizados com sucesso.');
+  carregarDashboard();
+});
+
+$('btn-reprocessar-conversoes').addEventListener('click', async () => {
+  const { ok, resultado } = await comErro(statusDashboard, 'Reenviando...', () =>
+    window.api.reprocessarConversoes()
+  );
+  if (ok) {
+    mostrarStatus(
+      statusDashboard,
+      `${resultado.enviadas} enviada(s), ${resultado.pendentes} ainda pendente(s), ${resultado.falhas} falha(s).`
+    );
+  }
+  carregarDashboard();
+});
+
+recarregadoresPorAba.dashboard = carregarDashboard;
+
+// ===============================================================
+// PRAZOS
+// ===============================================================
+
+const statusVerificacao = $('status-verificacao');
+let prazosCache = [];
+
+const ROTULO_SITUACAO = {
+  vencido: 'Vencido',
+  hoje: 'Vence hoje',
+  urgente: 'Urgente',
+  atencao: 'Atenção',
+  ok: 'Em dia',
+  concluido: 'Concluído',
+};
+
+function prazosFiltrados() {
+  const busca = $('busca-prazos').value.trim().toLowerCase();
+  const ocultarConcluidos = $('filtro-ocultar-concluidos').checked;
+
+  return prazosCache
+    .filter((p) => !(ocultarConcluidos && p.status === 'Concluido'))
+    .filter((p) => {
+      if (!busca) return true;
+      return [p.processo, p.cliente, p.acao, p.advogadoResponsavel]
+        .filter(Boolean)
+        .some((campo) => String(campo).toLowerCase().includes(busca));
+    })
+    .sort((a, b) => {
+      if (a.status === 'Concluido' && b.status !== 'Concluido') return 1;
+      if (b.status === 'Concluido' && a.status !== 'Concluido') return -1;
+      return new Date(a.dataVencimento) - new Date(b.dataVencimento);
+    });
+}
+
+function renderizarPrazos() {
+  const tbody = $('corpo-tabela-prazos');
+  tbody.replaceChildren();
+  const lista = prazosFiltrados();
+
+  if (!lista.length) {
+    tbody.append(linhaVazia(8, prazosCache.length ? 'Nenhum prazo corresponde ao filtro.' : 'Nenhum prazo cadastrado.'));
+    return;
+  }
+
+  for (const prazo of lista) {
+    const concluido = prazo.status === 'Concluido';
+    const acoes = el('div', { class: 'acoes' });
+
+    acoes.append(el('button', { class: 'secundario', text: 'Editar', onClick: () => abrirEdicaoPrazo(prazo.id) }));
+    acoes.append(
+      concluido
+        ? el('button', { class: 'secundario', text: 'Reabrir', onClick: () => acaoPrazo(() => window.api.reabrirPrazo(prazo.id)) })
+        : el('button', { class: 'sucesso', text: 'Concluir', onClick: () => acaoPrazo(() => window.api.concluirPrazo(prazo.id)) })
+    );
+    acoes.append(
+      el('button', {
+        class: 'perigo',
+        text: 'Excluir',
+        onClick: () => {
+          if (confirm(`Excluir o prazo do processo ${prazo.processo}?`)) {
+            acaoPrazo(() => window.api.excluirPrazo(prazo.id));
+          }
+        },
+      })
+    );
+
+    tbody.append(
+      el(
+        'tr',
+        {},
+        el('td', { text: prazo.processo }),
+        el('td', { text: prazo.cliente || '—' }),
+        el('td', { text: prazo.acao }),
+        el('td', { text: prazo.advogadoResponsavel || '—' }),
+        el('td', { text: dataBR(prazo.dataVencimento) }),
+        el('td', { class: 'num', text: concluido ? '—' : prazo.dias }),
+        el('td', {}, el('span', { class: `pill ${prazo.situacao}`, text: ROTULO_SITUACAO[prazo.situacao] || prazo.situacao })),
+        el('td', {}, acoes)
+      )
+    );
+  }
 }
 
 async function carregarPrazos() {
-  const prazos = await window.api.listarPrazos();
-  prazos.sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento));
-  corpoTabela.innerHTML = '';
-
-  for (const prazo of prazos) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(prazo.processo)}</td>
-      <td>${escapeHtml(prazo.cliente)}</td>
-      <td>${escapeHtml(prazo.acao)}</td>
-      <td>${escapeHtml(prazo.advogadoResponsavel)}</td>
-      <td>${formatarData(prazo.dataVencimento)}</td>
-      <td>${prazo.dias}</td>
-      <td><span class="situacao ${prazo.situacao}">${rotuloSituacao(prazo.situacao)}</span></td>
-      <td class="linha-acoes">
-        <button class="editar" data-id="${prazo.id}">Editar</button>
-        ${prazo.status !== 'Concluido' ? `<button class="concluir" data-id="${prazo.id}">Concluir</button>` : ''}
-        <button class="excluir" data-id="${prazo.id}">Excluir</button>
-      </td>
-    `;
-    corpoTabela.appendChild(tr);
-  }
-
-  corpoTabela.querySelectorAll('.editar').forEach((b) => b.addEventListener('click', () => abrirEdicao(b.dataset.id, prazos)));
-  corpoTabela.querySelectorAll('.concluir').forEach((b) => b.addEventListener('click', async () => {
-    await window.api.concluirPrazo(b.dataset.id);
-    carregarPrazos();
-  }));
-  corpoTabela.querySelectorAll('.excluir').forEach((b) => b.addEventListener('click', async () => {
-    if (confirm('Excluir este prazo?')) {
-      await window.api.excluirPrazo(b.dataset.id);
-      carregarPrazos();
-    }
-  }));
+  prazosCache = await window.api.listarPrazos();
+  renderizarPrazos();
 }
 
-function escapeHtml(texto) {
-  const div = document.createElement('div');
-  div.textContent = texto ?? '';
-  return div.innerHTML;
+async function acaoPrazo(fn) {
+  await comErro(statusVerificacao, null, fn);
+  carregarPrazos();
 }
 
-function formatarData(iso) {
-  const [ano, mes, dia] = iso.split('-');
-  return `${dia}/${mes}/${ano}`;
-}
-
-function abrirModal() {
-  modal.classList.remove('oculto');
-}
-function fecharModal() {
-  modal.classList.add('oculto');
-  formPrazo.reset();
-  document.getElementById('prazo-id').value = '';
-}
-
-document.getElementById('btn-novo-prazo').addEventListener('click', () => {
-  document.getElementById('modal-titulo').textContent = 'Novo Prazo';
-  abrirModal();
+$('busca-prazos').addEventListener('input', renderizarPrazos);
+$('filtro-ocultar-concluidos').addEventListener('change', renderizarPrazos);
+$('btn-atualizar-prazos').addEventListener('click', async () => {
+  await carregarPrazos();
+  mostrarStatus(statusVerificacao, 'Lista atualizada.', false, 2000);
 });
-document.getElementById('btn-cancelar-prazo').addEventListener('click', fecharModal);
 
-function abrirEdicao(id, prazos) {
-  const prazo = prazos.find((p) => p.id === id);
+$('btn-verificar-agora').addEventListener('click', async () => {
+  const { ok, resultado } = await comErro(statusVerificacao, 'Verificando...', () => window.api.verificarAgora());
+  if (ok) {
+    mostrarStatus(
+      statusVerificacao,
+      resultado.length ? `${resultado.length} alerta(s) disparado(s).` : 'Nenhum alerta pendente hoje.'
+    );
+  }
+  carregarPrazos();
+});
+
+// --- modal de prazo ---
+
+const modalPrazo = $('modal-prazo');
+const formPrazo = $('form-prazo');
+
+function preencherSelectClientes() {
+  const select = $('prazo-cliente-id');
+  const atual = select.value;
+  select.replaceChildren(el('option', { value: '', text: '— Sem cliente vinculado —' }));
+  for (const c of clientesCache) {
+    select.append(el('option', { value: c.id, text: c.nome || '(sem nome)' }));
+  }
+  select.value = atual;
+}
+
+function abrirModalPrazo(titulo) {
+  $('modal-titulo').textContent = titulo;
+  preencherSelectClientes();
+  modalPrazo.classList.remove('oculto');
+}
+
+function fecharModalPrazo() {
+  modalPrazo.classList.add('oculto');
+  formPrazo.reset();
+  $('prazo-id').value = '';
+}
+
+$('btn-novo-prazo').addEventListener('click', () => {
+  formPrazo.reset();
+  $('prazo-id').value = '';
+  abrirModalPrazo('Novo Prazo');
+});
+$('btn-cancelar-prazo').addEventListener('click', fecharModalPrazo);
+
+function abrirEdicaoPrazo(id) {
+  const prazo = prazosCache.find((p) => p.id === id);
   if (!prazo) return;
-  document.getElementById('modal-titulo').textContent = 'Editar Prazo';
-  document.getElementById('prazo-id').value = prazo.id;
-  document.getElementById('prazo-processo').value = prazo.processo;
-  document.getElementById('prazo-cliente').value = prazo.cliente;
-  document.getElementById('prazo-acao').value = prazo.acao;
-  document.getElementById('prazo-advogado').value = prazo.advogadoResponsavel;
-  document.getElementById('prazo-data').value = prazo.dataVencimento;
-  abrirModal();
+  $('prazo-id').value = prazo.id;
+  $('prazo-processo').value = prazo.processo || '';
+  $('prazo-acao').value = prazo.acao || '';
+  $('prazo-advogado').value = prazo.advogadoResponsavel || '';
+  $('prazo-data').value = (prazo.dataVencimento || '').slice(0, 10);
+  abrirModalPrazo('Editar Prazo');
+  $('prazo-cliente-id').value = prazo.clienteId || '';
 }
 
 formPrazo.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const id = document.getElementById('prazo-id').value;
+  const id = $('prazo-id').value;
+  const clienteId = $('prazo-cliente-id').value || null;
+  const cliente = clientesCache.find((c) => c.id === clienteId);
+
   const dados = {
-    processo: document.getElementById('prazo-processo').value,
-    cliente: document.getElementById('prazo-cliente').value,
-    acao: document.getElementById('prazo-acao').value,
-    advogadoResponsavel: document.getElementById('prazo-advogado').value,
-    dataVencimento: document.getElementById('prazo-data').value,
+    processo: $('prazo-processo').value.trim(),
+    clienteId,
+    cliente: cliente ? cliente.nome : '',
+    acao: $('prazo-acao').value.trim(),
+    advogadoResponsavel: $('prazo-advogado').value.trim(),
+    dataVencimento: $('prazo-data').value,
   };
 
-  if (id) {
-    await window.api.atualizarPrazo(id, dados);
-  } else {
-    await window.api.adicionarPrazo(dados);
+  const { ok } = await comErro(statusVerificacao, null, () =>
+    id ? window.api.atualizarPrazo(id, dados) : window.api.adicionarPrazo(dados)
+  );
+  if (ok) {
+    fecharModalPrazo();
+    carregarPrazos();
   }
-  fecharModal();
-  carregarPrazos();
 });
 
-document.getElementById('btn-verificar-agora').addEventListener('click', async () => {
-  statusVerificacao.textContent = 'Verificando...';
-  const resultado = await window.api.verificarAgora();
-  statusVerificacao.textContent = resultado.length
-    ? `${resultado.length} alerta(s) processado(s).`
-    : 'Nenhum prazo para alertar hoje.';
-  carregarPrazos();
-});
+recarregadoresPorAba.prazos = carregarPrazos;
 
-document.getElementById('btn-atualizar-prazos').addEventListener('click', carregarPrazos);
+// ===============================================================
+// CLIENTES
+// ===============================================================
 
-async function carregarConfig() {
-  const config = await window.api.obterConfig();
-  document.getElementById('cfg-token').value = config.telegramBotToken || '';
-  document.getElementById('cfg-chatid').value = config.telegramChatId || '';
-  document.getElementById('cfg-horario').value = config.horarioVerificacao || '08:00';
-  document.getElementById('cfg-ativas').checked = config.notificacoesAtivas !== false;
+const statusClientes = $('status-clientes');
+
+function etapaPorId(id) {
+  return ETAPAS.find((e) => e.id === id) || { id, rotulo: id, ordem: 0 };
 }
 
-formConfig.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  await window.api.salvarConfig({
-    telegramBotToken: document.getElementById('cfg-token').value.trim(),
-    telegramChatId: document.getElementById('cfg-chatid').value.trim(),
-    horarioVerificacao: document.getElementById('cfg-horario').value,
-    notificacoesAtivas: document.getElementById('cfg-ativas').checked,
-  });
-  statusConfig.textContent = 'Configurações salvas.';
-  setTimeout(() => (statusConfig.textContent = ''), 3000);
-});
-
-document.getElementById('btn-testar-telegram').addEventListener('click', async () => {
-  statusConfig.textContent = 'Testando...';
-  try {
-    await window.api.testarTelegram({
-      telegramBotToken: document.getElementById('cfg-token').value.trim(),
-      telegramChatId: document.getElementById('cfg-chatid').value.trim(),
-    });
-    statusConfig.textContent = 'Mensagem de teste enviada com sucesso!';
-  } catch (err) {
-    statusConfig.textContent = `Erro: ${err.message}`;
-  }
-});
-
-// ===================== Clientes =====================
-
-const corpoTabelaClientes = document.getElementById('corpo-tabela-clientes');
-const modalCliente = document.getElementById('modal-cliente');
-const formCliente = document.getElementById('form-cliente');
-const statusClientes = document.getElementById('status-clientes');
+function classeDaEtapa(id) {
+  if (id === 'ContratoFechado') return 'ok';
+  if (id === 'Perdido') return 'vencido';
+  if (id === 'Lead') return 'neutro';
+  return 'roxo';
+}
 
 function extrairGclid(valor) {
   const texto = (valor || '').trim();
-  const match = texto.match(/GCLID:\s*([^\s)]+)/i);
-  return match ? match[1] : texto;
+  const m = texto.match(/GCLID[:\s]*([A-Za-z0-9_\-.]+)/i);
+  return m ? m[1] : texto;
 }
 
-function formatarMoedaBRL(valor) {
-  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+function clientesFiltrados() {
+  const busca = $('busca-clientes').value.trim().toLowerCase();
+  const etapa = $('filtro-etapa').value;
+
+  return clientesCache
+    .filter((c) => !etapa || c.etapa === etapa)
+    .filter((c) => {
+      if (!busca) return true;
+      return [c.nome, c.cpf, c.telefone, c.gclid]
+        .filter(Boolean)
+        .some((campo) => String(campo).toLowerCase().includes(busca));
+    })
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
-function rotuloConversao(cliente, ultimaConversao) {
-  if (cliente.status !== 'Contrato Fechado') return { classe: 'pendente', texto: '—' };
-  if (!ultimaConversao) return { classe: 'pendente', texto: 'Não enviada' };
-  return ultimaConversao.sucesso
-    ? { classe: 'enviada', texto: 'Enviada ✅' }
-    : { classe: 'falhou', texto: 'Falhou ❌' };
+function celulaConversao(cliente) {
+  const r = cliente.resumoConversoes || {};
+  if (!cliente.gclid) return el('span', { class: 'pill neutro', text: 'Sem GCLID' });
+  if (r.falhas) return el('span', { class: 'pill falhou', title: r.ultimoErro || '', text: `${r.falhas} falha(s)` });
+  if (r.pendentes) return el('span', { class: 'pill pendente', title: r.ultimoErro || '', text: `${r.pendentes} na fila` });
+  if (r.enviadas) return el('span', { class: 'pill enviada', text: `${r.enviadas} enviada(s)` });
+  return el('span', { class: 'pill neutro', text: '—' });
+}
+
+function proximaEtapaDe(idEtapa) {
+  const atual = etapaPorId(idEtapa);
+  const seguintes = ETAPAS.filter((e) => e.ordem > atual.ordem && e.ordem >= 0).sort((a, b) => a.ordem - b.ordem);
+  return seguintes[0] || null;
+}
+
+function renderizarClientes() {
+  const tbody = $('corpo-tabela-clientes');
+  tbody.replaceChildren();
+  const lista = clientesFiltrados();
+
+  if (!lista.length) {
+    tbody.append(linhaVazia(7, clientesCache.length ? 'Nenhum cliente corresponde ao filtro.' : 'Nenhum cliente cadastrado.'));
+    return;
+  }
+
+  for (const cliente of lista) {
+    const acoes = el('div', { class: 'acoes' });
+    const proxima = proximaEtapaDe(cliente.etapa);
+
+    acoes.append(el('button', { text: 'Ficha', onClick: () => abrirFicha(cliente.id) }));
+    if (proxima) {
+      acoes.append(
+        el('button', {
+          class: 'sucesso',
+          text: `→ ${proxima.rotulo}`,
+          onClick: () => avancarEtapaCliente(cliente, proxima.id),
+        })
+      );
+    }
+    acoes.append(el('button', { class: 'secundario', text: 'Contrato', onClick: () => abrirModalContrato(cliente.id) }));
+    acoes.append(el('button', { class: 'secundario', text: 'Editar', onClick: () => abrirEdicaoCliente(cliente.id) }));
+    acoes.append(
+      el('button', {
+        class: 'perigo',
+        text: 'Excluir',
+        onClick: async () => {
+          if (!confirm(`Excluir ${cliente.nome} e todo o histórico dele?`)) return;
+          await comErro(statusClientes, null, () => window.api.excluirCliente(cliente.id));
+          carregarClientes();
+        },
+      })
+    );
+
+    const etapa = etapaPorId(cliente.etapa);
+    tbody.append(
+      el(
+        'tr',
+        {},
+        el('td', {}, el('b', { text: cliente.nome || '(sem nome)' }), cliente.prazosAbertos
+          ? el('div', { class: 'sub', style: 'font-size:11px;color:#6b7280', text: `${cliente.prazosAbertos} prazo(s) aberto(s)` })
+          : null),
+        el('td', { text: cliente.telefone || '—' }),
+        el('td', { class: 'num', text: brlExato(cliente.valorHonorarios) }),
+        el('td', {}, el('span', { class: `pill ${classeDaEtapa(cliente.etapa)}`, text: etapa.rotulo })),
+        el('td', { text: cliente.gclid ? 'Google Ads' : 'Orgânico/Indicação' }),
+        el('td', {}, celulaConversao(cliente)),
+        el('td', {}, acoes)
+      )
+    );
+  }
 }
 
 async function carregarClientes() {
-  const clientes = await window.api.listarClientes();
-  corpoTabelaClientes.innerHTML = '';
+  clientesCache = await window.api.listarClientes();
+  renderizarClientes();
+}
 
-  for (const cliente of clientes) {
-    const conversoes = await window.api.listarConversoesPorCliente(cliente.id);
-    const ultimaConversao = conversoes.sort((a, b) => new Date(b.enviadoEm) - new Date(a.enviadoEm))[0];
-    const fechado = cliente.status === 'Contrato Fechado';
-    const infoConversao = rotuloConversao(cliente, ultimaConversao);
+async function avancarEtapaCliente(cliente, idEtapa) {
+  const etapa = etapaPorId(idEtapa);
+  if (!confirm(`Mover ${cliente.nome} para "${etapa.rotulo}"?`)) return;
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(cliente.nome)}</td>
-      <td>${escapeHtml(cliente.cpf)}</td>
-      <td>${escapeHtml(cliente.telefone)}</td>
-      <td>${formatarMoedaBRL(cliente.valorHonorarios)}</td>
-      <td>${escapeHtml(cliente.formaPagamento)}</td>
-      <td><span class="pill ${fechado ? 'fechado' : 'lead'}">${fechado ? 'Contrato Fechado' : 'Lead'}</span></td>
-      <td title="${escapeHtml((ultimaConversao && ultimaConversao.erro) || '')}">
-        <span class="pill ${infoConversao.classe}">${infoConversao.texto}</span>
-      </td>
-      <td class="linha-acoes">
-        <button class="gerar-contrato" data-id="${cliente.id}">Gerar Contrato</button>
-        ${
-          fechado
-            ? `<button class="reenviar-conversao" data-id="${cliente.id}">Reenviar Conversão</button>
-               <button class="reabrir" data-id="${cliente.id}">Reabrir</button>`
-            : `<button class="fechar-contrato" data-id="${cliente.id}">Marcar Contrato Fechado</button>`
-        }
-        <button class="editar" data-id="${cliente.id}">Editar</button>
-        <button class="excluir" data-id="${cliente.id}">Excluir</button>
-      </td>
-    `;
-    corpoTabelaClientes.appendChild(tr);
+  const { ok, resultado } = await comErro(statusClientes, 'Atualizando...', () =>
+    window.api.avancarEtapa(cliente.id, idEtapa)
+  );
+  if (ok) {
+    if (resultado.aviso) {
+      mostrarStatus(statusClientes, `Etapa atualizada. Conversão não enviada: ${resultado.aviso}`, true, 8000);
+    } else if (resultado.enviadas) {
+      mostrarStatus(statusClientes, `Etapa atualizada e ${resultado.enviadas} conversão(ões) enviada(s) ao Google Ads.`);
+    } else {
+      mostrarStatus(statusClientes, 'Etapa atualizada.');
+    }
   }
-
-  corpoTabelaClientes.querySelectorAll('.editar').forEach((b) =>
-    b.addEventListener('click', () => abrirEdicaoCliente(b.dataset.id, clientes))
-  );
-  corpoTabelaClientes.querySelectorAll('.excluir').forEach((b) =>
-    b.addEventListener('click', async () => {
-      if (confirm('Excluir este cliente?')) {
-        await window.api.excluirCliente(b.dataset.id);
-        carregarClientes();
-      }
-    })
-  );
-  corpoTabelaClientes.querySelectorAll('.gerar-contrato').forEach((b) =>
-    b.addEventListener('click', () => abrirModalContrato(b.dataset.id, clientes))
-  );
-  corpoTabelaClientes.querySelectorAll('.fechar-contrato').forEach((b) =>
-    b.addEventListener('click', async () => {
-      if (!confirm('Marcar este cliente como Contrato Fechado? Isso tentará enviar a conversão para o Google Ads.')) return;
-      statusClientes.textContent = 'Marcando contrato como fechado...';
-      const resultado = await window.api.fecharContratoCliente(b.dataset.id);
-      statusClientes.textContent = resultado.enviouConversao
-        ? 'Contrato fechado e conversão enviada ao Google Ads com sucesso.'
-        : `Contrato fechado. Conversão não enviada: ${resultado.erro}`;
-      setTimeout(() => (statusClientes.textContent = ''), 5000);
-      carregarClientes();
-    })
-  );
-  corpoTabelaClientes.querySelectorAll('.reenviar-conversao').forEach((b) =>
-    b.addEventListener('click', async () => {
-      statusClientes.textContent = 'Reenviando conversão...';
-      const resultado = await window.api.reenviarConversao(b.dataset.id);
-      statusClientes.textContent = resultado.enviouConversao
-        ? 'Conversão reenviada com sucesso.'
-        : `Falha ao reenviar: ${resultado.erro}`;
-      setTimeout(() => (statusClientes.textContent = ''), 5000);
-      carregarClientes();
-    })
-  );
-  corpoTabelaClientes.querySelectorAll('.reabrir').forEach((b) =>
-    b.addEventListener('click', async () => {
-      if (confirm('Reabrir este cliente como Lead?')) {
-        await window.api.reabrirCliente(b.dataset.id);
-        carregarClientes();
-      }
-    })
-  );
-
-  return clientes;
+  carregarClientes();
 }
 
-function abrirModalCliente() {
-  modalCliente.classList.remove('oculto');
-}
+$('busca-clientes').addEventListener('input', renderizarClientes);
+$('filtro-etapa').addEventListener('change', renderizarClientes);
+$('btn-atualizar-clientes').addEventListener('click', async () => {
+  await carregarClientes();
+  mostrarStatus(statusClientes, 'Lista atualizada.', false, 2000);
+});
+
+// --- modal de cliente ---
+
+const modalCliente = $('modal-cliente');
+const formCliente = $('form-cliente');
+
 function fecharModalCliente() {
   modalCliente.classList.add('oculto');
   formCliente.reset();
-  document.getElementById('cliente-id').value = '';
+  $('cliente-id').value = '';
 }
 
-document.getElementById('btn-novo-cliente').addEventListener('click', () => {
-  document.getElementById('modal-cliente-titulo').textContent = 'Novo Cliente';
-  abrirModalCliente();
+$('btn-novo-cliente').addEventListener('click', () => {
+  formCliente.reset();
+  $('cliente-id').value = '';
+  $('modal-cliente-titulo').textContent = 'Novo Cliente';
+  modalCliente.classList.remove('oculto');
 });
-document.getElementById('btn-cancelar-cliente').addEventListener('click', fecharModalCliente);
-document.getElementById('btn-atualizar-clientes').addEventListener('click', async () => {
-  await carregarClientes();
-  statusClientes.textContent = 'Lista atualizada.';
-  setTimeout(() => (statusClientes.textContent = ''), 2000);
-});
+$('btn-cancelar-cliente').addEventListener('click', fecharModalCliente);
 
-function abrirEdicaoCliente(id, clientes) {
-  const cliente = clientes.find((c) => c.id === id);
-  if (!cliente) return;
-  document.getElementById('modal-cliente-titulo').textContent = 'Editar Cliente';
-  document.getElementById('cliente-id').value = cliente.id;
-  document.getElementById('cliente-nome').value = cliente.nome;
-  document.getElementById('cliente-cpf').value = cliente.cpf;
-  document.getElementById('cliente-telefone').value = cliente.telefone;
-  document.getElementById('cliente-endereco').value = cliente.endereco;
-  document.getElementById('cliente-honorarios').value = cliente.valorHonorarios;
-  document.getElementById('cliente-forma-pagamento').value = cliente.formaPagamento;
-  document.getElementById('cliente-gclid').value = cliente.gclid || '';
-  abrirModalCliente();
+function abrirEdicaoCliente(id) {
+  const c = clientesCache.find((x) => x.id === id);
+  if (!c) return;
+  $('modal-cliente-titulo').textContent = 'Editar Cliente';
+  $('cliente-id').value = c.id;
+  $('cliente-nome').value = c.nome || '';
+  $('cliente-cpf').value = c.cpf || '';
+  $('cliente-telefone').value = c.telefone || '';
+  $('cliente-endereco').value = c.endereco || '';
+  $('cliente-honorarios').value = c.valorHonorarios || '';
+  $('cliente-forma-pagamento').value = c.formaPagamento || '';
+  $('cliente-gclid').value = c.gclid || '';
+  modalCliente.classList.remove('oculto');
 }
 
 formCliente.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const id = document.getElementById('cliente-id').value;
+  const id = $('cliente-id').value;
   const dados = {
-    nome: document.getElementById('cliente-nome').value,
-    cpf: document.getElementById('cliente-cpf').value,
-    telefone: document.getElementById('cliente-telefone').value,
-    endereco: document.getElementById('cliente-endereco').value,
-    valorHonorarios: parseFloat(document.getElementById('cliente-honorarios').value) || 0,
-    formaPagamento: document.getElementById('cliente-forma-pagamento').value,
-    gclid: extrairGclid(document.getElementById('cliente-gclid').value),
+    nome: $('cliente-nome').value.trim(),
+    cpf: $('cliente-cpf').value.trim(),
+    telefone: $('cliente-telefone').value.trim(),
+    endereco: $('cliente-endereco').value.trim(),
+    valorHonorarios: parseFloat($('cliente-honorarios').value) || 0,
+    formaPagamento: $('cliente-forma-pagamento').value.trim(),
+    gclid: extrairGclid($('cliente-gclid').value),
   };
 
-  if (id) {
-    await window.api.atualizarCliente(id, dados);
-  } else {
-    await window.api.adicionarCliente(dados);
+  const { ok } = await comErro(statusClientes, null, () =>
+    id ? window.api.atualizarCliente(id, dados) : window.api.adicionarCliente(dados)
+  );
+  if (ok) {
+    fecharModalCliente();
+    carregarClientes();
   }
-  fecharModalCliente();
-  carregarClientes();
 });
 
-// ===================== Modelos de Contrato =====================
+// --- ficha 360 ---
 
-const corpoTabelaModelos = document.getElementById('corpo-tabela-modelos');
-const statusModelos = document.getElementById('status-modelos');
-
-function formatarDataHora(iso) {
-  return new Date(iso).toLocaleString('pt-BR');
+function itemFicha(rotulo, valor) {
+  return el('div', { class: 'ficha-item' },
+    el('div', { class: 'rotulo', text: rotulo }),
+    el('div', { class: 'valor', text: valor || '—' })
+  );
 }
+
+function secaoFicha(titulo, ...conteudo) {
+  return el('div', { class: 'ficha-secao' }, el('h3', { text: titulo }), ...conteudo);
+}
+
+async function abrirFicha(clienteId) {
+  const { ok, resultado } = await comErro(statusClientes, null, () => window.api.obterFichaCliente(clienteId));
+  if (!ok) return;
+
+  const { cliente, prazos, contratos, conversoes, impedimentoConversao } = resultado;
+  $('ficha-nome').textContent = cliente.nome || '(sem nome)';
+  const corpo = $('ficha-conteudo');
+  corpo.replaceChildren();
+
+  corpo.append(
+    secaoFicha(
+      'Dados',
+      el('div', { class: 'ficha-grid' },
+        itemFicha('CPF', cliente.cpf),
+        itemFicha('Telefone', cliente.telefone),
+        itemFicha('Honorários', brlExato(cliente.valorHonorarios)),
+        itemFicha('Forma de pagamento', cliente.formaPagamento),
+        itemFicha('Etapa', etapaPorId(cliente.etapa).rotulo),
+        itemFicha('Origem', cliente.gclid ? 'Google Ads' : 'Orgânico/Indicação'),
+        itemFicha('GCLID', cliente.gclid),
+        itemFicha('Cadastrado em', dataHoraBR(cliente.createdAt))
+      )
+    )
+  );
+
+  const historico = el('ul', { class: 'lista' });
+  for (const etapa of ETAPAS.filter((e) => e.ordem >= 0).sort((a, b) => a.ordem - b.ordem)) {
+    const quando = (cliente.etapasAtingidas || {})[etapa.id];
+    if (!quando) continue;
+    historico.append(el('li', {}, el('span', { text: etapa.rotulo }), el('span', { text: dataHoraBR(quando) })));
+  }
+  if (historico.childElementCount) corpo.append(secaoFicha('Linha do tempo', historico));
+
+  const listaPrazos = el('ul', { class: 'lista' });
+  if (prazos.length) {
+    for (const p of prazos) {
+      listaPrazos.append(
+        el('li', {},
+          el('span', { text: `${p.processo} — ${p.acao}` }),
+          el('span', {},
+            el('span', { class: `pill ${p.situacao}`, text: ROTULO_SITUACAO[p.situacao] || p.situacao }),
+            ` ${dataBR(p.dataVencimento)}`
+          )
+        )
+      );
+    }
+  } else {
+    listaPrazos.append(el('li', { class: 'nota', text: 'Nenhum prazo vinculado.' }));
+  }
+  corpo.append(secaoFicha(`Prazos (${prazos.length})`, listaPrazos));
+
+  const listaContratos = el('ul', { class: 'lista' });
+  if (contratos.length) {
+    for (const c of contratos.sort((a, b) => new Date(b.geradoEm) - new Date(a.geradoEm))) {
+      listaContratos.append(
+        el('li', {},
+          el('span', { text: `${c.templateNome} — ${dataHoraBR(c.geradoEm)}` }),
+          el('button', { class: 'secundario', text: 'Abrir pasta', onClick: () => window.api.abrirCaminho(c.arquivoDocx) })
+        )
+      );
+    }
+  } else {
+    listaContratos.append(el('li', { class: 'nota', text: 'Nenhum contrato gerado.' }));
+  }
+  corpo.append(secaoFicha(`Contratos (${contratos.length})`, listaContratos));
+
+  const listaConv = el('ul', { class: 'lista' });
+  if (impedimentoConversao) {
+    listaConv.append(el('li', { class: 'nota', text: `⚠️ ${impedimentoConversao}` }));
+  }
+  if (conversoes.length) {
+    for (const c of conversoes) {
+      listaConv.append(
+        el('li', {},
+          el('span', { text: `${etapaPorId(c.etapa).rotulo} · ${brlExato(c.valor)}` }),
+          el('span', { class: `pill ${c.status === 'enviada' ? 'enviada' : c.status === 'falhou' ? 'falhou' : 'pendente'}`,
+            title: c.erro || '', text: c.status })
+        )
+      );
+    }
+  } else if (!impedimentoConversao) {
+    listaConv.append(el('li', { class: 'nota', text: 'Nenhuma conversão enviada ainda.' }));
+  }
+  corpo.append(secaoFicha('Conversões Google Ads', listaConv));
+
+  $('modal-ficha').classList.remove('oculto');
+}
+
+$('btn-fechar-ficha').addEventListener('click', () => $('modal-ficha').classList.add('oculto'));
+
+recarregadoresPorAba.clientes = carregarClientes;
+
+// ===============================================================
+// MODELOS DE CONTRATO
+// ===============================================================
+
+const statusModelos = $('status-modelos');
 
 async function carregarModelos() {
   const templates = await window.api.listarTemplates();
-  corpoTabelaModelos.innerHTML = '';
+  const tbody = $('corpo-tabela-modelos');
+  tbody.replaceChildren();
 
-  for (const template of templates) {
-    const tr = document.createElement('tr');
-    const tagsHtml = (template.tags || []).map((t) => `<span class="tag-pill">${t}</span>`).join('') || '—';
-    tr.innerHTML = `
-      <td>${escapeHtml(template.nome)}</td>
-      <td>${tagsHtml}</td>
-      <td>${formatarDataHora(template.importadoEm)}</td>
-      <td class="linha-acoes">
-        <button class="excluir" data-id="${template.id}">Excluir</button>
-      </td>
-    `;
-    corpoTabelaModelos.appendChild(tr);
+  if (!templates.length) {
+    tbody.append(linhaVazia(4, 'Nenhum modelo importado.'));
+    return templates;
   }
 
-  corpoTabelaModelos.querySelectorAll('.excluir').forEach((b) =>
-    b.addEventListener('click', async () => {
-      if (confirm('Excluir este modelo de contrato?')) {
-        await window.api.excluirTemplate(b.dataset.id);
-        carregarModelos();
-      }
-    })
-  );
+  for (const t of templates) {
+    const tags = el('td', {});
+    if (t.erro) tags.append(el('span', { class: 'pill falhou', text: t.erro }));
+    else if (t.tags && t.tags.length) t.tags.forEach((tag) => tags.append(el('span', { class: 'tag-pill', text: tag })));
+    else tags.append(el('span', { class: 'nota', text: 'Nenhuma tag encontrada' }));
 
+    tbody.append(
+      el('tr', {},
+        el('td', { text: t.nome }),
+        tags,
+        el('td', { text: dataHoraBR(t.importadoEm) }),
+        el('td', {}, el('div', { class: 'acoes' },
+          el('button', {
+            class: 'perigo', text: 'Excluir',
+            onClick: async () => {
+              if (!confirm(`Excluir o modelo "${t.nome}"?`)) return;
+              await comErro(statusModelos, null, () => window.api.excluirTemplate(t.id));
+              carregarModelos();
+            },
+          })
+        ))
+      )
+    );
+  }
   return templates;
 }
 
-document.getElementById('btn-importar-modelo').addEventListener('click', async () => {
-  const template = await window.api.importarTemplate();
-  if (template) {
-    statusModelos.textContent = `Modelo "${template.nome}" importado com sucesso.`;
-    setTimeout(() => (statusModelos.textContent = ''), 3000);
-  }
+$('btn-importar-modelo').addEventListener('click', async () => {
+  const { ok, resultado } = await comErro(statusModelos, null, () => window.api.importarTemplate());
+  if (ok && resultado) mostrarStatus(statusModelos, `Modelo "${resultado.nome}" importado.`);
   carregarModelos();
 });
-document.getElementById('btn-atualizar-modelos').addEventListener('click', async () => {
+$('btn-atualizar-modelos').addEventListener('click', async () => {
   await carregarModelos();
-  statusModelos.textContent = 'Lista atualizada.';
-  setTimeout(() => (statusModelos.textContent = ''), 2000);
+  mostrarStatus(statusModelos, 'Lista atualizada.', false, 2000);
 });
 
-// ===================== Gerar Contrato =====================
+recarregadoresPorAba.modelos = carregarModelos;
 
-const modalContrato = document.getElementById('modal-contrato');
-const selectModelo = document.getElementById('contrato-select-modelo');
-const resultadoContrato = document.getElementById('contrato-resultado');
-const resultadoAcoes = document.getElementById('contrato-resultado-acoes');
-const listaHistorico = document.getElementById('lista-historico-contratos');
+// ===============================================================
+// GERAR CONTRATO
+// ===============================================================
+
+const modalContrato = $('modal-contrato');
+const selectModelo = $('contrato-select-modelo');
+const resultadoContrato = $('contrato-resultado');
+const resultadoAcoes = $('contrato-resultado-acoes');
 
 let clienteAtualContrato = null;
-let ultimoResultadoContrato = null;
+let ultimoContratoGerado = null;
 
-async function abrirModalContrato(clienteId, clientesCache) {
-  const clientes = clientesCache || (await window.api.listarClientes());
-  const cliente = clientes.find((c) => c.id === clienteId);
+async function abrirModalContrato(clienteId) {
+  const cliente = clientesCache.find((c) => c.id === clienteId);
   if (!cliente) return;
 
   clienteAtualContrato = cliente;
-  document.getElementById('contrato-cliente-nome').textContent = cliente.nome;
+  ultimoContratoGerado = null;
+  $('contrato-cliente-nome').textContent = cliente.nome;
   resultadoContrato.classList.add('oculto');
   resultadoAcoes.classList.add('oculto');
-  resultadoContrato.textContent = '';
 
   const templates = await window.api.listarTemplates();
-  selectModelo.innerHTML = templates
-    .map((t) => `<option value="${t.id}">${escapeHtml(t.nome)}</option>`)
-    .join('');
+  selectModelo.replaceChildren();
+  for (const t of templates) selectModelo.append(el('option', { value: t.id, text: t.nome }));
 
   await carregarHistoricoContratos(cliente.id);
   modalContrato.classList.remove('oculto');
@@ -419,27 +872,24 @@ async function abrirModalContrato(clienteId, clientesCache) {
 
 async function carregarHistoricoContratos(clienteId) {
   const historico = await window.api.listarContratosPorCliente(clienteId);
-  listaHistorico.innerHTML = '';
-  if (historico.length === 0) {
-    listaHistorico.innerHTML = '<li>Nenhum contrato gerado ainda.</li>';
+  const lista = $('lista-historico-contratos');
+  lista.replaceChildren();
+
+  if (!historico.length) {
+    lista.append(el('li', { class: 'nota', text: 'Nenhum contrato gerado ainda.' }));
     return;
   }
-  historico
-    .sort((a, b) => new Date(b.geradoEm) - new Date(a.geradoEm))
-    .forEach((registro) => {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <span>${escapeHtml(registro.templateNome)} — ${formatarDataHora(registro.geradoEm)}</span>
-        <button class="abrir-historico" data-caminho="${escapeHtml(registro.arquivoDocx)}">Abrir pasta</button>
-      `;
-      listaHistorico.appendChild(li);
-    });
-  listaHistorico.querySelectorAll('.abrir-historico').forEach((b) =>
-    b.addEventListener('click', () => window.api.abrirCaminho(b.dataset.caminho))
-  );
+  for (const r of historico.sort((a, b) => new Date(b.geradoEm) - new Date(a.geradoEm))) {
+    lista.append(
+      el('li', {},
+        el('span', { text: `${r.templateNome} — ${dataHoraBR(r.geradoEm)}${r.arquivoPdf ? ' (PDF)' : ''}` }),
+        el('button', { class: 'secundario', text: 'Abrir pasta', onClick: () => window.api.abrirCaminho(r.arquivoDocx) })
+      )
+    );
+  }
 }
 
-document.getElementById('btn-gerar-contrato').addEventListener('click', async () => {
+$('btn-gerar-contrato').addEventListener('click', async () => {
   if (!clienteAtualContrato || !selectModelo.value) return;
   resultadoContrato.classList.remove('oculto');
   resultadoContrato.textContent = 'Gerando contrato...';
@@ -447,112 +897,209 @@ document.getElementById('btn-gerar-contrato').addEventListener('click', async ()
 
   try {
     const registro = await window.api.gerarContrato(clienteAtualContrato.id, selectModelo.value);
-    ultimoResultadoContrato = registro;
+    ultimoContratoGerado = registro;
     resultadoContrato.textContent = registro.arquivoPdf
-      ? `Contrato gerado (.docx e .pdf) em: ${registro.arquivoDocx}`
-      : `Contrato gerado (.docx) em: ${registro.arquivoDocx}. PDF não gerado automaticamente — instale o LibreOffice para conversão automática, ou abra o .docx e exporte manualmente.`;
+      ? `Contrato gerado em .docx e .pdf: ${registro.arquivoDocx}`
+      : `Contrato gerado (.docx): ${registro.arquivoDocx}\nPara gerar PDF automaticamente, instale o LibreOffice.`;
     resultadoAcoes.classList.remove('oculto');
     await carregarHistoricoContratos(clienteAtualContrato.id);
-  } catch (err) {
-    resultadoContrato.textContent = `Erro ao gerar contrato: ${err.message}`;
+  } catch (e) {
+    resultadoContrato.textContent = `Erro ao gerar contrato: ${e.message}`;
   }
 });
 
-document.getElementById('btn-abrir-pasta-contrato').addEventListener('click', () => {
-  if (ultimoResultadoContrato) window.api.abrirCaminho(ultimoResultadoContrato.arquivoDocx);
+$('btn-abrir-pasta-contrato').addEventListener('click', () => {
+  if (ultimoContratoGerado) window.api.abrirCaminho(ultimoContratoGerado.arquivoDocx);
 });
 
-document.getElementById('btn-abrir-whatsapp-contrato').addEventListener('click', () => {
+$('btn-abrir-whatsapp-contrato').addEventListener('click', async () => {
   if (!clienteAtualContrato) return;
-  const mensagem = `Olá ${clienteAtualContrato.nome}, segue o contrato de honorários. Qualquer dúvida estou à disposição!`;
-  window.api.abrirWhatsapp(clienteAtualContrato.telefone, mensagem);
+  await comErro(
+    statusClientes,
+    null,
+    () => window.api.abrirWhatsapp(
+      clienteAtualContrato.telefone,
+      `Olá ${clienteAtualContrato.nome}, segue o contrato de honorários. Qualquer dúvida, estou à disposição!`
+    )
+  );
 });
 
-document.getElementById('btn-fechar-contrato').addEventListener('click', () => {
+$('btn-fechar-contrato').addEventListener('click', () => {
   modalContrato.classList.add('oculto');
   clienteAtualContrato = null;
-  ultimoResultadoContrato = null;
+  ultimoContratoGerado = null;
 });
 
-// ===================== Google Ads (Configurações) =====================
+// ===============================================================
+// CONFIGURAÇÕES
+// ===============================================================
 
-const formGoogleAds = document.getElementById('form-google-ads');
-const statusGoogleAds = document.getElementById('status-google-ads');
-const statusConexaoGoogleAds = document.getElementById('ga-status-conexao');
+const statusConfig = $('status-config');
+const statusGoogleAds = $('status-google-ads');
 
-async function carregarConfigGoogleAds() {
-  const config = await window.api.obterConfig();
-  document.getElementById('ga-developer-token').value = config.googleAdsDeveloperToken || '';
-  document.getElementById('ga-client-id').value = config.googleAdsClientId || '';
-  document.getElementById('ga-client-secret').value = config.googleAdsClientSecret || '';
-  document.getElementById('ga-customer-id').value = config.googleAdsCustomerId || '';
-  document.getElementById('ga-conversion-action-id').value = config.googleAdsConversionActionId || '';
-  document.getElementById('ga-nome-conversao').value = config.googleAdsNomeConversao || 'Contrato_Fechado';
-  document.getElementById('ga-moeda').value = config.googleAdsMoeda || 'BRL';
-  statusConexaoGoogleAds.textContent = config.googleAdsRefreshToken ? 'Conectado ✅' : 'Não conectado';
+async function carregarConfig() {
+  const c = await window.api.obterConfig();
+
+  $('cfg-token').value = c.telegramBotToken || '';
+  $('cfg-chatid').value = c.telegramChatId || '';
+  $('cfg-horario').value = c.horarioVerificacao || '08:00';
+  $('cfg-ativas').checked = c.notificacoesAtivas !== false;
+  $('cfg-autostart').checked = c.iniciarComWindows !== false;
+
+  $('ga-developer-token').value = c.googleAdsDeveloperToken || '';
+  $('ga-client-id').value = c.googleAdsClientId || '';
+  $('ga-client-secret').value = c.googleAdsClientSecret || '';
+  $('ga-customer-id').value = c.googleAdsCustomerId || '';
+  $('ga-login-customer-id').value = c.googleAdsLoginCustomerId || '';
+  $('ga-acao-contrato').value = c.googleAdsAcaoContrato || '';
+  $('ga-acao-qualificado').value = c.googleAdsAcaoQualificado || '';
+  $('ga-valor-qualificado').value = c.googleAdsValorQualificado || '';
+  $('ga-acao-reuniao').value = c.googleAdsAcaoReuniao || '';
+  $('ga-valor-reuniao').value = c.googleAdsValorReuniao || '';
+  $('ga-funil-completo').checked = c.googleAdsEnviarFunilCompleto !== false;
+  $('ga-moeda').value = c.googleAdsMoeda || 'BRL';
+  $('ga-api-version').value = c.googleAdsApiVersion || '';
+  $('ga-status-conexao').textContent = c.googleAdsRefreshToken ? 'Conectado ✅' : 'Não conectado';
 }
 
-function dadosFormularioGoogleAds() {
+$('form-config').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { ok } = await comErro(statusConfig, null, () =>
+    window.api.salvarConfig({
+      telegramBotToken: $('cfg-token').value.trim(),
+      telegramChatId: $('cfg-chatid').value.trim(),
+      horarioVerificacao: $('cfg-horario').value,
+      notificacoesAtivas: $('cfg-ativas').checked,
+      iniciarComWindows: $('cfg-autostart').checked,
+    })
+  );
+  if (ok) mostrarStatus(statusConfig, 'Configurações salvas.');
+});
+
+$('btn-testar-telegram').addEventListener('click', async () => {
+  const { ok } = await comErro(statusConfig, 'Testando...', () =>
+    window.api.testarTelegram({
+      telegramBotToken: $('cfg-token').value.trim(),
+      telegramChatId: $('cfg-chatid').value.trim(),
+    })
+  );
+  if (ok) mostrarStatus(statusConfig, 'Mensagem de teste enviada!');
+});
+
+function dadosGoogleAds() {
   return {
-    googleAdsDeveloperToken: document.getElementById('ga-developer-token').value.trim(),
-    googleAdsClientId: document.getElementById('ga-client-id').value.trim(),
-    googleAdsClientSecret: document.getElementById('ga-client-secret').value.trim(),
-    googleAdsCustomerId: document.getElementById('ga-customer-id').value.trim(),
-    googleAdsConversionActionId: document.getElementById('ga-conversion-action-id').value.trim(),
-    googleAdsNomeConversao: document.getElementById('ga-nome-conversao').value.trim(),
-    googleAdsMoeda: document.getElementById('ga-moeda').value.trim() || 'BRL',
+    googleAdsDeveloperToken: $('ga-developer-token').value.trim(),
+    googleAdsClientId: $('ga-client-id').value.trim(),
+    googleAdsClientSecret: $('ga-client-secret').value.trim(),
+    googleAdsCustomerId: $('ga-customer-id').value.trim(),
+    googleAdsLoginCustomerId: $('ga-login-customer-id').value.trim(),
+    googleAdsAcaoContrato: $('ga-acao-contrato').value.trim(),
+    googleAdsAcaoQualificado: $('ga-acao-qualificado').value.trim(),
+    googleAdsValorQualificado: parseFloat($('ga-valor-qualificado').value) || 0,
+    googleAdsAcaoReuniao: $('ga-acao-reuniao').value.trim(),
+    googleAdsValorReuniao: parseFloat($('ga-valor-reuniao').value) || 0,
+    googleAdsEnviarFunilCompleto: $('ga-funil-completo').checked,
+    googleAdsMoeda: $('ga-moeda').value.trim() || 'BRL',
+    googleAdsApiVersion: $('ga-api-version').value.trim(),
   };
 }
 
-formGoogleAds.addEventListener('submit', async (e) => {
+$('form-google-ads').addEventListener('submit', async (e) => {
   e.preventDefault();
-  await window.api.salvarConfig(dadosFormularioGoogleAds());
-  statusGoogleAds.textContent = 'Dados do Google Ads salvos.';
-  setTimeout(() => (statusGoogleAds.textContent = ''), 3000);
+  const { ok } = await comErro(statusGoogleAds, null, () => window.api.salvarConfig(dadosGoogleAds()));
+  if (ok) mostrarStatus(statusGoogleAds, 'Dados do Google Ads salvos.');
 });
 
-document.getElementById('btn-conectar-google').addEventListener('click', async () => {
-  const { googleAdsClientId, googleAdsClientSecret } = dadosFormularioGoogleAds();
-  if (!googleAdsClientId || !googleAdsClientSecret) {
-    statusGoogleAds.textContent = 'Preencha o Client ID e o Client Secret antes de conectar.';
+$('btn-conectar-google').addEventListener('click', async () => {
+  const dados = dadosGoogleAds();
+  if (!dados.googleAdsClientId || !dados.googleAdsClientSecret) {
+    mostrarStatus(statusGoogleAds, 'Preencha o Client ID e o Client Secret antes de conectar.', true);
     return;
   }
-  await window.api.salvarConfig(dadosFormularioGoogleAds());
-  statusGoogleAds.textContent = 'Abrindo o navegador para autorização... conclua o login e volte aqui.';
-  try {
-    await window.api.autorizarGoogleAds(googleAdsClientId, googleAdsClientSecret);
-    statusGoogleAds.textContent = 'Conectado ao Google Ads com sucesso!';
-    await carregarConfigGoogleAds();
-  } catch (err) {
-    statusGoogleAds.textContent = `Erro ao conectar: ${err.message}`;
+  await window.api.salvarConfig(dados);
+  const { ok } = await comErro(statusGoogleAds, 'Abrindo o navegador... autorize e volte para o app.', () =>
+    window.api.autorizarGoogleAds(dados.googleAdsClientId, dados.googleAdsClientSecret)
+  );
+  if (ok) {
+    mostrarStatus(statusGoogleAds, 'Conectado ao Google Ads com sucesso!');
+    carregarConfig();
   }
 });
 
-document.getElementById('btn-testar-google-ads').addEventListener('click', async () => {
-  statusGoogleAds.textContent = 'Testando conexão...';
-  try {
-    await window.api.testarGoogleAds();
-    statusGoogleAds.textContent = 'Conexão com Google Ads funcionando!';
-  } catch (err) {
-    statusGoogleAds.textContent = `Erro: ${err.message}`;
-  }
+$('btn-testar-google-ads').addEventListener('click', async () => {
+  const { ok } = await comErro(statusGoogleAds, 'Testando...', () => window.api.testarGoogleAds());
+  if (ok) mostrarStatus(statusGoogleAds, 'Conexão com Google Ads funcionando!');
 });
 
-document.getElementById('btn-desconectar-google').addEventListener('click', async () => {
+$('btn-desconectar-google').addEventListener('click', async () => {
   if (!confirm('Desconectar a conta do Google Ads?')) return;
-  await window.api.desconectarGoogleAds();
-  await carregarConfigGoogleAds();
-  statusGoogleAds.textContent = 'Desconectado.';
-  setTimeout(() => (statusGoogleAds.textContent = ''), 3000);
+  await comErro(statusGoogleAds, null, () => window.api.desconectarGoogleAds());
+  await carregarConfig();
+  mostrarStatus(statusGoogleAds, 'Desconectado.');
 });
 
-document.getElementById('link-google-cloud-console').addEventListener('click', (e) => {
+$('link-google-cloud').addEventListener('click', (e) => {
   e.preventDefault();
   window.api.abrirExterno('https://console.cloud.google.com/apis/credentials');
 });
 
-carregarPrazos();
-carregarConfig();
-carregarClientes();
-carregarModelos();
-carregarConfigGoogleAds();
+$('btn-exportar-backup').addEventListener('click', async () => {
+  const { ok, resultado } = await comErro(statusConfig, 'Exportando...', () => window.api.exportarBackup());
+  if (ok && resultado) mostrarStatus(statusConfig, `Backup salvo em ${resultado}`, false, 8000);
+});
+
+$('btn-abrir-pasta-dados').addEventListener('click', () => window.api.abrirPastaDados());
+
+async function carregarInfoSistema() {
+  const info = await window.api.infoSistema();
+  $('info-sistema').replaceChildren(
+    el('div', { text: `Versão ${info.versao}` }),
+    el('div', { text: `Pasta de dados: ${info.pastaDados}` }),
+    el('div', {
+      text: info.criptografiaAtiva
+        ? 'Tokens protegidos pelo cofre do sistema ✅'
+        : '⚠️ Cofre do sistema indisponível — os tokens não estão criptografados.',
+    })
+  );
+}
+
+recarregadoresPorAba.config = () => {
+  carregarConfig();
+  carregarInfoSistema();
+};
+
+// ===============================================================
+// Inicialização
+// ===============================================================
+
+// Fecha modais ao clicar fora ou apertar Esc.
+document.querySelectorAll('.modal').forEach((modal) => {
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.add('oculto');
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal').forEach((m) => m.classList.add('oculto'));
+});
+
+async function iniciar() {
+  ETAPAS = await window.api.listarEtapasFunil();
+
+  const filtro = $('filtro-etapa');
+  for (const etapa of ETAPAS) {
+    filtro.append(el('option', { value: etapa.id, text: etapa.rotulo }));
+  }
+
+  await carregarClientes();
+  await carregarPrazos();
+  await carregarModelos();
+  await carregarConfig();
+  await carregarInfoSistema();
+  await carregarDashboard();
+}
+
+iniciar().catch((e) => {
+  document.body.prepend(
+    el('div', { class: 'aviso', text: `Erro ao iniciar o aplicativo: ${e.message}` })
+  );
+});

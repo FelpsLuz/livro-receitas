@@ -1,178 +1,156 @@
 # CRM Jurídico
 
-App desktop (Electron) instalável no Windows/Mac/Linux para escritórios de advocacia.
+App desktop (Windows/Mac/Linux) para escritórios de advocacia: controla prazos processuais, gera
+contratos automaticamente e fecha o ciclo do Google Ads mostrando qual anúncio virou contrato
+assinado.
 
-Módulos:
-- ✅ **Módulo 3 — Alertas de Prazos**
-- ✅ **Módulo 2 — Gerador de Contratos**
-- ✅ **Módulo 1 — CRM + Conversões Offline do Google Ads**
+Todos os dados ficam **no seu computador**. Nenhum servidor externo, nenhuma mensalidade — as
+únicas chamadas para fora são para o Telegram (alertas) e para o Google Ads (conversões), e só se
+você configurar.
 
-## Módulo 3 — Alertas de Prazos
+---
 
-- Cadastro de prazos: processo, cliente, ação, advogado responsável, data de vencimento.
-- Painel colorido por situação: vencido, vence hoje, urgente (≤3 dias), atenção (≤7 dias), em dia.
-- Rotina diária automática (horário configurável, padrão 08:00) que verifica prazos vencendo em
-  **7, 3 e 0 dias** e envia:
-  - Notificação nativa do sistema operacional.
-  - Mensagem no Telegram (via bot próprio, grátis).
-- Botão "Verificar agora" para testar sem esperar o horário agendado.
+## Dashboard de ROI
 
-## Módulo 2 — Gerador de Contratos
+Cruza o que você **gastou** em anúncios (Google Ads API) com o que você **faturou** em contratos
+(CRM), respondendo a pergunta que nenhuma das duas ferramentas responde sozinha:
 
-- Cadastro de clientes: nome, CPF, telefone, endereço, valor dos honorários, forma de pagamento.
-- Modelos de contrato são arquivos `.docx` comuns com tags como `{{NOME_CLIENTE}}`, `{{CPF}}`,
-  `{{ENDERECO}}`, `{{VALOR_HONORARIOS}}`, `{{FORMA_PAGAMENTO}}` e `{{DATA_GERACAO}}` — o app já vem
-  com um modelo padrão de contrato de honorários pronto para uso, e você pode importar seus
-  próprios modelos (aba **Modelos de Contrato**).
-- Botão "Gerar Contrato" no cadastro do cliente: preenche as tags automaticamente e salva o
-  arquivo `.docx` numa pasta própria do cliente (dentro dos dados do app). Se o **LibreOffice**
-  estiver instalado no computador, o app também gera o `.pdf` automaticamente; caso contrário, o
-  `.docx` pode ser aberto/exportado manualmente no Word ou LibreOffice.
-- Histórico de contratos gerados por cliente, com botão para abrir a pasta do arquivo.
-- Botão "Enviar por WhatsApp": abre o WhatsApp Web/Desktop já com uma mensagem pronta para o
-  cliente (o anexo do arquivo precisa ser feito manualmente, pois o WhatsApp não permite anexar
-  arquivos automaticamente via link).
+- Investimento, receita, lucro, **ROI** e **ROAS** no período
+- **CAC** (custo por contrato fechado), ticket médio e taxa de conversão lead → contrato
+- Funil visual: quantos leads viraram qualificados, reuniões e contratos
+- **Desempenho por campanha** e ranking de **palavras-chave por receita gerada** (não por cliques)
+- Saúde do envio de conversões
+
+Sem o Google Ads conectado o painel continua útil, mostrando o lado do CRM.
 
 ## Módulo 1 — CRM + Conversões Offline do Google Ads
 
-Fecha o ciclo: descobre qual clique de anúncio realmente virou contrato assinado, e manda essa
-informação de volta pro Google Ads para ele otimizar as campanhas por resultado real, não só por
-"alguém chamou no WhatsApp".
+**1. Captura do GCLID.** O script em `landing-page/captura-gclid.js` lê o `?gclid=...` da URL,
+guarda no navegador e anexa `GCLID:xxxxx` na mensagem dos links de WhatsApp da página
+(veja `landing-page/exemplo.html`).
 
-**1. Captura do GCLID na Landing Page.** Em `landing-page/captura-gclid.js` há um script pronto:
-inclua-o na sua página (veja `landing-page/exemplo.html`). Ele lê o `?gclid=...` da URL, guarda no
-`localStorage` do navegador, e anexa automaticamente `GCLID:xxxxx` na mensagem dos links de
-WhatsApp da página.
+**2. Registro.** O estagiário cola no campo GCLID do cliente — pode colar a mensagem inteira do
+WhatsApp, o app extrai o código sozinho.
 
-**2. Registro no CRM.** O estagiário atende no WhatsApp, vê o `GCLID:xxxxx` na mensagem recebida e
-cola no campo **GCLID** do cadastro do cliente (aba Clientes) — aceita colar com ou sem o prefixo
-`GCLID:`.
+**3. Funil enviado ao Google.** Ao avançar o cliente de etapa (Lead → Qualificado → Reunião →
+Contrato Fechado), o app envia a conversão correspondente. Enviar o funil inteiro dá **muito mais
+sinal** ao algoritmo do que só o contrato: um escritório fecha poucos contratos por mês, mas gera
+dezenas de leads qualificados — volume suficiente para o Google aprender.
 
-**3. Disparo da conversão offline.** Quando o estagiário clica em **"Marcar Contrato Fechado"** no
-cliente, o app automaticamente:
-- Marca o status do cliente como "Contrato Fechado".
-- Envia para a Google Ads API: o GCLID, o valor do contrato (honorários) e o horário — usando a
-  ação de conversão configurada (ex: `Contrato_Fechado`).
-- Se o envio falhar (sem internet, GCLID errado, credencial expirada), mostra o erro e deixa
-  disponível o botão **"Reenviar Conversão"** para tentar de novo depois.
+O valor do contrato vai junto, então o Google passa a buscar o cliente de R$ 50 mil, não o de R$ 800.
 
-### Como configurar (aba Configurações > Google Ads)
+**Confiabilidade:** o horário da conversão é o momento em que a etapa foi atingida, gravado uma
+única vez. Reenviar é seguro — o Google reconhece como duplicata e ignora, em vez de contar duas
+vezes e inflar seu relatório. Falhas (sem internet, token expirado) entram numa fila que tenta de
+novo sozinha, com espera crescente.
 
-Diferente do Telegram, aqui você precisa de credenciais próprias do Google — não tem como pular
-essa parte, é uma exigência da própria Google Ads API:
+## Módulo 2 — Gerador de Contratos
 
-1. **Developer Token**: na sua conta Google Ads, vá em Ferramentas e Configurações > Configuração
-   > API Center e solicite o token. A aprovação de acesso *Standard* costuma levar alguns dias
-   (o acesso *Test* é liberado na hora, mas só funciona com contas de teste).
-2. **Client ID e Client Secret (OAuth)**: no
-   [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (tem um atalho direto
-   na tela de Configurações do app), crie um projeto, ative a **"Google Ads API"** em
-   "APIs e Serviços > Biblioteca", depois crie uma credencial OAuth do tipo
-   **"Aplicativo para computador" (Desktop app)**.
-3. **Customer ID**: os 10 dígitos que aparecem no canto superior direito da sua conta Google Ads
-   (sem os hífens, ou com — o app aceita os dois formatos).
-4. **ID da Ação de Conversão**: em Google Ads > Metas > Conversões > Nova ação de conversão >
-   Importar > "Outras fontes de dados ou CRM" > "Rastrear conversões a partir de cliques". Depois
-   de criada, o ID numérico aparece nos detalhes/URL dessa ação.
-5. No app, preencha os 5 campos acima e clique em **"Conectar com Google"** — uma aba do navegador
-   abre pedindo login e permissão; depois de autorizar, o app recebe e guarda o token de acesso
-   automaticamente (não precisa copiar nada manualmente, nem usar ferramentas externas tipo OAuth
-   Playground).
-6. Clique em **"Testar conexão"** para confirmar que tudo está certo (essa chamada é somente
-   leitura — não envia nenhum dado de conversão, só verifica o acesso).
+- Modelos são `.docx` comuns com tags: `{{NOME_CLIENTE}}`, `{{CPF}}`, `{{ENDERECO}}`,
+  `{{TELEFONE}}`, `{{VALOR_HONORARIOS}}`, `{{FORMA_PAGAMENTO}}`, `{{DATA_GERACAO}}`.
+- Já vem um modelo de contrato de honorários pronto; você pode importar os seus.
+- Um clique preenche tudo e salva na pasta do cliente. Com o **LibreOffice** instalado, gera o PDF
+  automaticamente.
+- Histórico por cliente e atalho para mandar mensagem pronta no WhatsApp.
 
-Sem essas credenciais preenchidas, o app continua funcionando normalmente para prazos e contratos —
-só não envia a conversão offline (o botão "Marcar Contrato Fechado" ainda marca o status, mas avisa
-que a conversão não foi enviada).
+## Módulo 3 — Alertas de Prazos
 
-Todos os dados (prazos, clientes, modelos, contratos gerados, histórico de conversões) ficam salvos
-localmente no seu computador — nenhuma nuvem/servidor externo é necessária, exceto as chamadas
-diretas à API do Google quando você usa este módulo.
+- Alertas faltando **7, 3, 1 e 0 dias**, e **todo dia** depois de vencido.
+- **Recuperação de alertas perdidos:** se o computador estiver desligado no dia do alerta, ele
+  dispara assim que o app abrir — em vez de se perder para sempre.
+- Notificação do Windows + mensagem no Telegram (bot próprio, gratuito).
+- O app pode iniciar junto com o Windows, para os alertas realmente acontecerem.
 
-## Botões de atualizar (sincronizar dados)
+## Ficha 360 do cliente
 
-Cada aba (Prazos, Clientes, Modelos) tem um botão **🔄 Atualizar**, que recarrega os dados salvos
-em disco (útil se os arquivos de dados forem alterados por fora do app, ou só para conferir que
-tudo foi salvo). Salvar um formulário (Novo Prazo, Novo Cliente, Importar Modelo, etc.) já grava os
-dados imediatamente — o botão Atualizar serve para "puxar" o estado mais recente do disco para a
-tela a qualquer momento.
+Tudo sobre um cliente em uma tela: dados, linha do tempo do funil, prazos vinculados, contratos
+gerados e o status das conversões enviadas ao Google Ads.
 
-## Como rodar em modo desenvolvimento
+---
+
+## Instalação
+
+Baixe o instalador e execute. Como o app não tem certificado de assinatura digital (que é pago), o
+Windows vai mostrar "O Windows protegeu seu PC" — clique em **Mais informações** → **Executar assim
+mesmo**.
+
+## Configuração dos alertas (Telegram, grátis)
+
+1. No Telegram, fale com **@BotFather**, envie `/newbot` e guarde o token.
+2. Mande qualquer mensagem para o bot criado.
+3. Pegue seu **chat_id** com o bot **@userinfobot**.
+4. Em **Configurações**, cole os dois, defina o horário e clique em "Testar conexão".
+
+## Configuração do Google Ads
+
+Essas credenciais são suas e exigidas pela própria Google — não tem como o app pular essa parte:
+
+1. **Developer Token**: conta Google Ads → Ferramentas → Configuração → API Center.
+   A aprovação de acesso *Standard* leva alguns dias.
+2. **Client ID e Secret**: [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   → crie um projeto → ative a "Google Ads API" → credencial OAuth do tipo **Desktop app**.
+3. **Customer ID**: os 10 dígitos no topo da conta Google Ads.
+4. **Ações de conversão**: Google Ads → Metas → Conversões → Nova ação → Importar →
+   "Outras fontes de dados ou CRM" → "Rastrear conversões a partir de cliques".
+   Crie uma por etapa que quiser medir e cole os IDs no app.
+5. Clique em **Conectar com Google** — o navegador abre para você autorizar, e o app guarda o
+   acesso sozinho (não precisa de ferramenta externa).
+6. **Testar conexão** valida tudo sem enviar nenhum dado.
+
+> Se as chamadas passarem a falhar com erro de versão, troque a **Versão da API** em Configurações.
+> O Google descontinua versões antigas a cada ~1 ano, e o campo evita ter que reinstalar o app.
+
+## Segurança e dados
+
+- Tokens do Google Ads e do Telegram são criptografados com o **cofre do sistema operacional**
+  (DPAPI no Windows). A tela de Configurações mostra se a proteção está ativa.
+- Os dados usam **escrita atômica com backup**: uma queda de energia no meio de uma gravação não
+  corrompe nem apaga o arquivo. Se um arquivo for danificado, o app restaura do backup
+  automaticamente e preserva o arquivo problemático para análise.
+- **Exporte um backup** periodicamente (Configurações → Exportar backup) e guarde fora do
+  computador. É o que salva o escritório se o HD falhar. O backup não inclui tokens, por segurança.
+
+---
+
+## Para desenvolvedores
 
 ```bash
-cd crm-juridico
 npm install
-npm start
+npm start          # roda em modo desenvolvimento
+npm test           # 43 testes de lógica (sem abrir o Electron)
+npm run test:app   # teste ponta a ponta operando a interface real
+npm run dist:win   # instalador .exe (precisa de Windows, ou Linux com Wine)
+npm run dist:linux # AppImage
 ```
 
-## Como gerar o instalador
+O repositório inclui um workflow do GitHub Actions que gera os instaladores das três plataformas
+automaticamente (aba Actions → "Build CRM Juridico").
 
-```bash
-npm run dist:win     # gera instalador .exe (Windows) — precisa rodar em Windows ou Linux/Mac com Wine
-npm run dist:linux   # gera .AppImage (Linux)
-npm run dist         # gera para a plataforma atual
-```
-
-O instalador fica em `crm-juridico/dist/`.
-
-> Se você não tem Windows disponível para gerar o `.exe`, o repositório já inclui um workflow do
-> GitHub Actions (`.github/workflows/build-crm-juridico.yml`) que builda automaticamente os
-> instaladores para Windows, Mac e Linux e disponibiliza como artefatos do Actions — sem precisar
-> instalar nada localmente. Basta rodar o workflow manualmente (aba Actions > "Build CRM Juridico
-> (instaladores)" > Run workflow) ou fazer um push na branch principal.
-
-## Como configurar os alertas por Telegram (grátis)
-
-1. No Telegram, converse com **@BotFather** e envie `/newbot`. Siga as instruções e guarde o
-   **token** gerado.
-2. Envie qualquer mensagem para o bot recém-criado (procure pelo nome de usuário dele).
-3. Descubra seu **chat_id**: abra no navegador
-   `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` (substituindo `<SEU_TOKEN>`) e procure o
-   campo `"chat":{"id": ...}` — ou converse com o bot **@userinfobot**.
-4. No app, aba **Configurações**, cole o token e o chat_id, defina o horário e clique em
-   "Testar conexão".
-
-## Como gerar PDF automaticamente (opcional)
-
-Instale o [LibreOffice](https://www.libreoffice.org/download/download/) (gratuito) no computador
-onde o app roda. O gerador de contratos detecta automaticamente o `soffice`/`libreoffice`
-instalado e converte o `.docx` gerado para `.pdf`. Sem o LibreOffice, o app ainda funciona
-normalmente — só não gera o PDF automático.
-
-## Testes
-
-```bash
-npm test
-```
-
-Roda os testes da lógica de prazos/alertas, do gerador de contratos (formatação, slugify,
-substituição de tags, fluxo completo de geração) e do cliente da Google Ads API (com `fetch`
-mockado — não faz nenhuma chamada de rede real nem precisa de credenciais) sem precisar abrir o
-Electron.
-
-Para regenerar o modelo padrão de contrato (caso queira editar `scripts/gerar-modelo-padrao.js`):
-
-```bash
-npm run gerar-modelo-padrao
-```
-
-## Estrutura
+### Estrutura
 
 ```
 crm-juridico/
-  main.js               # processo principal do Electron (janela, IPC, agendamento diário)
-  preload.js             # ponte segura entre main e renderer
+  main.js                  processo principal: janela, IPC, agendamentos, criptografia
+  preload.js               ponte segura entre o main e a interface
   src/
-    store.js              # persistência local em JSON (userData): prazos, clientes, modelos, contratos, conversões
-    prazos.js              # regras de negócio: dias restantes, situação, quais alertas disparar
-    telegram.js             # envio de mensagens via Telegram Bot API
-    docxTemplate.js          # preenchimento de tags {{...}} em .docx e detecção de tags
-    geradorContratos.js       # formatação de dados, geração do contrato e conversão para PDF
-    googleAds.js              # cliente HTTP da Google Ads API (access token, testar conexão, enviar conversão)
-    googleOAuth.js             # fluxo OAuth com servidor local temporário (gera o refresh token)
-  assets/templates/        # modelo padrão de contrato (.docx) incluído no app
-  scripts/                 # script para (re)gerar o modelo padrão
-  landing-page/             # script de captura de GCLID para a landing page (fora do app Electron)
-  renderer/                # interface (HTML/CSS/JS)
-  test/                    # testes automatizados
+    store.js               persistência local com escrita atômica, backup e migrações
+    prazos.js              regras de alerta (limiares, catch-up, vencidos)
+    funil.js               definição das etapas do funil de vendas
+    servicoConversoes.js   fila de conversões: idempotência e retry com backoff
+    googleAds.js           cliente da Google Ads API (conversões + métricas de custo)
+    googleOAuth.js         autorização OAuth via servidor local temporário
+    relatorios.js          cálculos do dashboard (ROI, CAC, funil, atribuição)
+    docxTemplate.js        substituição de tags em .docx
+    geradorContratos.js    geração do contrato e conversão para PDF
+    telegram.js            envio de alertas
+    log.js                 log em arquivo para diagnóstico
+  renderer/                interface (HTML/CSS/JS, sem framework)
+  landing-page/            script de captura de GCLID para o site
+  assets/                  ícone e modelo de contrato padrão
+  test/                    testes de lógica e teste ponta a ponta
 ```
+
+### Onde ficam os dados
+
+Windows: `%APPDATA%\crm-juridico`. Use **Configurações → Abrir pasta de dados** para chegar lá.
+O arquivo `crm-juridico.log` registra o que o app fez, útil para diagnosticar problemas.
