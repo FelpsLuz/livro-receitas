@@ -173,8 +173,22 @@ const modalCliente = document.getElementById('modal-cliente');
 const formCliente = document.getElementById('form-cliente');
 const statusClientes = document.getElementById('status-clientes');
 
+function extrairGclid(valor) {
+  const texto = (valor || '').trim();
+  const match = texto.match(/GCLID:\s*([^\s)]+)/i);
+  return match ? match[1] : texto;
+}
+
 function formatarMoedaBRL(valor) {
   return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function rotuloConversao(cliente, ultimaConversao) {
+  if (cliente.status !== 'Contrato Fechado') return { classe: 'pendente', texto: '—' };
+  if (!ultimaConversao) return { classe: 'pendente', texto: 'Não enviada' };
+  return ultimaConversao.sucesso
+    ? { classe: 'enviada', texto: 'Enviada ✅' }
+    : { classe: 'falhou', texto: 'Falhou ❌' };
 }
 
 async function carregarClientes() {
@@ -182,6 +196,11 @@ async function carregarClientes() {
   corpoTabelaClientes.innerHTML = '';
 
   for (const cliente of clientes) {
+    const conversoes = await window.api.listarConversoesPorCliente(cliente.id);
+    const ultimaConversao = conversoes.sort((a, b) => new Date(b.enviadoEm) - new Date(a.enviadoEm))[0];
+    const fechado = cliente.status === 'Contrato Fechado';
+    const infoConversao = rotuloConversao(cliente, ultimaConversao);
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(cliente.nome)}</td>
@@ -189,8 +208,18 @@ async function carregarClientes() {
       <td>${escapeHtml(cliente.telefone)}</td>
       <td>${formatarMoedaBRL(cliente.valorHonorarios)}</td>
       <td>${escapeHtml(cliente.formaPagamento)}</td>
+      <td><span class="pill ${fechado ? 'fechado' : 'lead'}">${fechado ? 'Contrato Fechado' : 'Lead'}</span></td>
+      <td title="${escapeHtml((ultimaConversao && ultimaConversao.erro) || '')}">
+        <span class="pill ${infoConversao.classe}">${infoConversao.texto}</span>
+      </td>
       <td class="linha-acoes">
         <button class="gerar-contrato" data-id="${cliente.id}">Gerar Contrato</button>
+        ${
+          fechado
+            ? `<button class="reenviar-conversao" data-id="${cliente.id}">Reenviar Conversão</button>
+               <button class="reabrir" data-id="${cliente.id}">Reabrir</button>`
+            : `<button class="fechar-contrato" data-id="${cliente.id}">Marcar Contrato Fechado</button>`
+        }
         <button class="editar" data-id="${cliente.id}">Editar</button>
         <button class="excluir" data-id="${cliente.id}">Excluir</button>
       </td>
@@ -211,6 +240,37 @@ async function carregarClientes() {
   );
   corpoTabelaClientes.querySelectorAll('.gerar-contrato').forEach((b) =>
     b.addEventListener('click', () => abrirModalContrato(b.dataset.id, clientes))
+  );
+  corpoTabelaClientes.querySelectorAll('.fechar-contrato').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!confirm('Marcar este cliente como Contrato Fechado? Isso tentará enviar a conversão para o Google Ads.')) return;
+      statusClientes.textContent = 'Marcando contrato como fechado...';
+      const resultado = await window.api.fecharContratoCliente(b.dataset.id);
+      statusClientes.textContent = resultado.enviouConversao
+        ? 'Contrato fechado e conversão enviada ao Google Ads com sucesso.'
+        : `Contrato fechado. Conversão não enviada: ${resultado.erro}`;
+      setTimeout(() => (statusClientes.textContent = ''), 5000);
+      carregarClientes();
+    })
+  );
+  corpoTabelaClientes.querySelectorAll('.reenviar-conversao').forEach((b) =>
+    b.addEventListener('click', async () => {
+      statusClientes.textContent = 'Reenviando conversão...';
+      const resultado = await window.api.reenviarConversao(b.dataset.id);
+      statusClientes.textContent = resultado.enviouConversao
+        ? 'Conversão reenviada com sucesso.'
+        : `Falha ao reenviar: ${resultado.erro}`;
+      setTimeout(() => (statusClientes.textContent = ''), 5000);
+      carregarClientes();
+    })
+  );
+  corpoTabelaClientes.querySelectorAll('.reabrir').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (confirm('Reabrir este cliente como Lead?')) {
+        await window.api.reabrirCliente(b.dataset.id);
+        carregarClientes();
+      }
+    })
   );
 
   return clientes;
@@ -247,6 +307,7 @@ function abrirEdicaoCliente(id, clientes) {
   document.getElementById('cliente-endereco').value = cliente.endereco;
   document.getElementById('cliente-honorarios').value = cliente.valorHonorarios;
   document.getElementById('cliente-forma-pagamento').value = cliente.formaPagamento;
+  document.getElementById('cliente-gclid').value = cliente.gclid || '';
   abrirModalCliente();
 }
 
@@ -260,6 +321,7 @@ formCliente.addEventListener('submit', async (e) => {
     endereco: document.getElementById('cliente-endereco').value,
     valorHonorarios: parseFloat(document.getElementById('cliente-honorarios').value) || 0,
     formaPagamento: document.getElementById('cliente-forma-pagamento').value,
+    gclid: extrairGclid(document.getElementById('cliente-gclid').value),
   };
 
   if (id) {
@@ -412,7 +474,85 @@ document.getElementById('btn-fechar-contrato').addEventListener('click', () => {
   ultimoResultadoContrato = null;
 });
 
+// ===================== Google Ads (Configurações) =====================
+
+const formGoogleAds = document.getElementById('form-google-ads');
+const statusGoogleAds = document.getElementById('status-google-ads');
+const statusConexaoGoogleAds = document.getElementById('ga-status-conexao');
+
+async function carregarConfigGoogleAds() {
+  const config = await window.api.obterConfig();
+  document.getElementById('ga-developer-token').value = config.googleAdsDeveloperToken || '';
+  document.getElementById('ga-client-id').value = config.googleAdsClientId || '';
+  document.getElementById('ga-client-secret').value = config.googleAdsClientSecret || '';
+  document.getElementById('ga-customer-id').value = config.googleAdsCustomerId || '';
+  document.getElementById('ga-conversion-action-id').value = config.googleAdsConversionActionId || '';
+  document.getElementById('ga-nome-conversao').value = config.googleAdsNomeConversao || 'Contrato_Fechado';
+  document.getElementById('ga-moeda').value = config.googleAdsMoeda || 'BRL';
+  statusConexaoGoogleAds.textContent = config.googleAdsRefreshToken ? 'Conectado ✅' : 'Não conectado';
+}
+
+function dadosFormularioGoogleAds() {
+  return {
+    googleAdsDeveloperToken: document.getElementById('ga-developer-token').value.trim(),
+    googleAdsClientId: document.getElementById('ga-client-id').value.trim(),
+    googleAdsClientSecret: document.getElementById('ga-client-secret').value.trim(),
+    googleAdsCustomerId: document.getElementById('ga-customer-id').value.trim(),
+    googleAdsConversionActionId: document.getElementById('ga-conversion-action-id').value.trim(),
+    googleAdsNomeConversao: document.getElementById('ga-nome-conversao').value.trim(),
+    googleAdsMoeda: document.getElementById('ga-moeda').value.trim() || 'BRL',
+  };
+}
+
+formGoogleAds.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await window.api.salvarConfig(dadosFormularioGoogleAds());
+  statusGoogleAds.textContent = 'Dados do Google Ads salvos.';
+  setTimeout(() => (statusGoogleAds.textContent = ''), 3000);
+});
+
+document.getElementById('btn-conectar-google').addEventListener('click', async () => {
+  const { googleAdsClientId, googleAdsClientSecret } = dadosFormularioGoogleAds();
+  if (!googleAdsClientId || !googleAdsClientSecret) {
+    statusGoogleAds.textContent = 'Preencha o Client ID e o Client Secret antes de conectar.';
+    return;
+  }
+  await window.api.salvarConfig(dadosFormularioGoogleAds());
+  statusGoogleAds.textContent = 'Abrindo o navegador para autorização... conclua o login e volte aqui.';
+  try {
+    await window.api.autorizarGoogleAds(googleAdsClientId, googleAdsClientSecret);
+    statusGoogleAds.textContent = 'Conectado ao Google Ads com sucesso!';
+    await carregarConfigGoogleAds();
+  } catch (err) {
+    statusGoogleAds.textContent = `Erro ao conectar: ${err.message}`;
+  }
+});
+
+document.getElementById('btn-testar-google-ads').addEventListener('click', async () => {
+  statusGoogleAds.textContent = 'Testando conexão...';
+  try {
+    await window.api.testarGoogleAds();
+    statusGoogleAds.textContent = 'Conexão com Google Ads funcionando!';
+  } catch (err) {
+    statusGoogleAds.textContent = `Erro: ${err.message}`;
+  }
+});
+
+document.getElementById('btn-desconectar-google').addEventListener('click', async () => {
+  if (!confirm('Desconectar a conta do Google Ads?')) return;
+  await window.api.desconectarGoogleAds();
+  await carregarConfigGoogleAds();
+  statusGoogleAds.textContent = 'Desconectado.';
+  setTimeout(() => (statusGoogleAds.textContent = ''), 3000);
+});
+
+document.getElementById('link-google-cloud-console').addEventListener('click', (e) => {
+  e.preventDefault();
+  window.api.abrirExterno('https://console.cloud.google.com/apis/credentials');
+});
+
 carregarPrazos();
 carregarConfig();
 carregarClientes();
 carregarModelos();
+carregarConfigGoogleAds();

@@ -1,14 +1,14 @@
 {
   "name": "crm-juridico",
   "version": "0.1.0",
-  "description": "CRM juridico local - Alertas de Prazos e Gerador de Contratos (Google Ads planejado)",
+  "description": "CRM juridico local - Alertas de Prazos, Gerador de Contratos e Conversões Offline do Google Ads",
   "main": "main.js",
   "author": "",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/scheduler.test.js && node test/contratos.test.js",
+    "test": "node test/scheduler.test.js && node test/contratos.test.js && node test/googleAds.test.js",
     "gerar-modelo-padrao": "node scripts/gerar-modelo-padrao.js",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",

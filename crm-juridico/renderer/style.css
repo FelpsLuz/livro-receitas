@@ -86,4 +86,11 @@ input[type=text], input[type=date], input[type=time], input[type=number], select
   border-radius: 10px; padding: 2px 8px; font-size: 11px; margin: 2px;
 }
 
+.pill { padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.pill.lead { background: #e2e2e2; color: #555; }
+.pill.fechado { background: #dff5e1; color: #1e7a34; }
+.pill.enviada { background: #dff5e1; color: #1e7a34; }
+.pill.falhou { background: #ffe0e0; color: #b3261e; }
+.pill.pendente { background: #e2e2e2; color: #555; }
+
 #status-config, #status-verificacao, #status-clientes, #status-modelos { font-size: 13px; color: #1e7a34; }

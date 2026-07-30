@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('api', {
   adicionarCliente: (cliente) => ipcRenderer.invoke('clientes:adicionar', cliente),
   atualizarCliente: (id, changes) => ipcRenderer.invoke('clientes:atualizar', { id, changes }),
   excluirCliente: (id) => ipcRenderer.invoke('clientes:excluir', id),
+  fecharContratoCliente: (id) => ipcRenderer.invoke('clientes:fecharContrato', id),
+  reabrirCliente: (id) => ipcRenderer.invoke('clientes:reabrir', id),
+  reenviarConversao: (id) => ipcRenderer.invoke('clientes:reenviarConversao', id),
+  listarConversoesPorCliente: (id) => ipcRenderer.invoke('clientes:listarConversoes', id),
 
   listarTemplates: () => ipcRenderer.invoke('templates:listar'),
   importarTemplate: () => ipcRenderer.invoke('templates:importar'),
@@ -26,6 +30,12 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('contratos:listarPorCliente', clienteId),
 
   abrirCaminho: (caminho) => ipcRenderer.invoke('sistema:abrirCaminho', caminho),
+  abrirExterno: (url) => ipcRenderer.invoke('sistema:abrirExterno', url),
   abrirWhatsapp: (telefone, mensagem) =>
     ipcRenderer.invoke('sistema:abrirWhatsapp', { telefone, mensagem }),
+
+  autorizarGoogleAds: (clientId, clientSecret) =>
+    ipcRenderer.invoke('config:autorizarGoogleAds', { clientId, clientSecret }),
+  desconectarGoogleAds: () => ipcRenderer.invoke('config:desconectarGoogleAds'),
+  testarGoogleAds: () => ipcRenderer.invoke('config:testarGoogleAds'),
 });

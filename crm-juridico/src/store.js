@@ -10,12 +10,21 @@ function makeStore(userDataPath) {
   const contratosFile = path.join(userDataPath, 'contratos.json');
   const templatesDir = path.join(userDataPath, 'templates');
   const contratosDir = path.join(userDataPath, 'contratos');
+  const conversoesFile = path.join(userDataPath, 'conversoes.json');
 
   const defaultConfig = {
     telegramBotToken: '',
     telegramChatId: '',
     horarioVerificacao: '08:00',
     notificacoesAtivas: true,
+    googleAdsDeveloperToken: '',
+    googleAdsClientId: '',
+    googleAdsClientSecret: '',
+    googleAdsRefreshToken: '',
+    googleAdsCustomerId: '',
+    googleAdsConversionActionId: '',
+    googleAdsNomeConversao: 'Contrato_Fechado',
+    googleAdsMoeda: 'BRL',
   };
 
   function readJson(file, fallback) {
@@ -100,6 +109,9 @@ function makeStore(userDataPath) {
       telefone: '',
       valorHonorarios: 0,
       formaPagamento: '',
+      gclid: '',
+      status: 'Lead',
+      fechadoEm: null,
       createdAt: new Date().toISOString(),
       ...cliente,
     };
@@ -183,6 +195,24 @@ function makeStore(userDataPath) {
     return listContratos().filter((c) => c.clienteId === clienteId);
   }
 
+  // ----- Conversões offline (Google Ads) -----
+
+  function listConversoes() {
+    return readJson(conversoesFile, []);
+  }
+
+  function addConversaoHistorico(registro) {
+    const conversoes = listConversoes();
+    const novo = { id: crypto.randomUUID(), ...registro };
+    conversoes.push(novo);
+    writeJson(conversoesFile, conversoes);
+    return novo;
+  }
+
+  function listConversoesPorCliente(clienteId) {
+    return listConversoes().filter((c) => c.clienteId === clienteId);
+  }
+
   return {
     listPrazos,
     savePrazos,
@@ -202,6 +232,9 @@ function makeStore(userDataPath) {
     listContratos,
     addContratoHistorico,
     listContratosPorCliente,
+    listConversoes,
+    addConversaoHistorico,
+    listConversoesPorCliente,
     templatesDir,
     contratosDir,
   };

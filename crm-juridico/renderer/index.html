@@ -56,6 +56,8 @@
           <th>Telefone</th>
           <th>Honorários</th>
           <th>Forma de Pagamento</th>
+          <th>Status</th>
+          <th>Conversão Ads</th>
           <th>Ações</th>
         </tr>
       </thead>
@@ -118,6 +120,52 @@
       </div>
       <span id="status-config"></span>
     </form>
+
+    <h2>Google Ads — Conversões Offline</h2>
+    <p class="ajuda">
+      1. Peça o <b>Developer Token</b> no Google Ads API Center da sua conta Google Ads (Ferramentas
+      &gt; Configuração &gt; API Center). A aprovação pode levar alguns dias.<br />
+      2. No <a href="#" id="link-google-cloud-console">Google Cloud Console</a>, crie um projeto, ative a
+      "Google Ads API" e crie uma credencial OAuth do tipo <b>Aplicativo para computador (Desktop
+      app)</b> — isso te dá o Client ID e o Client Secret.<br />
+      3. Pegue o <b>Customer ID</b> (10 dígitos, sem hífen) no canto superior da sua conta Google Ads.<br />
+      4. Crie a conversão em Google Ads &gt; Metas &gt; Conversões &gt; Nova ação de conversão &gt;
+      Importar &gt; "Outras fontes de dados ou CRM" &gt; "Rastrear conversões a partir de cliques" e
+      pegue o <b>ID da ação de conversão</b> (aparece na URL/detalhes da conversão criada).<br />
+      5. Preencha os campos abaixo e clique em <b>Conectar com Google</b> — uma aba do navegador vai
+      abrir para você autorizar o acesso; volte para o app depois de autorizar.
+    </p>
+    <form id="form-google-ads">
+      <label>Developer Token
+        <input type="text" id="ga-developer-token" />
+      </label>
+      <label>Client ID (OAuth)
+        <input type="text" id="ga-client-id" />
+      </label>
+      <label>Client Secret (OAuth)
+        <input type="text" id="ga-client-secret" />
+      </label>
+      <label>Customer ID
+        <input type="text" id="ga-customer-id" placeholder="1234567890" />
+      </label>
+      <label>ID da Ação de Conversão
+        <input type="text" id="ga-conversion-action-id" />
+      </label>
+      <label>Nome da conversão (rótulo interno)
+        <input type="text" id="ga-nome-conversao" placeholder="Contrato_Fechado" />
+      </label>
+      <label>Moeda
+        <input type="text" id="ga-moeda" placeholder="BRL" />
+      </label>
+      <p>Status da conexão: <b id="ga-status-conexao">Não conectado</b></p>
+      <div class="botoes">
+        <button type="submit">Salvar dados</button>
+        <button type="button" id="btn-conectar-google">Conectar com Google</button>
+        <button type="button" id="btn-testar-google-ads" class="btn-secundario">Testar conexão</button>
+        <button type="button" id="btn-desconectar-google" class="btn-secundario">Desconectar</button>
+      </div>
+      <span id="status-google-ads"></span>
+    </form>
   </main>
 
   <div id="modal-prazo" class="modal oculto">
@@ -170,6 +218,9 @@
         </label>
         <label>Forma de pagamento
           <input type="text" id="cliente-forma-pagamento" placeholder="Ex: à vista, 3x no cartão" />
+        </label>
+        <label>GCLID (Google Click ID)
+          <input type="text" id="cliente-gclid" placeholder="Colado da mensagem do WhatsApp, ex: GCLID:abc123" />
         </label>
         <div class="botoes">
           <button type="submit">Salvar</button>

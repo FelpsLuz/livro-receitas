@@ -7,6 +7,8 @@ const { prazosParaAlertar, formatarMensagem, situacao, diasRestantes } = require
 const { enviarMensagemTelegram, testarConexaoTelegram } = require('./src/telegram');
 const { detectarTags } = require('./src/docxTemplate');
 const { gerarContrato } = require('./src/geradorContratos');
+const { testarConexaoGoogleAds, enviarConversaoOffline } = require('./src/googleAds');
+const { autorizarGoogleAds } = require('./src/googleOAuth');
 
 let mainWindow;
 let store;
@@ -147,6 +149,67 @@ ipcMain.handle('clientes:excluir', (_event, id) => {
   return true;
 });
 
+async function tentarEnviarConversao(cliente) {
+  const config = store.getConfig();
+
+  if (!cliente.gclid) {
+    return { enviouConversao: false, erro: 'Cliente nao possui GCLID cadastrado.' };
+  }
+  if (!config.googleAdsRefreshToken || !config.googleAdsCustomerId || !config.googleAdsConversionActionId) {
+    return { enviouConversao: false, erro: 'Configuração do Google Ads incompleta (veja a aba Configurações).' };
+  }
+
+  try {
+    await enviarConversaoOffline(config, {
+      gclid: cliente.gclid,
+      valor: cliente.valorHonorarios,
+      dataHora: new Date(),
+    });
+    store.addConversaoHistorico({
+      clienteId: cliente.id,
+      gclid: cliente.gclid,
+      valor: cliente.valorHonorarios,
+      enviadoEm: new Date().toISOString(),
+      sucesso: true,
+      erro: null,
+    });
+    return { enviouConversao: true, erro: null };
+  } catch (e) {
+    store.addConversaoHistorico({
+      clienteId: cliente.id,
+      gclid: cliente.gclid,
+      valor: cliente.valorHonorarios,
+      enviadoEm: new Date().toISOString(),
+      sucesso: false,
+      erro: e.message,
+    });
+    return { enviouConversao: false, erro: e.message };
+  }
+}
+
+ipcMain.handle('clientes:fecharContrato', async (_event, id) => {
+  const cliente = store.updateCliente(id, {
+    status: 'Contrato Fechado',
+    fechadoEm: new Date().toISOString(),
+  });
+  const resultado = await tentarEnviarConversao(cliente);
+  return { cliente, ...resultado };
+});
+
+ipcMain.handle('clientes:reabrir', (_event, id) =>
+  store.updateCliente(id, { status: 'Lead', fechadoEm: null })
+);
+
+ipcMain.handle('clientes:reenviarConversao', async (_event, id) => {
+  const cliente = store.listClientes().find((c) => c.id === id);
+  if (!cliente) throw new Error('Cliente nao encontrado');
+  return tentarEnviarConversao(cliente);
+});
+
+ipcMain.handle('clientes:listarConversoes', (_event, clienteId) =>
+  store.listConversoesPorCliente(clienteId)
+);
+
 // ----- Modelos de contrato -----
 
 ipcMain.handle('templates:listar', () => {
@@ -208,9 +271,38 @@ ipcMain.handle('sistema:abrirCaminho', (_event, caminho) => {
   return true;
 });
 
+ipcMain.handle('sistema:abrirExterno', (_event, url) => {
+  shell.openExternal(url);
+  return true;
+});
+
 ipcMain.handle('sistema:abrirWhatsapp', (_event, { telefone, mensagem }) => {
   const numero = (telefone || '').replace(/\D/g, '');
   const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem || '')}`;
   shell.openExternal(url);
+  return true;
+});
+
+// ----- Google Ads (conversões offline) -----
+
+ipcMain.handle('config:autorizarGoogleAds', async (_event, { clientId, clientSecret }) => {
+  const { refreshToken } = await autorizarGoogleAds({
+    clientId,
+    clientSecret,
+    abrirNavegador: (url) => shell.openExternal(url),
+  });
+  return store.saveConfig({
+    googleAdsClientId: clientId,
+    googleAdsClientSecret: clientSecret,
+    googleAdsRefreshToken: refreshToken,
+  });
+});
+
+ipcMain.handle('config:desconectarGoogleAds', () =>
+  store.saveConfig({ googleAdsRefreshToken: '' })
+);
+
+ipcMain.handle('config:testarGoogleAds', async () => {
+  await testarConexaoGoogleAds(store.getConfig());
   return true;
 });
