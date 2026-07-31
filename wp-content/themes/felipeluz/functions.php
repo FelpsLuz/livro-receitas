@@ -140,12 +140,163 @@ function fl_botao_whatsapp() {
 		return;
 	}
 	printf(
-		'<a class="fl-zap" href="%s" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
+		'<a class="fl-zap" href="%s" target="_blank" rel="noopener" aria-label="Falar no WhatsApp"
+			data-fl-evento="contato_whatsapp" data-fl-local="flutuante">
 			<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.25-8.23a8.23 8.23 0 0 1 0 16.47zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.78.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.12-.15.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42h-.47c-.16 0-.43.06-.65.31-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.12.16 1.73 2.65 4.2 3.71.59.25 1.04.4 1.4.52.59.19 1.12.16 1.54.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
 		</a>',
 		esc_url( $link )
 	);
 }
+
+/**
+ * Ícones inline. SVG no HTML não custa requisição nem bloqueia render —
+ * fonte de ícone para três desenhos seria desperdício puro.
+ */
+function fl_icone( $nome ) {
+	$caminhos = array(
+		'quarto' => '<path d="M3 18v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5M3 18v2M21 18v2M3 13V8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5M7 11V9h4v2M13 11V9h4v2"/>',
+		'vaga'   => '<path d="M5 17h14M6.5 17v2M17.5 17v2M4 13l1.5-5A2 2 0 0 1 7.4 6.5h9.2A2 2 0 0 1 18.5 8L20 13M4 13h16v4H4zM7 15h.01M17 15h.01"/>',
+		'area'   => '<path d="M4 4h16v16H4zM4 9h5M4 15h5M15 4v5M15 15v5"/>',
+	);
+
+	if ( ! isset( $caminhos[ $nome ] ) ) {
+		return;
+	}
+
+	printf(
+		'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">%s</svg>',
+		$caminhos[ $nome ] // phpcs:ignore WordPress.Security.EscapeOutput
+	);
+}
+
+/**
+ * Migalhas visíveis. O JSON-LD correspondente sai do plugin.
+ */
+function fl_render_migalhas( $post_id = null ) {
+	$migalhas = fl_migalhas( $post_id );
+	$ultimo   = count( $migalhas ) - 1;
+
+	echo '<nav class="fl-trilha" aria-label="Você está em"><ol>';
+	foreach ( $migalhas as $posicao => $migalha ) {
+		echo '<li>';
+		if ( $posicao === $ultimo ) {
+			printf( '<span aria-current="page">%s</span>', esc_html( $migalha[0] ) );
+		} else {
+			printf( '<a href="%s">%s</a>', esc_url( $migalha[1] ), esc_html( $migalha[0] ) );
+		}
+		echo '</li>';
+	}
+	echo '</ol></nav>';
+}
+
+/**
+ * Imagem do topo da home. Precisa ser o LCP e precisa carregar primeiro:
+ * eager, fetchpriority alto, dimensões declaradas para não haver CLS.
+ * Sem carrossel — carrossel mata LCP e ninguém desliza.
+ */
+function fl_imagem_hero() {
+	$id = fl_id_retrato();
+
+	if ( ! $id ) {
+		/**
+		 * Sem retrato configurado, usa a capa do imóvel mais recente.
+		 * get_posts em vez de the_post(): mexer no post global no meio
+		 * do template é como se perde o loop da página.
+		 */
+		$recentes = get_posts(
+			array(
+				'post_type'      => 'imovel',
+				'post_status'    => 'publish',
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'meta_key'       => '_thumbnail_id',
+			)
+		);
+		if ( $recentes ) {
+			$id = get_post_thumbnail_id( $recentes[0] );
+		}
+	}
+
+	if ( ! $id ) {
+		return;
+	}
+
+	echo wp_get_attachment_image( // phpcs:ignore WordPress.Security.EscapeOutput
+		$id,
+		'fl-capa',
+		false,
+		array(
+			'class'         => 'fl-hero__imagem',
+			'alt'           => sprintf( '%s, %s em %s', fl_config( 'nome' ), strtolower( fl_config( 'papel' ) ), fl_config( 'cidade' ) ),
+			'loading'       => 'eager',
+			'fetchpriority' => 'high',
+			'decoding'      => 'sync',
+			'sizes'         => '(max-width: 900px) 100vw, 520px',
+		)
+	);
+}
+
+/**
+ * Pré-carrega a imagem do topo — encurta o caminho até o LCP.
+ */
+add_action( 'wp_head', function () {
+	if ( ! is_front_page() ) {
+		return;
+	}
+	$id = fl_id_retrato();
+	if ( ! $id ) {
+		return;
+	}
+	$src = wp_get_attachment_image_src( $id, 'fl-capa' );
+	if ( ! $src ) {
+		return;
+	}
+	printf(
+		'<link rel="preload" as="image" href="%s" fetchpriority="high">' . "\n",
+		esc_url( $src[0] )
+	);
+}, 3 );
+
+/**
+ * Eventos para o GA4. Sem biblioteca: empurra no dataLayer, e quem
+ * estiver escutando (GA4 via gtag ou GTM) recebe.
+ *
+ * A conversão que importa é lead_captacao — origem "quero-vender".
+ */
+add_action( 'wp_footer', function () {
+
+	$sucesso = isset( $_GET['fl_ok'] ) ? sanitize_key( wp_unslash( $_GET['fl_de'] ?? 'site' ) ) : '';
+	?>
+	<script>
+	( function () {
+		window.dataLayer = window.dataLayer || [];
+
+		function evento( nome, dados ) {
+			window.dataLayer.push( Object.assign( { event: nome }, dados || {} ) );
+			if ( typeof window.gtag === 'function' ) {
+				window.gtag( 'event', nome, dados || {} );
+			}
+		}
+
+		<?php if ( $sucesso ) : ?>
+		evento( 'generate_lead', {
+			origem: <?php echo wp_json_encode( $sucesso ); ?>,
+			pagina: window.location.pathname
+		} );
+		<?php endif; ?>
+
+		document.addEventListener( 'click', function ( e ) {
+			var alvo = e.target.closest( '[data-fl-evento]' );
+			if ( ! alvo ) { return; }
+			evento( alvo.getAttribute( 'data-fl-evento' ), {
+				local: alvo.getAttribute( 'data-fl-local' ) || '',
+				pagina: window.location.pathname
+			} );
+		} );
+	}() );
+	</script>
+	<?php
+}, 20 );
 
 /**
  * Título do arquivo de imóveis.

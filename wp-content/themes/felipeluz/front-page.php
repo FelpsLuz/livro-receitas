@@ -1,7 +1,11 @@
 <?php
 /**
- * Home. Duas portas: quem compra e quem vende.
- * A porta que paga a conta é a segunda.
+ * Home.
+ *
+ * Momento 1 (0–3s): rosto, nome, CRECI, posicionamento e dois botões
+ * distintos. Sem carrossel, sem popup, sem interstitial.
+ * Momento 2 (3–15s): a decisão de confiar — CRECI visível, números
+ * concretos e avaliações reais.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -9,6 +13,8 @@ defined( 'ABSPATH' ) || exit;
 get_header();
 
 $stats     = fl_estatisticas();
+$anos      = fl_anos_de_atuacao();
+$avaliacoes = fl_avaliacoes( 3 );
 $destaques = fl_query_destaques( 6 );
 $vendidos  = fl_query_vendidos( 3 );
 ?>
@@ -16,36 +22,93 @@ $vendidos  = fl_query_vendidos( 3 );
 <div class="fl-pagina fl-home">
 
 	<section class="fl-hero">
-		<div class="fl-hero__texto">
-			<p class="fl-hero__sobre">
-				<?php echo esc_html( fl_config( 'cidade' ) ? fl_config( 'cidade' ) . ' · ' : '' ); ?>Corretor de imóveis<?php echo fl_config( 'creci' ) ? esc_html( ' · CRECI ' . fl_config( 'creci' ) ) : ''; ?>
-			</p>
-			<h1>Poucos imóveis por vez.<br>Atenção integral em cada um.</h1>
-			<p class="fl-hero__apoio">
-				Não trabalho com volume. Trabalho com uma carteira curta, que eu conheço de cor,
-				e com proprietários que querem vender de verdade — não apenas anunciar.
-			</p>
-			<p class="fl-hero__acoes">
-				<a class="fl-btn fl-btn--ouro" href="<?php echo esc_url( fl_url_pagina( 'quero-vender' ) ); ?>">Quero vender meu imóvel</a>
-				<a class="fl-btn fl-btn--linha-clara" href="<?php echo esc_url( get_post_type_archive_link( 'imovel' ) ); ?>">Ver imóveis disponíveis</a>
-			</p>
+		<div class="fl-hero__conteudo">
+			<div class="fl-hero__texto">
+				<p class="fl-hero__sobre">
+					<?php echo esc_html( fl_config( 'papel' ) ); ?> em <?php echo esc_html( fl_config( 'cidade' ) ); ?>
+					<?php if ( fl_config( 'creci' ) ) : ?>
+						<span class="fl-hero__creci"><?php echo esc_html( fl_config( 'creci' ) ); ?></span>
+					<?php endif; ?>
+				</p>
+
+				<h1>Sua confiança,<br>minha dedicação.</h1>
+
+				<p class="fl-hero__apoio">
+					Sou <strong><?php echo esc_html( fl_config( 'nome' ) ); ?></strong>. Trabalho com uma carteira
+					curta, que conheço de cor, e com proprietários que querem vender de verdade —
+					não apenas anunciar. Estratégia, visão de mercado e cuidado em cada detalhe.
+				</p>
+
+				<p class="fl-hero__acoes">
+					<a class="fl-btn fl-btn--ouro" href="<?php echo esc_url( fl_url_pagina( 'quero-vender' ) ); ?>"
+						data-fl-evento="cta_captacao" data-fl-local="hero">Quero vender meu imóvel</a>
+					<a class="fl-btn fl-btn--linha-clara" href="<?php echo esc_url( get_post_type_archive_link( 'imovel' ) ); ?>"
+						data-fl-evento="cta_vitrine" data-fl-local="hero">Ver imóveis</a>
+				</p>
+			</div>
+
+			<div class="fl-hero__foto">
+				<?php fl_imagem_hero(); ?>
+			</div>
 		</div>
 	</section>
 
-	<?php if ( $stats['vendidos'] > 0 || $stats['ativos'] > 0 ) : ?>
+	<?php
+	/* Momento 2 — a decisão de confiar. */
+	$provas = array();
+	if ( $stats['vendidos'] > 0 ) {
+		$provas[] = array( $stats['vendidos'], 'imóveis vendidos' );
+	}
+	if ( $anos > 0 ) {
+		$provas[] = array( $anos, 1 === $anos ? 'ano no mercado imobiliário' : 'anos no mercado imobiliário' );
+	}
+	if ( $stats['dias_medio'] > 0 ) {
+		$provas[] = array( $stats['dias_medio'], 'dias, em média, da captação à venda' );
+	}
+	if ( $stats['ativos'] > 0 ) {
+		$provas[] = array( $stats['ativos'], 'imóveis na carteira ativa' );
+	}
+
+	if ( $provas ) :
+		?>
 		<section class="fl-numeros" aria-label="Números do trabalho">
-			<?php if ( $stats['vendidos'] > 0 ) : ?>
-				<div><strong><?php echo (int) $stats['vendidos']; ?></strong><span>imóveis vendidos</span></div>
-			<?php endif; ?>
-			<?php if ( $stats['dias_medio'] > 0 ) : ?>
-				<div><strong><?php echo (int) $stats['dias_medio']; ?></strong><span>dias, em média, da captação à venda</span></div>
-			<?php endif; ?>
-			<?php if ( $stats['ativos'] > 0 ) : ?>
-				<div><strong><?php echo (int) $stats['ativos']; ?></strong><span>imóveis na carteira ativa</span></div>
-			<?php endif; ?>
-			<?php if ( $stats['ticket_medio'] > 0 ) : ?>
-				<div><strong><?php echo esc_html( fl_valor_brl( $stats['ticket_medio'] ) ); ?></strong><span>ticket médio negociado</span></div>
-			<?php endif; ?>
+			<?php foreach ( $provas as $prova ) : ?>
+				<div>
+					<strong><?php echo esc_html( number_format_i18n( $prova[0] ) ); ?></strong>
+					<span><?php echo esc_html( $prova[1] ); ?></span>
+				</div>
+			<?php endforeach; ?>
+		</section>
+	<?php endif; ?>
+
+	<?php if ( $avaliacoes ) : ?>
+		<section class="fl-secao fl-avaliacoes">
+			<header class="fl-cabecalho-secao">
+				<h2>O que dizem quem já passou por aqui</h2>
+				<?php if ( fl_config( 'google' ) ) : ?>
+					<a class="fl-link-secao" href="<?php echo esc_url( fl_config( 'google' ) ); ?>" target="_blank" rel="noopener">Ver no Google</a>
+				<?php endif; ?>
+			</header>
+			<div class="fl-avaliacoes__grade">
+				<?php
+				foreach ( $avaliacoes as $avaliacao ) :
+					$nota = (int) get_post_meta( $avaliacao->ID, 'fl_nota', true );
+					$nota = $nota ? $nota : 5;
+					?>
+					<figure class="fl-avaliacao">
+						<p class="fl-avaliacao__estrelas" aria-label="<?php echo esc_attr( $nota . ' de 5 estrelas' ); ?>">
+							<?php echo esc_html( str_repeat( '★', $nota ) . str_repeat( '☆', 5 - $nota ) ); ?>
+						</p>
+						<blockquote><?php echo esc_html( wp_strip_all_tags( $avaliacao->post_content ) ); ?></blockquote>
+						<figcaption>
+							<?php echo esc_html( $avaliacao->post_title ); ?>
+							<?php if ( 'google' === get_post_meta( $avaliacao->ID, 'fl_origem', true ) ) : ?>
+								<small>avaliação no Google</small>
+							<?php endif; ?>
+						</figcaption>
+					</figure>
+				<?php endforeach; ?>
+			</div>
 		</section>
 	<?php endif; ?>
 
@@ -95,7 +158,8 @@ $vendidos  = fl_query_vendidos( 3 );
 			</li>
 		</ol>
 		<p class="fl-metodo__cta">
-			<a class="fl-btn fl-btn--ouro" href="<?php echo esc_url( fl_url_pagina( 'quero-vender' ) ); ?>">Quero uma avaliação do meu imóvel</a>
+			<a class="fl-btn fl-btn--ouro" href="<?php echo esc_url( fl_url_pagina( 'quero-vender' ) ); ?>"
+				data-fl-evento="cta_captacao" data-fl-local="metodo">Quero uma avaliação do meu imóvel</a>
 		</p>
 	</section>
 
@@ -118,7 +182,6 @@ $vendidos  = fl_query_vendidos( 3 );
 	<?php endif; ?>
 
 	<?php
-	// A home também captura. Formulário curto: o longo mora na LP.
 	get_template_part(
 		'template-parts/form-lead',
 		null,

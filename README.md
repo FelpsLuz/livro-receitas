@@ -32,11 +32,14 @@ apaga a carteira.
 | `/imovel/[slug]/` | `single-imovel.php` | Ficha individual |
 | `/vendidos/` | `vendidos.php` | Prova social permanente |
 | `/quero-vender/` | `quero-vender.php` | Captação de proprietário |
-| `/sobre/` | padrão | Autoridade: CRECI, trajetória, números |
+| `/sobre/` | `sobre.php` | Autoridade: CRECI, formação, números |
 | `/contato/` | `contato.php` | Canais + formulário |
 
-Também respondem `/tipo/[termo]/`, `/bairro/[termo]/` e `/finalidade/[termo]/`,
-usando o mesmo template da vitrine.
+`/bairro/[termo]/` tem template próprio (`taxonomy-imovel_bairro.php`): é o hub
+do bairro, onde o texto sobre a região mora **uma vez só**, na descrição do
+termo. As fichas linkam para lá em vez de repetir o mesmo parágrafo em doze
+páginas — isso seria conteúdo duplicado. `/tipo/[termo]/` e
+`/finalidade/[termo]/` usam o template da vitrine.
 
 ## Instalação
 
@@ -72,6 +75,10 @@ importação do XML sem risco.
 
 `Rank Math` (SEO), `LiteSpeed Cache` ou `WP Super Cache`, `UpdraftPlus` (backup).
 Formulário não precisa: a captação é nativa, e o lead é gravado no banco.
+
+No Rank Math, configure o sitemap segmentado (imóveis / páginas) e submeta no
+Search Console. Sem plugin de SEO o site usa o `wp-sitemap.xml` do core, que já
+inclui o CPT — funciona, mas sem segmentação.
 
 ## Importar a carteira do XML
 
@@ -141,22 +148,124 @@ endereço configurado. Exportação CSV em *Imóveis › Configurações*.
 ## Testes
 
 ```bash
-php tools/testes/teste-importador.php
+php tools/testes/teste-importador.php   # 59 verificações do parser de XML
+php tools/testes/teste-conteudo.php     # 47 verificações dos textos gerados
 ```
 
-59 verificações sobre o parser, em dois formatos de XML: feed de CRM (tags em
-português, `1.250.000,00`) e feed de portal (namespace, tags em inglês, muitas
-fotos e características por imóvel). Rodam sem WordPress.
+Rodam sem WordPress, com stubs mínimos.
 
-Quando o XML real da Code 49 chegar, jogue uma cópia anonimizada em
-`tools/testes/amostras/` e acrescente um bloco de verificações. É o que impede
-um ajuste no mapa de campos de quebrar outro formato.
+O primeiro cobre dois formatos de XML: feed de CRM (tags em português,
+`1.250.000,00`) e feed de portal (namespace, tags em inglês, muitas fotos e
+características por imóvel). Quando o XML real da Code 49 chegar, jogue uma
+cópia anonimizada em `tools/testes/amostras/` e acrescente um bloco de
+verificações — é o que impede um ajuste no mapa de campos de quebrar outro
+formato.
+
+O segundo cobre a resposta direta, a tabela de especificações e o FAQ. São
+textos gerados: um erro ali não quebra nada, só publica uma frase errada em
+toda ficha do site — o pior tipo de bug, porque ninguém percebe.
 
 Lint de tudo:
 
 ```bash
 find wp-content tools -name '*.php' -exec php -l {} \;
 ```
+
+## A jornada mobile
+
+O caminho é o mesmo para todo visitante, e cada etapa tem um requisito técnico
+que a sustenta:
+
+| Momento | O que acontece | O que garante |
+|---|---|---|
+| 0–3s, chegada | Rosto, nome, CRECI, posicionamento e dois botões | Sem carrossel e sem popup. Imagem do topo em WebP, `fetchpriority="high"`, com `preload` e proporção reservada |
+| 3–15s, confiança | Números reais, CRECI e avaliações do Google | Nada digitado à mão: os números saem da carteira |
+| Exploração | Cards em coluna única, foto 4:3, preço em destaque, três dados | Filtro abre fechado, como bottom sheet. Paginação rastreável, nunca scroll infinito |
+| A ficha | Ver abaixo | — |
+| Contato | CTA fixo no rodapé com o preço ao lado | `inputmode`, `font-size:16px`, alvo de toque de 44px, honeypot no lugar de CAPTCHA |
+
+O CTA fixo aparece só até 900px de largura — no desktop a caixa lateral já
+cumpre o papel. Ele sozinho costuma dobrar a taxa de contato em mobile.
+
+Sobre fontes: o tema usa system stack e Georgia. Sem webfont, `font-display` não
+tem o que resolver — e o LCP não espera por download nenhum.
+
+## Anatomia da ficha
+
+A ordem dos blocos não é estética, é funcional:
+
+1. **Galeria** — swipe com `scroll-snap` puro em CSS. A primeira foto é `eager`
+   com `fetchpriority="high"`, o resto é `lazy`. O alt sai de `fl_alt_foto()`:
+   usa o alt do anexo se alguém escreveu um, senão monta *"Apartamento no
+   Campolim, Sorocaba — foto 2 de 12"*. Nunca "foto-1".
+2. **Resposta direta** — 2 a 3 frases com tipo, bairro, cidade, área,
+   dormitórios, vagas e o preço numérico. É o parágrafo que a IA extrai. Sai
+   pronto dos campos; o campo *Resposta direta* só existe para sobrescrever.
+3. **Preço, condomínio e IPTU** explícitos. "Consulte-nos" é sabotagem tripla:
+   destrói conversão, esvazia o `offers.price` do schema e torna o imóvel
+   invisível para qualquer sistema que precise do número.
+4. **Tabela de especificações** em `<table>` — o formato que LLM extrai melhor.
+5. **Descrição própria**, 250 a 400 palavras, escritas à mão.
+6. **Diferenciais em lista**, nunca em parágrafo corrido.
+7. **Localização** — link para o hub do bairro. O mapa só carrega sob clique
+   (iframe de mapa é o segundo maior vilão de performance depois de imagem), com
+   a altura reservada por CSS para o CLS não estourar.
+8. **FAQ** — o corretor responde cinco perguntinhas no painel (financiamento,
+   permuta, ocupação, o que o condomínio inclui, distância até o centro) e o
+   bloco sai montado, junto com o `FAQPage`. Perguntas extras em
+   `Pergunta :: Resposta`, uma por linha.
+9. **Relacionados** — mesmo bairro, alimenta link interno.
+10. **CTA fixo.**
+
+## SEO técnico e camada de IA
+
+- **HTML no servidor.** Nada essencial injetado por JavaScript — crawler de LLM
+  em geral não executa JS. É uma vantagem real do WordPress sobre SPA.
+- **Uma URL canônica por listagem.** Vistas filtradas (`?tipo=casa&ordem=…`)
+  recebem canonical para a versão limpa e `noindex,follow`.
+- **Schema JSON-LD**: `RealEstateAgent` com `sameAs` (Google Business Profile,
+  Instagram, LinkedIn) na home; `RealEstateListing` + `Offer` + `Residence` na
+  ficha; `FAQPage`; e `BreadcrumbList`, que continua gerando rich result — o de
+  FAQ o Google aposentou em 2023 para a maioria dos sites, então o markup vale
+  como leitura por máquina, não como estrela no resultado.
+- **robots.txt** libera GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot,
+  ClaudeBot, Claude-SearchBot, Applebot-Extended e Google-Extended. Bloquear
+  Google-Extended não tiraria o site das AI Overviews (aquilo usa o índice do
+  Googlebot) — não há ganho em bloquear nada aqui. Só funciona se não houver um
+  `robots.txt` físico na raiz.
+- **WebP** nos tamanhos gerados, via `image_editor_output_format`. O original
+  enviado fica intacto.
+- **`/llms.txt`** existe. Custou dez minutos e não há evidência de que algum
+  provedor relevante consuma o arquivo hoje. Não conte com ele.
+
+**Consistência de entidade (NAP).** Nome, cidade e contato precisam ser
+idênticos — mesma grafia, mesma ordem — no site, no Google Business Profile, no
+Instagram e no LinkedIn. É o que a tela de Configurações centraliza. Divergência
+fragmenta a entidade e é o erro que mais custa em SEO local.
+
+O que move o ponteiro na IA está **fora** do site: volume de avaliações no
+Google, menções da marca em sites locais de Sorocaba, e conteúdo com dado
+proprietário que ninguém mais tem — seu levantamento de preço por bairro. Isso é
+o que faz outro site te citar, e citação externa é a moeda. O lugar desse dado é
+a descrição do termo em *Imóveis › Bairros*, com fonte e data: *"R$ 8.400/m² em
+média no Campolim (levantamento próprio, jul/2026)"*. Dado datado é citável;
+adjetivo não é.
+
+## O que medir
+
+| Métrica | Meta | Onde |
+|---|---|---|
+| LCP mobile | < 2,5s | Search Console, dados de campo — não o PageSpeed |
+| INP | < 200ms | Search Console |
+| CLS | < 0,1 | Search Console |
+| Taxa de contato na ficha | > 3% | GA4, evento `contato_whatsapp` |
+| Páginas indexadas | > 90% das enviadas | Search Console |
+| Leads de `/quero-vender/` | **métrica principal** | GA4, evento `generate_lead` com `origem=quero-vender` |
+
+Os eventos vão para o `dataLayer` e para o `gtag`, se houver. Basta instalar o
+GA4 ou o GTM — nenhum código a mais: `generate_lead` (com a origem),
+`contato_whatsapp`, `cta_captacao`, `cta_vitrine` e `cta_formulario`, todos com
+o `local` de onde foram clicados.
 
 ## O que este site deliberadamente não faz
 

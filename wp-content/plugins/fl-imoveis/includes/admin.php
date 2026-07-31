@@ -153,41 +153,104 @@ add_action( 'admin_menu', function () {
 	);
 } );
 
+function fl_campos_config() {
+	return array(
+		'identidade' => array(
+			'titulo' => 'Identidade',
+			'campos' => array(
+				'nome'  => array( 'Nome', 'Como você assina. Precisa ser idêntico no Google Business Profile, no Instagram e no LinkedIn — divergência fragmenta sua entidade e é o erro que mais custa em SEO local.' ),
+				'papel' => array( 'Como você se apresenta', 'Ex.: Personal Broker Imobiliário' ),
+				'creci' => array( 'CRECI', 'Exibido no rodapé e em cada ficha — exigência do COFECI para publicidade imobiliária. Confirme a resolução vigente no CRECI/SP.' ),
+				'desde' => array( 'Atuando desde (ano)', 'Vira "X anos de mercado" no bloco de confiança da home.' ),
+			),
+		),
+		'contato'    => array(
+			'titulo' => 'Contato',
+			'campos' => array(
+				'whatsapp' => array( 'WhatsApp', 'Só números, com DDD. Ex.: 15987654321' ),
+				'telefone' => array( 'Telefone', '' ),
+				'email'    => array( 'E-mail para receber leads', '' ),
+				'cidade'   => array( 'Cidade de atuação', '' ),
+				'uf'       => array( 'UF', '' ),
+			),
+		),
+		'perfis'     => array(
+			'titulo' => 'Perfis externos',
+			'campos' => array(
+				'google'    => array( 'Google Business Profile', 'URL completa. É a mais importante das três.' ),
+				'instagram' => array( 'Instagram', '' ),
+				'linkedin'  => array( 'LinkedIn', '' ),
+			),
+		),
+	);
+}
+
 add_action( 'admin_init', function () {
-	foreach ( array( 'whatsapp', 'telefone', 'email', 'creci', 'cidade', 'uf' ) as $chave ) {
-		register_setting( 'fl_config', 'fl_config_' . $chave, array( 'sanitize_callback' => 'sanitize_text_field' ) );
+	foreach ( fl_campos_config() as $grupo ) {
+		foreach ( array_keys( $grupo['campos'] ) as $chave ) {
+			register_setting( 'fl_config', 'fl_config_' . $chave, array( 'sanitize_callback' => 'sanitize_text_field' ) );
+		}
+	}
+	register_setting( 'fl_config', 'fl_config_retrato', array( 'sanitize_callback' => 'absint' ) );
+} );
+
+add_action( 'admin_enqueue_scripts', function ( $tela ) {
+	if ( false !== strpos( (string) $tela, 'fl-config' ) ) {
+		wp_enqueue_media();
 	}
 } );
 
 function fl_render_config() {
-	$campos = array(
-		'whatsapp' => array( 'WhatsApp', 'Só números, com DDD. Ex.: 11987654321' ),
-		'telefone' => array( 'Telefone', '' ),
-		'email'    => array( 'E-mail para receber leads', '' ),
-		'creci'    => array( 'CRECI', 'Exibido no rodapé e em cada ficha — exigência do COFECI para publicidade imobiliária.' ),
-		'cidade'   => array( 'Cidade de atuação', '' ),
-		'uf'       => array( 'UF', '' ),
-	);
+	$retrato = (int) get_option( 'fl_config_retrato', 0 );
 	?>
 	<div class="wrap">
 		<h1>Configurações — FL Imóveis</h1>
 		<form method="post" action="options.php">
 			<?php settings_fields( 'fl_config' ); ?>
+
+			<?php foreach ( fl_campos_config() as $grupo ) : ?>
+				<h2><?php echo esc_html( $grupo['titulo'] ); ?></h2>
+				<table class="form-table" role="presentation">
+					<?php foreach ( $grupo['campos'] as $chave => $info ) : ?>
+						<tr>
+							<th scope="row"><label for="fl_config_<?php echo esc_attr( $chave ); ?>"><?php echo esc_html( $info[0] ); ?></label></th>
+							<td>
+								<input type="text" class="regular-text" id="fl_config_<?php echo esc_attr( $chave ); ?>"
+									name="fl_config_<?php echo esc_attr( $chave ); ?>"
+									value="<?php echo esc_attr( get_option( 'fl_config_' . $chave, '' ) ); ?>"
+									placeholder="<?php echo esc_attr( fl_config( $chave ) ); ?>">
+								<?php if ( $info[1] ) : ?>
+									<p class="description"><?php echo esc_html( $info[1] ); ?></p>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</table>
+			<?php endforeach; ?>
+
+			<h2>Sua foto</h2>
 			<table class="form-table" role="presentation">
-				<?php foreach ( $campos as $chave => $info ) : ?>
-					<tr>
-						<th scope="row"><label for="fl_config_<?php echo esc_attr( $chave ); ?>"><?php echo esc_html( $info[0] ); ?></label></th>
-						<td>
-							<input type="text" class="regular-text" id="fl_config_<?php echo esc_attr( $chave ); ?>"
-								name="fl_config_<?php echo esc_attr( $chave ); ?>"
-								value="<?php echo esc_attr( get_option( 'fl_config_' . $chave, '' ) ); ?>">
-							<?php if ( $info[1] ) : ?>
-								<p class="description"><?php echo esc_html( $info[1] ); ?></p>
+				<tr>
+					<th scope="row">Retrato</th>
+					<td>
+						<div id="fl-retrato-previa">
+							<?php if ( $retrato ) : ?>
+								<?php echo wp_get_attachment_image( $retrato, 'medium', false, array( 'style' => 'max-width:180px;height:auto;border-radius:4px' ) ); ?>
 							<?php endif; ?>
-						</td>
-					</tr>
-				<?php endforeach; ?>
+						</div>
+						<p>
+							<button type="button" class="button" id="fl-escolher-retrato">Escolher imagem</button>
+							<button type="button" class="button-link" id="fl-remover-retrato">Remover</button>
+						</p>
+						<input type="hidden" name="fl_config_retrato" id="fl_config_retrato" value="<?php echo esc_attr( $retrato ); ?>">
+						<p class="description">
+							Rosto humano real, não banco de imagens. É o que decide se você é sério
+							nos primeiros 15 segundos — e vai para o schema como imagem da entidade.
+						</p>
+					</td>
+				</tr>
 			</table>
+
 			<?php submit_button(); ?>
 		</form>
 
@@ -199,5 +262,35 @@ function fl_render_config() {
 			</a>
 		</p>
 	</div>
+
+	<script>
+	jQuery( function ( $ ) {
+		var seletor;
+
+		$( '#fl-escolher-retrato' ).on( 'click', function ( e ) {
+			e.preventDefault();
+			if ( seletor ) { seletor.open(); return; }
+			seletor = wp.media( {
+				title: 'Escolha o seu retrato',
+				library: { type: 'image' },
+				button: { text: 'Usar esta imagem' },
+				multiple: false
+			} );
+			seletor.on( 'select', function () {
+				var imagem = seletor.state().get( 'selection' ).first().toJSON();
+				$( '#fl_config_retrato' ).val( imagem.id );
+				var url = imagem.sizes && imagem.sizes.medium ? imagem.sizes.medium.url : imagem.url;
+				$( '#fl-retrato-previa' ).html( '<img src="' + url + '" style="max-width:180px;height:auto;border-radius:4px">' );
+			} );
+			seletor.open();
+		} );
+
+		$( '#fl-remover-retrato' ).on( 'click', function ( e ) {
+			e.preventDefault();
+			$( '#fl_config_retrato' ).val( '' );
+			$( '#fl-retrato-previa' ).empty();
+		} );
+	} );
+	</script>
 	<?php
 }

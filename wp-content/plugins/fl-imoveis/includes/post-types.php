@@ -41,6 +41,35 @@ function fl_registrar_post_types() {
 	);
 
 	/**
+	 * Avaliações reais, transcritas do Google Business Profile.
+	 * Título = nome de quem avaliou; conteúdo = o texto da avaliação.
+	 */
+	register_post_type(
+		'fl_avaliacao',
+		array(
+			'labels'             => array(
+				'name'          => 'Avaliações',
+				'singular_name' => 'Avaliação',
+				'add_new'       => 'Adicionar avaliação',
+				'add_new_item'  => 'Adicionar nova avaliação',
+				'edit_item'     => 'Editar avaliação',
+				'not_found'     => 'Nenhuma avaliação cadastrada',
+				'menu_name'     => 'Avaliações',
+			),
+			'public'             => false,
+			'publicly_queryable' => false,
+			'show_ui'            => true,
+			'show_in_menu'       => true,
+			'show_in_rest'       => false,
+			'menu_icon'          => 'dashicons-star-filled',
+			'menu_position'      => 7,
+			'supports'           => array( 'title', 'editor', 'page-attributes' ),
+			'has_archive'        => false,
+			'rewrite'            => false,
+		)
+	);
+
+	/**
 	 * Leads: o mini-CRM que substitui o que a Code 49 entregava.
 	 * Não é público — nem no site, nem na REST API, nem na busca.
 	 */

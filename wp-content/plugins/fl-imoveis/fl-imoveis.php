@@ -23,6 +23,7 @@ require_once FL_IMOVEIS_DIR . 'includes/fields.php';
 require_once FL_IMOVEIS_DIR . 'includes/query.php';
 require_once FL_IMOVEIS_DIR . 'includes/leads.php';
 require_once FL_IMOVEIS_DIR . 'includes/schema.php';
+require_once FL_IMOVEIS_DIR . 'includes/seo.php';
 require_once FL_IMOVEIS_DIR . 'includes/redirects.php';
 require_once FL_IMOVEIS_DIR . 'includes/admin.php';
 

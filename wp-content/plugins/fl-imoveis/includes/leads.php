@@ -15,6 +15,7 @@ function fl_campos_lead() {
 		'telefone'     => 'Telefone',
 		'email'        => 'E-mail',
 		'mensagem'     => 'Mensagem',
+		'melhor_horario' => 'Melhor horário para contato',
 		'tipo_imovel'  => 'Tipo de imóvel',
 		'bairro'       => 'Bairro',
 		'motivo'       => 'Motivo da venda',
@@ -131,7 +132,13 @@ function fl_processar_lead() {
 
 	fl_notificar_lead( $lead_id, $dados, $origem, $imovel_id );
 
-	wp_safe_redirect( add_query_arg( 'fl_ok', '1', $retorno ) . '#formulario' );
+	// A origem volta na URL para o GA4 conseguir atribuir a conversão.
+	$destino = add_query_arg(
+		array( 'fl_ok' => '1', 'fl_de' => $origem ),
+		$retorno
+	);
+
+	wp_safe_redirect( $destino . '#formulario' );
 	exit;
 }
 

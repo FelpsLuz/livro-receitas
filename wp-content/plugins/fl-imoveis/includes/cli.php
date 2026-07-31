@@ -160,7 +160,7 @@ class FL_Comandos {
 			'inicio'       => array( 'Início', '' ),
 			'quero-vender' => array( 'Quero vender meu imóvel', 'quero-vender.php' ),
 			'vendidos'     => array( 'Vendidos', 'vendidos.php' ),
-			'sobre'        => array( 'Sobre', '' ),
+			'sobre'        => array( 'Sobre', 'sobre.php' ),
 			'contato'      => array( 'Contato', 'contato.php' ),
 		);
 
