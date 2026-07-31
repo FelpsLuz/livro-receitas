@@ -1,0 +1,916 @@
+/* =========================================================
+   Felipe Luz Broker — estilos do tema
+   ========================================================= */
+
+:root {
+	--fl-tinta: #14181d;
+	--fl-tinta-suave: #3d444d;
+	--fl-cinza: #6f7680;
+	--fl-linha: #e4e0da;
+	--fl-papel: #ffffff;
+	--fl-areia: #f7f4f0;
+	--fl-ouro: #a97b3c;
+	--fl-ouro-claro: #c4964f;
+	--fl-verde: #2f7d52;
+	--fl-roxo: #6b4d9c;
+	--fl-raio: 4px;
+	--fl-largura: 1180px;
+	--fl-serif: Georgia, "Times New Roman", serif;
+}
+
+.fl-pagina {
+	max-width: var(--fl-largura);
+	margin: 0 auto;
+	padding: 0 20px 80px;
+	color: var(--fl-tinta);
+}
+
+.fl-pagina h1,
+.fl-pagina h2,
+.fl-pagina h3 {
+	font-family: var(--fl-serif);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	color: var(--fl-tinta);
+}
+
+/* --------------------------------------------------------
+   Botões
+   -------------------------------------------------------- */
+
+.fl-btn {
+	display: inline-block;
+	padding: 14px 26px;
+	border: 1px solid transparent;
+	border-radius: var(--fl-raio);
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 1;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+
+.fl-btn--ouro { background: var(--fl-ouro); color: #fff; }
+.fl-btn--ouro:hover { background: var(--fl-ouro-claro); color: #fff; }
+
+.fl-btn--escuro { background: var(--fl-tinta); color: #fff; }
+.fl-btn--escuro:hover { background: var(--fl-tinta-suave); color: #fff; }
+
+.fl-btn--linha { background: transparent; border-color: var(--fl-linha); color: var(--fl-tinta); }
+.fl-btn--linha:hover { border-color: var(--fl-tinta); }
+
+.fl-btn--linha-clara { background: transparent; border-color: rgba(255,255,255,.45); color: #fff; }
+.fl-btn--linha-clara:hover { border-color: #fff; background: rgba(255,255,255,.08); color: #fff; }
+
+.fl-btn--bloco { display: block; width: 100%; text-align: center; margin-bottom: 10px; }
+
+/* --------------------------------------------------------
+   Cabeçalhos de seção
+   -------------------------------------------------------- */
+
+.fl-cabecalho-secao {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 56px 0 24px;
+}
+
+.fl-cabecalho-secao h1 { font-size: clamp(30px, 4vw, 44px); margin: 0; }
+.fl-cabecalho-secao h2 { font-size: clamp(24px, 3vw, 32px); margin: 0; }
+
+.fl-cabecalho-secao__apoio {
+	flex-basis: 100%;
+	max-width: 62ch;
+	margin: 4px 0 0;
+	color: var(--fl-cinza);
+	font-size: 17px;
+	line-height: 1.6;
+}
+
+.fl-link-secao {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--fl-ouro);
+	text-decoration: none;
+	border-bottom: 1px solid currentColor;
+}
+
+/* --------------------------------------------------------
+   Home — hero
+   -------------------------------------------------------- */
+
+.fl-hero {
+	background: var(--fl-tinta);
+	color: #fff;
+	margin: 0 -20px 0;
+	padding: clamp(64px, 10vw, 120px) 20px;
+}
+
+.fl-hero__texto { max-width: 760px; margin: 0 auto; }
+
+.fl-hero__sobre {
+	margin: 0 0 16px;
+	font-size: 13px;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	color: var(--fl-ouro-claro);
+}
+
+.fl-hero h1 {
+	font-size: clamp(34px, 6vw, 60px);
+	margin: 0 0 20px;
+	color: #fff;
+}
+
+.fl-hero__apoio {
+	max-width: 60ch;
+	margin: 0 0 32px;
+	font-size: 18px;
+	line-height: 1.65;
+	color: rgba(255,255,255,.78);
+}
+
+.fl-hero__acoes { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
+
+/* --------------------------------------------------------
+   Números
+   -------------------------------------------------------- */
+
+.fl-numeros {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 1px;
+	background: var(--fl-linha);
+	border: 1px solid var(--fl-linha);
+	margin: 48px 0;
+}
+
+.fl-numeros > div {
+	background: var(--fl-papel);
+	padding: 28px 22px;
+	text-align: center;
+}
+
+.fl-numeros strong {
+	display: block;
+	font-family: var(--fl-serif);
+	font-size: clamp(28px, 4vw, 40px);
+	font-weight: 600;
+	color: var(--fl-ouro);
+	line-height: 1.1;
+}
+
+.fl-numeros span {
+	display: block;
+	margin-top: 8px;
+	font-size: 14px;
+	line-height: 1.4;
+	color: var(--fl-cinza);
+}
+
+/* --------------------------------------------------------
+   Grade e cards
+   -------------------------------------------------------- */
+
+.fl-grade {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 28px;
+}
+
+.fl-grade--3 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+.fl-card { background: var(--fl-papel); }
+
+.fl-card__link {
+	display: block;
+	color: inherit;
+	text-decoration: none;
+}
+
+.fl-card__foto {
+	position: relative;
+	aspect-ratio: 10 / 7;
+	overflow: hidden;
+	background: var(--fl-areia);
+	border-radius: var(--fl-raio);
+}
+
+.fl-card__foto img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform .5s ease;
+}
+
+.fl-card__link:hover .fl-card__foto img { transform: scale(1.04); }
+
+.fl-card__sem-foto {
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(135deg, var(--fl-areia), #eae5de);
+}
+
+.fl-card--vendido .fl-card__foto img { filter: grayscale(.55); }
+
+.fl-selo {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	padding: 6px 12px;
+	border-radius: 99px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: #fff;
+	background: var(--fl-tinta);
+}
+
+.fl-selo--vendido { background: var(--fl-roxo); }
+.fl-selo--reservado { background: #9a6700; }
+.fl-selo--exclusivo { left: auto; right: 12px; background: var(--fl-ouro); }
+
+.fl-card__corpo { padding: 16px 2px 0; }
+
+.fl-card__local {
+	margin: 0 0 6px;
+	font-size: 12px;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	color: var(--fl-cinza);
+}
+
+.fl-card__titulo { font-size: 20px; margin: 0 0 8px; }
+
+.fl-card__preco {
+	margin: 0 0 12px;
+	font-size: 19px;
+	font-weight: 700;
+	color: var(--fl-ouro);
+}
+
+.fl-card__preco--vendido { color: var(--fl-roxo); }
+
+.fl-card__ficha {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	margin: 0;
+	padding: 12px 0 0;
+	border-top: 1px solid var(--fl-linha);
+	list-style: none;
+	font-size: 13px;
+	color: var(--fl-cinza);
+}
+
+.fl-card__ficha strong { color: var(--fl-tinta); }
+
+/* --------------------------------------------------------
+   Filtros
+   -------------------------------------------------------- */
+
+.fl-filtros {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 14px;
+	align-items: end;
+	padding: 22px;
+	background: var(--fl-areia);
+	border-radius: var(--fl-raio);
+	margin-bottom: 28px;
+}
+
+.fl-filtros__campo label {
+	display: block;
+	margin-bottom: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--fl-cinza);
+}
+
+.fl-filtros select {
+	width: 100%;
+	padding: 11px 12px;
+	border: 1px solid var(--fl-linha);
+	border-radius: var(--fl-raio);
+	background: #fff;
+	font-size: 15px;
+	color: var(--fl-tinta);
+}
+
+.fl-filtros__acoes { display: flex; align-items: center; gap: 14px; }
+.fl-filtros__acoes .fl-btn { padding: 12px 22px; }
+
+.fl-filtros__limpar { font-size: 14px; color: var(--fl-cinza); }
+
+.fl-resultado-total {
+	margin: 0 0 20px;
+	font-size: 14px;
+	color: var(--fl-cinza);
+}
+
+/* --------------------------------------------------------
+   Ficha do imóvel
+   -------------------------------------------------------- */
+
+.fl-trilha {
+	margin: 24px 0 18px;
+	font-size: 13px;
+	color: var(--fl-cinza);
+}
+
+.fl-trilha a { color: var(--fl-cinza); text-decoration: none; }
+.fl-trilha a:hover { color: var(--fl-tinta); }
+.fl-trilha span { margin: 0 8px; }
+
+.fl-faixa-vendido {
+	padding: 16px 20px;
+	margin-bottom: 24px;
+	background: #f3effa;
+	border-left: 3px solid var(--fl-roxo);
+	border-radius: var(--fl-raio);
+	font-size: 15px;
+	line-height: 1.6;
+}
+
+.fl-faixa-vendido a {
+	display: inline-block;
+	margin-left: 6px;
+	font-weight: 600;
+	color: var(--fl-roxo);
+}
+
+.fl-galeria { margin-bottom: 32px; }
+
+.fl-galeria__principal {
+	position: relative;
+	margin: 0;
+	aspect-ratio: 16 / 9;
+	overflow: hidden;
+	border-radius: var(--fl-raio);
+	background: var(--fl-areia);
+}
+
+.fl-galeria__principal img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.fl-galeria__abrir {
+	position: absolute;
+	right: 16px;
+	bottom: 16px;
+	padding: 10px 18px;
+	border: 0;
+	border-radius: var(--fl-raio);
+	background: rgba(20,24,29,.86);
+	color: #fff;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.fl-galeria__miniaturas {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.fl-galeria__mini {
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: var(--fl-raio);
+	overflow: hidden;
+	background: none;
+	cursor: pointer;
+	aspect-ratio: 4 / 3;
+}
+
+.fl-galeria__mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fl-galeria__mini.esta-ativa { border-color: var(--fl-ouro); }
+
+.fl-imovel__grade {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 340px;
+	gap: 48px;
+	align-items: start;
+}
+
+.fl-imovel__local {
+	margin: 0 0 8px;
+	font-size: 12px;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	color: var(--fl-cinza);
+}
+
+.fl-imovel__ref { margin-left: 10px; color: var(--fl-linha); }
+.fl-imovel__ref::before { content: "· "; }
+
+.fl-imovel__cabecalho h1 {
+	font-size: clamp(28px, 4vw, 40px);
+	margin: 0 0 24px;
+}
+
+.fl-ficha {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+	gap: 1px;
+	margin: 0 0 32px;
+	padding: 0;
+	list-style: none;
+	background: var(--fl-linha);
+	border: 1px solid var(--fl-linha);
+	border-radius: var(--fl-raio);
+	overflow: hidden;
+}
+
+.fl-ficha li {
+	background: var(--fl-papel);
+	padding: 18px 12px;
+	text-align: center;
+}
+
+.fl-ficha strong { display: block; font-size: 22px; font-family: var(--fl-serif); }
+.fl-ficha span { display: block; margin-top: 4px; font-size: 12px; color: var(--fl-cinza); }
+
+.fl-imovel__texto { font-size: 17px; line-height: 1.75; color: var(--fl-tinta-suave); }
+.fl-imovel__texto p { margin-bottom: 1.2em; }
+
+.fl-caracteristicas h2,
+.fl-custos h2 { font-size: 20px; margin: 40px 0 16px; }
+
+.fl-caracteristicas ul {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 8px 20px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.fl-caracteristicas li {
+	position: relative;
+	padding-left: 20px;
+	font-size: 15px;
+	color: var(--fl-tinta-suave);
+}
+
+.fl-caracteristicas li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 8px;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--fl-ouro);
+}
+
+.fl-custos ul { margin: 0; padding: 0; list-style: none; }
+
+.fl-custos li {
+	display: flex;
+	justify-content: space-between;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--fl-linha);
+	font-size: 15px;
+}
+
+.fl-nota { margin-top: 12px; font-size: 13px; color: var(--fl-cinza); }
+
+.fl-depoimento {
+	margin: 40px 0 0;
+	padding: 24px 28px;
+	border-left: 3px solid var(--fl-ouro);
+	background: var(--fl-areia);
+	font-family: var(--fl-serif);
+	font-size: 19px;
+	line-height: 1.6;
+}
+
+.fl-depoimento cite {
+	display: block;
+	margin-top: 12px;
+	font-family: system-ui, sans-serif;
+	font-size: 14px;
+	font-style: normal;
+	color: var(--fl-cinza);
+}
+
+.fl-caixa-preco {
+	position: sticky;
+	top: 24px;
+	padding: 26px;
+	border: 1px solid var(--fl-linha);
+	border-radius: var(--fl-raio);
+	background: var(--fl-papel);
+}
+
+.fl-caixa-preco__rotulo {
+	margin: 0 0 6px;
+	font-size: 12px;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	color: var(--fl-cinza);
+}
+
+.fl-caixa-preco__valor {
+	margin: 0 0 18px;
+	font-family: var(--fl-serif);
+	font-size: 32px;
+	font-weight: 600;
+	color: var(--fl-ouro);
+	line-height: 1.1;
+}
+
+.fl-caixa-preco__valor--vendido { color: var(--fl-roxo); }
+
+.fl-caixa-preco__apoio { margin: -10px 0 18px; font-size: 14px; color: var(--fl-cinza); }
+
+.fl-caixa-preco__creci {
+	margin: 16px 0 0;
+	padding-top: 16px;
+	border-top: 1px solid var(--fl-linha);
+	font-size: 12px;
+	color: var(--fl-cinza);
+	text-align: center;
+}
+
+.fl-midia-extra { margin-top: 40px; }
+.fl-video iframe { width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
+
+.fl-relacionados { margin-top: 72px; }
+.fl-relacionados h2 { font-size: 24px; margin-bottom: 24px; }
+
+/* --------------------------------------------------------
+   Seções escuras, método, diferenciais
+   -------------------------------------------------------- */
+
+.fl-secao { margin-top: 24px; }
+
+.fl-secao--escura {
+	background: var(--fl-tinta);
+	color: #fff;
+	margin: 72px -20px 0;
+	padding: 8px 20px 64px;
+}
+
+.fl-secao--escura h1,
+.fl-secao--escura h2,
+.fl-secao--escura h3,
+.fl-secao--escura .fl-card__titulo { color: #fff; }
+
+.fl-secao--escura .fl-card__link { color: #fff; }
+.fl-secao--escura .fl-cabecalho-secao__apoio { color: rgba(255,255,255,.66); }
+.fl-secao--escura .fl-card__ficha { border-color: rgba(255,255,255,.16); color: rgba(255,255,255,.66); }
+.fl-secao--escura .fl-card__ficha strong { color: #fff; }
+.fl-secao--escura .fl-card__local { color: rgba(255,255,255,.55); }
+.fl-secao--escura .fl-link-secao { color: var(--fl-ouro-claro); }
+.fl-secao__rodape { margin-top: 32px; text-align: center; }
+
+.fl-etapas {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 32px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	counter-reset: etapa;
+}
+
+.fl-etapas li { padding-top: 20px; border-top: 2px solid var(--fl-ouro); }
+
+.fl-etapas__numero {
+	display: block;
+	margin-bottom: 10px;
+	font-family: var(--fl-serif);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: .1em;
+	color: var(--fl-ouro);
+}
+
+.fl-etapas h3 { font-size: 19px; margin: 0 0 10px; }
+.fl-etapas p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--fl-tinta-suave); }
+
+.fl-metodo__cta { margin-top: 40px; }
+
+.fl-diferenciais__grade {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 32px;
+}
+
+.fl-diferenciais__grade h3 { font-size: 19px; margin: 0 0 10px; }
+.fl-diferenciais__grade p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--fl-tinta-suave); }
+
+/* --------------------------------------------------------
+   Landing de captação
+   -------------------------------------------------------- */
+
+.fl-lp__hero {
+	background: var(--fl-tinta);
+	color: #fff;
+	margin: 0 -20px;
+	padding: clamp(56px, 9vw, 100px) 20px;
+	text-align: center;
+}
+
+.fl-lp__hero h1 {
+	max-width: 20ch;
+	margin: 0 auto 20px;
+	font-size: clamp(32px, 5.5vw, 54px);
+	color: #fff;
+}
+
+.fl-lp__subtitulo {
+	max-width: 62ch;
+	margin: 0 auto 32px;
+	font-size: 18px;
+	line-height: 1.65;
+	color: rgba(255,255,255,.78);
+}
+
+.fl-lp__acoes { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 0; }
+
+.fl-numeros--lp { margin-top: 0; border-top: 0; }
+
+.fl-lp__creci {
+	margin-top: 48px;
+	text-align: center;
+	font-size: 13px;
+	color: var(--fl-cinza);
+}
+
+/* --------------------------------------------------------
+   Formulário
+   -------------------------------------------------------- */
+
+.fl-form {
+	margin: 72px auto 0;
+	max-width: 760px;
+	padding: 40px;
+	background: var(--fl-areia);
+	border-radius: var(--fl-raio);
+}
+
+.fl-form__cabecalho { text-align: center; margin-bottom: 28px; }
+.fl-form__cabecalho h2 { font-size: 28px; margin: 0 0 10px; }
+.fl-form__cabecalho p { margin: 0; color: var(--fl-cinza); font-size: 16px; }
+
+.fl-form__campos {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 18px;
+}
+
+.fl-campo { margin: 0; }
+.fl-campo--largo { grid-column: 1 / -1; }
+
+.fl-campo label {
+	display: block;
+	margin-bottom: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--fl-tinta);
+}
+
+.fl-campo input,
+.fl-campo select,
+.fl-campo textarea {
+	width: 100%;
+	padding: 13px 14px;
+	border: 1px solid var(--fl-linha);
+	border-radius: var(--fl-raio);
+	background: #fff;
+	font-size: 16px;
+	font-family: inherit;
+	color: var(--fl-tinta);
+}
+
+.fl-campo input:focus,
+.fl-campo select:focus,
+.fl-campo textarea:focus {
+	outline: 2px solid var(--fl-ouro);
+	outline-offset: 1px;
+	border-color: transparent;
+}
+
+.fl-campo--acao {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 16px;
+	margin-top: 6px;
+}
+
+.fl-form__nota { font-size: 13px; color: var(--fl-cinza); }
+
+.fl-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+.fl-aviso {
+	padding: 14px 18px;
+	margin-bottom: 20px;
+	border-radius: var(--fl-raio);
+	font-size: 15px;
+}
+
+.fl-aviso--ok { background: #e8f5ee; color: #1c5e3b; border-left: 3px solid var(--fl-verde); }
+.fl-aviso--erro { background: #fdecec; color: #8c2020; border-left: 3px solid #c53030; }
+
+/* --------------------------------------------------------
+   Faixa de CTA, vazio, contato
+   -------------------------------------------------------- */
+
+.fl-faixa-cta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	margin-top: 72px;
+	padding: 36px 40px;
+	background: var(--fl-areia);
+	border-radius: var(--fl-raio);
+}
+
+.fl-faixa-cta h2 { font-size: 24px; margin: 0 0 8px; }
+.fl-faixa-cta p { margin: 0; color: var(--fl-cinza); max-width: 58ch; }
+
+.fl-vazio {
+	padding: 64px 20px;
+	text-align: center;
+	background: var(--fl-areia);
+	border-radius: var(--fl-raio);
+}
+
+.fl-vazio h2 { font-size: 24px; margin: 0 0 12px; }
+.fl-vazio p { max-width: 56ch; margin: 0 auto 24px; color: var(--fl-cinza); line-height: 1.65; }
+.fl-vazio__acoes { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+
+.fl-contato__canais {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+.fl-contato__canal {
+	display: block;
+	padding: 24px;
+	border: 1px solid var(--fl-linha);
+	border-radius: var(--fl-raio);
+	text-decoration: none;
+	color: inherit;
+	transition: border-color .18s ease;
+}
+
+.fl-contato__canal:hover { border-color: var(--fl-ouro); }
+
+.fl-contato__canal span {
+	display: block;
+	font-size: 12px;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	color: var(--fl-cinza);
+	margin-bottom: 6px;
+}
+
+.fl-contato__canal strong { font-size: 18px; }
+
+.fl-conteudo-editorial {
+	max-width: 68ch;
+	margin: 48px auto;
+	font-size: 17px;
+	line-height: 1.75;
+	color: var(--fl-tinta-suave);
+}
+
+.fl-creci {
+	padding: 14px 20px;
+	text-align: center;
+	font-size: 12px;
+	letter-spacing: .06em;
+	color: var(--fl-cinza);
+	background: var(--fl-areia);
+}
+
+/* --------------------------------------------------------
+   WhatsApp flutuante
+   -------------------------------------------------------- */
+
+.fl-zap {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 90;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 50%;
+	background: #25d366;
+	color: #fff;
+	box-shadow: 0 6px 20px rgba(0,0,0,.22);
+	transition: transform .18s ease;
+}
+
+.fl-zap:hover { transform: scale(1.06); color: #fff; }
+
+/* --------------------------------------------------------
+   Lightbox
+   -------------------------------------------------------- */
+
+.fl-lightbox {
+	position: fixed;
+	inset: 0;
+	z-index: 999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(10,12,15,.94);
+}
+
+.fl-lightbox[hidden] { display: none; }
+
+.fl-lightbox__img {
+	max-width: 92vw;
+	max-height: 84vh;
+	object-fit: contain;
+}
+
+.fl-lightbox__fechar,
+.fl-lightbox__nav {
+	position: absolute;
+	border: 0;
+	background: rgba(255,255,255,.1);
+	color: #fff;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.fl-lightbox__fechar {
+	top: 18px;
+	right: 18px;
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	font-size: 26px;
+}
+
+.fl-lightbox__nav {
+	top: 50%;
+	transform: translateY(-50%);
+	width: 52px;
+	height: 68px;
+	font-size: 34px;
+	border-radius: var(--fl-raio);
+}
+
+.fl-lightbox__nav--ant { left: 14px; }
+.fl-lightbox__nav--prox { right: 14px; }
+
+.fl-lightbox__contador {
+	position: absolute;
+	bottom: 22px;
+	left: 0;
+	right: 0;
+	text-align: center;
+	color: rgba(255,255,255,.72);
+	font-size: 14px;
+	margin: 0;
+}
+
+/* --------------------------------------------------------
+   Responsivo
+   -------------------------------------------------------- */
+
+@media (max-width: 900px) {
+	.fl-imovel__grade { grid-template-columns: 1fr; gap: 32px; }
+	.fl-caixa-preco { position: static; }
+	.fl-form { padding: 28px 20px; }
+	.fl-faixa-cta { padding: 28px 24px; }
+}
+
+@media (max-width: 600px) {
+	.fl-filtros { grid-template-columns: 1fr 1fr; }
+	.fl-filtros__acoes { grid-column: 1 / -1; }
+	.fl-hero__acoes .fl-btn,
+	.fl-lp__acoes .fl-btn { flex: 1 1 100%; text-align: center; }
+	.fl-lightbox__nav { width: 42px; height: 56px; font-size: 26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* { transition: none !important; animation: none !important; }
+}

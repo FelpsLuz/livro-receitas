@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Carga>
+  <Imoveis>
+    <Imovel>
+      <CodigoImovel>AP1042</CodigoImovel>
+      <TipoImovel>Apartamento Padrão</TipoImovel>
+      <Finalidade>Venda</Finalidade>
+      <Bairro>VILA MARIANA</Bairro>
+      <Cidade>São Paulo</Cidade>
+      <UF>SP</UF>
+      <CEP>04101-000</CEP>
+      <Endereco>Rua Domingos de Morais</Endereco>
+      <PrecoVenda>1.250.000,00</PrecoVenda>
+      <ValorCondominio>980,00</ValorCondominio>
+      <ValorIptu>3200,00</ValorIptu>
+      <QtdDormitorios>3</QtdDormitorios>
+      <QtdSuites>1</QtdSuites>
+      <QtdBanheiros>2</QtdBanheiros>
+      <QtdVagas>2</QtdVagas>
+      <AreaUtil>98</AreaUtil>
+      <AreaTotal>140</AreaTotal>
+      <Latitude>-23.5891</Latitude>
+      <Longitude>-46.6345</Longitude>
+      <Situacao>Disponivel</Situacao>
+      <Observacao><![CDATA[Apartamento reformado, andar alto, vista livre. Prédio com lazer completo.]]></Observacao>
+      <Caracteristicas>
+        <Item>Varanda gourmet</Item>
+        <Item>Piscina</Item>
+        <Item>Academia</Item>
+      </Caracteristicas>
+      <Fotos>
+        <Foto>
+          <URLArquivo>https://cdn.exemplo.com.br/fotos/ap1042-01.jpg</URLArquivo>
+          <Principal>true</Principal>
+        </Foto>
+        <Foto>
+          <URLArquivo>https://cdn.exemplo.com.br/fotos/ap1042-02.jpg</URLArquivo>
+        </Foto>
+        <Foto>
+          <URLArquivo>https://cdn.exemplo.com.br/fotos/ap1042-03.JPG</URLArquivo>
+        </Foto>
+      </Fotos>
+      <Video>https://www.youtube.com/watch?v=abc123</Video>
+    </Imovel>
+    <Imovel>
+      <CodigoImovel>CA0311</CodigoImovel>
+      <TipoImovel>Sobrado</TipoImovel>
+      <Finalidade>Venda</Finalidade>
+      <Bairro>Jardim Paulista</Bairro>
+      <Cidade>São Paulo</Cidade>
+      <UF>SP</UF>
+      <PrecoVenda>2400000</PrecoVenda>
+      <QtdDormitorios>4</QtdDormitorios>
+      <QtdVagas>4</QtdVagas>
+      <AreaUtil>310</AreaUtil>
+      <Situacao>Vendido</Situacao>
+      <Observacao>Sobrado em rua tranquila.</Observacao>
+      <Fotos>
+        <Foto><URLArquivo>https://cdn.exemplo.com.br/fotos/ca0311-01.jpg</URLArquivo></Foto>
+      </Fotos>
+    </Imovel>
+    <Imovel>
+      <CodigoImovel>SL0088</CodigoImovel>
+      <TipoImovel>Sala Comercial</TipoImovel>
+      <Finalidade>Locacao</Finalidade>
+      <Bairro>Itaim Bibi</Bairro>
+      <Cidade>São Paulo</Cidade>
+      <PrecoLocacao>8.500,00</PrecoLocacao>
+      <AreaUtil>72</AreaUtil>
+      <QtdVagas>1</QtdVagas>
+      <Fotos>
+        <Foto><URLArquivo>https://cdn.exemplo.com.br/fotos/sl0088-01.webp</URLArquivo></Foto>
+      </Fotos>
+    </Imovel>
+  </Imoveis>
+</Carga>

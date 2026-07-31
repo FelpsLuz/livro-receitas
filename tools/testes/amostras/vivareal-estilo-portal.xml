@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListingDataFeed xmlns="http://www.vivareal.com/schemas/1.0">
+  <Header><Provider>Code49</Provider></Header>
+  <Listings>
+    <Listing>
+      <ListingID>L001</ListingID>
+      <PropertyType>Residential / Apartment</PropertyType>
+      <TransactionType>For Sale</TransactionType>
+      <Neighborhood>Moema</Neighborhood>
+      <City>Sao Paulo</City>
+      <ListPrice currency="BRL">950000</ListPrice>
+      <NumeroDormitorios>2</NumeroDormitorios>
+      <NumeroBanheiros>2</NumeroBanheiros>
+      <Garages>1</Garages>
+      <UsableArea>85</UsableArea>
+      <Description>Descricao do imovel L001.</Description>
+      <Features>
+        <Caracteristica>Item 1</Caracteristica>
+        <Caracteristica>Item 2</Caracteristica>
+        <Caracteristica>Item 3</Caracteristica>
+        <Caracteristica>Item 4</Caracteristica>
+        <Caracteristica>Item 5</Caracteristica>
+        <Caracteristica>Item 6</Caracteristica>
+        <Caracteristica>Item 7</Caracteristica>
+        <Caracteristica>Item 8</Caracteristica>
+        <Caracteristica>Item 9</Caracteristica>
+        <Caracteristica>Item 10</Caracteristica>
+        <Caracteristica>Item 11</Caracteristica>
+        <Caracteristica>Item 12</Caracteristica>
+        <Caracteristica>Item 13</Caracteristica>
+        <Caracteristica>Item 14</Caracteristica>
+        <Caracteristica>Item 15</Caracteristica>
+        <Caracteristica>Item 16</Caracteristica>
+        <Caracteristica>Item 17</Caracteristica>
+        <Caracteristica>Item 18</Caracteristica>
+        <Caracteristica>Item 19</Caracteristica>
+        <Caracteristica>Item 20</Caracteristica>
+        <Caracteristica>Item 21</Caracteristica>
+        <Caracteristica>Item 22</Caracteristica>
+        <Caracteristica>Item 23</Caracteristica>
+        <Caracteristica>Item 24</Caracteristica>
+        <Caracteristica>Item 25</Caracteristica>
+        <Caracteristica>Item 26</Caracteristica>
+        <Caracteristica>Item 27</Caracteristica>
+        <Caracteristica>Item 28</Caracteristica>
+        <Caracteristica>Item 29</Caracteristica>
+        <Caracteristica>Item 30</Caracteristica>
+        <Caracteristica>Item 31</Caracteristica>
+        <Caracteristica>Item 32</Caracteristica>
+        <Caracteristica>Item 33</Caracteristica>
+        <Caracteristica>Item 34</Caracteristica>
+        <Caracteristica>Item 35</Caracteristica>
+        <Caracteristica>Item 36</Caracteristica>
+        <Caracteristica>Item 37</Caracteristica>
+        <Caracteristica>Item 38</Caracteristica>
+        <Caracteristica>Item 39</Caracteristica>
+        <Caracteristica>Item 40</Caracteristica>
+      </Features>
+      <Media>
+        <Foto><URL>https://cdn.x.com/L001-01.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-02.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-03.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-04.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-05.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-06.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-07.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-08.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-09.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-10.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-11.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-12.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-13.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-14.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-15.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-16.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-17.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-18.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-19.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-20.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-21.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-22.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-23.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-24.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L001-25.jpg</URL></Foto>
+      </Media>
+    </Listing>
+    <Listing>
+      <ListingID>L002</ListingID>
+      <PropertyType>Residential / Home</PropertyType>
+      <TransactionType>For Sale</TransactionType>
+      <Neighborhood>Moema</Neighborhood>
+      <City>Sao Paulo</City>
+      <ListPrice currency="BRL">1800000</ListPrice>
+      <NumeroDormitorios>3</NumeroDormitorios>
+      <NumeroBanheiros>2</NumeroBanheiros>
+      <Garages>1</Garages>
+      <UsableArea>85</UsableArea>
+      <Description>Descricao do imovel L002.</Description>
+      <Features>
+        <Caracteristica>Item 1</Caracteristica>
+        <Caracteristica>Item 2</Caracteristica>
+        <Caracteristica>Item 3</Caracteristica>
+        <Caracteristica>Item 4</Caracteristica>
+        <Caracteristica>Item 5</Caracteristica>
+        <Caracteristica>Item 6</Caracteristica>
+        <Caracteristica>Item 7</Caracteristica>
+        <Caracteristica>Item 8</Caracteristica>
+        <Caracteristica>Item 9</Caracteristica>
+        <Caracteristica>Item 10</Caracteristica>
+        <Caracteristica>Item 11</Caracteristica>
+        <Caracteristica>Item 12</Caracteristica>
+        <Caracteristica>Item 13</Caracteristica>
+        <Caracteristica>Item 14</Caracteristica>
+        <Caracteristica>Item 15</Caracteristica>
+        <Caracteristica>Item 16</Caracteristica>
+        <Caracteristica>Item 17</Caracteristica>
+        <Caracteristica>Item 18</Caracteristica>
+        <Caracteristica>Item 19</Caracteristica>
+        <Caracteristica>Item 20</Caracteristica>
+        <Caracteristica>Item 21</Caracteristica>
+        <Caracteristica>Item 22</Caracteristica>
+        <Caracteristica>Item 23</Caracteristica>
+        <Caracteristica>Item 24</Caracteristica>
+        <Caracteristica>Item 25</Caracteristica>
+        <Caracteristica>Item 26</Caracteristica>
+        <Caracteristica>Item 27</Caracteristica>
+        <Caracteristica>Item 28</Caracteristica>
+        <Caracteristica>Item 29</Caracteristica>
+        <Caracteristica>Item 30</Caracteristica>
+        <Caracteristica>Item 31</Caracteristica>
+        <Caracteristica>Item 32</Caracteristica>
+        <Caracteristica>Item 33</Caracteristica>
+        <Caracteristica>Item 34</Caracteristica>
+        <Caracteristica>Item 35</Caracteristica>
+        <Caracteristica>Item 36</Caracteristica>
+        <Caracteristica>Item 37</Caracteristica>
+        <Caracteristica>Item 38</Caracteristica>
+        <Caracteristica>Item 39</Caracteristica>
+        <Caracteristica>Item 40</Caracteristica>
+      </Features>
+      <Media>
+        <Foto><URL>https://cdn.x.com/L002-01.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-02.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-03.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-04.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-05.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-06.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-07.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-08.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-09.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-10.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-11.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-12.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-13.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-14.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-15.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-16.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-17.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-18.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-19.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-20.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-21.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-22.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-23.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-24.jpg</URL></Foto>
+        <Foto><URL>https://cdn.x.com/L002-25.jpg</URL></Foto>
+      </Media>
+    </Listing>
+  </Listings>
+</ListingDataFeed>

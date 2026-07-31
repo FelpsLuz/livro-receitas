@@ -1,0 +1,25 @@
+# Dados da carteira e da migração — nunca versionar.
+# XML tem dado de proprietário; fotos são pesadas e são backup, não código.
+*.xml
+!tools/testes/amostras/*.xml
+fotos/
+backup/
+leads-*.csv
+
+# WordPress: só o nosso plugin e o nosso tema entram no repositório.
+wp-admin/
+wp-includes/
+wp-content/uploads/
+wp-content/upgrade/
+wp-content/languages/
+wp-content/plugins/*
+!wp-content/plugins/fl-imoveis/
+wp-content/themes/*
+!wp-content/themes/felipeluz/
+wp-config.php
+.htaccess
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
