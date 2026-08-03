@@ -154,6 +154,16 @@ main#conteudo.trocando { animation: trocaAba .15s ease-out; }
 .ia-botoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .ia-botoes .btn { flex: 1; min-width: 130px; margin: 0; }
 .ia-ativa { color: #7ab0d8; font-weight: bold; }
+.ia-gratis-aviso { font-size: .85rem; border: 2px solid #5b9a50; background: rgba(91,154,80,.12);
+  padding: 7px 9px; margin: 8px 0; text-align: left; }
+/* ---------- terras bárbaras ---------- */
+.lista-barbaras { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.card-barbaro {
+  border: 2px solid rgba(120,90,50,.55); border-left: 6px solid var(--ouro);
+  background: rgba(0,0,0,.10); padding: 9px 11px;
+}
+.card-barbaro .linha-botoes { margin-top: 6px; }
+.premio-barbaro { color: #6b7a3a; font-weight: bold; }
 .falatorio { border-left: 3px solid var(--ouro); padding-left: 8px; font-style: italic; }
 .card-reino.brilho { animation: brilhoCard 1.2s ease-out; }
 @keyframes brilhoCard {

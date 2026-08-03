@@ -77,7 +77,9 @@ const Producao = (() => {
       log(`⚠️ Faltam braços em ${state.terra.nome}: os edifícios operam a ${Math.round(eficiencia * 100)}% (população ocupada demais).`);
 
     const alimento = Math.round(producaoDe(state, 'fazenda', ed.fazenda) * eficiencia);
-    const madeira = Math.round(producaoDe(state, 'serraria', ed.serraria) * eficiencia);
+    // Brenha Negra: mata sem fim dobra o corte de madeira
+    const fatorMad = (typeof Barbaras !== 'undefined') ? Barbaras.fatorMadeira(state) : 1;
+    const madeira = Math.round(producaoDe(state, 'serraria', ed.serraria) * eficiencia * fatorMad);
     const ferro = Math.round(producaoDe(state, 'mina', ed.mina) * eficiencia);
     state.terra.alimento += alimento;
     state.terra.madeira += madeira;

@@ -114,6 +114,42 @@ const BANDEIRAS_JOGADOR = [
 ];
 const CUSTO_FUNDAR_REINO = 50000;
 
+// ---------- TERRAS BÁRBARAS ----------
+// Fora das seis coroas existem terras que nenhum rei governa: são delas que
+// nasce um reino feito do NADA. Cada região é o solo natal de um clã — e há
+// dois caminhos para tomá-la: a campanha (aço) ou o pacto (conversa e ouro).
+// Quem se estabelece aqui NUNCA precisa se ajoelhar a rei nenhum.
+const TERRAS_BARBARAS = [
+  {
+    id: 'ermos', nome: 'Ermos de Ferro', cla: 'cla_lobos', terreno: 'montanha',
+    defesa: 3, custoPacto: 1400, relacaoPacto: 35, homensMin: 25,
+    bonus: { mina: 2, ferreiro: 1 }, cor: '#6b7280',
+    desc: 'Cordilheira negra rasgada por minas antigas. O vento corta como faca e o ferro aflora na rocha — por isso os Lobos nunca saíram daqui.',
+    premio: 'Minas ricas: mina nível +2 e ferreiro +1 de graça.',
+  },
+  {
+    id: 'costa', nome: 'Costa dos Ossos', cla: 'cla_corvos', terreno: 'litoral',
+    defesa: 2, custoPacto: 1100, relacaoPacto: 30, homensMin: 18,
+    bonus: { serraria: 1, fazenda: 1 }, cor: '#4a6b7a',
+    desc: 'Praia de cascalho semeada de cascos naufragados e costelas de baleia. Quem controla estas enseadas controla o contrabando do norte.',
+    premio: 'Enseadas de contrabando: +25% no preço de venda de mercadorias.',
+  },
+  {
+    id: 'estepe', nome: 'Estepe Cinzenta', cla: 'cla_estepe', terreno: 'planicie',
+    defesa: 3, custoPacto: 1600, relacaoPacto: 40, homensMin: 30,
+    bonus: { fazenda: 2 }, cor: '#8a7a4a',
+    desc: 'Capim alto até onde a vista alcança, sem uma única cerca. Aqui cavalo vale mais que ouro e ninguém jamais construiu um muro que durasse.',
+    premio: 'Pastagens infinitas: manutenção de tropas −20% e fazenda +2.',
+  },
+  {
+    id: 'brenha', nome: 'Brenha Negra', cla: 'cla_machados', terreno: 'floresta',
+    defesa: 2, custoPacto: 900, relacaoPacto: 25, homensMin: 15,
+    bonus: { serraria: 2, fazenda: 1 }, cor: '#3e5f3e',
+    desc: 'Floresta tão fechada que o sol não toca o chão. Os machados do norte cortam esta mata há gerações e conhecem cada trilha de caça.',
+    premio: 'Madeira sem fim: serraria +2 e madeira dobrada na coleta.',
+  },
+];
+
 // cidades dos nobres: sorteadas a cada novo jogo
 const NOMES_CIDADES = ['Pedraverde', 'Vau do Sol', 'Ravina Alta', 'Porto Cinza', 'Vila das Brumas',
   'Colina do Falcão', 'Forte Aurora', 'Passo do Lobo', 'Baía Rubra', 'Campo Largo', 'Torre Velha',

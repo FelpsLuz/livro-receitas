@@ -143,19 +143,28 @@ const Politica = (() => {
   // ---------- títulos: a escada até a coroa ----------
   // Mercenário → Capitão (50⭐) → Cavaleiro (armado por um rei) →
   // Senhor (terra) → Barão (terra 2+) → Conde/NOBRE (terra 4+) → Rei
+  // grau de poder: 0 plebeu · 1 senhor · 2 barão · 3 conde · 4 rei.
+  // Vale igual para quem foi armado por um rei e para quem tomou terra bárbara
+  // no aço — a diferença está só no NOME do título.
+  function grauNobreza(state) {
+    if (state.jogador.reiDe) return 4;
+    if (state.terra) return state.terra.nivel >= 4 ? 3 : state.terra.nivel >= 2 ? 2 : 1;
+    return 0;
+  }
   function titulo(state) {
     const j = state.jogador;
-    if (j.reiDe) return 'Rei';
-    if (state.terra) {
-      if (state.terra.nivel >= 4) return 'Conde';
-      if (state.terra.nivel >= 2) return 'Barão';
-      return 'Senhor';
-    }
+    const g = grauNobreza(state);
+    // quem ergueu a casa em terra sem rei carrega títulos bárbaros, não feudais
+    const barb = state.terra && state.terra.barbara && !j.cavaleiro;
+    if (g === 4) return 'Rei';
+    if (g === 3) return barb ? 'Jarl' : 'Conde';
+    if (g === 2) return barb ? 'Senhor da Marca' : 'Barão';
+    if (g === 1) return barb ? 'Chefe de Guerra' : 'Senhor';
     if (j.cavaleiro) return 'Cavaleiro';
     if (j.renome >= 50) return 'Capitão Mercenário';
     return 'Mercenário';
   }
-  function eNobre(state) { return ['Conde', 'Rei'].includes(titulo(state)); }
+  function eNobre(state) { return grauNobreza(state) >= 3; }
   function eCavaleiro(state) { return state.jogador.cavaleiro || state.terra != null || state.jogador.reiDe; }
 
   function podeSerArmado(state, reinoId) {
@@ -534,7 +543,7 @@ const Politica = (() => {
 
   return { garantir, inicializarRelacoes, tickReinos, proporTratado, aceitarOferta,
            aliado, temComercio, tickTorneio, participarTorneio, desafiarMilicia,
-           lealdadeDe, titulo, eNobre, eCavaleiro, podeSerArmado, armarCavaleiro,
+           lealdadeDe, titulo, eNobre, grauNobreza, eCavaleiro, podeSerArmado, armarCavaleiro,
            gerarNobres, nobresDe, persuadirNobre, meusNobres,
            podeProclamar, proclamarIndependencia, jurarVassalagem, quebrarVassalagem,
            DOUTRINAS, pagarTributo, tickSucessao };

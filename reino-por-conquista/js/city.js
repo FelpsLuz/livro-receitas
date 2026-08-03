@@ -28,6 +28,8 @@ const Cidade = (() => {
   // Quando carregadas, substituem casas/poço/props procedurais.
   const EST = {};
   const EST_LISTA = ['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco',
+    'muralha_portao', 'mesa', 'lareira', 'planta', 'saco', 'cesta', 'toco', 'poste_2', 'banco_2', 'placa_2',
+    'estandarte', 'caixa_agua', 'caixa_grande', 'feno_2', 'flor_v1', 'flor_v2', 'flor_b1', 'flor_b2',
     'arvore_1', 'arvore_2', 'arvore_3', 'arvore_4', 'arbusto_1', 'arbusto_2', 'arbusto_3',
     'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c', 'fogueira', 'pedra_1', 'pedra_2', 'pedra_3'];
   function estImg(nome) {
@@ -167,6 +169,33 @@ const Cidade = (() => {
         if (ym2 > ym) P(mx, ym, 2, 3, corLuz);
       }
     };
+    // CAMADA MAIS DISTANTE: picos angulares de verdade atrás das colinas macias
+    // (só ondas senoidais davam uma massa única e arredondada, sem caráter)
+    const picos = [[52, 118, 44], [118, 96, 58], [196, 108, 40], [268, 84, 66],
+                   [352, 104, 48], [430, 92, 60], [516, 112, 42], [588, 100, 52]];
+    for (const [px, py, pw] of picos) {
+      x.fillStyle = pal.montanha[0];
+      x.beginPath();
+      x.moveTo(px - pw / 2, 176); x.lineTo(px - pw * 0.12, py + 6);
+      x.lineTo(px, py); x.lineTo(px + pw * 0.18, py + 10); x.lineTo(px + pw / 2, 176);
+      x.closePath(); x.fill();
+      // face direita pegando o sol
+      x.fillStyle = pal.montanha[1];
+      x.beginPath();
+      x.moveTo(px, py); x.lineTo(px + pw * 0.18, py + 10); x.lineTo(px + pw / 2, 176);
+      x.lineTo(px + pw * 0.18, 176); x.closePath(); x.fill();
+      // neve no cume, escorrendo pelas ravinas
+      x.fillStyle = '#eef3f8';
+      x.beginPath();
+      x.moveTo(px - pw * 0.14, py + 8); x.lineTo(px, py); x.lineTo(px + pw * 0.16, py + 9);
+      x.lineTo(px + pw * 0.06, py + 13); x.lineTo(px - pw * 0.05, py + 10); x.closePath(); x.fill();
+    }
+    // névoa separando os picos distantes das colinas da frente
+    const brumaPicos = x.createLinearGradient(0, 92, 0, 182);
+    brumaPicos.addColorStop(0, 'rgba(196,218,236,.30)');
+    brumaPicos.addColorStop(1, 'rgba(196,218,236,.62)');
+    x.fillStyle = brumaPicos; x.fillRect(0, 92, W, 90);
+
     serra(150, 26, 0.012, 1.2, pal.montanha[0], pal.montanha[1]);
     // textura de rocha: salpicos e linhas de cume na cadeia distante
     for (let i = 0; i < 120; i++) {
@@ -199,20 +228,53 @@ const Cidade = (() => {
     x.fillStyle = 'rgba(190,215,232,.16)';
     x.fillRect(0, 168, W, 37);
 
-    // ---------- linha de floresta ----------
-    for (let i = 0; i < 54; i++) {
-      const fx = i * 12 + sr(i) * 8, fy = 188 + sr(i * 3) * 10;
-      const c = i % 2 ? pal.arvore[1] : pal.arvore[0];
-      x.fillStyle = c;
-      x.beginPath(); x.moveTo(fx - 5, fy + 4); x.lineTo(fx, fy - 12 - sr(i * 7) * 5); x.lineTo(fx + 5, fy + 4); x.fill();
-      x.fillStyle = pal.neve ? '#e8eff3' : pal.arvore[2];
-      x.beginPath(); x.moveTo(fx + 1, fy - 9); x.lineTo(fx + 4, fy + 2); x.lineTo(fx, fy + 2); x.fill();
-    }
+    // ---------- linha de floresta em BOSQUES, não em fileira ----------
+    // Duas fiadas com alturas e espaçamentos irregulares: a mata ganha massa
+    // e deixa de parecer uma cerca de pinheiros idênticos.
+    const fiada = (n, baseY, escala, corA, corB, alpha) => {
+      x.globalAlpha = alpha;
+      for (let i = 0; i < n; i++) {
+        // agrupamento: árvores se adensam em bosques em vez de espaçadas igual
+        const bos = Math.floor(i / 5);
+        const fx = (i * (W / n)) + sr(i * 11) * 14 + Math.sin(bos * 2.1) * 10;
+        const alt = (11 + sr(i * 7) * 12) * escala;
+        const larg = (4.5 + sr(i * 13) * 3) * escala;
+        const fy = baseY + sr(i * 3) * 8;
+        x.fillStyle = i % 3 ? corA : corB;
+        // pinheiro em três saias, não um triângulo só
+        for (let s = 0; s < 3; s++) {
+          const t = s / 3, ly = fy + 4 - alt * t, lw = larg * (1 - t * 0.45);
+          x.beginPath();
+          x.moveTo(fx - lw, ly); x.lineTo(fx, ly - alt * 0.42); x.lineTo(fx + lw, ly);
+          x.closePath(); x.fill();
+        }
+        x.fillStyle = pal.neve ? '#e8eff3' : pal.arvore[2];   // luz na face direita
+        x.beginPath();
+        x.moveTo(fx + 1, fy - alt * 0.5); x.lineTo(fx + larg * 0.8, fy + 3); x.lineTo(fx, fy + 3);
+        x.closePath(); x.fill();
+      }
+      x.globalAlpha = 1;
+    };
+    fiada(46, 186, 1.15, pal.arvore[0], pal.arvore[1], 0.55);   // fiada de trás, esmaecida
+    fiada(38, 194, 1.0, pal.arvore[1], pal.arvore[0], 1);       // fiada da frente, nítida
 
     // ---------- gramado com rampa de profundidade ----------
     P(0, 200, W, 160, pal.grama[2]);
     P(0, 200, W, 26, pal.grama[3]);                      // horizonte amarelado (luz)
     P(0, 300, W, 60, pal.grama[1]);                      // primeiro plano mais frio
+    // RELEVO: lombadas suaves de terreno quebram o gramado plano e dão volume.
+    // Cada lombada tem topo iluminado e sopé em sombra, como uma colina de verdade.
+    for (const [lx, ly, lw, lh, tom] of [
+      [-30, 246, 250, 26, 3], [180, 232, 210, 20, 3], [400, 252, 280, 24, 3],
+      [60, 300, 260, 30, 0], [340, 316, 330, 34, 0], [520, 276, 190, 22, 2],
+    ]) {
+      x.fillStyle = pal.grama[tom];
+      x.beginPath(); x.ellipse(lx + lw / 2, ly + lh, lw / 2, lh, 0, Math.PI, 0); x.fill();
+      x.fillStyle = 'rgba(255,246,200,.10)';             // crista pegando o sol
+      x.beginPath(); x.ellipse(lx + lw / 2 + 6, ly + lh - 2, lw / 2.4, lh * 0.55, 0, Math.PI, 0); x.fill();
+      x.fillStyle = 'rgba(30,50,30,.10)';                // sopé em sombra
+      x.beginPath(); x.ellipse(lx + lw / 2 - 8, ly + lh + 2, lw / 2.1, lh * 0.35, 0, Math.PI, 0); x.fill();
+    }
     // dithering entre as faixas
     for (let dx = 0; dx < W; dx += 6) {
       P(dx + (dx % 12 ? 0 : 3), 224, 3, 3, pal.grama[3]);
@@ -249,30 +311,69 @@ const Cidade = (() => {
       P(gx, gy, 2, 2, ['#e8e0f0', '#f5d060', '#e88fa8'][i % 3]);
     }
 
-    // ---------- rio ORGÂNICO com margens escuras ----------
-    const margemRio = (rx) => 306 + Math.sin(rx * 0.017) * 6 + Math.sin(rx * 0.007 + 3) * 4;
-    for (let rx = 0; rx < W; rx += 2) {
-      const topo = margemRio(rx);
-      const fundo = topo + 24 + Math.sin(rx * 0.013 + 1) * 3;
-      P(rx, topo - 2, 2, 2, pal.grama[0]);               // margem sombreada
-      P(rx, topo, 2, fundo - topo, pal.neve ? '#a9c0d2' : '#2e5a78');
-      P(rx, topo, 2, 3, pal.neve ? '#cdddea' : '#6fa3c0'); // reflexo do céu na borda
-      P(rx, fundo, 2, 2, pal.neve ? '#8fa8ba' : '#244a63'); // fundo escuro
-      P(rx, fundo + 2, 2, 2, pal.grama[0]);
+    // ---------- rio em DIAGONAL: entra pela direita e sai pela base ----------
+    // Nada de faixa horizontal cortando a tela: o rio vem em fuga, largo na
+    // frente e estreito ao longe, e leva o olho para dentro da cena.
+    // eixo do rio parametrizado por t (0 = longe/direita, 1 = perto/base)
+    const rioEixo = (t) => ({
+      x: 612 - 300 * t - Math.sin(t * 2.6) * 26,
+      y: 250 + 118 * t,
+      larg: 13 + 34 * t * t + t * 10,
+    });
+    const rioPoli = (folga) => {
+      x.beginPath();
+      for (let i = 0; i <= 24; i++) { const p = rioEixo(i / 24); x.lineTo(p.x - p.larg / 2 - folga, p.y); }
+      for (let i = 24; i >= 0; i--) { const p = rioEixo(i / 24); x.lineTo(p.x + p.larg / 2 + folga, p.y); }
+      x.closePath();
+    };
+    // margem de areia e seixo em volta de toda a curva
+    x.fillStyle = pal.neve ? '#dfe7ee' : '#b9a887'; rioPoli(6); x.fill();
+    x.fillStyle = pal.neve ? '#eef3f8' : '#cbbb9c'; rioPoli(3); x.fill();
+    // corpo d'água
+    x.fillStyle = pal.neve ? '#a9c0d2' : '#2e5a78'; rioPoli(0); x.fill();
+    // margem esquerda em sombra e brilho do céu na direita (luz vem da direita)
+    x.save(); rioPoli(0); x.clip();
+    for (let i = 0; i <= 40; i++) {
+      const p = rioEixo(i / 40);
+      P(p.x - p.larg / 2, p.y, 3, 4, pal.neve ? '#8fa8ba' : '#1e3f57');
+      P(p.x + p.larg / 2 - 3, p.y, 3, 4, pal.neve ? '#cdddea' : '#6fa3c0');
     }
-    // reflexos verticais dos objetos próximos na água (borrados)
     if (!pal.neve) {
-      x.fillStyle = 'rgba(20,38,54,.25)';
-      for (const [rx, rw] of [[300, 44], [150, 30], [508, 34]]) {
-        for (let i = 0; i < rw; i += 4) {
-          const alt = 8 + sr(rx + i) * 8;
-          x.fillRect(rx + i, margemRio(rx + i) + 3, 3, alt);
-        }
+      // correnteza: riscos claros seguindo a diagonal
+      x.fillStyle = 'rgba(190,220,238,.30)';
+      for (let i = 0; i < 40; i++) {
+        const t = sr(i * 61), p = rioEixo(t);
+        const off = (sr(i * 67) - 0.5) * p.larg * 0.7;
+        x.fillRect(p.x + off, p.y, 4 + sr(i * 71) * 8, 1);
       }
-      // espuma clara junto às margens
-      x.fillStyle = 'rgba(220,238,248,.35)';
-      for (let rx = 0; rx < W; rx += 9) x.fillRect(rx + (rx % 18 ? 3 : 0), margemRio(rx) + 1, 4, 1);
+      // reflexo trêmulo do céu
+      x.fillStyle = 'rgba(230,245,255,.14)';
+      for (let i = 0; i < 14; i++) { const p = rioEixo(sr(i * 91)); x.fillRect(p.x - 4, p.y, 9, 2); }
     }
+    x.restore();
+    // seixos molhados espalhados pelas duas margens
+    if (!pal.neve) for (let i = 0; i < 34; i++) {
+      const t = sr(i * 83), p = rioEixo(t);
+      const lado = i % 2 ? 1 : -1;
+      P(p.x + lado * (p.larg / 2 + 2 + sr(i * 89) * 5), p.y + sr(i * 97) * 4, 2 + (i % 2), 2, '#9a8a6a');
+    }
+    // funções de compatibilidade para quem posiciona pela margem (ponte etc.)
+    const margemRio = (rx) => {
+      let melhor = 300, dist = 1e9;
+      for (let i = 0; i <= 24; i++) {
+        const p = rioEixo(i / 24), d = Math.abs(p.x - rx);
+        if (d < dist) { dist = d; melhor = p.y - p.larg / 2; }
+      }
+      return melhor;
+    };
+    const larguraRio = (rx) => {
+      let melhor = 20, dist = 1e9;
+      for (let i = 0; i <= 24; i++) {
+        const p = rioEixo(i / 24), d = Math.abs(p.x - rx);
+        if (d < dist) { dist = d; melhor = p.larg; }
+      }
+      return melhor;
+    };
 
     // ---------- estrada de terra com cascalho (textura do tileset quando carregada) ----------
     const rua = (x0, y0, x1, y1, larg) => {
@@ -309,19 +410,56 @@ const Cidade = (() => {
       }
     };
     const yMuralha = 236;
-    rua(320, nivel >= 1 ? yMuralha + 18 : 212, 316, 302, 30);
-    rua(316, 318, 320, 360, 40);
-    // trilhas de terra ligando as casas à estrada
-    if (nivel >= 1) { rua(200, 262, 300, 286, 8); rua(440, 268, 340, 290, 8); }
+    // A estrada VEM do horizonte e MORRE no assentamento — não atravessa a
+    // tela inteira de frente (isso lia como um tronco cortando a cena ao meio).
+    // No acampamento (sem vila) ela passa LONGE, cruzando o fundo na horizontal:
+    // uma estrada vindo de frente, curta e grossa, lia como um objeto sólido.
+    if (nivel >= 0) {
+      rua(322, nivel >= 1 ? yMuralha + 14 : 218, 302, 284, 13);
+      if (nivel >= 1) { rua(206, 258, 296, 280, 7); rua(438, 264, 336, 288, 7); }
+    } else {
+      // trilha de tropeiro serpenteando no fundo do vale, sumindo atrás das
+      // lombadas — gasta, irregular, com sulcos de roda e capim invadindo
+      for (let i = 0; i <= 128; i++) {
+        const t = i / 128;
+        const tx = t * W;
+        const ty = 232 + Math.sin(t * 5.1 + 0.6) * 13 + Math.sin(t * 11.3) * 4;
+        const larg = 7 + Math.sin(t * 7.7 + 1.2) * 2.5 + sr(i * 3) * 2;
+        if (sr(i * 29) < 0.13) continue;            // trechos engolidos pelo capim
+        P(tx, ty, 6, larg, '#8a6a42');
+        P(tx, ty, 6, 1, '#a58a5c');                  // borda superior na luz
+        P(tx, ty + larg - 1, 6, 1, '#6b5334');       // sulco sombreado
+        if (i % 7 === 0) P(tx + 1, ty + larg / 2, 3, 1, '#6b5334');   // marca de roda
+      }
+    }
+    // trilha estreita que segue do acampamento até a travessia do rio
+    const tPonte = 0.52;
+    const pPonte = rioEixo(tPonte);
+    rua(322, 292, pPonte.x - 22, pPonte.y - 10, 8);
 
-    // ---------- ponte de madeira ----------
-    const yPonte = margemRio(320) - 4;
-    P(288, yPonte, 62, 8, '#8a6b45');
-    P(288, yPonte, 62, 2, '#a58a5c');
-    for (let i = 0; i < 8; i++) P(290 + i * 8, yPonte + 2, 2, 6, '#5d4428');
-    P(288, yPonte + 8, 62, 3, '#4a3a26');
-    for (const px of [290, 344]) { P(px, yPonte - 8, 3, 9, '#6b4f30'); P(px, yPonte - 8, 3, 2, '#8a6b45'); }
-    P(290, yPonte - 7, 57, 2, '#6b4f30');
+    // ---------- ponte de madeira, atravessando o rio na perpendicular ----------
+    (function ponte() {
+      const p0 = rioEixo(tPonte - 0.04), p1 = rioEixo(tPonte + 0.04);
+      const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x) + Math.PI / 2;  // perpendicular ao fluxo
+      const comp = pPonte.larg + 26, larg = 13;
+      x.save();
+      x.translate(pPonte.x, pPonte.y);
+      x.rotate(ang);
+      const R = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(a, b, w, h); };
+      R(-comp / 2 + 1, -larg / 2 + 3, comp - 2, larg, 'rgba(20,38,54,.30)');   // sombra na água
+      for (let i = 0; i < comp; i += 4) {                                      // tábuas
+        R(-comp / 2 + i, -larg / 2, 3, larg, (i / 4) % 2 ? '#8a6b45' : '#7d6040');
+        R(-comp / 2 + i, -larg / 2, 3, 2, '#a58a5c');
+      }
+      R(-comp / 2, -larg / 2 - 1, comp, 1, '#a58a5c');                         // longarinas
+      R(-comp / 2, larg / 2 - 1, comp, 2, '#4a3a26');
+      for (const px of [-comp / 2 + 3, -3, comp / 2 - 6]) {                    // postes do corrimão
+        R(px, -larg / 2 - 8, 3, 9, '#6b4f30'); R(px, -larg / 2 - 8, 3, 2, '#8a6b45');
+        R(px, larg / 2 - 1, 3, 7, '#5d4428');
+      }
+      R(-comp / 2 + 3, -larg / 2 - 7, comp - 8, 2, '#6b4f30');                 // mão-corrida
+      x.restore();
+    })();
 
     // ---------- campos de cultivo ----------
     if (nivel >= 1) {
@@ -547,15 +685,43 @@ const Cidade = (() => {
     }
   }
 
-  function tenda(x, tx, ty, cor) {
+  // tenda de campanha: lona costurada, cordas esticadas, abertura com brasa
+  // dentro e bandeirola no mastro — nada de triângulo chapado.
+  function tenda(x, tx, ty, cor, semBandeira) {
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
-    P(tx - 4, ty + 20, 36, 4, SOMBRA);
-    x.fillStyle = cor;
-    x.beginPath(); x.moveTo(tx, ty + 20); x.lineTo(tx + 14, ty); x.lineTo(tx + 28, ty + 20); x.fill();
-    x.fillStyle = 'rgba(38,54,74,.25)';
-    x.beginPath(); x.moveTo(tx, ty + 20); x.lineTo(tx + 14, ty); x.lineTo(tx + 14, ty + 20); x.fill();
-    P(tx + 13, ty - 4, 2, 5, '#5d4428');
-    P(tx + 10, ty + 9, 8, 11, '#3d3020');
+    const cx = tx + 14, base = ty + 20;
+    // sombra elíptica no chão (luz vem da direita-superior)
+    x.fillStyle = SOMBRA;
+    x.beginPath(); x.ellipse(cx - 3, base + 2, 20, 5, 0, 0, 7); x.fill();
+    // cordas de amarração e estacas
+    x.strokeStyle = 'rgba(90,70,45,.85)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(cx, ty + 1); x.lineTo(tx - 7, base + 1); x.stroke();
+    x.beginPath(); x.moveTo(cx, ty + 1); x.lineTo(tx + 35, base + 1); x.stroke();
+    P(tx - 8, base - 1, 2, 4, '#4a3a26'); P(tx + 34, base - 1, 2, 4, '#4a3a26');
+    // lona: face direita iluminada, esquerda em sombra
+    x.fillStyle = corClara(cor);
+    x.beginPath(); x.moveTo(cx, ty); x.lineTo(tx + 28, base); x.lineTo(cx, base); x.closePath(); x.fill();
+    x.fillStyle = sombraCor(cor);
+    x.beginPath(); x.moveTo(cx, ty); x.lineTo(tx, base); x.lineTo(cx, base); x.closePath(); x.fill();
+    // costuras horizontais da lona
+    x.strokeStyle = 'rgba(60,45,28,.30)';
+    for (let k = 1; k <= 3; k++) {
+      const yy = ty + (base - ty) * (k / 4), meia = (yy - ty) * 0.7;
+      x.beginPath(); x.moveTo(cx - meia, yy); x.lineTo(cx + meia, yy); x.stroke();
+    }
+    // aba de entrada aberta, com brasa quente lá dentro
+    x.fillStyle = '#2a1d12';
+    x.beginPath(); x.moveTo(cx - 5, base); x.lineTo(cx, base - 13); x.lineTo(cx + 5, base); x.closePath(); x.fill();
+    P(cx - 2, base - 4, 4, 3, 'rgba(232,150,60,.55)');
+    // lona dobrada da aba, presa ao lado
+    x.fillStyle = sombraCor(cor);
+    x.beginPath(); x.moveTo(cx + 4, base - 10); x.lineTo(cx + 9, base - 3); x.lineTo(cx + 4, base); x.closePath(); x.fill();
+    // mastro + bandeirola
+    P(cx - 1, ty - 7, 2, 8, '#5d4428');
+    if (!semBandeira) {
+      x.fillStyle = '#8b2635';
+      x.beginPath(); x.moveTo(cx + 1, ty - 7); x.lineTo(cx + 10, ty - 5); x.lineTo(cx + 1, ty - 2); x.closePath(); x.fill();
+    }
   }
 
   // barracas de mercado — cada uma é ÚNICA (toldo, mercadoria e adereço próprios)
@@ -827,19 +993,60 @@ const Cidade = (() => {
   }
 
   function acampamento(x, pal) {
-    tenda(x, 170, 240, '#8a6b45'); tenda(x, 400, 254, '#7a6248'); tenda(x, 120, 276, '#93765a'); tenda(x, 470, 280, '#8a6b45');
     const P = (a, b, w, h, c) => { x.fillStyle = c; x.fillRect(Math.round(a), Math.round(b), Math.round(w), Math.round(h)); };
-    // carroça
-    P(432, 292, 6, 4, SOMBRA);
-    P(430, 282, 28, 12, '#6b4f30'); P(431, 280, 26, 4, '#8a6b45'); P(454, 282, 4, 12, '#8a6b45');
-    for (const rx of [433, 449]) { P(rx, 292, 8, 8, '#3d3020'); P(rx + 3, 292, 2, 8, '#5a4a35'); P(rx, 295, 8, 2, '#5a4a35'); }
-    // estandarte
-    P(210, 226, 3, 40, '#4a3826');
-    // rack de lanças
+    // tendas espalhadas em profundidade (as de trás menores pela distância)
+    tenda(x, 400, 250, '#7a6248', true);
+    tenda(x, 170, 238, '#8a6b45');
+    tenda(x, 112, 274, '#93765a', true);
+    tenda(x, 468, 278, '#8a6b45');
+
+    // carroça de suprimentos, com carga e rodas gastas
+    x.fillStyle = SOMBRA;
+    x.beginPath(); x.ellipse(444, 301, 20, 4, 0, 0, 7); x.fill();
+    P(430, 282, 28, 12, '#6b4f30'); P(431, 280, 26, 4, '#8a6b45'); P(454, 282, 4, 12, '#a58a5c');
+    P(433, 276, 8, 5, '#8a7a4a'); P(443, 277, 7, 4, '#7a6a3a');   // fardos na caçamba
+    for (const rx of [433, 449]) {
+      P(rx, 292, 8, 8, '#3d3020'); P(rx + 3, 292, 2, 8, '#5a4a35'); P(rx, 295, 8, 2, '#5a4a35');
+    }
+    // rack de lanças fincado
     P(350, 250, 20, 3, '#6b4f30');
     for (const lx of [352, 358, 364]) { P(lx, 232, 2, 20, '#8a6b45'); P(lx - 1, 229, 4, 4, '#c0bdb0'); }
-    // boneco de treino
+    // boneco de treino, com marcas de golpe
     P(160, 288, 3, 16, '#6b4f30'); P(152, 291, 19, 3, '#6b4f30'); P(157, 282, 9, 7, '#b09a6e');
+    P(158, 284, 2, 1, '#6b4f30'); P(162, 286, 2, 1, '#6b4f30');
+    // escudos encostados e uma espada fincada no chão
+    for (const [sx, sc] of [[300, '#7a3a3a'], [312, '#3a5a7a']]) {
+      x.fillStyle = sc; x.beginPath(); x.ellipse(sx, 292, 6, 8, 0, 0, 7); x.fill();
+      x.fillStyle = 'rgba(255,240,200,.25)'; x.beginPath(); x.ellipse(sx + 1, 289, 2.5, 3.5, 0, 0, 7); x.fill();
+    }
+    P(268, 276, 2, 18, '#c0bdb0'); P(264, 276, 10, 2, '#8a6b45'); P(268, 271, 2, 5, '#5d4428');
+    // varal de campanha entre duas estacas
+    P(196, 262, 2, 22, '#5d4428'); P(244, 264, 2, 20, '#5d4428');
+    x.strokeStyle = 'rgba(60,45,28,.8)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(197, 264); x.quadraticCurveTo(220, 270, 245, 266); x.stroke();
+    P(206, 266, 7, 9, '#9a8a6a'); P(220, 268, 6, 8, '#8a7a5a'); P(232, 268, 5, 7, '#a09070');
+
+    // props do tileset dão a textura de acampamento habitado
+    const props = [
+      ['caixa_grande', 336, 296, 15], ['barril', 356, 296, 12], ['saco', 324, 297, 11],
+      ['cesta', 420, 300, 13], ['feno_2', 128, 300, 20], ['toco', 492, 300, 18],
+      ['mesa', 214, 296, 24],
+    ];
+    for (const [nome, px, py, larg] of props) if (estPronta(nome)) estDesenha(x, nome, px, py, larg);
+    // flores do tileset semeadas no capim (só nas estações verdes)
+    if (pal.tiles) {
+      const flores = ['flor_v1', 'flor_v2', 'flor_b1', 'flor_b2'].map(estPronta).filter(Boolean);
+      if (flores.length) {
+        x.imageSmoothingEnabled = false;
+        for (let i = 0; i < 9; i++) {
+          const fx = 40 + sr(i * 97) * (W - 80), fy = 292 + sr(i * 101) * 56;
+          const im = flores[i % flores.length];
+          x.globalAlpha = 0.85;
+          x.drawImage(im, Math.round(fx), Math.round(fy - 12), 16, 16);
+          x.globalAlpha = 1;
+        }
+      }
+    }
   }
 
   // ============================================================
@@ -1269,9 +1476,53 @@ const Cidade = (() => {
     astros(ctx, pal, ciclo);
     desenharDinamico(ctx, state, pal, nivel);
     desenharAndarilhos(ctx);
+    primeiroPlano(ctx, pal);          // moldura viva, à frente de tudo
     atmosfera(ctx, pal, ciclo, est);
     clima(ctx, est, ciclo);
     ambiente(ctx, ciclo, nivel);
+  }
+
+  // ---------- PRIMEIRO PLANO: as bordas ganham massa e a cena ganha profundidade ----------
+  // Árvores grandes e escuras nos cantos emolduram a vista (como numa pintura):
+  // o olho é empurrado para o centro e a cena deixa de ser um cenário chapado.
+  function primeiroPlano(ctx, pal) {
+    const balanco = Math.sin(anim / 90) * 1.6;
+    const copa = (cx, base, alt, larg, escuro) => {
+      // tronco com raízes
+      ctx.fillStyle = escuro ? '#2b2018' : '#3d2d1e';
+      ctx.fillRect(cx - 5, base - alt * 0.42, 10, alt * 0.42);
+      ctx.fillRect(cx - 11, base - 5, 7, 5); ctx.fillRect(cx + 5, base - 4, 8, 4);
+      // massa da folhagem em três bolhas, com balanço lento
+      const c1 = escuro ? '#1e3320' : '#27492a', c2 = escuro ? '#264026' : '#2f5733';
+      for (const [dx, dy, r, cor] of [
+        [-larg * 0.34, -alt * 0.52, larg * 0.46, c1],
+        [larg * 0.30, -alt * 0.58, larg * 0.44, c1],
+        [0, -alt * 0.78, larg * 0.52, c2],
+      ]) {
+        ctx.fillStyle = cor;
+        ctx.beginPath();
+        ctx.ellipse(cx + dx + balanco, base + dy, r, r * 0.86, 0, 0, 7);
+        ctx.fill();
+      }
+      // recorte de folhas soltas na silhueta (evita bolha lisa)
+      ctx.fillStyle = c2;
+      for (let i = 0; i < 16; i++) {
+        const a = sr(cx + i * 13) * 6.28, rr = larg * (0.42 + sr(cx + i * 17) * 0.22);
+        ctx.fillRect(cx + Math.cos(a) * rr + balanco, base - alt * 0.62 + Math.sin(a) * rr * 0.8, 5, 4);
+      }
+    };
+    copa(-8, 372, 190, 92, true);      // canto inferior esquerdo
+    copa(646, 384, 205, 100, true);    // canto inferior direito
+    copa(88, 366, 120, 58, false);     // arbusto alto quebrando a borda
+    // capim alto rente à câmera, na base da tela
+    ctx.fillStyle = pal.neve ? 'rgba(226,236,244,.85)' : 'rgba(28,58,32,.85)';
+    for (let i = 0; i < 90; i++) {
+      const gx = sr(i * 137) * W, h = 8 + sr(i * 139) * 13;
+      const incl = Math.sin(anim / 70 + i) * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(gx, H); ctx.lineTo(gx + incl, H - h); ctx.lineTo(gx + 3, H);
+      ctx.closePath(); ctx.fill();
+    }
   }
 
   function renderShowcase(canvas) {

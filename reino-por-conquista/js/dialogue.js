@@ -924,16 +924,39 @@ const Dialogo = (() => {
     const meuReino = npc.id.startsWith('rei_')
       ? state.reinos.find(r => r.id === npc.id.replace('rei_', '')) : null;
     const exemplos = [...(voz.saudacao || []), ...(voz.neutro || [])].slice(0, 3);
+    // CÓDICE: crença, medo, contas a acertar e segredo — é o que dá alma ao personagem
+    const codice = (typeof Lore !== 'undefined') ? Lore.blocoPrompt(npc) : '';
+    // quem é o jogador AGORA no mundo (título, terra, coroa, exército)
+    const j = state.jogador;
+    const tituloJ = (typeof Politica !== 'undefined') ? Politica.titulo(state) : 'mercenário';
+    const terraJ = state.terra
+      ? `${state.terra.nome} (${NIVEIS_TERRA[state.terra.nivel].nome}${state.terra.barbara ? ', terra bárbara tomada sem licença de rei nenhum' : ''})`
+      : 'nenhuma terra';
+    const exercitoJ = (typeof Combate !== 'undefined') ? Combate.totalHomens(j.tropas) : 0;
+    // o que ESTE npc está fazendo neste mês
+    const agenda = (typeof Agenda !== 'undefined') ? Agenda.de(state, npc) : null;
+    // boato sobre o jogador que este NPC já ouviu
+    const boato = (typeof Fofoca !== 'undefined' && Fofoca.sabidasPor(state, npc.id)[0]) || null;
+    const outrosReis = state.reinos.filter(r => !meuReino || r.id !== meuReino.id)
+      .map(r => `${r.rei.nome} de ${r.nome}`).join('; ');
     return [
       `Você é ${npc.nome} — personalidade: ${npc.personalidade}. ${npc.desc || ''}`,
+      codice,
       meuReino ? `Seu reino: ${meuReino.nome} (capital ${meuReino.capital}). Doutrina: ${(typeof Politica !== 'undefined' && Politica.DOUTRINAS[meuReino.id]) || ''}` : '',
-      `Relação com o jogador (${state.jogador.nome}): ${nomeRelacao(tags.relacao)} (${tags.relacao}/100).`,
-      memorias.length ? `Você LEMBRA literalmente do que o jogador já disse:\n${memorias.join('\n')}` : 'Vocês nunca conversaram nada marcante.',
-      guerras.length ? `Guerras em curso no continente: ${guerras.join('; ')}.` : 'O continente está em paz.',
-      `Exemplos do seu jeito de falar (imite o TOM, não repita):\n${exemplos.map(e => `- "${e}"`).join('\n')}`,
+      npc.barbaro ? `Você é um chefe bárbaro: não serve a coroa nenhuma e despreza quem se ajoelha.` : '',
+      `Outros soberanos vivos: ${outrosReis}.`,
+      `QUEM ESTÁ FALANDO COM VOCÊ: ${j.nome}, ${tituloJ}, ${j.idade} anos, renome ${j.renome}, ${exercitoJ} homens em armas, terras: ${terraJ}.` +
+        (j.reiDe === 'jogador' ? ` ATENÇÃO: ele fundou o próprio reino (${j.reinoNome}) e agora é um rei como você.` : ''),
+      `Relação de vocês: ${nomeRelacao(tags.relacao)} (${tags.relacao} numa escala de -100 a 100). Trate-o exatamente conforme esse número.`,
+      memorias.length ? `VOCÊ LEMBRA, PALAVRA POR PALAVRA, do que ele já lhe disse:\n${memorias.join('\n')}\n(Use isso quando fizer sentido — cobre, agradeça ou ironize.)` : 'Vocês nunca trocaram nada memorável antes.',
+      guerras.length ? `Guerras em curso: ${guerras.join('; ')}.` : 'O continente está em paz — tensa, mas paz.',
+      agenda ? `Você está, neste exato mês, ${agenda.atividade}.` : '',
+      boato ? `Boato que chegou aos seus ouvidos recentemente: ${boato.tipo.replace(/_/g, ' ')}${boato.frase ? ` — "${boato.frase}"` : ''}.` : '',
+      `Exemplos do seu jeito de falar (imite o TOM, jamais copie):\n${exemplos.map(e => `- "${e}"`).join('\n')}`,
       `O jogador disse agora: "${textoJogador}"`,
-      `O motor do jogo já decidiu a mecânica — intenção: ${resultado.intencao || 'nenhuma'}; efeitos: ${resultado.efeitos.join(' ') || 'nenhum'}. NÃO os contradiga.`,
-      `Responda APENAS com JSON válido: {"fala": "1-3 frases em português no seu tom", "emocao": "neutro|feliz|raiva"}. Não invente fatos, nomes ou números que não estão acima.`,
+      `O motor do jogo JÁ decidiu a mecânica — intenção detectada: ${resultado.intencao || 'nenhuma'}; efeitos aplicados: ${resultado.efeitos.join(' ') || 'nenhum'}. Sua fala deve ser COERENTE com isso e nunca contradizê-lo.`,
+      `REGRAS: 1 a 3 frases, em português do Brasil, na primeira pessoa do personagem. Nunca mencione jogo, IA, sistema ou regras. Nunca invente lugares, pessoas, números ou eventos que não estejam acima. Não repita as falas de exemplo.`,
+      `Responda APENAS com JSON válido: {"fala": "...", "emocao": "neutro|feliz|raiva"}.`,
     ].filter(Boolean).join('\n');
   }
 

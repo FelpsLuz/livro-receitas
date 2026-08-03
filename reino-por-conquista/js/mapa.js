@@ -16,6 +16,13 @@ const MapaMundi = (() => {
     rosa: { x: 528, y: 276 },
     jogador: { x: 182, y: 344 },
   };
+  // terras sem rei, nas bordas do mundo civilizado
+  const POS_BARBARA = {
+    ermos: { x: 132, y: 132 },   // cordilheira noroeste
+    costa: { x: 462, y: 356 },   // enseadas do sul
+    estepe: { x: 300, y: 350 },  // planície aberta ao sul
+    brenha: { x: 560, y: 214 },  // floresta fechada a leste
+  };
   // estradas: quem se liga a quem (o Império toca todos)
   const ESTRADAS = [
     ['imperio', 'aguias'], ['imperio', 'alvorecer'], ['imperio', 'touros'],
@@ -125,6 +132,30 @@ const MapaMundi = (() => {
     ctx.restore();
   }
 
+  // território bárbaro: totem de crânio e estandarte de peles, sem muros
+  function totemBarbaro(ctx, x, y, cor, tomada) {
+    ctx.fillStyle = '#5d4428'; ctx.fillRect(x - 1.5, y - 16, 3, 18);      // mastro
+    ctx.fillStyle = cor;                                                   // pele estendida
+    ctx.beginPath(); ctx.moveTo(x + 2, y - 15); ctx.lineTo(x + 14, y - 11);
+    ctx.lineTo(x + 2, y - 5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#3a2c1a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#efe8d6';                                             // crânio no topo
+    ctx.beginPath(); ctx.arc(x, y - 19, 3.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3a2c1a';
+    ctx.fillRect(x - 2, y - 20, 1.5, 1.5); ctx.fillRect(x + 0.5, y - 20, 1.5, 1.5);
+    ctx.fillStyle = '#5d4428';                                             // tendas em volta
+    for (const dx of [-13, 11]) {
+      ctx.beginPath(); ctx.moveTo(x + dx, y + 2); ctx.lineTo(x + dx + 5, y - 7);
+      ctx.lineTo(x + dx + 10, y + 2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#3a2c1a'; ctx.stroke();
+    }
+    if (tomada) { // sob seu estandarte: coroa bárbara sobre o totem
+      ctx.fillStyle = '#c9a227';
+      ctx.fillRect(x - 5, y - 27, 10, 2.5);
+      ctx.fillRect(x - 5, y - 30, 2, 3); ctx.fillRect(x - 1, y - 31, 2, 4); ctx.fillRect(x + 3, y - 30, 2, 3);
+    }
+  }
+
   function rosaDosVentos(ctx, x, y) {
     ctx.strokeStyle = '#4a3a26'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(x, y, 15, 0, 7); ctx.stroke();
@@ -161,7 +192,7 @@ const MapaMundi = (() => {
     return JSON.stringify([
       state.reinos.map(r => [r.id, r.dominadoPor === 'jogador', !!r.emCrise, r.capital, r.nome]),
       state.jogador.reiDe, state.jogador.bandeira, state.jogador.reinoNome, state.local,
-      carregadas,
+      carregadas, state.barbaras || {},
     ]);
   }
 
@@ -291,6 +322,16 @@ const MapaMundi = (() => {
           ctx.drawImage(bd, p.x + 14, p.y - 26, 15, 10);
         }
         rotulo(ctx, p.x, p.y + 16, state.jogador.reinoNome || 'Seu Reino', '#26160e');
+      }
+      // TERRAS BÁRBARAS: sem coroa, sem muros — e livres para tomar
+      if (typeof Barbaras !== 'undefined') {
+        for (const t of Barbaras.TERRAS) {
+          const p = POS_BARBARA[t.id]; if (!p) continue;
+          const minha = Barbaras.dono(state, t.id);
+          totemBarbaro(ctx, p.x, p.y, t.cor, !!minha);
+          rotulo(ctx, p.x, p.y + 14, t.nome, minha ? '#26160e' : '#6b4a2a');
+          if (!minha) rotulo(ctx, p.x, p.y + 25, '~ sem rei ~', '#8a6a3a');
+        }
       }
     }
 

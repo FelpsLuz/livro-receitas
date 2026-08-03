@@ -121,7 +121,10 @@ const Economia = (() => {
       }
       msgExtra = ' (ágio de contrabando de guerra!)';
     }
-    const ganho = preco * qtd;
+    // Costa dos Ossos: as enseadas de contrabando pagam melhor por tudo
+    const agioRegiao = (typeof Barbaras !== 'undefined') ? Barbaras.bonusVenda(state) : 1;
+    if (agioRegiao > 1) msgExtra += ' (suas enseadas rendem +25%!)';
+    const ganho = Math.round(preco * qtd * agioRegiao);
     state.carga[gId] -= qtd;
     state.jogador.ouro += ganho;
     const m = state.mercados[reinoId][gId];
@@ -206,6 +209,8 @@ const Economia = (() => {
     manut += state.jogador.guardas * 4; // guarda de elite é cara
     // campeões de guerra cobram soldo (nada é de graça)
     for (const c of (state.campeoes || [])) manut += (c.soldo || 0);
+    // Estepe Cinzenta: pastagem infinita barateia manter homens e cavalos
+    if (typeof Barbaras !== 'undefined') manut = Math.round(manut * Barbaras.fatorManutencao(state));
     state.jogador.ultimaManut = manut;
 
     if (state.jogador.ouro >= manut) {

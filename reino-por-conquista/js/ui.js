@@ -163,6 +163,7 @@ const UI = (() => {
   // ---------- SUA TERRA (pixel art + gestão) ----------
   function renderTerra(c) {
     const s = Jogo.state, t = s.terra;
+    if (npcAtual) { renderConversa(c, npcAtual); return; }   // parlamentar com chefes bárbaros
     const painel = el('div', 'painel');
     painel.appendChild(el('h2', null, t ? `${t.nome} — ${NIVEIS_TERRA[t.nivel].nome}` : 'Acampamento Mercenário'));
     const wrap = el('div', 'canvas-wrap');
@@ -172,10 +173,15 @@ const UI = (() => {
     painel.appendChild(wrap);
 
     if (!t) {
-      painel.appendChild(el('p', 'flavor', 'Sem terras, sem raízes. Sua "corte" é uma fogueira e três tendas na beira da estrada. Seja armado CAVALEIRO por um rei (60⭐ + relação 40, na corte) e compre seu primeiro pedaço de chão.'));
-      const b = el('button', 'btn', '🏕️ Comprar terra (300 🪙, requer título de Cavaleiro)');
+      painel.appendChild(el('p', 'flavor', 'Sem terras, sem raízes. Sua "corte" é uma fogueira e três tendas na beira da estrada. Há DOIS caminhos para ter chão seu: ajoelhar-se a um rei — ou tomar terra onde rei nenhum manda.'));
+      painel.appendChild(el('h3', null, '🤝 O caminho da coroa'));
+      const b = el('button', 'btn sec', '🏕️ Comprar terra (300 🪙, requer título de Cavaleiro)');
       b.onclick = () => aviso(Jogo.comprarTerra().msg) || renderTudo();
       painel.appendChild(b);
+      painel.appendChild(el('p', 'flavor', 'Seja armado CAVALEIRO por um rei (60⭐ + relação 40, na corte) e compre seu primeiro pedaço de chão — com a bênção dele, e sob a sombra dele.'));
+      painel.appendChild(el('h3', null, '🐺 O caminho de quem não se ajoelha'));
+      painel.appendChild(el('p', 'flavor', 'Quatro terras bárbaras não respondem a coroa alguma. Tome uma no aço ou no pacto e sua casa nasce LIVRE — daí ao trono próprio, sem jamais jurar vassalagem.'));
+      painel.appendChild(cardsBarbaros());
     } else {
       const col = t.ultimaColeta;
       painel.appendChild(el('div', 'grade', `
@@ -994,6 +1000,57 @@ const UI = (() => {
     box.appendChild(bOk); box.appendChild(bNao);
   }
 
+  // ---------- terras bárbaras: aço ou pacto ----------
+  function cardsBarbaros() {
+    const s = Jogo.state;
+    const caixa = el('div', 'lista-barbaras');
+    for (const t of Barbaras.TERRAS) {
+      const cla = Clas.claPorId(t.cla);
+      const rel = Dialogo.tagsDe(s, t.cla).relacao;
+      const tomada = Barbaras.dono(s, t.id);
+      const card = el('div', 'card-barbaro');
+      card.style.borderLeftColor = t.cor;
+      const homens = Combate.totalHomens(s.jogador.tropas);
+      card.appendChild(el('div', 'npc-info',
+        `<b>${esc(t.nome)}</b> <small>· ${esc(cla.nome)} · chefe ${esc(cla.lider)}</small><br>
+         <small><i>${esc(t.desc)}</i></small><br>
+         <small class="premio-barbaro">🎁 ${esc(t.premio)}</small><br>
+         <small>⚔️ Defesa ${'🗡️'.repeat(t.defesa)} · exige ${t.homensMin} homens (você tem ${homens}) ·
+         🤝 pacto: relação ${rel}/${t.relacaoPacto} + ${t.custoPacto} 🪙</small>` +
+        (tomada ? `<br><small class="bom">✅ Sua ${tomada === 'pacto' ? '(pelo pacto)' : '(pela conquista)'}</small>` : '')));
+      if (!tomada && !s.terra) {
+        const linha = el('div', 'linha-botoes');
+        const podeC = Barbaras.podeCampanha(s, t.id);
+        const bC = el('button', 'btn mini', '⚔️ Marchar (campanha)');
+        bC.disabled = !podeC.ok;
+        if (!podeC.ok) bC.title = podeC.msg;
+        bC.onclick = () => {
+          confirmar(`Marchar sobre ${t.nome} contra os ${cla.nome}? Vitória entrega a terra; derrota custa homens e renome.`, () => {
+            const rel2 = Barbaras.campanha(s, t.id, Jogo.log);
+            Jogo.salvar();
+            if (rel2 && rel2.rodadas) mostrarBatalha(rel2); else renderTudo();
+          });
+        };
+        const podeP = Barbaras.podePacto(s, t.id);
+        const bP = el('button', 'btn mini', `🤝 Selar pacto (${t.custoPacto} 🪙)`);
+        bP.disabled = !podeP.ok;
+        if (!podeP.ok) bP.title = podeP.msg;
+        bP.onclick = () => {
+          const r = Barbaras.pacto(s, t.id, Jogo.log);
+          if (r.ok) Sfx.vitoria(); else Sfx.alerta();
+          aviso(r.msg); Jogo.salvar(); renderTudo();
+        };
+        const chefe = Barbaras.chefeDe(t.id);
+        const bF = el('button', 'btn mini', '💬 Falar com o chefe');
+        bF.onclick = () => { npcAtual = chefe; abaAtual = 'terra'; renderTudo(); };
+        linha.appendChild(bC); linha.appendChild(bP); linha.appendChild(bF);
+        card.appendChild(linha);
+      }
+      caixa.appendChild(card);
+    }
+    return caixa;
+  }
+
   // ---------- configuração da IA na nuvem ----------
   function abrirConfigIA(aoFechar) {
     const modal = $('#modal');
@@ -1002,11 +1059,13 @@ const UI = (() => {
     box.innerHTML = '';
     box.appendChild(el('h2', null, '🧠 IA das conversas'));
     box.appendChild(el('p', 'flavor',
-      'Ligue uma IA de verdade e converse LIVREMENTE com os reis — eles entendem e respondem qualquer coisa, no personagem. ' +
+      'Ligue uma IA de verdade e converse LIVREMENTE com os reis — eles conhecem a própria lore (o que creem, o que temem, com quem têm contas) e respondem no personagem. ' +
       'A mecânica do jogo (relação, ouro, memória) continua no motor; a IA só dá voz. ' +
       'Sua chave fica só neste aparelho, nunca é enviada a nós nem salva no jogo. Sem internet, o jogo usa o motor offline.'));
+    box.appendChild(el('p', 'ia-gratis-aviso',
+      '💚 Há três opções <b>GRATUITAS</b> (só pedem cadastro, sem cartão): Groq, Google Gemini e OpenRouter. Recomendo o <b>Groq</b> — é grátis e o mais rápido.'));
 
-    const provAtual = LLMNuvem.provedor() || 'claude';
+    const provAtual = LLMNuvem.provedor() || 'groq';
     const linhaProv = el('div', 'ia-campo');
     linhaProv.appendChild(el('label', null, 'Provedor'));
     const sel = el('select', 'input-reino');

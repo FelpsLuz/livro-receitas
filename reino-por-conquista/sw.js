@@ -1,11 +1,11 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v26';
+const CACHE = 'reino-v27';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',
   './js/data.js', './js/assets.js', './js/duelo.js', './js/sfx.js', './js/portraits.js', './js/clans.js', './js/production.js', './js/politics.js',
-  './js/gossip.js', './js/agenda.js', './js/mapa.js',
-  './js/dialogue.js', './js/llm_nuvem.js', './js/economy.js', './js/combat.js', './js/intrigue.js',
+  './js/barbaras.js', './js/gossip.js', './js/agenda.js', './js/mapa.js',
+  './js/lore.js', './js/dialogue.js', './js/llm_nuvem.js', './js/economy.js', './js/combat.js', './js/intrigue.js',
   './js/city.js', './js/game.js', './js/ui.js',
   './icons/icon-192.png', './icons/icon-512.png',
   './img/hud/logo.png', './img/hud/moldura.png', './img/hud/barra_vazia.png', './img/hud/barra_vida.png',
@@ -36,6 +36,10 @@ const ARQUIVOS = [
     .flatMap(([r, n]) => Array.from({ length: n }, (_, i) => './img/retratos/lorde_' + r + '_' + (i + 1) + '.png')),
   ...['terra', 'mapa', 'mercado', 'taverna', 'corte', 'exercito', 'clas', 'intrigas', 'familia', 'cronica']
     .map((i) => './img/icones/' + i + '.png'),
+  ...['muralha_portao', 'mesa', 'lareira', 'planta', 'saco', 'cesta', 'toco', 'poste_2', 'banco_2', 'placa_2',
+      'estandarte', 'caixa_agua', 'caixa_grande', 'feno_2', 'flor_v1', 'flor_v2', 'flor_b1', 'flor_b2',
+      'sombra_curta', 'sombra_longa']
+    .map((e) => './img/estruturas/' + e + '.png'),
   ...['casa_1', 'casa_2', 'casa_3', 'casa_4', 'poco', 'arco', 'poste', 'feno', 'caixa', 'barril', 'placa', 'mural', 'banco',
       'arvore_1', 'arvore_2', 'arvore_3', 'arvore_4', 'arbusto_1', 'arbusto_2', 'arbusto_3',
       'grama_a', 'grama_b', 'grama_c', 'estrada_a', 'estrada_b', 'estrada_c',
