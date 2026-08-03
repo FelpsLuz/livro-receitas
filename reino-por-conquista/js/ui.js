@@ -77,8 +77,12 @@ const UI = (() => {
   function iniciarAnimacao() {
     if (animTimer) cancelAnimationFrame(animTimer);
     const loop = () => {
+      // com um modal aberto, os canvases de trás não precisam ser redesenhados
+      const modalAberto = $('#modal').style.display === 'flex';
       const canvas = $('#canvas-cidade');
-      if (canvas && canvas.offsetParent !== null && Jogo.state) Cidade.render(canvas, Jogo.state);
+      if (canvas && canvas.offsetParent !== null && Jogo.state && !modalAberto) Cidade.render(canvas, Jogo.state);
+      const cvMapa = $('#canvas-mapa');
+      if (cvMapa && cvMapa.offsetParent !== null && Jogo.state && !modalAberto) MapaMundi.render(cvMapa, Jogo.state, performance.now());
       Retratos.tick();
       animTimer = requestAnimationFrame(loop);
     };
@@ -103,7 +107,7 @@ const UI = (() => {
     }
   }
   function reajustarCanvases() {
-    ['#canvas-cidade', '#canvas-titulo'].forEach((id) => {
+    ['#canvas-cidade', '#canvas-titulo', '#canvas-mapa'].forEach((id) => {
       const cv = $(id);
       if (cv) ajustarPixelPerfeito(cv);
     });
@@ -265,6 +269,24 @@ const UI = (() => {
     const s = Jogo.state;
     const painel = el('div', 'painel');
     painel.appendChild(el('h2', null, 'O Continente'));
+    // MAPA ILUSTRADO: pergaminho vivo — clique numa capital para ir ao reino
+    const wrapMapa = el('div', 'canvas-wrap');
+    const cvMapa = el('canvas');
+    cvMapa.id = 'canvas-mapa'; cvMapa.width = 640; cvMapa.height = 420;
+    cvMapa.title = 'Clique numa capital para ver o reino';
+    cvMapa.onclick = (ev) => {
+      const id = MapaMundi.reinoEm(cvMapa, ev, s);
+      if (!id) return;
+      Sfx.pagina();
+      const card = document.getElementById('card-reino-' + id);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.remove('brilho'); void card.offsetWidth; card.classList.add('brilho');
+      }
+    };
+    wrapMapa.appendChild(cvMapa);
+    painel.appendChild(wrapMapa);
+    painel.appendChild(el('p', 'flavor', '🗺️ Espadas cruzadas = guerra em curso · coroa = trono sob seu domínio · clique numa capital para saltar ao reino.'));
     // barra de progresso da UNIFICAÇÃO (nova condição de vitória)
     const dominados = s.reinos.filter(r => r.dominadoPor === 'jogador').length;
     const total = s.reinos.length;
@@ -294,6 +316,7 @@ const UI = (() => {
       const rel = Dialogo.nomeRelacao(tags.relacao);
       const cb = s.casusBelli.includes(r.id);
       const card = el('div', 'card-reino com-retrato');
+      card.id = 'card-reino-' + r.id;
       card.style.borderLeftColor = r.cor;
       card.appendChild(retratoDe(r.rei.id, null, r.rei.retratoId));
       const lordes = Politica.nobresDe(s, r.id);
@@ -404,6 +427,8 @@ const UI = (() => {
     if (npcAtual) { renderConversa(c, npcAtual); return; }
     const painel = el('div', 'painel');
     painel.appendChild(el('h2', null, '🍺 Taverna do Javali Manco'));
+    const falat = Fofoca.falatorio(s); // o boato que corre as mesas este mês
+    if (falat) painel.appendChild(el('p', 'flavor falatorio', esc(falat)));
 
     if (s.torneio) {
       const cardT = el('div', 'card-contrato');
@@ -470,8 +495,10 @@ const UI = (() => {
     const tags = s.tags[npc.id] || { relacao: 0 };
     const card = el('div', 'card-npc com-retrato');
     card.appendChild(retratoDe(npc.id, null, npc.retratoId));
+    const agora = Agenda.linha(s, npc); // a agenda do mês vaza no painel
     const info = el('div', 'npc-info',
-      `<b>${npc.nome}</b> <small>(${Dialogo.nomeRelacao(tags.relacao)} ${tags.relacao})</small><br><small><i>${npc.desc}</i></small>`);
+      `<b>${npc.nome}</b> <small>(${Dialogo.nomeRelacao(tags.relacao)} ${tags.relacao})</small><br><small><i>${npc.desc}</i></small>` +
+      (agora ? `<br><small class="agenda-npc">📍 Agora: ${agora}</small>` : ''));
     const b = el('button', 'btn mini', '💬 Conversar');
     b.onclick = () => { npcAtual = npc; renderTudo(); };
     info.appendChild(el('div')).appendChild(b);

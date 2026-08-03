@@ -1,9 +1,10 @@
 // Service Worker — jogo 100% offline após a primeira visita
-const CACHE = 'reino-v24';
+const CACHE = 'reino-v25';
 const ARQUIVOS = [
   './', './index.html', './manifest.json',
   './css/style.css', './fonts/VT323.ttf',
   './js/data.js', './js/assets.js', './js/duelo.js', './js/sfx.js', './js/portraits.js', './js/clans.js', './js/production.js', './js/politics.js',
+  './js/gossip.js', './js/agenda.js', './js/mapa.js',
   './js/dialogue.js', './js/economy.js', './js/combat.js', './js/intrigue.js',
   './js/city.js', './js/game.js', './js/ui.js',
   './icons/icon-192.png', './icons/icon-512.png',

@@ -295,6 +295,9 @@ const Intriga = (() => {
       state.jogador.renome = Math.max(0, state.jogador.renome - 20);
       log(`❌ Seu exército foi despedaçado diante dos muros de ${reino.capital}. Renome −20. Reagrupe-se... se sobrar alguém.`);
     }
+    if (typeof Fofoca !== 'undefined')
+      Fofoca.plantar(state, 'batalha', { autor: 'jogador', origem: 'rei_' + reinoId,
+        vitoria: !!rel.vitoria, contexto: reino.capital });
     return rel;
   }
 

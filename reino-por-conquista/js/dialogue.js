@@ -334,6 +334,11 @@ const Dialogo = (() => {
         }
         if (npc.id.startsWith('rei_')) {
           efeitos.push('[Preços no reino dele aumentaram para você]');
+          // um insulto GRAVE numa corte vira boato que viaja pelo continente
+          if (grave && typeof Fofoca !== 'undefined')
+            Fofoca.plantar(state, 'insulto_rei', { autor: 'jogador', origem: npc.id,
+              alvoReino: npc.id.replace('rei_', ''), alvoNome: npc.nome, alvoGenero: npc.genero,
+              frase: textoJogador.trim().slice(0, 40) });
         }
         break;
       }
@@ -358,11 +363,19 @@ const Dialogo = (() => {
             efeitos.push('[Casus Belli concedido AO REINO DELE contra VOCÊ]');
             acoes.push({ tipo: 'risco_assassino', reino: reinoId });
           }
+          if (typeof Fofoca !== 'undefined')
+            Fofoca.plantar(state, 'ameaca_rei', { autor: 'jogador', origem: npc.id,
+              alvoReino: reinoId, alvoNome: npc.nome, alvoGenero: npc.genero, frase: textoJogador.trim().slice(0, 40) });
         }
         break;
       }
       case 'saudacao':
         resposta = memoriaPrefixo() + semRepetir(voz.saudacao, tags, 'sau');
+        // a agenda do NPC vaza na conversa: ele conta o que estava fazendo
+        if (typeof Agenda !== 'undefined' && Math.random() < 0.35) {
+          const ag = Agenda.de(state, npc);
+          if (ag) resposta += ' ' + ag.fala;
+        }
         if (tags.relacao > -10) efeitos.push(mudarRelacao(state, npc.id, 1, 'cortesia').tag);
         break;
       case 'despedida':
@@ -409,6 +422,9 @@ const Dialogo = (() => {
             efeitos.push(mudarRelacao(state, npc.id, ganho, 'suborno negociado').tag);
             tags.flags.subornou = (tags.flags.subornou || 0) + 1;
             lembrar(state, npc.id, 'suborno', textoJogador);
+            if (npc.id.startsWith('rei_') && typeof Fofoca !== 'undefined')
+              Fofoca.plantar(state, 'suborno_rei', { autor: 'jogador', origem: npc.id,
+                alvoReino: npc.id.replace('rei_', ''), alvoNome: npc.nome, alvoGenero: npc.genero });
             resposta = oferta >= custo * 2
               ? `*pesa a bolsa, ergue a sobrancelha* ${oferta} de ouro... Generosidade assim abre portas que nem sabia que eu tinha.`
               : rnd(voz.suborno_aceito) + ` (${oferta} de ouro aceitos.)`;
@@ -419,6 +435,9 @@ const Dialogo = (() => {
           efeitos.push(mudarRelacao(state, npc.id, 15, 'suborno').tag);
           tags.flags.subornou = (tags.flags.subornou || 0) + 1;
           lembrar(state, npc.id, 'suborno', textoJogador);
+          if (npc.id.startsWith('rei_') && typeof Fofoca !== 'undefined')
+            Fofoca.plantar(state, 'suborno_rei', { autor: 'jogador', origem: npc.id,
+              alvoReino: npc.id.replace('rei_', ''), alvoNome: npc.nome, alvoGenero: npc.genero });
           resposta = rnd(voz.suborno_aceito);
         } else {
           resposta = rnd(voz.suborno_recusado) + ` (Você precisaria de ${custo} de ouro.)`;
@@ -440,6 +459,10 @@ const Dialogo = (() => {
         break;
       }
       case 'perguntar_segredo': {
+        // primeiro os boatos REAIS que circulam pelo grafo de fofoca
+        const boato = typeof Fofoca !== 'undefined' && Math.random() < 0.65
+          ? Fofoca.contarSegredo(state, npc) : null;
+        if (boato) { resposta = boato; break; }
         const r = Intriga.perguntarSegredo(state, npc);
         resposta = r.resposta;
         efeitos.push(...r.efeitos);
@@ -575,6 +598,19 @@ const Dialogo = (() => {
         // sem intenção clara: responde pelo humor atual da relação (sem repetir a última fala)
         if (tags.relacao <= -40) resposta = 'Não tenho paciência para seus balbucios. Fale claro ou saia.';
         else resposta = memoriaPrefixo() + rndDiferente(voz.neutro, tags);
+      }
+    }
+    // FOFOCA ESPONTÂNEA: se o NPC ouviu um boato sobre VOCÊ, ele joga na mesa
+    // (uma vez só por boato) — e a relação reage conforme o lado dele
+    if (resposta && typeof Fofoca !== 'undefined' && Math.random() < 0.4 &&
+        (principal === 'saudacao' || principal === 'como_vai' || principal === null)) {
+      const boato = Fofoca.paraMencionar(state, npc);
+      if (boato) {
+        const m = Fofoca.mencao(state, boato, npc);
+        if (m) {
+          resposta += ' ' + m.texto;
+          if (m.delta) efeitos.push(mudarRelacao(state, npc.id, m.delta, 'fofoca').tag);
+        }
       }
     }
     tags.flags.ultimoTopico = principal;

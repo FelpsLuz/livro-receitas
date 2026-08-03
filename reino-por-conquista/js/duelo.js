@@ -86,19 +86,35 @@ const Duelo = (() => {
       });
     }
 
-    function desenhar(l) {
+    function desenhar(l, mult, chao) {
       const ficha = FICHAS[l.tipo];
       const a = ficha.anims[l.anim];
       const im = img(a.arq);
       if (!im.complete || !im.naturalWidth) return;
-      const esc = ficha.alvoH / ficha.fh;
+      const esc = (ficha.alvoH / ficha.fh) * (mult || 1);
       const w = a.fw * esc, h = ficha.fh * esc;
       const fi = (l.anim === 'morte' && l.f >= a.frames) ? a.frames - 1 : l.f % a.frames;
       ctx.save();
-      ctx.translate(l.x - w / 2, CHAO - h + 4);
+      ctx.translate(l.x - w / 2, (chao || CHAO) - h + 4);
       if (l.flip) { ctx.translate(w, 0); ctx.scale(-1, 1); }
       ctx.drawImage(im, fi * a.fw, 0, a.fw, ficha.fh, 0, 0, w, h);
       ctx.restore();
+    }
+
+    // ESCARAMUÇA AO FUNDO: a guerra não é só o duelo — figurantes lutam ao longe
+    const figurantes = [
+      { tipo: 'guerreiro', x: W * 0.13, flip: false, anim: 'atk', f: 0 },
+      { tipo: fy.tipo, x: W * 0.20, flip: true, anim: 'hit', f: 1 },
+      { tipo: fy.tipo, x: W * 0.82, flip: false, anim: 'atk', f: 2 },
+      { tipo: 'guerreiro', x: W * 0.90, flip: true, anim: 'idle', f: 0 },
+    ];
+    function desenharFigurantes() {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.filter = 'brightness(0.45) saturate(0.6)';
+      for (const fig of figurantes) desenhar(fig, 0.5, CHAO - 26);
+      ctx.restore();
+      ctx.filter = 'none';
     }
 
     function passo() {
@@ -130,6 +146,8 @@ const Duelo = (() => {
       }
       if (fx.anim === 'run' && fx.x < W / 2 - 44) fx.x += 3;
 
+      desenharFigurantes();
+
       // sombras
       ctx.fillStyle = 'rgba(0,0,0,.35)';
       for (const l of [fx, fy]) { ctx.beginPath(); ctx.ellipse(l.x, CHAO + 4, 24, 5, 0, 0, 7); ctx.fill(); }
@@ -156,6 +174,10 @@ const Duelo = (() => {
       }
 
       if (++quadro % 6 === 0) { fx.f++; fy.f++; }
+      if (quadro % 9 === 0) for (const fig of figurantes) {
+        fig.f++;
+        if (fig.f % 11 === 0) fig.anim = fig.anim === 'atk' ? 'hit' : fig.anim === 'hit' ? 'idle' : 'atk';
+      }
       if (++tick >= dur) {
         tick = 0;
         if (etapa < roteiro.length - 1) { etapa++; }

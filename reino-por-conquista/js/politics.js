@@ -113,6 +113,8 @@ const Politica = (() => {
     for (const r of state.reinos)
       Dialogo.mudarRelacao(state, 'rei_' + r.id, r.id === 'imperio' ? -40 : -20, 'proclamou independência');
     log(`👑 INDEPENDÊNCIA! Você cinge a própria coroa: nasce o ${state.jogador.reinoNome}, sob a bandeira ${BANDEIRAS_JOGADOR.find(b => b.id === state.jogador.bandeira).nome}. As seis cortes tremem — e Felps, o Destruidor, esmaga a taça na mão ao saber. Sobreviva 12 meses no trono.`);
+    if (typeof Fofoca !== 'undefined')
+      Fofoca.plantar(state, 'independencia', { autor: 'jogador', origem: 'taverneiro', nomeReino: state.jogador.reinoNome });
     return { ok: true, msg: `O ${state.jogador.reinoNome} foi proclamado! Segure o trono por 12 meses.` };
   }
 
@@ -263,21 +265,24 @@ const Politica = (() => {
     for (const r of state.reinos) {
       if (r.dominadoPor === 'jogador') continue;      // trono já é seu
       if (Math.random() >= 0.006) continue;           // morte rara (~1 a cada ~14 anos por reino)
-      const causa = rnd(['de velhice', 'de uma febre súbita', 'numa caçada', 'por uma faca no escuro', 'de um coração fraco', 'envenenado num banquete']);
+      const causa = rnd(['de velhice', 'de uma febre súbita', 'numa caçada', 'por uma faca no escuro', 'de um coração fraco', 'por veneno num banquete']);
       const antigo = r.rei.nome;
+      const antigoFem = r.rei.genero === 'f';
       const lordes = nobresDe(state, r.id);
       if (lordes.length) {
         const novo = rnd(lordes);
         // o lorde sobe ao trono: retrato muda, MAS a relação (keyed por rei.id) segue
         r.rei = { id: r.rei.id, retratoId: novo.id, nome: novo.nome,
           genero: novo.fem ? 'f' : 'm', personalidade: r.rei.personalidade,
-          desc: (novo.papel ? novo.papel + ' ' : '') + `Coroou-se soberano de ${r.nome} após a morte de ${antigo}.` };
+          desc: (novo.papel ? novo.papel + ' ' : '') + `Coroou-se ${novo.fem ? 'soberana' : 'soberano'} de ${r.nome} após a morte de ${antigo}.` };
         state.nobres = state.nobres.filter(n => n.id !== novo.id);   // deixa de ser lorde
         const tg = state.tags['rei_' + r.id];
         if (tg) tg.relacao = clamp(Math.round(tg.relacao * 0.5) + ri(-8, 8), -100, 100);  // corte nova, relação esfria
-        log(`⚰️ ${antigo}, soberano de ${r.nome}, morreu ${causa}. ${novo.nome} — antes Lorde de ${novo.cidade} — cinge a coroa.`);
+        log(`⚰️ ${antigo}, ${antigoFem ? 'soberana' : 'soberano'} de ${r.nome}, morreu ${causa}. ${novo.nome} — antes ${novo.fem ? 'Senhora' : 'Lorde'} de ${novo.cidade} — cinge a coroa.`);
         state.cartas.unshift({ de: novo.nome, tipo: 'neutro', ano: state.ano, mes: state.mes,
-          texto: `"O trono de ${r.nome} tem novo dono: eu. Nossos antigos acertos com meu antecessor... talvez precisem ser renegociados."` });
+          texto: `"O trono de ${r.nome} tem ${novo.fem ? 'nova dona' : 'novo dono'}: eu. Nossos antigos acertos com meu antecessor... talvez precisem ser renegociados."` });
+        if (typeof Fofoca !== 'undefined')
+          Fofoca.plantar(state, 'sucessao', { origem: 'rei_' + r.id, reinoNome: r.nome, novoRei: novo.nome });
       } else {
         // sem lordes (você aliciou todos): o reino mergulha no caos e vira presa fácil
         r.emCrise = true;
