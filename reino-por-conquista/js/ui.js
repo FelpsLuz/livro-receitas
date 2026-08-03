@@ -42,6 +42,20 @@ const UI = (() => {
     };
     if (!Jogo.temSave()) $('#btn-continuar').style.display = 'none';
 
+    if (typeof LLMNuvem !== 'undefined') {
+      LLMNuvem.registrar();
+      const bIA = $('#btn-ia');
+      const rotuloIA = () => {
+        bIA.textContent = LLMNuvem.estaConfigurado()
+          ? '🧠 IA ligada (' + (LLMNuvem.PROVEDORES[LLMNuvem.provedor()] || {}).nome + ') — configurar'
+          : '🧠 IA das conversas (Claude / GPT)';
+      };
+      rotuloIA();
+      bIA.onclick = () => abrirConfigIA(rotuloIA);
+    } else {
+      const bIA = $('#btn-ia'); if (bIA) bIA.style.display = 'none';
+    }
+
     document.querySelectorAll('.aba').forEach(b => {
       b.onclick = () => {
         Sfx.pagina(); abaAtual = b.dataset.aba; npcAtual = null; renderTudo();
@@ -545,8 +559,10 @@ const UI = (() => {
     const lado = el('div', 'conversa-persona');
     const retratoConversa = retratoDe(npc.id, 'g', npc.retratoId);
     lado.appendChild(retratoConversa);
+    const iaLigada = typeof LLMNuvem !== 'undefined' && LLMNuvem.estaConfigurado();
     lado.appendChild(el('div', null,
-      `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>`));
+      `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>` +
+      (iaLigada ? '<br><small class="ia-ativa">🧠 IA ligada</small>' : '')));
     cab.appendChild(lado);
     const bSair = el('button', 'btn mini', '← Sair da conversa');
     bSair.onclick = () => { npcAtual = null; renderTudo(); };
@@ -587,10 +603,20 @@ const UI = (() => {
       hist.appendChild(tb);
       rolar();
 
-      const r = Dialogo.falar(s, npc, texto);
-      // quanto mais longa e pesada a resposta, mais tempo ele "pensa"
-      const atraso = Math.min(2600, 550 + r.resposta.length * 9) * (0.75 + Math.random() * 0.5);
-      setTimeout(() => {
+      // Com IA na nuvem ligada, a fala vem da API (a mecânica continua no
+      // motor); sem ela, o motor offline responde. falarAsync cobre os dois
+      // e cai no motor sozinho em qualquer erro — a mecânica aplica UMA vez.
+      const usaIA = typeof LLMNuvem !== 'undefined' && LLMNuvem.estaConfigurado();
+      (async () => {
+        const inicio = performance.now();
+        let r;
+        try { r = await Dialogo.falarAsync(s, npc, texto); }
+        catch (e) { r = Dialogo.falar(s, npc, texto); }
+        // garante um tempo mínimo de "pondera" mesmo quando a resposta é instantânea
+        const minPondera = usaIA ? 150 : (420 + Math.random() * 500);
+        const jaPassou = performance.now() - inicio;
+        if (jaPassou < minPondera) await new Promise(res => setTimeout(res, minPondera - jaPassou));
+
         Sfx.pagina();
         tb.classList.remove('digitando');
         retratoConversa.classList.add('falando'); // retrato balança enquanto fala
@@ -617,7 +643,7 @@ const UI = (() => {
             renderTudo();
           }
         }, 26);
-      }, atraso);
+      })();
     };
     bFalar.onclick = enviar;
     input.onkeydown = (e) => { if (e.key === 'Enter') enviar(); };
@@ -966,6 +992,88 @@ const UI = (() => {
     const bNao = el('button', 'btn sec', 'Ainda não');
     bNao.onclick = () => { modal.style.display = 'none'; };
     box.appendChild(bOk); box.appendChild(bNao);
+  }
+
+  // ---------- configuração da IA na nuvem ----------
+  function abrirConfigIA(aoFechar) {
+    const modal = $('#modal');
+    modal.style.display = 'flex';
+    const box = $('#modal-box');
+    box.innerHTML = '';
+    box.appendChild(el('h2', null, '🧠 IA das conversas'));
+    box.appendChild(el('p', 'flavor',
+      'Ligue uma IA de verdade e converse LIVREMENTE com os reis — eles entendem e respondem qualquer coisa, no personagem. ' +
+      'A mecânica do jogo (relação, ouro, memória) continua no motor; a IA só dá voz. ' +
+      'Sua chave fica só neste aparelho, nunca é enviada a nós nem salva no jogo. Sem internet, o jogo usa o motor offline.'));
+
+    const provAtual = LLMNuvem.provedor() || 'claude';
+    const linhaProv = el('div', 'ia-campo');
+    linhaProv.appendChild(el('label', null, 'Provedor'));
+    const sel = el('select', 'input-reino');
+    for (const [id, p] of Object.entries(LLMNuvem.PROVEDORES)) {
+      const opt = el('option', null, p.nome); opt.value = id;
+      if (id === provAtual) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    linhaProv.appendChild(sel);
+    box.appendChild(linhaProv);
+
+    const linhaKey = el('div', 'ia-campo');
+    const lblKey = el('label', null, 'Chave de API');
+    linhaKey.appendChild(lblKey);
+    const inpKey = el('input', 'input-reino');
+    inpKey.type = 'password'; inpKey.placeholder = 'cole aqui a sua chave';
+    inpKey.value = LLMNuvem.chave || '';
+    linhaKey.appendChild(inpKey);
+    const dica = el('small', 'flavor', '');
+    linhaKey.appendChild(dica);
+    box.appendChild(linhaKey);
+
+    const linhaModelo = el('div', 'ia-campo');
+    linhaModelo.appendChild(el('label', null, 'Modelo (opcional)'));
+    const inpModelo = el('input', 'input-reino');
+    const provObj = () => LLMNuvem.PROVEDORES[sel.value];
+    inpModelo.placeholder = 'padrão: ' + provObj().modeloPadrao;
+    inpModelo.value = (LLMNuvem.provedor() === sel.value ? (LLMNuvem.modelo() === provObj().modeloPadrao ? '' : LLMNuvem.modelo()) : '');
+    linhaModelo.appendChild(inpModelo);
+    box.appendChild(linhaModelo);
+
+    const atualizaDica = () => {
+      dica.textContent = provObj().dica;
+      inpModelo.placeholder = 'padrão: ' + provObj().modeloPadrao;
+    };
+    sel.onchange = atualizaDica; atualizaDica();
+
+    const status = el('p', 'ia-status', '');
+    box.appendChild(status);
+
+    const linhaBtns = el('div', 'ia-botoes');
+    const bTestar = el('button', 'btn sec', '🔌 Testar conexão');
+    bTestar.onclick = async () => {
+      const r = LLMNuvem.configurar(sel.value, inpKey.value, inpModelo.value);
+      if (!r.ok) { status.className = 'ia-status ruim'; status.textContent = '⚠️ ' + r.msg; return; }
+      status.className = 'ia-status'; status.textContent = '⏳ Testando...';
+      bTestar.disabled = true;
+      const t = await LLMNuvem.testar();
+      bTestar.disabled = false;
+      if (t.ok) { status.className = 'ia-status bom'; status.textContent = '✅ Funcionou! O taverneiro disse: "' + t.fala + '"'; }
+      else { status.className = 'ia-status ruim'; status.textContent = '❌ Falhou: ' + t.erro; }
+    };
+    const bSalvar = el('button', 'btn destaque', '💾 Salvar e ligar');
+    bSalvar.onclick = () => {
+      const r = LLMNuvem.configurar(sel.value, inpKey.value, inpModelo.value);
+      if (!r.ok) { status.className = 'ia-status ruim'; status.textContent = '⚠️ ' + r.msg; return; }
+      Sfx.vitoria(); modal.style.display = 'none';
+      if (aoFechar) aoFechar();
+    };
+    const bDesligar = el('button', 'btn sec', '🚫 Desligar IA');
+    bDesligar.onclick = () => { LLMNuvem.desligar(); inpKey.value = ''; Sfx.tique();
+      status.className = 'ia-status'; status.textContent = 'IA desligada — o jogo usa o motor offline.'; if (aoFechar) aoFechar(); };
+    const bFechar = el('button', 'btn sec', 'Fechar');
+    bFechar.onclick = () => { modal.style.display = 'none'; };
+    linhaBtns.appendChild(bTestar); linhaBtns.appendChild(bSalvar);
+    linhaBtns.appendChild(bDesligar); linhaBtns.appendChild(bFechar);
+    box.appendChild(linhaBtns);
   }
 
   function confirmar(msg, fn) {

@@ -29,7 +29,9 @@ const Dialogo = (() => {
       'nojento','nojenta','imbecil','canalha','rato','vaca','cachorro','miseravel','tirano','tirana',
       'usurpador','usurpadora','ladrao de trono','bastardo','bastarda','chiqueiro','imundo','imunda',
       'ridiculo','ridicula','desprezivel','palhaco','palhaca','fede','fedorento','fedorenta','podre',
-      'incompetente','mentiroso','mentirosa','farsante','vergonha'] },
+      'incompetente','mentiroso','mentirosa','farsante','vergonha','otario','otaria','babaca','panaca',
+      'escroto','trouxa','jumento','asno','mula','cretino','cretina','estupido','estupida','arrogante',
+      'corno','pilantra','vagabundo','vagabunda','fracassado','fracassada','covardia','morra','te odeio'] },
     { id: 'elogio', palavras: ['sabio','sabia','sabedoria','forte','grande','magnifico','magnifica',
       'honrado','honrada','bela','belo','glorioso','gloriosa','admiro','respeito','corajoso','corajosa',
       'justo','justa','generoso','generosa','lendario','lendaria','brilhante','poderoso','poderosa',
@@ -60,12 +62,31 @@ const Dialogo = (() => {
     { id: 'opiniao', palavras: ['o que acha', 'o que voce acha', 'opiniao sobre', 'me fale sobre', 'me conte sobre', 'como e o reino', 'confia em', 'o que pensa'] },
     { id: 'desculpar', palavras: ['desculpa', 'desculpe', 'perdao', 'me perdoe', 'perdoe me', 'sinto muito',
       'me arrependo', 'retiro o que disse', 'fui injusto', 'fui injusta', 'errei com voce', 'nao devia ter dito'] },
+    // "quero comprar seu castelo/exército/reino" — não se compra um trono, toma-se
+    { id: 'tomar_posse', palavras: ['comprar seu', 'comprar teu', 'comprar sua', 'comprar tua',
+      'quero seu', 'quero sua', 'me da seu', 'me da sua', 'me de seu', 'tomar seu', 'tomar sua',
+      'seu exercito', 'seu castelo', 'seu reino', 'seu trono', 'sua coroa', 'suas terras',
+      'seus soldados', 'seu ouro', 'suas tropas', 'seu tesouro', 'sua fortaleza'] },
+    // "te amo", "quero ser seu amigo" — afeto / amizade
+    { id: 'afeto', palavras: ['te amo', 'te adoro', 'gosto de voce', 'gosto de ti', 'quero ser seu amigo',
+      'seja meu amigo', 'quero sua amizade', 'gosto muito de voce', 'voce e especial', 'me apaixonei'] },
+    // "sou seu filho", "somos irmãos" — laço de sangue inventado
+    { id: 'parentesco', palavras: ['sou seu filho', 'sou sua filha', 'sou seu irmao', 'sou sua irma',
+      'somos irmaos', 'sou seu pai', 'sou sua mae', 'sou seu parente', 'sou do seu sangue',
+      'sua familia', 'somos parentes', 'sou seu primo', 'seu sangue corre'] },
+    // "confie em mim", "junte-se a mim" — persuasão / recrutar o rei para sua causa
+    { id: 'persuadir', palavras: ['confie em mim', 'confia em mim', 'estou do seu lado', 'junte se a mim',
+      'lute comigo', 'lute ao meu lado', 'me apoie', 'apoie minha causa', 'una se a mim',
+      'somos aliados', 'trabalhe comigo', 'siga me', 'aposte em mim'] },
+    // "me ajuda", "preciso de você"
+    { id: 'pedir_ajuda', palavras: ['me ajuda', 'me ajude', 'preciso de ajuda', 'preciso de voce',
+      'me da uma mao', 'socorro', 'me salve', 'preciso da sua ajuda', 'pode me ajudar'] },
   ];
 
   // keywords curtas/ambíguas exigem limite de palavra (evita 'boi'→'oi', 'salsicha'→'sal')
   const EXATO = new Set(['oi', 'ola', 'sim', 'nao', 'sal', 'paz', 'guerra', 'ferro', 'salve', 'grato']);
   // ao empatar no peso, intenções hostis vencem a bajulação
-  const PRIORIDADE = { ameaca: 3, insulto: 3, chantagear: 2, subornar: 1 };
+  const PRIORIDADE = { ameaca: 3, insulto: 3, chantagear: 2, tomar_posse: 2, subornar: 1, persuadir: 1 };
   // gírias e abreviações pt-BR viram a forma canônica antes da detecção
   const GIRIAS = { vc: 'voce', vcs: 'voces', eh: 'e', mto: 'muito', mt: 'muito', blz: 'beleza',
     tlgd: 'entendeu', pq: 'porque', q: 'que', tb: 'tambem', tbm: 'tambem', obg: 'obrigado',
@@ -123,6 +144,11 @@ const Dialogo = (() => {
     if (/\b(dou|dar|pago|pagar|ofereco|oferto)\b/.test(t) && /\b\d{2,6}\b/.test(t) && /\bouro\b/.test(t)) {
       const j = achadas.find(a => a.id === 'subornar');
       if (j) j.peso += 2; else achadas.push({ id: 'subornar', peso: 2 });
+    }
+    // "queimar seu castelo" é AMEAÇA, não compra: verbo destrutivo anula tomar_posse
+    if (/\b(queimar|incendiar|destruir|destroi|arrasar|saquear|saque|invadir|matar|derrubar)\b/.test(t)) {
+      const ip = achadas.findIndex(a => a.id === 'tomar_posse');
+      if (ip !== -1 && achadas.some(a => a.id === 'ameaca')) achadas.splice(ip, 1);
     }
     // desempate: maior peso; empate → intenção mais hostil (ameaça não vira elogio)
     achadas.sort((a, b) => b.peso - a.peso || (PRIORIDADE[b.id] || 0) - (PRIORIDADE[a.id] || 0));
@@ -535,6 +561,76 @@ const Dialogo = (() => {
         }
         break;
       }
+      case 'tomar_posse': {
+        const rei = npc.id.startsWith('rei_');
+        const querComprar = /\bcompr/.test(textoNorm);
+        const POSSE = {
+          orgulhoso: rei
+            ? `${querComprar ? 'Comprar' : 'Tomar'} o que é MEU? *ri com desdém* Coroas não se compram como sacas de trigo, criatura. Este trono se toma com aço, no campo de batalha — e o seu não chega aos meus muros.`
+            : 'O que eu tenho não está à venda, e você não tem como tomar.',
+          calculista: `Interessante proposta. Mas pense: se eu vendesse meu ${querComprar ? 'reino' : 'trono'}, o que restaria de mim? Se quer o que é meu, ${state.jogador.reiDe ? 'traga um exército — é a única moeda que aceito por uma coroa' : 'primeiro conquiste um nome. Tronos trocam de dono na guerra, não na feira'}.`,
+          ganancioso: `*gargalha* Vender meu próprio reino?! Nem por todo o ouro do continente. Agora, um contrato lucrativo... isso a gente conversa.`,
+          honrado: `Um rei não vende seu povo nem sua terra, amigo. Se cobiça uma coroa, ganhe a sua com honra — ou venha tomá-la de espada em punho, como manda a lei da guerra.`,
+          cruel: `*inclina-se lentamente* Você acaba de pedir para levar o que é meu. Homens perderam a língua por menos. Se quer meu trono, venha buscá-lo — eu adoraria a desculpa.`,
+          romantica: `*sorri* Meu reino? Que audácia encantadora. Não está à venda — mas admiro quem sonha grande. Conquiste-o, se for capaz.`,
+        };
+        resposta = POSSE[npc.personalidade] || POSSE.honrado;
+        if (rei) efeitos.push('[Ele sabe que você cobiça o trono dele]');
+        break;
+      }
+      case 'afeto': {
+        tags.flags.afeto = (tags.flags.afeto || 0) + 1;
+        const alta = tags.relacao >= 25, baixa = tags.relacao <= -20;
+        const AFETO = {
+          orgulhoso: baixa ? 'Afeto? De VOCÊ? Guarde essa doçura para quem a mereça.' : alta ? 'Hm. Sua lealdade é... notada. Não a desperdice.' : 'Palavras doces enchem a boca e esvaziam o bolso. Mostre com atos.',
+          calculista: alta ? 'Afeição é um investimento. O seu, ao menos, tem me dado retorno.' : 'Todo "eu te amo" tem um preço embutido. Qual é o seu, exatamente?',
+          ganancioso: 'Amor não paga cerveja, amigo. Mas se vier com um presente, eu escuto com mais carinho.',
+          honrado: alta ? 'E eu, a você, tenho apreço sincero. Amizades assim valem mais que exércitos.' : 'Estima se conquista com o tempo e a espada, não com uma frase. Mas começou bem.',
+          cruel: baixa ? '*ri friamente* Você me AMA? Que patético. Não confundo bajulação com utilidade.' : 'Afeto é a coleira mais macia. Continue — talvez eu goste de tê-la em você.',
+          romantica: alta ? '*cora levemente* Ora... também nutro uma afeição por você. Quem diria, nesta corte de facas.' : 'Que declaração ousada! Não sei se é coragem ou loucura. Gosto das duas.',
+        };
+        resposta = AFETO[npc.personalidade] || AFETO.honrado;
+        if (tags.relacao > -20 && tags.relacao < 40) efeitos.push(mudarRelacao(state, npc.id, alta ? 3 : 1, 'afeto').tag);
+        break;
+      }
+      case 'parentesco': {
+        const PAR = {
+          orgulhoso: '*ergue a sobrancelha* Meu sangue? Minha linhagem está gravada em pedra e pergaminho, e o seu nome não consta. Bela tentativa.',
+          calculista: 'Parente meu? *sorri de canto* Curioso — meus genealogistas nunca o mencionaram. Prove com documentos e talvez conversemos sobre herança.',
+          ganancioso: 'Ah, "família" aparecendo quando há um trono por perto. Já vi esse teatro. Se veio pela herança, chegou cedo demais — ainda respiro.',
+          honrado: 'Se somos sangue, então é sangue que desconheço. Mas trato bem até os estranhos, quanto mais um suposto parente. Sente-se e me conte essa história.',
+          cruel: '*silêncio gélido* Reivindicar meu sangue é reivindicar meu trono. Escolha suas próximas palavras como se sua cabeça dependesse delas. Porque depende.',
+          romantica: '*ri* Meu parente perdido! Que reviravolta digna dos meus romances. Verdade ou não, adorei o enredo.',
+        };
+        resposta = PAR[npc.personalidade] || PAR.honrado;
+        break;
+      }
+      case 'persuadir': {
+        const alta = tags.relacao >= 30, media = tags.relacao >= 0;
+        const PERS = {
+          orgulhoso: alta ? 'Você provou seu valor. Talvez — TALVEZ — eu marche ao seu lado, se a causa honrar meu nome.' : 'Seguir VOCÊ? Um trono não se curva a promessas. Conquiste meu respeito primeiro.',
+          calculista: alta ? 'Sua causa começa a fazer sentido nos meus cálculos. Traga-me vantagem concreta e teremos um pacto.' : '"Confie em mim" é o que todo traidor diz antes da facada. Mostre números, não juras.',
+          ganancioso: media ? 'Do seu lado? Sempre — enquanto o seu lado pagar melhor. Ponha ouro na mesa e sou seu.' : 'Aliar-me a você? Só vejo risco e nenhum lucro. Volte com uma proposta que valha a pena.',
+          honrado: alta ? 'Sua palavra tem peso comigo. Se a sua causa for justa, terá minha espada nela.' : 'Confiança se constrói com feitos, amigo, não com pedidos. Prove-se e me terá ao seu lado.',
+          cruel: alta ? 'Você me é útil, admito. Fique perto — e reze para continuar útil.' : '*ri* Junte-me à sua causa? Eu não sirvo a ninguém. Os outros é que servem a mim.',
+          romantica: alta ? 'Ao seu lado? *sorri* Como poderia recusar alguém tão convincente. Conte comigo.' : 'Você tenta me seduzir para a sua causa. Ousado. Mas vai precisar de mais que palavras bonitas.',
+        };
+        resposta = PERS[npc.personalidade] || PERS.honrado;
+        if (alta && npc.id.startsWith('rei_')) efeitos.push('[Sua influência sobre ele cresce]');
+        break;
+      }
+      case 'pedir_ajuda': {
+        const AJUDA = {
+          orgulhoso: tags.relacao >= 20 ? 'Você pede ajuda a um rei. Pois bem — diga o que precisa, e verei se é digno do meu esforço.' : 'Ajuda? Reis não são babás. Traga algo que me interesse e talvez eu mova um dedo.',
+          calculista: 'Ajuda tem custo, sempre. Diga exatamente o que quer e o que oferece em troca — então avalio.',
+          ganancioso: 'Ajudo com prazer... pelo preço certo. O que precisa, e quanto vale para você?',
+          honrado: 'Se está em apuros, fale sem rodeios. Um bom senhor não vira as costas a quem pede socorro honesto.',
+          cruel: 'Precisa de mim? *sorri* Que posição deliciosa para você estar. Diga o que quer — e o que fará por mim depois.',
+          romantica: 'Socorro? Conte comigo — adoro uma boa causa perdida. O que aflige você?',
+        };
+        resposta = AJUDA[npc.personalidade] || AJUDA.honrado;
+        break;
+      }
       default: {
         // decodificação de segunda camada: reino mencionado? sim/não?
         const alvoReino = reinoMencionado(state, textoNorm, null);
@@ -564,40 +660,53 @@ const Dialogo = (() => {
           resposta = npc.personalidade === 'cruel' ? '*estreita os olhos* "Não" é uma palavra cara aqui.' : 'Como preferir. A porta é a mesma.';
           break;
         }
-        // confusão com ECO: assimila o absurdo e devolve no tom da personalidade
-        const palavras = textoJogador.trim().replace(/[?!.]+$/, '').split(/\s+/);
-        if (palavras.length >= 2 && Math.random() < 0.75) {
-          const eco = palavras.slice(0, 4).join(' ');
-          const CONFUSOES = {
-            orgulhoso: [`"${eco}"...? Meça as palavras diante de um trono, criatura.`,
-              `Disseram "${eco}" nesta corte. Os bardos não vão acreditar.`,
-              `*olha em volta* Alguém entendeu "${eco}"? Ninguém? Pois é.`],
-            calculista: [`"${eco}". Anotado. Ainda calculo o que você ganha falando isso.`,
-              `Interessante... "${eco}". Todo disparate esconde uma intenção. Qual é a sua?`,
-              `Vou fingir que "${eco}" foi um código. Meus espiões vão decifrar.`],
-            ganancioso: [`"${eco}"? Se isso for mercadoria, não tem preço de tabela.`,
-              `Perdi dois minutos ouvindo "${eco}". Vou cobrar.`,
-              `"${eco}", é? Se vende, eu compro barato. Se não vende, não me interessa.`],
-            honrado: [`"${eco}"... Perdoe-me, mas não compreendi. Fale simples, que eu ouço.`,
-              `Não sei o que é "${eco}", amigo. Mas sente-se e explique com calma.`,
-              `Juro pela minha espada que nunca ouvi "${eco}" em batalha alguma.`],
-            cruel: [`"${eco}"... *silêncio* Você tem sorte de eu ter achado engraçado.`,
-              `Diga "${eco}" de novo. Devagar. Quero decidir se rio ou se chamo o carrasco.`,
-              `O último que disse "${eco}" aqui está pendurado na muralha. Prossiga.`],
-            romantica: [`"${eco}"? *ri* Você é estranho. Gosto de gente estranha.`,
-              `Nunca ouvi falar de "${eco}" nos meus livros. Me conte mais!`,
-              `"${eco}"... soa como poesia ruim. E eu ADORO poesia ruim.`],
+        // SEM INTENÇÃO CLARA: o rei nunca "não entende como um robô".
+        // Ele reage ao TOM (pergunta? afirmação?) e responde no personagem,
+        // sempre puxando a conversa — referência ao mundo, ao humor da relação
+        // ou uma provocação diegética. Fim do "ninguém entendeu X".
+        const ehPergunta = /\?|^(o que|qual|quem|quando|onde|como|por que|porque|quanto|sera|voce (pode|acha|tem|quer|sabe))\b/.test(textoJogador.trim().toLowerCase());
+        const guerraDele = npc.id.startsWith('rei_') && (state.guerras || []).some(g => {
+          const meu = npc.id.slice(4); return g.a === meu || g.b === meu;
+        });
+        if (ehPergunta) {
+          const PERG = {
+            orgulhoso: ['Faça perguntas dignas de um trono, e terá respostas dignas. Seja direto: o que quer de mim?',
+              'Meu tempo vale reinos. Vá ao ponto — o que veio pedir?'],
+            calculista: ['Toda pergunta revela quem pergunta. Seja específico e eu ponderarei a resposta.',
+              'Depende do que você oferece em troca do que quer saber. Fale claro.'],
+            ganancioso: ['Respostas também são mercadoria, amigo. Diga exatamente o que quer saber — e o que paga por isso.',
+              'Pergunte objetivamente. Rodeios me custam cerveja.'],
+            honrado: ['Pergunte sem rodeios e eu respondo com franqueza — é assim que trato quem me procura.',
+              'Não entendi bem o que deseja saber. Diga com todas as letras, que eu escuto.'],
+            cruel: ['*inclina a cabeça* Perguntas demais deixam um homem interessante... ou morto. Seja claro no que quer.',
+              'Faça a pergunta certa e eu talvez responda. Faça a errada e descobrirá o meu humor.'],
+            romantica: ['Que curiosidade encantadora. Mas seja mais clara comigo — o que realmente deseja saber?',
+              'Pergunte com o coração aberto e eu respondo. O que quer de mim?'],
           };
-          const opcoes = CONFUSOES[npc.personalidade] || CONFUSOES.honrado;
-          let ci = Math.floor(Math.random() * opcoes.length);
-          if (ci === tags.flags.ultimaConfusao) ci = (ci + 1) % opcoes.length;
-          tags.flags.ultimaConfusao = ci;
-          resposta = opcoes[ci];
+          resposta = semRepetir(PERG[npc.personalidade] || PERG.honrado, tags, 'perg');
+          if (guerraDele) resposta += ' Mas seja breve — tenho uma guerra para vencer.';
           break;
         }
-        // sem intenção clara: responde pelo humor atual da relação (sem repetir a última fala)
-        if (tags.relacao <= -40) resposta = 'Não tenho paciência para seus balbucios. Fale claro ou saia.';
-        else resposta = memoriaPrefixo() + rndDiferente(voz.neutro, tags);
+        // afirmação vaga: o rei ancora no estado real e devolve o fio da conversa
+        const ANCORA = {
+          orgulhoso: ['Curioso ponto de vista. Diga-me: o que espera que eu faça a respeito?',
+            'Falou. Agora, qual é o seu verdadeiro objetivo ao me dizer isso?'],
+          calculista: ['Anotado. Mas o que você ganha me dizendo isso? Todo gesto tem um cálculo por trás.',
+            'Entendo suas palavras. O que ainda não entendo é a sua intenção. Revele-a.'],
+          ganancioso: ['Conversa fiada não enche cofre. Se há um negócio nisso, aponte-o.',
+            'Certo, certo. E onde exatamente entra o meu lucro nessa história?'],
+          honrado: ['Compreendo. E como posso ajudá-lo de fato? Fale sem receio.',
+            'Suas palavras são bem-vindas. Mas diga: o que o traz de verdade à minha corte?'],
+          cruel: ['*observa você em silêncio por um instante* Você fala muito. Chegue ao que interessa.',
+            'Palavras, palavras. Diga o que quer de mim antes que eu perca o interesse — ou a paciência.'],
+          romantica: ['Que conversa deliciosamente enigmática. Mas venha, seja direto comigo — o que deseja?',
+            'Adoro um mistério. Ainda assim, diga-me com clareza: o que o traz até mim?'],
+        };
+        if (tags.relacao <= -40) {
+          resposta = 'Não tenho paciência para rodeios com você. Diga o que quer, claramente, ou saia da minha frente.';
+        } else {
+          resposta = memoriaPrefixo() + semRepetir(ANCORA[npc.personalidade] || ANCORA.honrado, tags, 'anc');
+        }
       }
     }
     // FOFOCA ESPONTÂNEA: se o NPC ouviu um boato sobre VOCÊ, ele joga na mesa

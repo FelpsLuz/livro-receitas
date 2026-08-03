@@ -144,6 +144,16 @@ main#conteudo.trocando { animation: trocaAba .15s ease-out; }
 #canvas-cidade { width: 100%; display: block; image-rendering: pixelated; }
 #canvas-mapa { width: 100%; display: block; image-rendering: pixelated; cursor: pointer; }
 .agenda-npc { color: #5a4026; }
+/* ---------- configuração da IA ---------- */
+.ia-campo { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; text-align: left; }
+.ia-campo label { font-size: .82rem; color: var(--ouro); font-weight: bold; }
+.ia-campo select.input-reino { cursor: pointer; }
+.ia-status { min-height: 1.2em; font-size: .85rem; margin: 8px 0; word-break: break-word; }
+.ia-status.bom { color: var(--verde-claro, #5b9a50); }
+.ia-status.ruim { color: var(--sangue); }
+.ia-botoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ia-botoes .btn { flex: 1; min-width: 130px; margin: 0; }
+.ia-ativa { color: #7ab0d8; font-weight: bold; }
 .falatorio { border-left: 3px solid var(--ouro); padding-left: 8px; font-style: italic; }
 .card-reino.brilho { animation: brilhoCard 1.2s ease-out; }
 @keyframes brilhoCard {
