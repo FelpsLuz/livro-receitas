@@ -21,6 +21,7 @@ const Sfx = preload("res://scripts/sfx.gd")
 const Llm = preload("res://scripts/llm.gd")
 const CidadeView = preload("res://scripts/cidade_view.gd")
 const CidadeCena = preload("res://scripts/cidade_cena.gd")
+const VilaCena = preload("res://scripts/vila_cena.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -73,7 +74,8 @@ func _montar_titulo() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	caixa.add_child(v)
-	var vitrine := CidadeCena.new()
+	# a tela de título mostra um reino no auge — a mesma vila do jogo, nível 5
+	var vitrine: SubViewportContainer = VilaCena.new() if VilaCena.disponivel() else CidadeCena.new()
 	vitrine.custom_minimum_size = Vector2(480, 270)
 	v.add_child(vitrine)
 	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
@@ -166,7 +168,9 @@ func _montar_jogo() -> void:
 		b_mudo.text = "🔇" if Sfx.mudo else "🔊")
 	rodape.add_child(b_mudo)
 
-	cidade_view = CidadeCena.new()
+	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
+	# procedural de sempre. As duas cenas têm a mesma API (.estado, semear_npcs).
+	cidade_view = VilaCena.new() if VilaCena.disponivel() else CidadeCena.new()
 
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")

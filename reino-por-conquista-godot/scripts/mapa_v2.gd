@@ -11,6 +11,23 @@ extends RefCounted
 
 const PASTA := "res://assets_v2/tilesets/"
 
+## ---- LAYOUT WANG DOS ATLAS DO PIXELLAB ----
+## Os 16 tiles são as 16 combinações dos 4 CANTOS entre dois materiais: o
+## "cheio" (grama, água) e o "vazio" (terra arada, areia). Conferido nos três
+## atlas gerados — campo_terra, praia_agua e grama_pedra usam a MESMA ordem.
+## Máscara: canto superior-esquerdo=1, superior-direito=2,
+##          inferior-esquerdo=4, inferior-direito=8. Bit ligado = material cheio.
+const WANG := {
+	0: Vector2i(0, 3), 1: Vector2i(3, 3), 2: Vector2i(0, 2), 3: Vector2i(1, 2),
+	4: Vector2i(0, 0), 5: Vector2i(3, 2), 6: Vector2i(2, 3), 7: Vector2i(3, 1),
+	8: Vector2i(1, 3), 9: Vector2i(0, 1), 10: Vector2i(1, 0), 11: Vector2i(2, 2),
+	12: Vector2i(3, 0), 13: Vector2i(2, 0), 14: Vector2i(1, 1), 15: Vector2i(2, 1),
+}
+const TILE_CHEIO := Vector2i(2, 1)     # 100% do material de cima (grama/água)
+const TILE_VAZIO := Vector2i(0, 3)     # 100% do material de baixo (terra/areia)
+## Quantas variantes espelhadas existem dos dois tiles puros (a base + 3).
+const VARIANTES := 4
+
 static func tem(nome: String) -> bool:
 	return ResourceLoader.exists(PASTA + nome + ".png")
 
@@ -62,6 +79,19 @@ static func montar(nome: String, tile: int = 32, solidos: Array = []) -> TileSet
 				np.add_polygon(PackedInt32Array([0, 1, 2, 3]))
 				dados.set_navigation_polygon(0, np)
 
+	# Variantes espelhadas dos DOIS tiles puros. Um campo inteiro pintado com o
+	# mesmo tile vira papel de parede: as mesmas flores repetidas em grade. Três
+	# espelhamentos quebram o padrão sem custar um pixel de arte nova.
+	# (Só os puros: espelhar um tile de transição inverteria a borda.)
+	for puro in [TILE_CHEIO, TILE_VAZIO]:
+		if fonte.get_tile_data(puro, 0) == null:
+			continue
+		for combo in [[true, false], [false, true], [true, true]]:
+			var alt: int = fonte.create_alternative_tile(puro)
+			var d: TileData = fonte.get_tile_data(puro, alt)
+			d.flip_h = combo[0]
+			d.flip_v = combo[1]
+
 	return ts
 
 ## Camada pronta para a árvore de cena, já com o TileSet aplicado.
@@ -82,6 +112,42 @@ static func preencher(camada: TileMapLayer, area: Rect2i, tile_atlas: Vector2i) 
 	for y in range(area.position.y, area.position.y + area.size.y):
 		for x in range(area.position.x, area.position.x + area.size.x):
 			camada.set_cell(Vector2i(x, y), 0, tile_atlas)
+
+## Espalha as variantes espelhadas de um tile puro de forma determinística —
+## mesma célula, mesma variante, sempre (o mapa não "pisca" ao remontar).
+static func _variante(x: int, y: int) -> int:
+	return absi((x * 73856093) ^ (y * 19349663)) % VARIANTES
+
+## Pinta uma área com o Wang de 4 cantos, gerando as transições de verdade.
+##
+## `dentro(canto: Vector2i) -> bool` responde se aquele CANTO da grade é do
+## material cheio (grama, água). Cada célula olha os seus 4 cantos e escolhe o
+## tile pela máscara — é isso que dá a borda de pedra da lavoura e a espuma da
+## praia sem desenhar nada à mão.
+##
+## `pular(celula: Vector2i) -> bool` (opcional) deixa a célula VAZIA, para a
+## camada de baixo aparecer — é como o rio fica só onde deve.
+static func pintar_wang(camada: TileMapLayer, area: Rect2i, dentro: Callable,
+		pular: Callable = Callable()) -> void:
+	if camada == null or not dentro.is_valid():
+		return
+	for y in range(area.position.y, area.position.y + area.size.y):
+		for x in range(area.position.x, area.position.x + area.size.x):
+			var celula := Vector2i(x, y)
+			if pular.is_valid() and pular.call(celula):
+				camada.erase_cell(celula)
+				continue
+			var mascara := 0
+			if dentro.call(Vector2i(x, y)):         mascara |= 1
+			if dentro.call(Vector2i(x + 1, y)):     mascara |= 2
+			if dentro.call(Vector2i(x, y + 1)):     mascara |= 4
+			if dentro.call(Vector2i(x + 1, y + 1)): mascara |= 8
+			var coord: Vector2i = WANG[mascara]
+			# só os tiles puros têm variante espelhada
+			var alt := 0
+			if coord == TILE_CHEIO or coord == TILE_VAZIO:
+				alt = _variante(x, y)
+			camada.set_cell(celula, 0, coord, alt)
 
 ## Só os ATLAS montados (grade 4×4 de tiles Wang) — os tiles avulsos que a API
 ## devolve ficam de fora, senão o TileSet sairia com um único tile.

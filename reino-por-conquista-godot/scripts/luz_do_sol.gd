@@ -12,6 +12,10 @@ extends DirectionalLight2D
 @export var cor_noite: Color = Color(0.15, 0.15, 0.35) # azul escuro/roxo
 @export var velocidade_ciclo: float = 0.08             # bem lento por padrão
 @export var ciclo_automatico: bool = true
+## Multiplicador da energia. Cenário com muita cor fria (rio, praia) fica
+## acinzentado quando a luz quente entra a plena força — a soma de laranja com
+## ciano dá cinza. Baixar a força mantém a hora do dia sem lavar a água.
+@export var forca: float = 1.0
 
 var tempo: float = 0.0
 
@@ -31,12 +35,12 @@ func aplicar_ciclo(ciclo: float) -> void:
 	if ciclo > 0.5:
 		var peso := (ciclo - 0.5) * 2.0                  # tarde → dia
 		color = cor_tarde.lerp(cor_dia, peso)
-		energy = lerpf(0.7, 1.2, peso)
+		energy = lerpf(0.7, 1.2, peso) * forca
 		rotation_degrees = lerpf(-45.0, -135.0, peso)    # o sol caminha no céu
 	else:
 		var peso := ciclo * 2.0                          # noite → tarde
 		color = cor_noite.lerp(cor_tarde, peso)
-		energy = lerpf(0.3, 0.7, peso)
+		energy = lerpf(0.3, 0.7, peso) * forca
 		rotation_degrees = lerpf(-135.0, -45.0, peso)
 
 # permite amarrar a luz à hora do MUNDO do jogo (mês/estação) em vez
