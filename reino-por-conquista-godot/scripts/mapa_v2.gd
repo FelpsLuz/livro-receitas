@@ -32,6 +32,10 @@ static func montar(nome: String, tile: int = 32, solidos: Array = []) -> TileSet
 	var fonte := TileSetAtlasSource.new()
 	fonte.texture = tex
 	fonte.texture_region_size = Vector2i(tile, tile)
+	# A fonte precisa entrar no TileSet ANTES de configurar os tiles: o TileData
+	# só enxerga as camadas de física/navegação do TileSet ao qual pertence.
+	# (Configurar antes falha silenciosamente com "p_layer_id out of bounds".)
+	ts.add_source(fonte, 0)
 
 	var colunas := int(tex.get_width() / tile)
 	var linhas := int(tex.get_height() / tile)
@@ -51,13 +55,13 @@ static func montar(nome: String, tile: int = 32, solidos: Array = []) -> TileSet
 				# tile caminhável entra na malha de navegação
 				var np := NavigationPolygon.new()
 				var meio2 := float(tile) / 2.0
-				np.add_outline(PackedVector2Array([
+				var contorno := PackedVector2Array([
 					Vector2(-meio2, -meio2), Vector2(meio2, -meio2),
-					Vector2(meio2, meio2), Vector2(-meio2, meio2)]))
-				np.make_polygons_from_outlines()
+					Vector2(meio2, meio2), Vector2(-meio2, meio2)])
+				np.vertices = contorno
+				np.add_polygon(PackedInt32Array([0, 1, 2, 3]))
 				dados.set_navigation_polygon(0, np)
 
-	ts.add_source(fonte, 0)
 	return ts
 
 ## Camada pronta para a árvore de cena, já com o TileSet aplicado.
@@ -79,12 +83,15 @@ static func preencher(camada: TileMapLayer, area: Rect2i, tile_atlas: Vector2i) 
 		for x in range(area.position.x, area.position.x + area.size.x):
 			camada.set_cell(Vector2i(x, y), 0, tile_atlas)
 
+## Só os ATLAS montados (grade 4×4 de tiles Wang) — os tiles avulsos que a API
+## devolve ficam de fora, senão o TileSet sairia com um único tile.
 static func disponiveis() -> Array:
 	var achados := []
 	var d := DirAccess.open(PASTA)
 	if d == null:
 		return achados
 	for arq in d.get_files():
-		if arq.ends_with(".png"):
+		if arq.ends_with("_atlas.png"):
 			achados.append(arq.get_basename())
+	achados.sort()
 	return achados

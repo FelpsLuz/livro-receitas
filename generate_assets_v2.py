@@ -159,6 +159,8 @@ def baixar_url(url: str):
     import requests
     r = requests.get(url, headers={"Authorization": cabecalho()["Authorization"]},
                      timeout=180, allow_redirects=True)
+    if not r.ok:                      # CDN pública recusa o Bearer: tenta sem
+        r = requests.get(url, timeout=180, allow_redirects=True)
     if not r.ok:
         raise RuntimeError(f"download falhou: {erro(r)}")
     import PIL.Image
@@ -166,10 +168,23 @@ def baixar_url(url: str):
 
 
 def _acha_urls(no, achadas=None):
-    """Varre a resposta atrás de download_url / image_url (em qualquer nível)."""
+    """Varre a resposta atrás das URLs das imagens (em qualquer nível).
+
+    Dois formatos convivem:
+      download_url: str                      → um arquivo só
+      rotation_urls: {direcao: url, ...}     → as 8 rotações do personagem,
+                                               e a CHAVE é o nome da direção.
+    """
     achadas = achadas if achadas is not None else []
     if isinstance(no, dict):
+        rot = no.get("rotation_urls")
+        if isinstance(rot, dict):
+            for direcao, url in rot.items():
+                if isinstance(url, str) and url.startswith("http"):
+                    achadas.append((direcao, url))
         for k, v in no.items():
+            if k == "rotation_urls":
+                continue
             if isinstance(v, str) and v.startswith("http") and (
                     "download" in k or "url" in k):
                 achadas.append((no.get("direction") or no.get("name") or "", v))
@@ -336,6 +351,34 @@ def gerar_heroi(spec: dict, seed: int):
 GERADORES = {"ui": gerar_ui, "tileset": gerar_tileset, "objeto": gerar_objeto, "heroi": gerar_heroi}
 
 
+def montar_atlas(pasta: Path, pid: str, tile: int = 32) -> Path | None:
+    """O create-tileset devolve os 16 tiles Wang SOLTOS, um PNG cada.
+    O TileSetAtlasSource da Godot quer um atlas único, então costuramos os
+    16 numa grade 4×4 — preservando a ordem, que é o índice Wang."""
+    import PIL.Image
+    partes = []
+    principal = pasta / f"{pid}.png"
+    if principal.exists():
+        partes.append(principal)
+    i = 1
+    while (pasta / f"{pid}_{i}.png").exists():
+        partes.append(pasta / f"{pid}_{i}.png")
+        i += 1
+    if len(partes) < 2:
+        return None
+    cols = 4 if len(partes) >= 16 else len(partes)
+    linhas = (len(partes) + cols - 1) // cols
+    atlas = PIL.Image.new("RGBA", (cols * tile, linhas * tile), (0, 0, 0, 0))
+    for n, caminho in enumerate(partes):
+        im = PIL.Image.open(caminho).convert("RGBA")
+        if im.size != (tile, tile):
+            im = im.resize((tile, tile), PIL.Image.NEAREST)
+        atlas.paste(im, ((n % cols) * tile, (n // cols) * tile))
+    destino = pasta / f"{pid}_atlas.png"
+    atlas.save(destino)
+    return destino
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Gera os assets Pro do jogo (PixelLab v2).")
     ap.add_argument("--grupo", choices=["ui", "tilesets", "objects", "characters"])
@@ -411,7 +454,12 @@ def main() -> int:
                 destino_img = alvo if idx == 0 else pasta / f"{pid}_{nome or idx}.png"
                 img.save(destino_img)
             feitos += 1
-            print(f"[{n}/{len(ids)}] ✅ {pid} → {len(imagens)} arquivo(s) em {spec['grupo']}/")
+            extra = ""
+            if spec["tipo"] == "tileset":
+                atlas = montar_atlas(pasta, pid, spec.get("tile", (32, 32))[0])
+                if atlas:
+                    extra = f" + atlas {atlas.name}"
+            print(f"[{n}/{len(ids)}] ✅ {pid} → {len(imagens)} arquivo(s) em {spec['grupo']}/{extra}")
             time.sleep(1.5)
         except Exception as e:
             falhas.append((pid, str(e)[:170]))

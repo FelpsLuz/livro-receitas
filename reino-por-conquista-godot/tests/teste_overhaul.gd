@@ -96,6 +96,17 @@ func _initialize() -> void:
 			ok("tile_size correto", ts.tile_size == Vector2i(32, 32), str(ts.tile_size))
 			ok("camadas de física e navegação criadas",
 				ts.get_physics_layers_count() > 0 and ts.get_navigation_layers_count() > 0)
+			# não basta a camada existir: o polígono precisa estar NO tile
+			var fonte: TileSetAtlasSource = ts.get_source(0)
+			var solido: TileData = fonte.get_tile_data(Vector2i(0, 0), 0)
+			ok("tile sólido recebeu polígono de colisão",
+				solido != null and solido.get_collision_polygons_count(0) > 0,
+				"%d polígono(s)" % (solido.get_collision_polygons_count(0) if solido else -1))
+			var livre: TileData = fonte.get_tile_data(Vector2i(1, 0), 0)
+			var nav: NavigationPolygon = livre.get_navigation_polygon(0) if livre else null
+			ok("tile livre recebeu malha de navegação",
+				nav != null and nav.get_polygon_count() > 0,
+				"%d polígono(s)" % (nav.get_polygon_count() if nav else -1))
 			var camada: TileMapLayer = MapaV2.criar_camada(tnome, 32)
 			ok("TileMapLayer com TileSet aplicado",
 				camada != null and camada.tile_set != null)
@@ -121,6 +132,32 @@ func _initialize() -> void:
 			if arq.ends_with(".png") and not FileAccess.file_exists(caminho + "/" + arq + ".import"):
 				sem_import.append(pasta + "/" + arq)
 	ok("todo PNG de assets_v2 tem .import", sem_import.is_empty(), ", ".join(sem_import))
+
+	# ---------- VITRINE: a cena de demonstração monta inteira? ----------
+	var cena_v := load("res://cenas/vitrine_v2.tscn")
+	ok("cena da vitrine carrega", cena_v != null)
+	if cena_v != null:
+		var inst = cena_v.instantiate()
+		root.add_child(inst)
+		await process_frame
+		var n_sprites := 0
+		var n_anim := 0
+		var n_patch := 0
+		var n_tile := 0
+		var pilha: Array = [inst]
+		while not pilha.is_empty():
+			var atual = pilha.pop_back()
+			for f in atual.get_children():
+				pilha.append(f)
+			if atual is AnimatedSprite2D: n_anim += 1
+			elif atual is Sprite2D: n_sprites += 1
+			elif atual is NinePatchRect: n_patch += 1
+			elif atual is TileMapLayer: n_tile += 1
+		print("  ℹ️  vitrine: %d Sprite2D, %d AnimatedSprite2D, %d NinePatchRect, %d TileMapLayer"
+			% [n_sprites, n_anim, n_patch, n_tile])
+		ok("vitrine tem objetos, personagens, UI e terreno",
+			n_sprites > 0 and n_anim > 0 and n_patch > 0 and n_tile > 0)
+		inst.queue_free()
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

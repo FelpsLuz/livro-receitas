@@ -13,14 +13,16 @@ const PASTA := "res://assets_v2/ui/"
 
 ## Margens 9-slice de cada peça, medidas na imagem gerada (não chutadas):
 ## a moldura de madeira tem ~32px de borda numa arte de 256×256.
+## Medidas na ARTE de cada peça (onde a moldura termina e o miolo começa),
+## não chutadas: é isso que faz o 9-slice esticar sem deformar os rebites.
 const MARGENS := {
-	"painel_madeira": 35,
-	"painel_pergaminho": 35,
-	"moldura_retrato": 24,
-	"quadro_inventario": 20,
+	"painel_madeira": 32,
+	"painel_pergaminho": 33,
+	"moldura_retrato": 32,
+	"quadro_inventario": 40,
 	"botao_madeira": 18,
-	"botao_madeira_apertado": 18,
-	"barra_hud": 16,
+	"botao_madeira_apertado": 26,
+	"barra_hud": 20,
 }
 
 static func tem(nome: String) -> bool:
