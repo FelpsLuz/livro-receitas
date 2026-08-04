@@ -278,6 +278,48 @@ def gerar_simulado(prompt: str, tamanho: int, seed: int):
     return img, 0.0
 
 
+def diagnostico() -> int:
+    """Antes de gastar crédito: a chave existe? a rede deixa? a conta tem saldo?"""
+    print("🔎 Diagnóstico do PixelLab\n")
+    falhou = False
+
+    segredo = os.environ.get("PIXELLAB_SECRET", "").strip()
+    if segredo:
+        print(f"  ✅ chave  PIXELLAB_SECRET definida ({len(segredo)} caracteres)")
+    else:
+        print("  ❌ chave  PIXELLAB_SECRET ausente — defina nas variáveis do ambiente")
+        falhou = True
+
+    try:
+        import requests
+        r = requests.get("https://api.pixellab.ai/v1/balance",
+                         headers={"Authorization": f"Bearer {segredo}"} if segredo else {},
+                         timeout=25)
+        print(f"  ✅ rede   api.pixellab.ai respondeu (HTTP {r.status_code})")
+        if r.status_code == 200:
+            try:
+                print(f"  ✅ saldo  {json.dumps(r.json())[:120]}")
+            except Exception:
+                pass
+        elif r.status_code in (401, 403):
+            print("  ⚠️  a rede chega, mas a chave foi recusada — confira o valor")
+            falhou = True
+    except Exception as e:
+        msg = str(e)
+        if "403" in msg or "CONNECT" in msg or "ProxyError" in msg:
+            print("  ❌ rede   bloqueada pela política do ambiente")
+            print("           Libere 'api.pixellab.ai' em claude.ai/code → ícone de nuvem →")
+            print("           engrenagem do ambiente → Network access: Custom → Allowed domains")
+            print("           (marque também 'include default list of common package managers')")
+        else:
+            print(f"  ❌ rede   {msg[:150]}")
+        falhou = True
+
+    print("\n" + ("❌ Ainda não dá para gerar — resolva os itens acima."
+                  if falhou else "✅ Tudo pronto: rode  python3 generate_assets.py --grupo reis"))
+    return 1 if falhou else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Gera os sprites do jogo com o PixelLab.")
     ap.add_argument("--grupo", choices=sorted(GRUPOS), help="conjunto a gerar")
@@ -289,9 +331,14 @@ def main() -> int:
     ap.add_argument("--simular", action="store_true",
                     help="não chama a API: gera placeholders para testar o pipeline")
     ap.add_argument("--listar", action="store_true", help="mostra o elenco e sai")
+    ap.add_argument("--diagnostico", action="store_true",
+                    help="checa chave, rede e saldo antes de gerar qualquer coisa")
     ap.add_argument("--forcar", action="store_true", help="regera mesmo se o PNG já existe")
     ap.add_argument("--saida", default=str(SAIDA), help="pasta de destino")
     args = ap.parse_args()
+
+    if args.diagnostico:
+        return diagnostico()
 
     lore, fichas = ler_lore(), ler_dados()
     print(f"📖 Lore lida: {len(lore)} personagens no códice, {len(fichas)} fichas em data/clans.")
