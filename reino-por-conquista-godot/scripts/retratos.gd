@@ -37,10 +37,30 @@ static func _ficha(id: String) -> Dictionary:
 static func _esc(c: Color, f: float) -> Color:
 	return Color(c.r * f, c.g * f, c.b * f)
 
-static func textura(id: String, humor: String = "neutro") -> ImageTexture:
+## Pasta onde generate_assets.py grava os sprites do PixelLab.
+const PASTA_SPRITES := "res://assets/sprites/"
+
+## Carrega o sprite gerado, se existir. É o mesmo princípio usado no build web:
+## a arte de verdade entra por cima e o desenho procedural fica só como reserva,
+## então o jogo nunca quebra por falta de um arquivo.
+static func sprite_gerado(id: String) -> Texture2D:
+	var caminho := PASTA_SPRITES + id + ".png"
+	if not ResourceLoader.exists(caminho):
+		return null
+	var tex := load(caminho)
+	return tex if tex is Texture2D else null
+
+static func textura(id: String, humor: String = "neutro") -> Texture2D:
 	var chave := id + "|" + humor
 	if _cache.has(chave):
 		return _cache[chave]
+	# 1) sprite do PixelLab, quando disponível (mesma textura para todo humor:
+	#    a expressão vem da arte, e a relação já é mostrada no texto da UI)
+	var pronta := sprite_gerado(id)
+	if pronta != null:
+		_cache[chave] = pronta
+		return pronta
+	# 2) reserva: retrato desenhado em código
 	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
 	_desenhar(img, id, humor)
 	var tex := ImageTexture.create_from_image(img)

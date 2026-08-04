@@ -96,3 +96,24 @@ godot --headless --path . --script res://tests/teste_nucleo.gd
 - Exporta nativamente para Windows, Android, iOS e Web a partir de um único projeto.
 - A versão web original (`../reino-por-conquista`) continua sendo a referência jogável
   enquanto a fase 2 avança.
+
+## Sprites de personagem via PixelLab
+
+O elenco (6 reis, 3 NPCs, 4 chefes bárbaros e 5 tropas/inimigos) pode ser gerado
+por IA com o script `generate_assets.py` na raiz do repositório, que lê a lore do
+jogo para montar os prompts e grava PNG com fundo transparente em
+`res://assets/sprites/`.
+
+```bash
+pip install pixellab
+export PIXELLAB_SECRET="sua-chave"
+python3 generate_assets.py --listar     # elenco e prompts
+python3 generate_assets.py --simular    # pipeline sem gastar crédito
+python3 generate_assets.py --tudo       # gera de verdade
+godot --headless --path reino-por-conquista-godot --import
+```
+
+A arte entra sozinha: `Retratos.textura(id, humor)` usa o PNG quando existe e cai
+no retrato procedural quando não existe. `SpritesPersonagens.criar_sprite(id)`
+devolve um `Sprite2D` pronto para pixel art, e `cenas/galeria_sprites.tscn`
+mostra o elenco inteiro. Testes: `--script res://tests/teste_sprites.gd`.
