@@ -60,6 +60,9 @@ func _initialize() -> void:
 	await _tirar(jogo, 3, "taverna")
 	await _tirar(jogo, 3, "taverna_servicos", 900)
 
+	st["terra"]["alimento"] = 0            # celeiro vazio: a cena da fome
+	await _tirar(jogo, 0, "terra_fome", 300)
+	st["terra"]["alimento"] = 300
 	st["mes"] = 1                          # inverno: a vila coberta de neve
 	await _tirar(jogo, 0, "terra_inverno", 380)
 	st["mes"] = 3
@@ -69,6 +72,8 @@ func _initialize() -> void:
 	await _modal(jogo, "modal_rebeliao")
 	st["evento_pendente"] = {"tipo": "notavel_ambicioso", "nome": "Mira Vento"}
 	await _modal(jogo, "modal_ambicioso")
+	st["evento_pendente"] = {"tipo": "traicao_guardas"}
+	await _modal(jogo, "modal_traicao")
 	st["evento_pendente"] = null
 	jogo._modal_batalha({"vitoria": true, "contexto": "Cerco a Império Central",
 		"rodadas": [], "debandada": "", "baixas_jogador": 14})

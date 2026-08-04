@@ -429,8 +429,28 @@ func _aba_terra(c: Container) -> void:
 			Jogo.salvar(state)
 			atualizar())
 	else:
-		_par(c, "👥 População %d   🌾 Alimento %d   🪵 Madeira %d   😊 Felicidade %d" %
-			[t["populacao"], t["alimento"], t["madeira"], t["felicidade"]])
+		# linha de recursos com ícone: o que a vila TEM, lido de relance
+		var hr := HBoxContainer.new()
+		hr.add_theme_constant_override("separation", 6)
+		c.add_child(hr)
+		for par_r in [["populacao", "%d" % int(t["populacao"])],
+				["trigo", "%d" % int(t["alimento"])],
+				["madeira", "%d" % int(t["madeira"])]]:
+			var ic_r := Icones.imagem(str(par_r[0]), 26)
+			if ic_r != null:
+				hr.add_child(ic_r)
+			var l_r := Label.new()
+			l_r.text = "%s    " % str(par_r[1])
+			l_r.add_theme_color_override("font_color", Tema.TINTA)
+			hr.add_child(l_r)
+		var l_fel := Label.new()
+		l_fel.text = "😊 Felicidade %d" % int(t["felicidade"])
+		l_fel.add_theme_color_override("font_color", Tema.TINTA)
+		hr.add_child(l_fel)
+		# celeiro vazio é o começo do fim: deserção, infelicidade e rebelião
+		if int(t["alimento"]) <= 0:
+			_par(c, "🌾 O celeiro está vazio. Os homens comem o que a vila não tem.")
+			_faixa(c, Retratos.ilustracao("fome"), 110)
 		# O DILEMA: quem pega em armas some da base de imposto. Mostrar os dois
 		# números lado a lado é o que transforma recrutar numa decisão.
 		var ativa: int = Economia.populacao_ativa(state)
@@ -544,9 +564,14 @@ func _aba_mapa(c: Container) -> void:
 				Jogo.salvar(state)
 				atualizar())
 		if not Intel.tem(state, alvo_id):
-			# a neblina só levanta com gente na estrada: o informante ao lado do
-			# botão diz de onde vem o número que hoje está "???"
-			_arte(lb, Retratos.sprite_gerado("informante"), 34)
+			# a neblina só levanta com gente na estrada: os dois ícones ao lado
+			# do botão dizem de onde vem o número que hoje está "???"
+			var ic_neb := Icones.imagem("neblina", 30)
+			if ic_neb != null:
+				lb.add_child(ic_neb)
+			var ic_esp := Icones.imagem("espiao", 30)
+			if ic_esp != null:
+				lb.add_child(ic_esp)
 			_botao(lb, "🕵 Espionar (80 🪙)", func():
 				var r: Dictionary = Intriga.espionar(state, alvo_id)
 				if int(r.get("prender", 0)) > 0:
@@ -755,8 +780,11 @@ func _aba_exercito(c: Container) -> void:
 		var l_up := Label.new()
 		l_up.text = "%d/mês" % int(par_up[1])
 		hu.add_child(l_up)
+	var ic_moral := Icones.imagem("moral", 26)
+	if ic_moral != null:
+		hu.add_child(ic_moral)
 	var l_moral := Label.new()
-	l_moral.text = "   —   Moral do exército: %d/100" % Economia.moral(state)
+	l_moral.text = "Moral %d/100" % Economia.moral(state)
 	l_moral.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hu.add_child(l_moral)
 	if Economia.moral(state) <= 35:
@@ -791,6 +819,9 @@ func _aba_exercito(c: Container) -> void:
 		for i in fila.size():
 			var item: Dictionary = fila[i]
 			var hf2 := _card(c)
+			var ic_amp := Icones.imagem("ampulheta", 32)
+			if ic_amp != null:
+				hf2.add_child(ic_amp)
 			var lf := Label.new()
 			lf.text = "%s ×%d — próximo em %s" % [
 				Dados.TROPAS[item["tipo"]]["nome"], item["restantes"],
@@ -1000,6 +1031,9 @@ func _aba_intrigas(c: Container) -> void:
 		if state["jogador"]["rei_de"] == reino["id"]:
 			continue
 		var h := _card(c)
+		var ic_op := Icones.imagem("espiao", 34)
+		if ic_op != null:
+			h.add_child(ic_op)
 		var l := Label.new()
 		l.text = reino["nome"] + ("  📜 CB" if state["casus_belli"].has(reino["id"]) else "")
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1256,7 +1290,7 @@ func _modal_evento() -> void:
 					Jogo.resolver_evento(state, "recusar")
 					Jogo.salvar(state)
 					atualizar()],
-			])
+			], Retratos.ilustracao("traicao"))
 		_:
 			state["evento_pendente"] = null
 			atualizar()
@@ -1288,7 +1322,9 @@ func _arte_de_batalha(contexto: String) -> Texture2D:
 		return Retratos.ilustracao("cerco")
 	if t.contains("rebeli"):
 		return Retratos.ilustracao("rebeliao")
-	if t.contains("saque") or t.contains("estrada") or t.contains("embosc"):
+	if t.contains("saque"):
+		return Retratos.ilustracao("saque")
+	if t.contains("estrada") or t.contains("embosc"):
 		return Retratos.ilustracao("emboscada")
 	return null
 
@@ -1300,7 +1336,7 @@ func _modal_fim() -> void:
 		[["Nova saga", func():
 			Jogo.apagar_save()
 			get_tree().reload_current_scene()]],
-		Retratos.ilustracao("coroacao") if vitoria else null)
+		Retratos.ilustracao("coroacao") if vitoria else Retratos.ilustracao("derrota"))
 
 func _modal_llm() -> void:
 	var v := _painel_modal()

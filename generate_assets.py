@@ -271,6 +271,22 @@ CENAS = {
     "evento_coroacao": "wide scene illustration, coronation in a candlelit cathedral, "
                        "iron crown lowered onto a kneeling figure, kneeling crowd, "
                        "shafts of light through high windows",
+    # os quatro momentos que ainda apareciam só como texto na interface
+    "evento_traicao": "wide scene illustration, night betrayal at a castle gate, two "
+                      "guards quietly unbarring the heavy doors while a hooded figure "
+                      "hands them a purse of coin, torchlight, armed men waiting outside "
+                      "in the dark",
+    "evento_saque": "wide scene illustration, raiding party returning home at sunset, "
+                    "soldiers leading laden pack horses and carts of grain sacks and "
+                    "barrels, smoke rising from a burning village far behind them",
+    "evento_fome": "wide scene illustration, famine, interior of an EMPTY stone granary "
+                   "at dusk, completely bare wooden shelves, one overturned empty basket "
+                   "on the floor, cracked dry earth and a dead withered field through the "
+                   "open door, a single gaunt figure sitting with head in hands, grey "
+                   "desaturated light, NO food, NO sacks, NO crowd, NO market stall",
+    "evento_derrota": "wide scene illustration, aftermath of a lost battle at dusk, "
+                      "a fallen banner half buried in churned mud, broken spears and "
+                      "abandoned shields, crows circling, empty grey field, no figures",
 }
 
 GRUPOS = {

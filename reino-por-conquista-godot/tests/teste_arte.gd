@@ -17,6 +17,7 @@ const Dados = preload("res://scripts/dados.gd")
 const Retratos = preload("res://scripts/retratos.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
+const Icones = preload("res://scripts/icones.gd")
 const Jogo = preload("res://scripts/jogo.gd")
 
 var passou := 0
@@ -54,12 +55,14 @@ func _initialize() -> void:
 		Retratos.textura_tropa("lanceiro") == Retratos.textura("tropa_lanceiro"))
 
 	# ---------- 2. ilustrações de evento ----------
-	var cenas := ["cerco", "emboscada", "inverno", "rebeliao", "juramento", "coroacao"]
+	var cenas := ["cerco", "emboscada", "inverno", "rebeliao", "juramento", "coroacao",
+		"traicao", "saque", "fome", "derrota"]
 	var sem_cena: Array = []
 	for e in cenas:
 		if Retratos.ilustracao(e) == null:
 			sem_cena.append(e)
-	ok("as 6 cenas de evento existem", sem_cena.is_empty(), "faltam: " + str(sem_cena))
+	ok("as %d cenas de evento existem" % cenas.size(),
+		sem_cena.is_empty(), "faltam: " + str(sem_cena))
 
 	var panoramica := true
 	for e in cenas:
@@ -178,6 +181,18 @@ func _initialize() -> void:
 	# ---------- 8. NPCs de serviço da taverna ----------
 	for id in ["informante", "cartografo"]:
 		ok("a taverna tem o rosto de %s" % id, Retratos.sprite_gerado(id) != null)
+
+	# ---------- 9. ícones de mecânica ----------
+	# Estes não são mercadoria: são estados (neblina, moral, fila, cerco) que a
+	# UI mostrava só com emoji. O inventário tem que estar completo, senão o
+	# ícone some sem ninguém perceber.
+	var inv: Dictionary = Icones.inventario()
+	ok("todo ícone do catálogo tem PNG", inv["falta"].is_empty(), str(inv["falta"]))
+	for n in ["espiao", "neblina", "populacao", "moral", "ampulheta", "cerco"]:
+		ok("ícone de %s carrega" % n, Icones.textura(n) != null)
+	ok("ícone inexistente devolve null", Icones.textura("nao_existe") == null)
+	ok("Icones.imagem devolve TextureRect pronto",
+		Icones.imagem("espiao", 30) is TextureRect)
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

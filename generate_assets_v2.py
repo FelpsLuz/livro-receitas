@@ -194,6 +194,29 @@ CATALOGO = {
     "icone_cavalos": dict(grupo="icons", tipo="icone", size=(64, 64),
         desc="game inventory icon, brown horse head with bridle, side profile, " + ESTILO_MUNDO),
 
+    # ---------- ícones de MECÂNICA (economia, espionagem, guerra) ----------
+    # Estes não são mercadoria: são estados que a UI hoje mostra só com emoji —
+    # neblina de guerra, moral, fila do quartel, população em armas.
+    "icone_espiao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, hooded spy head in profile, face in shadow under the "
+             "cowl, a small dagger crossed behind, " + ESTILO_MUNDO),
+    "icone_neblina": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, thick grey fog bank hiding a distant tower, only the "
+             "silhouette visible, unknown territory, " + ESTILO_MUNDO),
+    "icone_populacao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, three simple peasant figures standing together seen "
+             "from the front, one taller in the middle, " + ESTILO_MUNDO),
+    "icone_moral": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, war banner on a pole flying upward in the wind, red "
+             "cloth with a gold device, " + ESTILO_MUNDO),
+    "icone_ampulheta": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, wooden framed hourglass with running golden sand, "
+             + ESTILO_MUNDO),
+    "icone_cerco": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, single wooden catapult on wheels seen from the side, "
+             "throwing arm loaded with a grey stone, taut rope, isolated siege "
+             "engine object, no building, no house, no wall, " + ESTILO_MUNDO),
+
     # ---------- ANIMAÇÕES (a partir de um personagem já criado) ----------
     "heroi_caminhando": dict(grupo="characters", tipo="animacao",
         personagem="heroi_jogador", acao="walking, steady march, arms swinging",

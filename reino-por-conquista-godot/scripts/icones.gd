@@ -18,7 +18,10 @@ const PASTA := "res://assets_v2/icons/"
 ## Tudo o que o gerador sabe fazer (espelha o CATALOGO de generate_assets_v2.py).
 const TODOS := ["moedas", "trigo", "madeira", "espada", "escudo", "arco",
 	"lanca", "pao", "cerveja", "pergaminho", "gema", "coroa",
-	"ferro", "sal", "tecidos", "cavalos"]
+	"ferro", "sal", "tecidos", "cavalos",
+	# ícones de MECÂNICA, não de mercadoria: são estados que a UI mostrava
+	# só com emoji — neblina de guerra, moral, fila do quartel, cerco
+	"espiao", "neblina", "populacao", "moral", "ampulheta", "cerco"]
 
 static func _id(nome: String) -> String:
 	return nome if nome.begins_with("icone_") else "icone_" + nome
