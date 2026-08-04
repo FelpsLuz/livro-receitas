@@ -20,6 +20,7 @@ const Rotas = preload("res://scripts/rotas.gd")
 const Combate = preload("res://scripts/combate.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Cerco = preload("res://scripts/cerco.gd")
+const Comandantes = preload("res://scripts/comandantes.gd")
 
 ## Enquanto marcha, o exército testa a sorte uma vez por dia de estrada.
 const MINUTOS_POR_DIA := 20
@@ -81,7 +82,7 @@ static func lista(state: Dictionary) -> Array:
 ## exército em marcha não defende a própria casa, e é isso que torna atacar
 ## uma decisão e não um clique de graça.
 static func despachar(state: Dictionary, alvo: String, tropas: Dictionary,
-		intencao: String) -> Dictionary:
+		intencao: String, comandante: String = "") -> Dictionary:
 	if intencao != "saque" and intencao != "cerco":
 		return {"ok": false, "msg": "Intenção inválida."}
 	var soma := 0
@@ -111,7 +112,12 @@ static func despachar(state: Dictionary, alvo: String, tropas: Dictionary,
 		"duracao": int(est["minutos"]), "chega_em": agora + int(est["minutos"]),
 		"proximo_teste": agora + MINUTOS_POR_DIA,
 		"saque": {}, "trajeto": str(est["trajeto"]),
+		"comandante": comandante,
 	}
+	# batedor experiente enxerga a emboscada antes dela acontecer
+	var cmd := Comandantes.por_id(state, comandante)
+	if not cmd.is_empty():
+		m["perigo"] = float(m["perigo"]) * Comandantes.fator_perigo(cmd)
 	lista(state).append(m)
 	Sinais.emitir(&"marcha_partiu", m)
 	return {"ok": true, "marcha": m,
@@ -164,7 +170,12 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 			if log.is_valid():
 				log.call("Nenhum homem da marcha para %s voltou."
 					% Rotas.nome_do(state, m["alvo"]))
-			eventos.append({"tipo": "perdida", "marcha": m["id"]})
+			var cap := Comandantes.capturar(state,
+				Comandantes.por_id(state, str(m.get("comandante", ""))), log)
+			if int(cap.get("preso", 0)) > 0:
+				var Jogo = load("res://scripts/jogo.gd")
+				Jogo.prender(state, int(cap["preso"]), log)
+			eventos.append({"tipo": "perdida", "marcha": m["id"], "comandante": cap})
 			continue
 
 		# ---- cerco em andamento: uma fase a cada 30 do relógio ----
@@ -204,9 +215,17 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 					m["chega_em"] = int(m["chega_em"]) + int(m["duracao"])
 					m["proximo_teste"] = int(m["chega_em"]) - int(m["duracao"]) + MINUTOS_POR_DIA
 					vivas.append(m)
-				elif log.is_valid():
-					log.call("O exército enviado a %s foi destruído."
-						% Rotas.nome_do(state, m["alvo"]))
+				else:
+					# morreu diante dos muros: o comandante é CAPTURADO,
+					# igual a quando o exército some na estrada
+					var cap2 := Comandantes.capturar(state,
+						Comandantes.por_id(state, str(m.get("comandante", ""))), log)
+					if int(cap2.get("preso", 0)) > 0:
+						var Jogo2 = load("res://scripts/jogo.gd")
+						Jogo2.prender(state, int(cap2["preso"]), log)
+					if log.is_valid():
+						log.call("O exército enviado a %s foi destruído."
+							% Rotas.nome_do(state, m["alvo"]))
 			"volta":
 				eventos.append(_resolver_retorno(state, m, log))
 	state["marchas"] = vivas
@@ -273,6 +292,8 @@ static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
 	var alvo: String = m["alvo"]
 	var guarnicao := _guarnicao_de(state, alvo)
 	var bonus := Combate.bonus_de(state, m["tropas"])
+	var cmd: Dictionary = Comandantes.por_id(state, str(m.get("comandante", "")))
+	bonus *= Comandantes.bonus_ataque(cmd)
 	var rel := Combate.resolver_assalto(m["tropas"], guarnicao, bonus, debuff_defensor, m["intencao"])
 	rel["tipo"] = "batalha"
 	rel["marcha"] = m["id"]

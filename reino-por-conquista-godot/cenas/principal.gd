@@ -32,6 +32,9 @@ const Relogio = preload("res://scripts/relogio.gd")
 const Rotas = preload("res://scripts/rotas.gd")
 const Cerco = preload("res://scripts/cerco.gd")
 const Intel = preload("res://scripts/intel.gd")
+const Estacoes = preload("res://scripts/estacoes.gd")
+const Vassalagem = preload("res://scripts/vassalagem.gd")
+const Comandantes = preload("res://scripts/comandantes.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -239,10 +242,16 @@ func atualizar() -> void:
 	if state.is_empty():
 		return
 	var j: Dictionary = state["jogador"]
-	status_label.text = "%s · %s · %d anos   🪙 %d   ⭐ %d   ⚔ %d homens (moral %d)   🛡 %d   📅 %s, Ano %d" % [
-		j["nome"], Contratos.titulo(state), j["idade"], j["ouro"], j["renome"],
+	var vs: Dictionary = Vassalagem.resumo(state)
+	var selo: String = ""
+	if bool(vs.get("vassalo", false)):
+		selo = "  ⚑ vassalo de %s" % vs["nome"]
+	status_label.text = "%s · %s%s · %d anos   🪙 %d   ⭐ %d   ⚔ %d homens (moral %d)   🛡 %d   📅 %s de %s, Ano %d" % [
+		j["nome"], Contratos.titulo(state), selo, j["idade"], j["ouro"], j["renome"],
 		Combate.total_homens(j["tropas"]), Economia.moral(state), j["guardas"],
-		MESES[state["mes"] - 1], state["ano"]]
+		MESES[state["mes"] - 1], Estacoes.nome(state), state["ano"]]
+	# a UI muda de temperatura junto com o mundo: azul-gelo no inverno
+	status_label.add_theme_color_override("font_color", Estacoes.cor(state))
 
 	if state["fim"] != null:
 		_modal_fim()
@@ -352,6 +361,23 @@ func _aba_terra(c: Container) -> void:
 	else:
 		_par(c, "👥 População %d   🌾 Alimento %d   🪵 Madeira %d   😊 Felicidade %d" %
 			[t["populacao"], t["alimento"], t["madeira"], t["felicidade"]])
+		# O DILEMA: quem pega em armas some da base de imposto. Mostrar os dois
+		# números lado a lado é o que transforma recrutar numa decisão.
+		var ativa: int = Economia.populacao_ativa(state)
+		var armas: int = Economia.pop_em_armas(state)
+		_par(c, "⚒ Trabalhando: %d   ⚔ Em armas: %d   💰 Imposto: %d 🪙/mês" %
+			[ativa, armas, Economia.imposto_mensal(state)])
+		if armas > 0:
+			_par(c, "   (cada homem em armas é um pagador de imposto a menos)")
+		var nivel_cap: int = clampi(int(t["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
+		_par(c, "🏰 %s sustenta até %d de tropa · imposto %.2f 🪙 por habitante" % [
+			Dados.NIVEIS_TERRA[nivel_cap]["nome"], Recrutamento.pop_maxima(state),
+			float(Dados.NIVEIS_TERRA[nivel_cap]["imposto"])])
+		# a estação, e o aviso de que o inverno vem aí
+		var aviso_est: String = "%s — %s" % [Estacoes.nome(state), Estacoes.nota(state)]
+		if Estacoes.proxima(state) == "inverno" and Estacoes.meses_ate_virar(state) <= 2:
+			aviso_est += "  ❄ O inverno chega em %d mês(es)." % Estacoes.meses_ate_virar(state)
+		_par(c, aviso_est)
 		if int(t["felicidade"]) <= 30:
 			_par(c, "⚠ O povo murmura. Felicidade baixa termina em foices e tochas.")
 		if int(t["nivel"]) < 5:
@@ -416,6 +442,21 @@ func _aba_mapa(c: Container) -> void:
 		else:
 			_par(lb, "📍 Você está aqui")
 		var alvo_id: String = reino["id"]
+		# JURAR LEALDADE: a saída para quem começa pobre diante de reinos ricos
+		if not Vassalagem.e_vassalo(state) and Vassalagem.pode_jurar(state, alvo_id)["ok"]:
+			_botao(lb, "🤝 Jurar lealdade", func():
+				var r: Dictionary = Vassalagem.jurar(state, alvo_id, Jogo.log_para(state))
+				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
+		elif Vassalagem.suserano(state) == alvo_id:
+			_botao(lb, "⚑ Declarar independência", func():
+				var r: Dictionary = Vassalagem.declarar_independencia(state, Jogo.log_para(state))
+				Sfx.tocar(self, "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
 		if not Intel.tem(state, alvo_id):
 			_botao(lb, "🕵 Espionar (80 🪙)", func():
 				var r: Dictionary = Intriga.espionar(state, alvo_id)
@@ -610,6 +651,28 @@ func _aba_exercito(c: Container) -> void:
 	if Combate.total_homens(j["tropas"]) > 0:
 		_titulo_secao(c, "⚔ Enviar exército")
 		_par(c, "Metade das suas tropas parte. Saque volta rápido com carga; cerco quebra o inimigo.")
+		# COMANDANTE: quem lidera muda o que a marcha faz — e é capturado se
+		# o exército for obliterado, então escolher é apostar duas coisas
+		var escolhido: String = str(j.get("comandante_escolhido", "senhor"))
+		var hc := _card(c)
+		var lc := Label.new()
+		var atual_cmd: Dictionary = Comandantes.por_id(state, escolhido)
+		var perfil: Dictionary = Comandantes.PERFIS.get(atual_cmd.get("perfil", "senhor"), {})
+		lc.text = "🎖 Comandante: %s — %s" % [
+			str(atual_cmd.get("nome", "—")), str(perfil.get("desc", ""))]
+		lc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hc.add_child(lc)
+		var opcoes: Array = Comandantes.disponiveis(state)
+		if opcoes.size() > 1:
+			_botao(hc, "Trocar", func():
+				var i := 0
+				for k in opcoes.size():
+					if str(opcoes[k]["id"]) == escolhido:
+						i = k
+				state["jogador"]["comandante_escolhido"] = str(opcoes[(i + 1) % opcoes.size()]["id"])
+				Jogo.salvar(state)
+				atualizar())
 		for alvo in Rotas.todos_os_nos():
 			if alvo == "jogador":
 				continue
@@ -631,14 +694,15 @@ func _aba_exercito(c: Container) -> void:
 			ha.add_child(la)
 			var destino: String = alvo
 			var envio: Dictionary = metade
+			var cmd_id: String = str(state["jogador"].get("comandante_escolhido", "senhor"))
 			_botao(ha, "Saque", func():
-				var r: Dictionary = Marchas.despachar(state, destino, envio, "saque")
+				var r: Dictionary = Marchas.despachar(state, destino, envio, "saque", cmd_id)
 				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
 			_botao(ha, "Cerco", func():
-				var r: Dictionary = Marchas.despachar(state, destino, envio, "cerco")
+				var r: Dictionary = Marchas.despachar(state, destino, envio, "cerco", cmd_id)
 				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)

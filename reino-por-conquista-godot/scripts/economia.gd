@@ -7,6 +7,7 @@ extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
+const Estacoes = preload("res://scripts/estacoes.gd")
 
 static func inicializar_mercados(state: Dictionary) -> void:
 	state["mercados"] = {}
@@ -126,29 +127,70 @@ static func tick_mercados(state: Dictionary) -> void:
 			m["demanda"] += (1.0 - m["demanda"]) * 0.10
 			m["demanda"] = clampf(m["demanda"] * (1.0 + (randf() - 0.5) * 0.06), 0.5, 3.0)
 
+## ---------- O DILEMA DA POPULAÇÃO ----------
+## Quem pega em armas SAI da lavoura e do rol de contribuintes. Um exército
+## de 200 homens não é só caro de manter: ele apaga 200 pagadores de imposto
+## da sua própria terra. É a escolha central da economia — muitos homens
+## medíocres ou poucos de elite.
+static func pop_em_armas(state: Dictionary) -> int:
+	var t := 0
+	for tipo in state["jogador"]["tropas"]:
+		var d = Dados.TROPAS.get(tipo)
+		if d != null:
+			t += int(state["jogador"]["tropas"][tipo]) * int(d.get("pop", 1))
+	# quem está na estrada também não colhe nem paga imposto
+	for m in state.get("marchas", []):
+		for tipo in m.get("tropas", {}):
+			var d2 = Dados.TROPAS.get(tipo)
+			if d2 != null:
+				t += int(m["tropas"][tipo]) * int(d2.get("pop", 1))
+	return t
+
+## População que ainda trabalha: é ela que colhe e paga imposto.
+static func populacao_ativa(state: Dictionary) -> int:
+	if state.get("terra") == null:
+		return 0
+	return maxi(0, int(state["terra"]["populacao"]) - pop_em_armas(state))
+
+## Imposto do mês. Sai do NÍVEL da terra (o portão de progressão) vezes a
+## população que sobrou trabalhando.
+static func imposto_mensal(state: Dictionary) -> int:
+	if state.get("terra") == null:
+		return 0
+	var nivel: int = clampi(int(state["terra"]["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
+	var taxa: float = float(Dados.NIVEIS_TERRA[nivel]["imposto"])
+	return roundi(populacao_ativa(state) * taxa)
+
 static func tick_terra(state: Dictionary, log: Callable) -> void:
 	if state["terra"] == null:
 		return
 	var t: Dictionary = state["terra"]
-	var convocados: int = int(state["jogador"]["tropas"].get("campones", 0))
-	var trabalhando: int = maxi(0, t["populacao"] - convocados)
-	var producao: int = roundi(trabalhando * 1.5 * (1.0 + t["nivel"] * 0.15))
-	t["alimento"] = maxi(0, t["alimento"] + producao - t["populacao"])
-	# A madeira deixou de ser só material de obra: desde o upkeep global, o
-	# exército gasta flecha e haste todo mês. Sem escalar com a população, a
-	# lenha vira o gargalo silencioso que faz a tropa desertar sem motivo
-	# aparente — a terra sustenta o exército que a população dela permite.
-	t["madeira"] += 2 + t["nivel"] * 2 + int(trabalhando / 12.0)
-	if convocados > t["populacao"] * 0.4:
-		log.call("Quase metade da vila está no exército: a colheita despencou.")
-	if t["alimento"] <= 0:
-		t["felicidade"] = clampi(t["felicidade"] - 20, 0, 100)
-		t["populacao"] = maxi(5, t["populacao"] - Dados.ri(1, 4))
+	var trabalhando := populacao_ativa(state)
+	var em_armas := pop_em_armas(state)
+
+	# ---- colheita, dobrada à estação ----
+	var fator := Estacoes.fator_comida(state)
+	var producao: int = roundi(trabalhando * 1.5 * (1.0 + t["nivel"] * 0.15) * fator)
+	t["alimento"] = maxi(0, int(t["alimento"]) + producao - int(t["populacao"]))
+	t["madeira"] = int(t["madeira"]) + 2 + int(t["nivel"]) * 2 + int(trabalhando / 12.0)
+
+	if Estacoes.e_inverno(state) and producao == 0:
+		log.call("Inverno: as fazendas de %s pararam. O celeiro é o que há." % t["nome"])
+	elif em_armas > int(t["populacao"]) * 0.4:
+		log.call("Quase metade da vila está em armas: a colheita e o imposto despencaram.")
+
+	# ---- imposto: só quem ficou é que paga ----
+	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + imposto_mensal(state)
+	state["jogador"]["ultimo_imposto"] = imposto_mensal(state)
+
+	# ---- fome e pressão ----
+	if int(t["alimento"]) <= 0:
+		t["felicidade"] = clampi(int(t["felicidade"]) - 20, 0, 100)
+		t["populacao"] = maxi(5, int(t["populacao"]) - Dados.ri(1, 4))
 		log.call("FOME em %s! Felicidade -20." % t["nome"])
-	elif t["felicidade"] < 70:
-		t["felicidade"] = clampi(t["felicidade"] + 5, 0, 100)
-	state["jogador"]["ouro"] += roundi(trabalhando * 0.8 * (1.0 + t["nivel"] * 0.2))
-	if t["felicidade"] <= 20 and randf() < 0.5:
+	elif int(t["felicidade"]) < 70:
+		t["felicidade"] = clampi(int(t["felicidade"]) + 5, 0, 100)
+	if int(t["felicidade"]) <= 20 and randf() < 0.5:
 		log.call("REBELIÃO em %s!" % t["nome"])
 		state["evento_pendente"] = {"tipo": "rebeliao"}
 

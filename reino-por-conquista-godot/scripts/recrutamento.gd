@@ -46,11 +46,16 @@ static func pop_usada(state: Dictionary) -> int:
 			t += int(item["restantes"]) * int(d2.get("pop", 1))
 	return t
 
-## Teto de população: sem terra, o mercenário sustenta um bando pequeno.
+## PORTÃO DE PROGRESSÃO: o teto do exército sai do NÍVEL da terra, não da
+## população. Construir é o que libera exército — sem isso, nada impede
+## enfileirar dez mil homens no segundo dia. A população continua limitando
+## por outro caminho: quem vira soldado deixa de pagar imposto.
 static func pop_maxima(state: Dictionary) -> int:
 	if state.get("terra") == null:
-		return 30
-	return int(state["terra"]["populacao"])
+		return 20                      # o bando que um mercenário sem terra sustenta
+	var nivel: int = clampi(int(state["terra"]["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
+	# o teto é o menor entre o que a infraestrutura comporta e o que há de gente
+	return mini(int(Dados.NIVEIS_TERRA[nivel]["cap"]), int(state["terra"]["populacao"]))
 
 static func fila(state: Dictionary) -> Array:
 	if not state.has("fila_recrutamento"):

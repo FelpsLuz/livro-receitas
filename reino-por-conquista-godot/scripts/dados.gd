@@ -139,14 +139,44 @@ const FORMACOES := {
 	"cerco": {"nome": "Envolvimento", "vence_de": "linha"},
 }
 
+# ---------------------------------------------------------------
+# NÍVEIS DA TERRA — o PORTÃO DE PROGRESSÃO do jogo.
+#
+# `cap` é o teto de população militar que a infraestrutura sustenta, e
+# `imposto` é quanto cada habitante ATIVO rende por mês. Os dois saem daqui
+# e de nenhum outro lugar: é a construção que libera o exército e o ouro,
+# não o tempo. Sem esse portão, nada impede o jogador de enfileirar dez mil
+# homens no segundo dia.
+#
+# A tensão que isso cria é de propósito: subir de nível custa ouro e madeira
+# AGORA para render teto e imposto DEPOIS.
+# ---------------------------------------------------------------
 const NIVEIS_TERRA := [
-	{"nome": "Acampamento", "custo_ouro": 0,    "custo_madeira": 0},
-	{"nome": "Aldeia",      "custo_ouro": 200,  "custo_madeira": 60},
-	{"nome": "Vila",        "custo_ouro": 500,  "custo_madeira": 150},
-	{"nome": "Burgo",       "custo_ouro": 1200, "custo_madeira": 300},
-	{"nome": "Cidade",      "custo_ouro": 2500, "custo_madeira": 600},
-	{"nome": "Castelo",     "custo_ouro": 5000, "custo_madeira": 1200},
+	{"nome": "Acampamento", "custo_ouro": 0,    "custo_madeira": 0,    "cap": 30,  "imposto": 0.35},
+	{"nome": "Aldeia",      "custo_ouro": 200,  "custo_madeira": 60,   "cap": 80,  "imposto": 0.55},
+	{"nome": "Vila",        "custo_ouro": 500,  "custo_madeira": 150,  "cap": 160, "imposto": 0.85},
+	{"nome": "Burgo",       "custo_ouro": 1200, "custo_madeira": 300,  "cap": 300, "imposto": 1.25},
+	{"nome": "Cidade",      "custo_ouro": 2500, "custo_madeira": 600,  "cap": 550, "imposto": 1.75},
+	{"nome": "Castelo",     "custo_ouro": 5000, "custo_madeira": 1200, "cap": 900, "imposto": 2.40},
 ]
+
+# ---------------------------------------------------------------
+# ESTAÇÕES — o inverno é um inimigo que não se pode subornar.
+#
+# Dezembro, Janeiro e Fevereiro param as fazendas e dobram o custo de manter
+# um exército acampado. É o que obriga jogador E NPCs a planejar guerra para
+# a primavera, em vez de sitiar o ano inteiro.
+# ---------------------------------------------------------------
+const ESTACOES := {
+	"primavera": {"nome": "Primavera", "meses": [3, 4, 5],    "comida": 1.15, "cerco": 1.0,
+		"cor": "7fa650", "nota": "Os campos brotam. É a estação de marchar."},
+	"verao":     {"nome": "Verão",     "meses": [6, 7, 8],    "comida": 1.30, "cerco": 1.0,
+		"cor": "c9a227", "nota": "Colheita farta e estradas secas."},
+	"outono":    {"nome": "Outono",    "meses": [9, 10, 11],  "comida": 0.85, "cerco": 1.3,
+		"cor": "a5622d", "nota": "O celeiro enche, mas o frio se anuncia."},
+	"inverno":   {"nome": "Inverno",   "meses": [12, 1, 2],   "comida": 0.0,  "cerco": 2.0,
+		"cor": "8fb4d8", "nota": "As fazendas param. Manter homens em campo custa o dobro."},
+}
 
 const NOMES_M := ["Edmund", "Rowan", "Cedric", "Tomas", "Garrick", "Alaric", "Bran", "Osric", "Doran", "Wilfred"]
 const NOMES_F := ["Mira", "Elysia", "Sable", "Anora", "Gwen", "Isolde", "Runa", "Catrin", "Lyra", "Maren"]

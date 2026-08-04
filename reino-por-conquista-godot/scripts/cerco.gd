@@ -21,6 +21,8 @@ const Dados = preload("res://scripts/dados.gd")
 const Combate = preload("res://scripts/combate.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Sinais = preload("res://scripts/sinais.gd")
+const Estacoes = preload("res://scripts/estacoes.gd")
+const Comandantes = preload("res://scripts/comandantes.gd")
 
 ## Seis fases, uma a cada 30 do relógio unificado.
 const FASES := 6
@@ -50,15 +52,24 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 		"reforco": false, "abandonou": false, "efetivado": false}
 
 	# ---- 1. o custo de ficar parado no campo inimigo ----
-	var custo := Economia.upkeep_de(m["tropas"], MULTIPLICADOR_UPKEEP)
+	# o dobro por estar acampado, vezes a estação: no inverno são QUATRO
+	# vezes o upkeep normal, e é isso que mata cerco de dezembro
+	var fator := MULTIPLICADOR_UPKEEP * Estacoes.fator_cerco(state)
+	var cmd: Dictionary = Comandantes.por_id(state, str(m.get("comandante", "")))
+	var custo := Economia.upkeep_de(m["tropas"], fator)
+	# um quartel-mestre competente é a diferença entre campanha e fome
+	custo["comida"] = roundi(int(custo["comida"]) * Comandantes.fator_comida_cerco(cmd))
 	var pagou := _cobrar(state, custo, c)
+	ev["inverno"] = Estacoes.e_inverno(state)
 	if not pagou.is_empty():
 		c["moral"] = int(c["moral"]) - 18 * pagou.size()
 		if log.is_valid():
 			log.call("Cerco (fase %d): falta %s no acampamento."
 				% [int(c["fase"]), " e ".join(pagou)])
 	else:
-		c["moral"] = int(c["moral"]) - 4      # o tédio e a lama cobram sozinhos
+		# tédio e lama cobram sozinhos; a neve cobra mais
+		c["moral"] = int(c["moral"]) - maxi(1,
+			(7 if Estacoes.e_inverno(state) else 4) - Comandantes.moral_cerco(cmd))
 
 	# ---- 2. reforços do defensor pelas costas ----
 	if randf() < CHANCE_REFORCO:

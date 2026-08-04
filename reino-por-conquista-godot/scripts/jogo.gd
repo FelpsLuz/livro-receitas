@@ -19,6 +19,8 @@ const Sinais = preload("res://scripts/sinais.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Intel = preload("res://scripts/intel.gd")
+const Estacoes = preload("res://scripts/estacoes.gd")
+const Vassalagem = preload("res://scripts/vassalagem.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -34,6 +36,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 			"tropas": _tropas_zeradas({"lanceiro": 5}),
 			"equip": 0, "formacao": "linha", "guardas": 0,
 			"rei_de": "", "meses_reinando": 0, "meses_sem_pagar": 0, "meses_imperador": 0,
+			"suserano": "", "meses_vassalo": 0,
 		},
 		"reinos": Dados.REINOS_BASE.duplicate(true),
 		"guerras": [], "tags": {}, "segredos": [], "casus_belli": [],
@@ -118,6 +121,7 @@ static func passar_mes(state: Dictionary) -> void:
 	Intel.tick(state)                     # relatórios de espião envelhecem
 	Cidadaos.tick(state, log)             # a sua sociedade também
 	Taverna.tick(state, log)              # informantes cobram e reportam
+	Vassalagem.tick(state, log)           # o suserano cobra o tributo
 	# um mês de jogo = 600 minutos: empurra quartel E marchas pelo mesmo relógio
 	Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 	Clas.tick(state, log)
@@ -331,6 +335,8 @@ static func _migrar(state: Dictionary) -> Dictionary:
 			state[campo] = {}
 	if not state["jogador"].has("moral"):
 		state["jogador"]["moral"] = 100
+	if not state["jogador"].has("suserano"):
+		state["jogador"]["suserano"] = ""
 	# tropas renomeadas (cavaleiro → cav_leve) e as oito novas, que um save
 	# anterior à Fase 3 não conhece
 	if state.get("jogador") != null and state["jogador"].get("tropas") != null:
