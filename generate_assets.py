@@ -20,15 +20,21 @@ Uso
     python3 generate_assets.py --tudo            # gera o elenco inteiro
     python3 generate_assets.py --apenas rei_touros --tamanho 64
 
-Notas de API (extraídas do SDK oficial pixellab 1.0.5 instalado)
-----------------------------------------------------------------
-* Autenticação: PIXELLAB_SECRET no ambiente → header "Authorization: Bearer <secret>".
-* O SDK 1.0.5 fala com https://api.pixellab.ai/v1 e expõe generate_image_pixflux
-  (texto→pixel art) e generate_image_bitforge (com imagem de estilo de referência).
-  O endpoint /v2/create-character-v3 NÃO existe neste SDK; se a sua conta já tiver
-  acesso à v2, use --api v2 e o script chama o REST diretamente via requests.
-* Transparência: no_background=True.
-* Estilo: outline="selective outline" (o sel-out), shading, detail, view, direction.
+Notas de API (conferidas em https://api.pixellab.ai/v2/llms.txt e no openapi.json)
+---------------------------------------------------------------------------------
+* Base: https://api.pixellab.ai/v2 — autentique com PIXELLAB_SECRET no ambiente,
+  enviado como "Authorization: Bearer <secret>".
+* POST /create-image-pixflux (padrão aqui): SÍNCRONO, devolve {usage, image} na hora.
+* POST /create-character-v3 (--api v3): ASSÍNCRONO — devolve background_job_id, que
+  é consultado em GET /background-jobs/{id} até concluir; entrega o personagem com
+  8 rotações, que gravamos como <id>_<direcao>.png.
+* Códigos que importam: 401 chave inválida, 402 SEM CRÉDITOS, 422 parâmetros,
+  429/529 limite de taxa.
+* Transparência: no_background=True. Estilo: outline="selective outline" (sel-out),
+  shading, detail, view.
+* O SDK Python 1.0.5 (pip install pixellab) fala com a /v1 e hoje QUEBRA ao ler a
+  resposta (valida usage.type=='usd', mas a API devolve 'generations'), por isso
+  este script chama a REST v2 diretamente.
 """
 
 from __future__ import annotations
@@ -162,8 +168,9 @@ APARENCIA = {
                "practical grey steel half-armor, worn sword, arms crossed, unimpressed expression",
     "espiao": "hooded spy, face half in shadow, dark charcoal cloak, leather gloves, "
               "daggers at the belt, sealed letter tucked in his sleeve",
-    "cla_lobos": "northern clan chieftain, long braided blond hair and beard, wolf-pelt hood, "
-                 "iron ring mail, huge spear, snow-dusted shoulders",
+    "cla_lobos": "burly northern clan chieftain, MALE, long braided BLOND hair and thick blond beard, "
+                 "grey wolf-pelt hood over his head, iron ring mail, huge spear, snow-dusted shoulders, "
+                 "no pink or red hair",
     "cla_corvos": "silent scout woman, black hood, one clouded blind eye, dark grey leathers, "
                   "recurve bow, raven feathers braided in her hair",
     "cla_estepe": "nomad horse-lord, long drooping moustache, topknot, red war paint across the face, "
@@ -212,54 +219,150 @@ def montar_prompt(pid: str, lore: dict, fichas: dict) -> str:
 
 
 # ------------------------------------------------------------------ geração
-def cliente_v1():
-    import pixellab
+def salvar_rotacoes(dados: dict, destino: Path, pid: str) -> int:
+    """create-character-v3 devolve o personagem virado para vários lados;
+    grava cada rotação como <id>_<direcao>.png e a frontal como <id>.png."""
+    from io import BytesIO
+    import PIL.Image
+    salvos = 0
+    rotacoes = dados.get("rotations") or dados.get("images") or []
+    if isinstance(rotacoes, dict):
+        rotacoes = [{"direction": k, "image": v} for k, v in rotacoes.items()]
+    for r in rotacoes:
+        b64 = ((r.get("image") or {}).get("base64") if isinstance(r.get("image"), dict)
+               else r.get("base64"))
+        if not b64:
+            continue
+        direcao = (r.get("direction") or f"{salvos}").replace(" ", "_")
+        img = PIL.Image.open(BytesIO(base64.b64decode(b64))).convert("RGBA")
+        img.save(destino / f"{pid}_{direcao}.png")
+        if direcao in ("south", "front", "0"):
+            img.save(destino / f"{pid}.png")     # a pose que o jogo usa por padrão
+        salvos += 1
+    if salvos and not (destino / f"{pid}.png").exists():
+        # nenhuma veio marcada como frontal: usa a primeira
+        primeira = sorted(destino.glob(f"{pid}_*.png"))[0]
+        PIL.Image.open(primeira).save(destino / f"{pid}.png")
+    return salvos
+
+
+BASE_V2 = os.environ.get("PIXELLAB_BASE_URL", "https://api.pixellab.ai/v2").rstrip("/")
+
+
+def _cabecalho():
     segredo = os.environ.get("PIXELLAB_SECRET", "").strip()
     if not segredo:
-        raise SystemExit(
-            "❌ Falta a chave. Rode:  export PIXELLAB_SECRET=\"sua-chave\"\n"
-            "   (pegue em https://www.pixellab.ai — Account → API)")
-    return pixellab.Client(secret=segredo)
+        raise SystemExit("❌ Falta a chave: export PIXELLAB_SECRET=\"sua-chave\"")
+    return {"Authorization": f"Bearer {segredo}", "content-type": "application/json"}
 
 
-def gerar_v1(cli, prompt: str, tamanho: int, seed: int):
-    """SDK oficial (pixellab 1.0.5) → POST /v1/generate-image-pixflux."""
-    r = cli.generate_image_pixflux(
-        description=prompt,
-        negative_description=NEGATIVO,
-        image_size={"width": tamanho, "height": tamanho},
-        seed=seed,
-        **ESTILO,
-    )
-    return r.image.pil_image(), getattr(getattr(r, "usage", None), "usd", None)
+def _erro_http(resp) -> str:
+    """Traduz os códigos que a API documenta, para a mensagem ser acionável."""
+    mapa = {
+        401: "chave inválida (401)",
+        402: "SEM CRÉDITOS na conta PixelLab (402) — recarregue em pixellab.ai",
+        422: "parâmetros recusados (422)",
+        429: "limite de concorrência/taxa (429) — espere e tente de novo",
+        529: "limite de taxa (529) — espere e tente de novo",
+    }
+    detalhe = ""
+    try:
+        j = resp.json()
+        detalhe = j.get("detail") or j.get("error") or ""
+        if isinstance(detalhe, list):
+            detalhe = json.dumps(detalhe)[:180]
+    except Exception:
+        detalhe = resp.text[:180]
+    return f"{mapa.get(resp.status_code, f'HTTP {resp.status_code}')}" + (f" — {detalhe}" if detalhe else "")
+
+
+def _usd(dados) -> float | None:
+    """A API devolve usage como {type:'usd'|'generations', usd|generations: n}."""
+    u = dados.get("usage") or {}
+    return u.get("usd") if u.get("type") == "usd" else None
+
+
+def _imagem_de(dados):
+    from io import BytesIO
+    import PIL.Image
+    b64 = (dados.get("image") or {}).get("base64") or dados.get("image_base64")
+    if not b64:
+        raise RuntimeError(f"resposta sem imagem: {json.dumps(dados)[:220]}")
+    return PIL.Image.open(BytesIO(base64.b64decode(b64)))
 
 
 def gerar_v2(prompt: str, tamanho: int, seed: int):
-    """REST v2 (/v2/create-character-v3) para contas com acesso à v2."""
+    """POST /v2/create-image-pixflux — síncrono, devolve a imagem na hora.
+
+    É o caminho padrão: uma pose por personagem, barato e direto.
+    (O SDK Python 1.0.5 ainda valida usage.type=='usd' e quebra com a resposta
+    atual da API, que usa 'generations' — por isso falamos REST direto.)
+    """
     import requests
-    segredo = os.environ.get("PIXELLAB_SECRET", "").strip()
-    if not segredo:
-        raise SystemExit("❌ Falta PIXELLAB_SECRET no ambiente.")
-    base = os.environ.get("PIXELLAB_BASE_URL", "https://api.pixellab.ai/v2").rstrip("/")
     corpo = {
         "description": prompt,
         "negative_description": NEGATIVO,
         "image_size": {"width": tamanho, "height": tamanho},
         "seed": seed,
-        "transparent_background": True,
-        **{k: v for k, v in ESTILO.items() if k != "no_background"},
+        "text_guidance_scale": ESTILO["text_guidance_scale"],
+        "outline": ESTILO["outline"],
+        "shading": ESTILO["shading"],
+        "detail": ESTILO["detail"],
+        "view": ESTILO["view"],
+        "isometric": False,
+        "no_background": True,                       # fundo transparente
     }
-    resp = requests.post(f"{base}/create-character-v3", json=corpo,
-                         headers={"Authorization": f"Bearer {segredo}"}, timeout=180)
-    resp.raise_for_status()
+    resp = requests.post(f"{BASE_V2}/create-image-pixflux", json=corpo,
+                         headers=_cabecalho(), timeout=300)
+    if not resp.ok:
+        raise RuntimeError(_erro_http(resp))
     dados = resp.json()
-    # a v2 pode devolver a imagem em campos diferentes conforme o modelo
-    b64 = (dados.get("image", {}) or {}).get("base64") or dados.get("image_base64")
-    if not b64:
-        raise RuntimeError(f"resposta sem imagem: {json.dumps(dados)[:300]}")
-    from io import BytesIO
-    import PIL.Image
-    return PIL.Image.open(BytesIO(base64.b64decode(b64))), (dados.get("usage") or {}).get("usd")
+    return _imagem_de(dados), _usd(dados)
+
+
+def gerar_v3(prompt: str, tamanho: int, seed: int, espera: int = 300):
+    """POST /v2/create-character-v3 — personagem com 8 rotações (assíncrono).
+
+    Devolve background_job_id; a gente faz polling em /background-jobs/{id} e,
+    quando termina, baixa o personagem em /characters/{id}. Custa bem mais que
+    o pixflux, mas entrega o personagem virado para os 8 lados.
+    """
+    import requests
+    corpo = {
+        "description": prompt,
+        "image_size": {"width": tamanho, "height": tamanho},
+        "view": ESTILO["view"],
+        "no_background": True,
+        "outline": ESTILO["outline"],
+        "detail": ESTILO["detail"],
+        "seed": seed,
+        "enhance_prompt": True,        # a própria API enriquece a descrição
+    }
+    resp = requests.post(f"{BASE_V2}/create-character-v3", json=corpo,
+                         headers=_cabecalho(), timeout=120)
+    if not resp.ok:
+        raise RuntimeError(_erro_http(resp))
+    envio = resp.json()
+    job = envio.get("background_job_id")
+    personagem = envio.get("character_id")
+    if not job:
+        raise RuntimeError(f"sem background_job_id: {json.dumps(envio)[:200]}")
+    inicio = time.time()
+    while time.time() - inicio < espera:
+        time.sleep(5)
+        st = requests.get(f"{BASE_V2}/background-jobs/{job}", headers=_cabecalho(), timeout=60)
+        if not st.ok:
+            raise RuntimeError(_erro_http(st))
+        info = st.json()
+        estado = (info.get("status") or "").lower()
+        if estado in ("completed", "succeeded", "success", "done"):
+            det = requests.get(f"{BASE_V2}/characters/{personagem}", headers=_cabecalho(), timeout=120)
+            if not det.ok:
+                raise RuntimeError(_erro_http(det))
+            return det.json(), _usd(envio)     # dicionário com as rotações
+        if estado in ("failed", "error", "cancelled"):
+            raise RuntimeError(f"job falhou: {json.dumps(info)[:200]}")
+    raise RuntimeError(f"tempo esgotado esperando o job {job}")
 
 
 def gerar_simulado(prompt: str, tamanho: int, seed: int):
@@ -326,8 +429,9 @@ def main() -> int:
     ap.add_argument("--tudo", action="store_true", help="gera o elenco inteiro")
     ap.add_argument("--apenas", metavar="ID", help="gera um personagem só")
     ap.add_argument("--tamanho", type=int, default=64, help="lado do sprite (padrão 64)")
-    ap.add_argument("--api", choices=["v1", "v2"], default="v1",
-                    help="v1 = SDK oficial (padrão); v2 = REST create-character-v3")
+    ap.add_argument("--api", choices=["pixflux", "v3"], default="pixflux",
+                    help="pixflux = 1 pose, síncrono e barato (padrão); "
+                         "v3 = create-character-v3, personagem com 8 rotações")
     ap.add_argument("--simular", action="store_true",
                     help="não chama a API: gera placeholders para testar o pipeline")
     ap.add_argument("--listar", action="store_true", help="mostra o elenco e sai")
@@ -371,9 +475,6 @@ def main() -> int:
 
     destino = Path(args.saida)
     destino.mkdir(parents=True, exist_ok=True)
-    cli = None
-    if not args.simular and args.api == "v1":
-        cli = cliente_v1()
 
     modo = "SIMULAÇÃO (sem API)" if args.simular else f"PixelLab {args.api}"
     print(f"🎨 Gerando {len(ids)} sprites {args.tamanho}×{args.tamanho} — modo: {modo}")
@@ -391,10 +492,15 @@ def main() -> int:
         try:
             if args.simular:
                 img, usd = gerar_simulado(prompt, args.tamanho, seed)
-            elif args.api == "v2":
-                img, usd = gerar_v2(prompt, args.tamanho, seed)
+            elif args.api == "v3":
+                dados, usd = gerar_v3(prompt, args.tamanho, seed)
+                salvar_rotacoes(dados, destino, pid)
+                feitos += 1
+                custo += usd or 0.0
+                print(f"[{n}/{len(ids)}] ✅ {pid} — personagem com rotações salvo")
+                continue
             else:
-                img, usd = gerar_v1(cli, prompt, args.tamanho, seed)
+                img, usd = gerar_v2(prompt, args.tamanho, seed)
             img.convert("RGBA").save(alvo)          # PNG com canal alfa
             custo += usd or 0.0
             feitos += 1

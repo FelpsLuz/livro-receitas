@@ -1,9 +1,10 @@
 # Sprites de personagem (PixelLab)
 
-Esta pasta recebe os PNG gerados por `generate_assets.py` (na raiz do repositório).
-Ela vem **vazia de propósito**: sem os arquivos, o jogo desenha os retratos
-procedurais de sempre. Assim que um PNG aparece aqui, ele passa a ser usado
-automaticamente — sem mexer em código.
+Os 18 PNG do elenco já estão aqui, gerados por `generate_assets.py` (na raiz do
+repositório) com o endpoint `/v2/create-image-pixflux`, 64×64 e fundo transparente.
+
+Se um arquivo faltar, o jogo desenha o retrato procedural daquele personagem —
+nada quebra. Para refazer um sprite, use `--apenas <id> --forcar`.
 
 ## Como gerar
 
