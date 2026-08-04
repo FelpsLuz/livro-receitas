@@ -30,6 +30,8 @@ const Taverna = preload("res://scripts/taverna.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Rotas = preload("res://scripts/rotas.gd")
+const Cerco = preload("res://scripts/cerco.gd")
+const Intel = preload("res://scripts/intel.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -237,9 +239,10 @@ func atualizar() -> void:
 	if state.is_empty():
 		return
 	var j: Dictionary = state["jogador"]
-	status_label.text = "%s · %s · %d anos   🪙 %d   ⭐ %d   ⚔ %d homens   🛡 %d   📅 %s, Ano %d" % [
+	status_label.text = "%s · %s · %d anos   🪙 %d   ⭐ %d   ⚔ %d homens (moral %d)   🛡 %d   📅 %s, Ano %d" % [
 		j["nome"], Contratos.titulo(state), j["idade"], j["ouro"], j["renome"],
-		Combate.total_homens(j["tropas"]), j["guardas"], MESES[state["mes"] - 1], state["ano"]]
+		Combate.total_homens(j["tropas"]), Economia.moral(state), j["guardas"],
+		MESES[state["mes"] - 1], state["ano"]]
 
 	if state["fim"] != null:
 		_modal_fim()
@@ -387,9 +390,20 @@ func _aba_mapa(c: Container) -> void:
 			extras += "  📜 Casus Belli"
 		if state["jogador"]["rei_de"] == reino["id"]:
 			extras += "  👑 SEU TRONO"
+		# NEBLINA: a força do inimigo NÃO aparece de graça. Sem um espião
+		# recente, o jogador vê "???" — e marchar às cegas é decisão dele.
+		var vis: Dictionary = Intel.sobre(state, reino["id"])
+		var forca_txt: String = "⚔ %s" % vis["texto"]
+		if bool(vis.get("conhecido", false)):
+			var det: Array = Intel.detalhar(state, reino["id"])
+			var partes: Array = []
+			for l in det.slice(0, 3):
+				partes.append("%d %s" % [int(l["n"]), str(l["nome"]).to_lower()])
+			if not partes.is_empty():
+				forca_txt += " (" + ", ".join(partes) + ")"
 		var info := Label.new()
-		info.text = "%s — %s\n%s · %s (%d)%s" % [reino["nome"], reino["capital"],
-			reino["rei"]["nome"], Dialogo.nome_relacao(rel), rel, extras]
+		info.text = "%s — %s\n%s · %s (%d)%s\n%s" % [reino["nome"], reino["capital"],
+			reino["rei"]["nome"], Dialogo.nome_relacao(rel), rel, extras, forca_txt]
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(info)
 		var lb := HBoxContainer.new()
@@ -401,6 +415,16 @@ func _aba_mapa(c: Container) -> void:
 				atualizar())
 		else:
 			_par(lb, "📍 Você está aqui")
+		var alvo_id: String = reino["id"]
+		if not Intel.tem(state, alvo_id):
+			_botao(lb, "🕵 Espionar (80 🪙)", func():
+				var r: Dictionary = Intriga.espionar(state, alvo_id)
+				if int(r.get("prender", 0)) > 0:
+					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
+				Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
 		if state["jogador"]["rei_de"] == "":
 			var tem_cb: bool = state["casus_belli"].has(reino["id"])
 			_botao(lb, "⚔ Conquistar" if tem_cb else "⚔ Atacar SEM casus belli", func():
@@ -494,6 +518,11 @@ func _aba_exercito(c: Container) -> void:
 		[roundi(p["atq"]), roundi(p["def"]), p["homens"], str(j.get("ultima_manut", "—")), j["equip"]])
 	_par(c, "👥 População comprometida: %d de %d" %
 		[Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state)])
+	var up: Dictionary = Economia.upkeep_de(j["tropas"])
+	_par(c, "📉 Manutenção mensal: %d 🪙 · %d 🌾 · %d 🪵   —   Moral do exército: %d/100" %
+		[int(up["ouro"]), int(up["comida"]), int(up["madeira"]), Economia.moral(state)])
+	if Economia.moral(state) <= 35:
+		_par(c, "⚠ Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.")
 	for tipo in Dados.TROPAS:
 		var h := _card(c)
 		var l := Label.new()
@@ -542,13 +571,28 @@ func _aba_exercito(c: Container) -> void:
 		for mt in transito:
 			var hm := _card(c)
 			var lm := Label.new()
-			var rumo: String = "→ %s" % Rotas.nome_do(state, mt["alvo"]) \
-				if mt["fase"] == "ida" else "← voltando de %s" % Rotas.nome_do(state, mt["alvo"])
+			var rumo: String = ""
+			match mt["fase"]:
+				"ida": rumo = "→ %s" % Rotas.nome_do(state, mt["alvo"])
+				"cerco": rumo = "⚑ sitiando %s" % Rotas.nome_do(state, mt["alvo"])
+				_: rumo = "← voltando de %s" % Rotas.nome_do(state, mt["alvo"])
 			var carga := ""
 			for g in mt["carga"]:
 				carga += " · %s %d" % [g, int(mt["carga"][g])]
-			lm.text = "%d homens %s (%s) — chega em %s%s" % [
-				mt["homens"], rumo, mt["intencao"], mt["texto_faltam"], carga]
+			if mt["fase"] == "cerco":
+				# o cerco tem que ser VISÍVEL fase a fase: é meio jogo acontecendo
+				# fora da tela, e sem isso o jogador só vê recursos sumindo
+				var pg: Dictionary = mt.get("cerco", {})
+				lm.text = "%d homens %s — fase %d de %d · moral %d/100 · gasto %d🪙 %d🌾 %d🪵%s" % [
+					mt["homens"], rumo, int(pg.get("fase", 0)), int(pg.get("de", 6)),
+					int(pg.get("moral", 0)), int(pg.get("gasto", {}).get("ouro", 0)),
+					int(pg.get("gasto", {}).get("comida", 0)),
+					int(pg.get("gasto", {}).get("madeira", 0)),
+					"  ⚔ %d intervenções" % int(pg.get("reforcos", 0))
+						if int(pg.get("reforcos", 0)) > 0 else ""]
+			else:
+				lm.text = "%d homens %s (%s) — chega em %s%s" % [
+					mt["homens"], rumo, mt["intencao"], mt["texto_faltam"], carga]
 			lm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			lm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			hm.add_child(lm)

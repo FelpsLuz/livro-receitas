@@ -82,6 +82,37 @@ static func enfileirar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
 	return {"ok": true, "msg": "%d× %s em treinamento (%d min cada)."
 		% [qtd, Dados.TROPAS[tipo]["nome"], tempo_de(state, tipo)]}
 
+# ------------------------------------------------------------
+# NÚCLEO GENÉRICO DA FILA
+# O jogador e os reis NPCs treinam pelas MESMAS regras. A diferença é só de
+# onde sai o tempo de treino e para onde vai o recruta — então isso vira
+# parâmetro, e não uma segunda implementação que diverge com o tempo.
+# ------------------------------------------------------------
+## `tempo_fn(tipo) -> int` e `entregar_fn(tipo) -> void`.
+static func avancar_fila(f: Array, minutos: int, tempo_fn: Callable,
+		entregar_fn: Callable) -> int:
+	var entregues := 0
+	var restante := minutos
+	while restante > 0 and not f.is_empty():
+		var item: Dictionary = f[0]
+		var falta: int = int(item["restante"])
+		if restante < falta:
+			item["restante"] = falta - restante
+			restante = 0
+			break
+		restante -= falta
+		var tipo: String = item["tipo"]
+		entregar_fn.call(tipo)
+		item["restantes"] = int(item["restantes"]) - 1
+		entregues += 1
+		if int(item["restantes"]) <= 0:
+			f.pop_front()
+			if not f.is_empty():
+				f[0]["restante"] = int(tempo_fn.call(f[0]["tipo"]))
+		else:
+			item["restante"] = int(tempo_fn.call(tipo))
+	return entregues
+
 ## Empurra o cronômetro. É o único ponto que entrega tropa.
 ##
 ## O laço tem que ser `while`: avançar um mês de uma vez (600 min) precisa

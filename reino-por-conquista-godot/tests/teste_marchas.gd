@@ -177,8 +177,11 @@ func _init() -> void:
 	mm["perigo"] = 0.0
 	Relogio.avancar(s4, int(mm["duracao"]), Jogo.log_para(s4))
 	# o relatório do saque tem UMA fase; o do cerco, três
+	# Cerco NÃO resolve mais na chegada — virou máquina de seis fases, coberta
+	# em teste_cerco.gd. Aqui o que interessa é o RELATÓRIO da batalha, então
+	# o caminho direto é um saque, que resolve ao chegar.
 	var s5 := base()
-	Marchas.despachar(s5, "touros", {"lanceiro": 30, "arqueiro": 20, "cav_leve": 5}, "cerco")
+	Marchas.despachar(s5, "sem_rei", {"lanceiro": 30, "arqueiro": 20, "cav_leve": 5}, "saque")
 	var mc: Dictionary = Marchas.lista(s5)[0]
 	mc["perigo"] = 0.0
 	var evs: Array = Relogio.avancar(s5, int(mc["duracao"]), Jogo.log_para(s5))["marchas"]
@@ -188,7 +191,7 @@ func _init() -> void:
 			batalha = e
 	ok("a chegada gera um relatório de batalha", not batalha.is_empty())
 	if not batalha.is_empty():
-		ok("cerco roda as três fases", batalha["fases"].size() == 3,
+		ok("a batalha detalha as fases travadas", batalha["fases"].size() >= 1,
 			"%d fases" % batalha["fases"].size())
 		ok("o relatório é texto legível",
 			str(batalha["resumo"]).contains("Disparo")
@@ -257,9 +260,13 @@ func _init() -> void:
 	ok("o relógio foi preservado", int(s9b["minuto"]) == int(s9["minuto"]))
 	ok("as tropas em marcha continuam fora do bolso",
 		int(s9b["jogador"]["tropas"]["lanceiro"]) == int(s9["jogador"]["tropas"]["lanceiro"]))
-	# e continua andando depois de carregar
-	Relogio.avancar(s9b, 10000, Jogo.log_para(s9b))
-	ok("a marcha carregada chega ao fim", s9b["marchas"].is_empty())
+	# e continua andando depois de carregar. Um cerco é ida + seis fases +
+	# volta, e cada chamada de avancar() resolve uma transição de fase por
+	# marcha — como no jogo real, onde passar_mes é chamado várias vezes.
+	for i in 12:
+		Relogio.avancar(s9b, 2000, Jogo.log_para(s9b))
+	ok("a marcha carregada chega ao fim", s9b["marchas"].is_empty(),
+		"%d pendentes" % s9b["marchas"].size())
 	Jogo.apagar_save()
 
 	# ---------------- 11. AVANÇO GRANDE DE UMA VEZ ----------------

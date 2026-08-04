@@ -17,6 +17,9 @@ extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
 const Sinais = preload("res://scripts/sinais.gd")
+const Economia = preload("res://scripts/economia.gd")
+const Recrutamento = preload("res://scripts/recrutamento.gd")
+const Combate = preload("res://scripts/combate.gd")
 
 ## Quantos meses um pacto dura antes de precisar ser renovado.
 const DURACAO_PACTO := 12
@@ -49,9 +52,25 @@ static func inicializar(state: Dictionary) -> void:
 	for r in state["reinos"]:
 		if not r.has("tesouro"):
 			r["tesouro"] = Dados.ri(400, 900)
-		if not r.has("forca"):
-			# nobres é o que o mundo já usava para medir peso de um reino
-			r["forca"] = int(r.get("nobres", 5)) * Dados.ri(8, 14)
+		if not r.has("celeiro"):
+			r["celeiro"] = Dados.ri(300, 700)
+		if not r.has("madeireira"):
+			r["madeireira"] = Dados.ri(150, 400)
+		if not r.has("moral"):
+			r["moral"] = 100
+		if not r.has("equip"):
+			r["equip"] = 0
+		if not r.has("fila"):
+			r["fila"] = []
+		if not r.has("tropas"):
+			# exército DE VERDADE, não um número abstrato: é o que permite ao
+			# espião contar cabeças e ao upkeep cobrar por elas
+			var base: int = int(r.get("nobres", 5)) * Dados.ri(2, 4)
+			r["tropas"] = {
+				"lanceiro": base * 2, "espadachim": roundi(base * 1.2),
+				"arqueiro": base, "cav_leve": maxi(1, roundi(base * 0.25)),
+			}
+		r["forca"] = forca_de(r)
 	# opinião inicial: vizinhos que produzem a mesma coisa se estranham
 	for i in state["reinos"].size():
 		for j in range(i + 1, state["reinos"].size()):
@@ -65,6 +84,18 @@ static func inicializar(state: Dictionary) -> void:
 				if b["producao"].has(bem):
 					atrito -= 20        # concorrentes no mesmo mercado
 			state["relacoes_npc"][k] = clampi(Dados.ri(-15, 25) + atrito, -100, 100)
+
+## `forca` deixa de ser um número solto: agora é o RESUMO do exército real.
+## O resto do código (guerras, conquistas, guarnições) continua lendo forca,
+## então nada quebra — só passa a refletir tropas que existem de fato.
+static func forca_de(r: Dictionary) -> int:
+	var t = r.get("tropas")
+	if t == null:
+		return int(r.get("forca", 40))
+	var total := 0
+	for tipo in t:
+		total += int(t[tipo]) * int(Dados.TROPAS.get(tipo, {}).get("pop", 1))
+	return maxi(1, total)
 
 static func vivo(r: Dictionary) -> bool:
 	return str(r.get("dominado_por", "")) == ""
@@ -108,31 +139,102 @@ static func _assinar(state: Dictionary, a: Dictionary, b: Dictionary,
 # ------------------------------------------------------------
 static func tick(state: Dictionary, log: Callable) -> void:
 	inicializar(state)
-	_tick_economia(state)
+	_tick_economia(state, log)
 	_tick_pactos(state, log)
 	_tick_opiniao(state)
 	_tick_declaracoes(state, log)
 	_tick_conquistas(state, log)
 
-## Tesouro e força oscilam: produção rende, guerra queima, comércio soma.
-static func _tick_economia(state: Dictionary) -> void:
+## Tesouro, celeiro e madeireira rendem; o EXÉRCITO consome. Um rei NPC
+## joga pelas mesmas regras do jogador: se não paga, a moral cai e os homens
+## desertam. Se sobra, ele treina mais gente — na mesma fila.
+static func _tick_economia(state: Dictionary, log: Callable) -> void:
 	for r in state["reinos"]:
 		if not vivo(r):
 			continue
-		var renda: int = int(r.get("nobres", 5)) * Dados.ri(6, 14)
+		# ---- renda ----
+		var nobres: int = int(r.get("nobres", 5))
+		# A renda tem que SUSTENTAR um exército de verdade. Calibrado contra o
+		# upkeep real: um reino de 10 nobres arrecada ~350 de ouro e mantém
+		# ~130 homens. Com a renda antiga (nobres × 6-14), todo reino do mapa
+		# faliria em vinte meses e o mundo esvaziava sozinho.
+		var renda: int = nobres * Dados.ri(25, 45)
 		for p in pactos_de(state, r["id"]):
 			if p["tipo"] == "comercio":
 				renda = roundi(renda * 1.25)
-		var gasto: int = int(r["forca"]) / 4
-		if _em_guerra(state, r["id"]):
-			gasto = roundi(gasto * 2.2)          # campanha é cara
-		r["tesouro"] = maxi(0, int(r["tesouro"]) + renda - gasto)
-		# tesouro cheio vira soldado; cofre vazio dispersa o exército
-		if int(r["tesouro"]) > 1200:
-			r["tesouro"] = int(r["tesouro"]) - 200
-			r["forca"] = int(r["forca"]) + Dados.ri(5, 12)
-		elif int(r["tesouro"]) <= 0:
-			r["forca"] = maxi(5, int(r["forca"]) - Dados.ri(3, 9))
+		r["tesouro"] = int(r.get("tesouro", 0)) + renda
+		r["celeiro"] = int(r.get("celeiro", 0)) + nobres * Dados.ri(20, 35)
+		r["madeireira"] = int(r.get("madeireira", 0)) + nobres * Dados.ri(10, 20)
+
+		# ---- upkeep: MESMA função que cobra do jogador ----
+		var em_guerra := _em_guerra(state, r["id"])
+		var custo := Economia.upkeep_de(r["tropas"], 1.6 if em_guerra else 1.0)
+		var faltou := 0
+		for par in [["tesouro", "ouro"], ["celeiro", "comida"], ["madeireira", "madeira"]]:
+			var cofre: String = par[0]
+			var chave_custo: String = par[1]
+			if int(r[cofre]) >= int(custo[chave_custo]):
+				r[cofre] = int(r[cofre]) - int(custo[chave_custo])
+			else:
+				r[cofre] = 0
+				if int(custo[chave_custo]) > 0:
+					faltou += 1
+
+		# ---- moral e deserção, iguais às do jogador ----
+		if faltou == 0:
+			r["moral"] = clampi(int(r.get("moral", 100)) + 5, 0, 100)
+		else:
+			r["moral"] = clampi(int(r.get("moral", 100)) - 10 * faltou, 0, 100)
+			if int(r["moral"]) <= 35:
+				var perdidos := 0
+				for tipo in r["tropas"]:
+					var n: int = int(r["tropas"][tipo])
+					var vao: int = mini(n, ceili(n * 0.12))
+					r["tropas"][tipo] = n - vao
+					perdidos += vao
+				if perdidos > 0 and randf() < 0.35:
+					log.call("Sem soldo, %d homens desertaram de %s." % [perdidos, r["nome"]])
+
+		# ---- recrutamento e melhorias ----
+		_npc_treina(state, r)
+		_npc_melhora(r)
+		r["forca"] = forca_de(r)
+
+## O rei NPC enfileira tropas quando tem folga no cofre — pela MESMA fila e
+## pelos MESMOS tempos de treino que o jogador usa (Recrutamento.avancar_fila).
+static func _npc_treina(state: Dictionary, r: Dictionary) -> void:
+	var f: Array = r["fila"]
+	# escolhe o que treinar pelo que falta: reino sem lança morre de cavalaria
+	if f.size() < 2 and int(r["tesouro"]) > 350:
+		var alvo := "lanceiro"
+		var t: Dictionary = r["tropas"]
+		if int(t.get("lanceiro", 0)) > int(t.get("espadachim", 0)) * 2:
+			alvo = "espadachim"
+		elif int(t.get("arqueiro", 0)) < int(t.get("lanceiro", 0)) / 2:
+			alvo = "arqueiro"
+		elif int(r["tesouro"]) > 900:
+			alvo = "cav_leve"
+		var qtd: int = Dados.ri(3, 8)
+		var custo: int = int(Dados.TROPAS[alvo]["custo"]) * qtd
+		if int(r["tesouro"]) >= custo:
+			r["tesouro"] = int(r["tesouro"]) - custo
+			f.append({"tipo": alvo, "restantes": qtd,
+				"restante": int(Dados.TEMPO_TREINO.get(alvo, 60))})
+	# um mês de treino, pelo mesmo motor do quartel do jogador
+	Recrutamento.avancar_fila(f, 600,
+		func(tipo): return int(Dados.TEMPO_TREINO.get(tipo, 60)),
+		func(tipo): r["tropas"][tipo] = int(r["tropas"].get(tipo, 0)) + 1)
+
+## Melhoria de equipamento também custa — e também vale para o NPC.
+static func _npc_melhora(r: Dictionary) -> void:
+	var nivel: int = int(r.get("equip", 0))
+	if nivel >= 3:
+		return
+	var preco: int = 200 * (nivel + 1)
+	if int(r["tesouro"]) >= preco + 400 and int(r["madeireira"]) >= 80:
+		r["tesouro"] = int(r["tesouro"]) - preco
+		r["madeireira"] = int(r["madeireira"]) - 80
+		r["equip"] = nivel + 1
 
 static func _tick_pactos(state: Dictionary, log: Callable) -> void:
 	var vivos: Array = []
@@ -171,17 +273,41 @@ static func _tick_pactos(state: Dictionary, log: Callable) -> void:
 				if iguais == 0 and randf() < 0.15:
 					_assinar(state, a, b, "comercio", log)
 
-## A opinião anda sozinha: pactos aproximam, guerras afastam, o resto oscila.
+## A opinião anda sozinha — mas não é passeio aleatório. Há PRESSÃO:
+## quem disputa o mesmo mercado se estranha todo mês, e quem vê o vizinho
+## ficar forte demais aprende a temê-lo. Sem essas duas forças, um dado de
+## ±2 quase nunca chega aos -50 da guerra, e o mapa fica em paz eterna.
 static func _tick_opiniao(state: Dictionary) -> void:
 	for i in state["reinos"].size():
 		for j in range(i + 1, state["reinos"].size()):
-			var a: String = state["reinos"][i]["id"]
-			var b: String = state["reinos"][j]["id"]
+			var ra: Dictionary = state["reinos"][i]
+			var rb: Dictionary = state["reinos"][j]
+			if not vivo(ra) or not vivo(rb):
+				continue
+			var a: String = ra["id"]
+			var b: String = rb["id"]
 			var delta := 0
 			if tem_pacto(state, a, b, "alianca"):
 				delta += 3
 			elif tem_pacto(state, a, b, "comercio"):
 				delta += 2
+			else:
+				# Concorrência empurra para a guerra; complementaridade, para o
+				# comércio. As duas precisam coexistir: só a primeira e o mapa
+				# vira guerra de todos contra todos, sem pacto nenhum.
+				var disputados := 0
+				for bem in ra.get("producao", []):
+					if rb.get("producao", []).has(bem):
+						disputados += 1
+				if disputados > 0:
+					delta -= disputados          # brigam pelo mesmo mercado
+				else:
+					delta += 1                   # têm o que trocar
+				# medo: o vizinho que cresce DEMAIS vira ameaça
+				var fa := float(maxi(1, int(ra["forca"])))
+				var fb := float(maxi(1, int(rb["forca"])))
+				if maxf(fa, fb) / minf(fa, fb) >= 2.0:
+					delta -= 1
 			if _em_guerra_entre(state, a, b):
 				delta -= 6
 			delta += Dados.ri(-2, 2)

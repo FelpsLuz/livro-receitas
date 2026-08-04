@@ -19,6 +19,7 @@ const Dados = preload("res://scripts/dados.gd")
 const Rotas = preload("res://scripts/rotas.gd")
 const Combate = preload("res://scripts/combate.gd")
 const Sinais = preload("res://scripts/sinais.gd")
+const Cerco = preload("res://scripts/cerco.gd")
 
 ## Enquanto marcha, o exército testa a sorte uma vez por dia de estrada.
 const MINUTOS_POR_DIA := 20
@@ -166,12 +167,34 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 			eventos.append({"tipo": "perdida", "marcha": m["id"]})
 			continue
 
+		# ---- cerco em andamento: uma fase a cada 30 do relógio ----
+		if m["fase"] == "cerco":
+			if _rodar_cerco(state, m, agora, eventos, log):
+				vivas.append(m)
+			continue
+
 		if agora < int(m["chega_em"]):
 			vivas.append(m)
 			continue
 
 		match m["fase"]:
 			"ida":
+				# CERCO não resolve na chegada: vira atrito de seis fases.
+				# Saque continua sendo bate-e-corre.
+				if m["intencao"] == "cerco":
+					m["fase"] = "cerco"
+					# o cerco começa no instante em que a marcha CHEGOU, não
+					# "agora": um salto grande de tempo (passar_mes = 600) tem
+					# que gastar o resto do mês nos muros, e não parado
+					Cerco.iniciar(m, int(m["chega_em"]))
+					if log.is_valid():
+						log.call("Seu exército acampou diante de %s. O cerco começou."
+							% Rotas.nome_do(state, m["alvo"]))
+					eventos.append({"tipo": "cerco_iniciado", "marcha": m["id"]})
+					# e as fases que já couberam nesse salto rodam JÁ
+					if _rodar_cerco(state, m, agora, eventos, log):
+						vivas.append(m)
+					continue
 				var rel := _resolver_chegada(state, m, log)
 				eventos.append(rel)
 				if Combate.total_homens(m["tropas"]) > 0:
@@ -188,6 +211,34 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 				eventos.append(_resolver_retorno(state, m, log))
 	state["marchas"] = vivas
 	return eventos
+
+## Roda as fases de cerco que couberem até `agora`. Devolve true se a marcha
+## continua sitiando (false = já mudou de fase e foi tratada aqui).
+static func _rodar_cerco(state: Dictionary, m: Dictionary, agora: int,
+		eventos: Array, log: Callable) -> bool:
+	# `while`: passar um mês de uma vez roda as seis fases, não uma
+	while agora >= int(m["proxima_fase"]):
+		m["proxima_fase"] = int(m["proxima_fase"]) + Cerco.MINUTOS_POR_FASE
+		var evf := Cerco.avancar_fase(state, m, log)
+		eventos.append(evf)
+		if bool(evf["abandonou"]):
+			if Combate.total_homens(m["tropas"]) > 0:
+				_virar_para_casa(m, agora)       # levanta acampamento
+				return true
+			return false                          # exército acabou nos muros
+		if bool(evf["efetivado"]):
+			# os muros caem com METADE dos status: a recompensa do atrito
+			eventos.append(_resolver_chegada(state, m, log, Cerco.DEBUFF_DEFENSOR))
+			if Combate.total_homens(m["tropas"]) > 0:
+				_virar_para_casa(m, agora)
+				return true
+			return false
+	return true
+
+static func _virar_para_casa(m: Dictionary, agora: int) -> void:
+	m["fase"] = "volta"
+	m["chega_em"] = agora + int(m["duracao"])
+	m["proximo_teste"] = agora + MINUTOS_POR_DIA
 
 ## Emboscada na estrada. Sem o jogador presente, resolve-se sozinha e vira
 ## relatório — bandidos levam parte do saque quando há saque para levar.
@@ -216,12 +267,13 @@ static func _emboscada(state: Dictionary, m: Dictionary, log: Callable) -> Dicti
 	return ev
 
 ## Chegada ao alvo: o combate de três fases que já existe roda aqui.
-static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable) -> Dictionary:
+static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
+		debuff_defensor: float = 1.0) -> Dictionary:
 	var Geopolitica = load("res://scripts/geopolitica.gd")
 	var alvo: String = m["alvo"]
 	var guarnicao := _guarnicao_de(state, alvo)
 	var bonus := Combate.bonus_de(state, m["tropas"])
-	var rel := Combate.resolver_assalto(m["tropas"], guarnicao, bonus, 1.0, m["intencao"])
+	var rel := Combate.resolver_assalto(m["tropas"], guarnicao, bonus, debuff_defensor, m["intencao"])
 	rel["tipo"] = "batalha"
 	rel["marcha"] = m["id"]
 	rel["contexto"] = "%s a %s" % [
@@ -299,6 +351,11 @@ static func _guarnicao_de(state: Dictionary, alvo: String) -> Dictionary:
 	if reino.is_empty():
 		# Reino sem Rei: terra de ninguém, defendida por quem sobrou
 		return {"campones": Dados.ri(10, 20), "barbaro": Dados.ri(4, 10)}
+	# o reino tem exército DE VERDADE desde o upkeep global: a guarnição é
+	# uma cópia dele, para a batalha não alterar o original antes da hora
+	var t = reino.get("tropas")
+	if t != null and not t.is_empty():
+		return t.duplicate(true)
 	var f: int = int(reino.get("forca", 40))
 	return {
 		"lanceiro": maxi(1, roundi(f * 0.5)),
@@ -343,5 +400,6 @@ static func em_transito(state: Dictionary) -> Array:
 			"faltam": maxi(0, int(m["chega_em"]) - agora),
 			"texto_faltam": _texto_dias(maxi(0, int(m["chega_em"]) - agora)),
 			"carga": m["saque"].duplicate(), "trajeto": str(m.get("trajeto", "")),
+			"cerco": Cerco.progresso(m),
 		})
 	return saida

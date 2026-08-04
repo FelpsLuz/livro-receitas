@@ -41,6 +41,9 @@ const REINOS_BASE := [
 #
 #   classe : em QUAL fase a unidade ATACA (arq → cav → inf)
 #   dg/dc/da : defesa contra infantaria / cavalaria / arqueiros
+#   comida/madeira/manut : upkeep POR MÊS. Cavalo come três vezes mais que
+#            homem e arqueiro gasta madeira em flecha — manter exército é
+#            uma decisão econômica, não um número de status.
 #   pop    : o que ela custa da população — é AQUI que mora o equilíbrio.
 #            Comparar unidade por unidade engana: 1 Cav. Pesada (pop 6) vale
 #            6 lanceiros, e 6 lanceiros dão 270 de defesa anticavalaria
@@ -52,23 +55,23 @@ const REINOS_BASE := [
 const TROPAS := {
 	# milícia da própria terra: não é uma das oito, mas é de onde todo
 	# senhor tira gente quando o dinheiro acaba
-	"campones":   {"nome": "Camponeses",       "custo": 5,   "manut": 1, "pop": 1,
+	"campones":   {"nome": "Camponeses",       "custo": 5,   "manut": 1, "comida": 1, "madeira": 0, "pop": 1,
 		"classe": "inf", "atq": 5,   "dg": 8,   "dc": 4,  "da": 6,   "saque": 12, "vel": 20},
-	"lanceiro":   {"nome": "Lanceiros",        "custo": 20,  "manut": 2, "pop": 1,
+	"lanceiro":   {"nome": "Lanceiros",        "custo": 20,  "manut": 2, "comida": 1, "madeira": 1, "pop": 1,
 		"classe": "inf", "atq": 10,  "dg": 15,  "dc": 45, "da": 20,  "saque": 25, "vel": 18},
-	"espadachim": {"nome": "Espadachins",      "custo": 30,  "manut": 3, "pop": 1,
+	"espadachim": {"nome": "Espadachins",      "custo": 30,  "manut": 3, "comida": 1, "madeira": 1, "pop": 1,
 		"classe": "inf", "atq": 25,  "dg": 50,  "dc": 15, "da": 40,  "saque": 15, "vel": 22},
-	"barbaro":    {"nome": "Bárbaros",         "custo": 28,  "manut": 3, "pop": 1,
+	"barbaro":    {"nome": "Bárbaros",         "custo": 28,  "manut": 3, "comida": 1, "madeira": 1, "pop": 1,
 		"classe": "inf", "atq": 40,  "dg": 10,  "dc": 5,  "da": 10,  "saque": 10, "vel": 18},
-	"arqueiro":   {"nome": "Arqueiros",        "custo": 32,  "manut": 3, "pop": 1,
+	"arqueiro":   {"nome": "Arqueiros",        "custo": 32,  "manut": 3, "comida": 1, "madeira": 2, "pop": 1,
 		"classe": "arq", "atq": 15,  "dg": 50,  "dc": 40, "da": 5,   "saque": 10, "vel": 18},
-	"explorador": {"nome": "Exploradores",     "custo": 18,  "manut": 2, "pop": 2,
+	"explorador": {"nome": "Exploradores",     "custo": 18,  "manut": 2, "comida": 1, "madeira": 0, "pop": 2,
 		"classe": "inf", "atq": 0,   "dg": 2,   "dc": 1,  "da": 2,   "saque": 0,  "vel": 9},
-	"cav_leve":   {"nome": "Cavalaria Leve",   "custo": 130, "manut": 8, "pop": 4,
+	"cav_leve":   {"nome": "Cavalaria Leve",   "custo": 130, "manut": 8, "comida": 3, "madeira": 1, "pop": 4,
 		"classe": "cav", "atq": 130, "dg": 30,  "dc": 40, "da": 30,  "saque": 80, "vel": 10},
-	"arq_cavalo": {"nome": "Arq. a Cavalo",    "custo": 160, "manut": 10, "pop": 5,
+	"arq_cavalo": {"nome": "Arq. a Cavalo",    "custo": 160, "manut": 10, "comida": 3, "madeira": 2, "pop": 5,
 		"classe": "arq", "atq": 120, "dg": 40,  "dc": 30, "da": 50,  "saque": 50, "vel": 10},
-	"cav_pesada": {"nome": "Cavalaria Pesada", "custo": 260, "manut": 14, "pop": 6,
+	"cav_pesada": {"nome": "Cavalaria Pesada", "custo": 260, "manut": 14, "comida": 4, "madeira": 2, "pop": 6,
 		"classe": "cav", "atq": 150, "dg": 200, "dc": 80, "da": 180, "saque": 50, "vel": 11},
 }
 

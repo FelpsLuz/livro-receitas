@@ -18,6 +18,7 @@ const Taverna = preload("res://scripts/taverna.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Marchas = preload("res://scripts/marchas.gd")
+const Intel = preload("res://scripts/intel.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -29,7 +30,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 			"idade": 22,
 			"atributos": {"forca": Dados.ri(4, 7), "carisma": Dados.ri(4, 7),
 				"gestao": Dados.ri(4, 7), "intriga": Dados.ri(3, 6)},
-			"renome": 0, "ouro": 150, "crueldade": 0,
+			"renome": 0, "ouro": 150, "crueldade": 0, "moral": 100,
 			"tropas": _tropas_zeradas({"lanceiro": 5}),
 			"equip": 0, "formacao": "linha", "guardas": 0,
 			"rei_de": "", "meses_reinando": 0, "meses_sem_pagar": 0, "meses_imperador": 0,
@@ -50,6 +51,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"informantes": [],         # ouvidos comprados na taverna
 		"marchas": [],             # exércitos na estrada (marchas.gd)
 		"minuto": 0,               # relógio único do mundo (relogio.gd)
+		"intel": {},               # o que o espião revelou (intel.gd)
 	}
 	Economia.inicializar_mercados(state)
 	Geopolitica.inicializar(state)
@@ -113,6 +115,7 @@ static func passar_mes(state: Dictionary) -> void:
 	Economia.tick_terra(state, log)
 	Economia.tick_exercito(state, log)
 	Geopolitica.tick(state, log)          # o mundo dos NPCs anda sozinho
+	Intel.tick(state)                     # relatórios de espião envelhecem
 	Cidadaos.tick(state, log)             # a sua sociedade também
 	Taverna.tick(state, log)              # informantes cobram e reportam
 	# um mês de jogo = 600 minutos: empurra quartel E marchas pelo mesmo relógio
@@ -323,9 +326,11 @@ static func _migrar(state: Dictionary) -> Dictionary:
 		if item.has("restante_seg") and not item.has("restante"):
 			item["restante"] = item["restante_seg"]
 			item.erase("restante_seg")
-	for campo in ["relacoes_npc", "flagras"]:
+	for campo in ["relacoes_npc", "flagras", "intel"]:
 		if not state.has(campo):
 			state[campo] = {}
+	if not state["jogador"].has("moral"):
+		state["jogador"]["moral"] = 100
 	# tropas renomeadas (cavaleiro → cav_leve) e as oito novas, que um save
 	# anterior à Fase 3 não conhece
 	if state.get("jogador") != null and state["jogador"].get("tropas") != null:

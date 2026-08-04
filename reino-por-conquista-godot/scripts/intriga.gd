@@ -8,6 +8,7 @@ const Dialogo = preload("res://scripts/dialogo.gd")
 const Combate = preload("res://scripts/combate.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
+const Intel = preload("res://scripts/intel.gd")
 
 ## Espionagem com MEMÓRIA: 30% de falha fixa, aliviada pelo atributo intriga.
 ## Quando o espião é pego, o reino LEMBRA — e na terceira vez eles não vêm
@@ -19,7 +20,20 @@ static func espionar(state: Dictionary, reino_id: String) -> Dictionary:
 	var falha: float = maxf(0.10, 0.30 - int(state["jogador"]["atributos"]["intriga"]) * 0.02)
 	if randf() >= falha:
 		state["segredos"].append({"reino": reino_id, "usado": false})
-		return {"ok": true, "msg": "SEGREDO descoberto sobre o rei de %s." % reino_id}
+		# O relatório do espião é a ÚNICA forma de furar a neblina de guerra:
+		# sem isto, o jogador marcha contra um "???" e descobre o tamanho do
+		# exército inimigo quando já é tarde.
+		Geopolitica.inicializar(state)
+		var alvo: Dictionary = Geopolitica.reino_por_id(state, reino_id)
+		var contagem := 0
+		if not alvo.is_empty():
+			Intel.registrar(state, reino_id, alvo.get("tropas", {}),
+				int(alvo.get("forca", 0)))
+			for tipo in alvo.get("tropas", {}):
+				contagem += int(alvo["tropas"][tipo])
+		return {"ok": true, "revelou": contagem,
+			"msg": "SEGREDO descoberto sobre o rei de %s. Seu espião contou %d homens sob as bandeiras dele."
+				% [reino_id, contagem]}
 
 	if not state.has("flagras"):
 		state["flagras"] = {}

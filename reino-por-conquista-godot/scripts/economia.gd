@@ -134,7 +134,11 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	var trabalhando: int = maxi(0, t["populacao"] - convocados)
 	var producao: int = roundi(trabalhando * 1.5 * (1.0 + t["nivel"] * 0.15))
 	t["alimento"] = maxi(0, t["alimento"] + producao - t["populacao"])
-	t["madeira"] += 2 + t["nivel"] * 2
+	# A madeira deixou de ser só material de obra: desde o upkeep global, o
+	# exército gasta flecha e haste todo mês. Sem escalar com a população, a
+	# lenha vira o gargalo silencioso que faz a tropa desertar sem motivo
+	# aparente — a terra sustenta o exército que a população dela permite.
+	t["madeira"] += 2 + t["nivel"] * 2 + int(trabalhando / 12.0)
 	if convocados > t["populacao"] * 0.4:
 		log.call("Quase metade da vila está no exército: a colheita despencou.")
 	if t["alimento"] <= 0:
@@ -148,24 +152,91 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 		log.call("REBELIÃO em %s!" % t["nome"])
 		state["evento_pendente"] = {"tipo": "rebeliao"}
 
+## ---------- UPKEEP ----------
+## O que um exército consome por mês: ouro (soldo), comida e madeira.
+## Vale para o jogador e para os reinos NPC — a mesma função, os mesmos
+## números. É isto que impede um exército de existir de graça.
+static func upkeep_de(tropas: Dictionary, multiplicador: float = 1.0) -> Dictionary:
+	var ouro := 0.0
+	var comida := 0.0
+	var madeira := 0.0
+	for tipo in tropas:
+		var d = Dados.TROPAS.get(tipo)
+		if d == null:
+			continue
+		var n: int = int(tropas[tipo])
+		ouro += float(d.get("manut", 0)) * n
+		comida += float(d.get("comida", 0)) * n
+		madeira += float(d.get("madeira", 0)) * n
+	return {"ouro": roundi(ouro * multiplicador),
+		"comida": roundi(comida * multiplicador),
+		"madeira": roundi(madeira * multiplicador)}
+
+## Moral do exército do jogador. Cai quando falta pagamento ou comida, sobe
+## devagar quando tudo está em dia — deserção vem da moral, não do dado.
+static func moral(state: Dictionary) -> int:
+	return int(state["jogador"].get("moral", 100))
+
+static func mudar_moral(state: Dictionary, delta: int) -> int:
+	var m := clampi(moral(state) + delta, 0, 100)
+	state["jogador"]["moral"] = m
+	return m
+
 static func tick_exercito(state: Dictionary, log: Callable) -> void:
-	var manut := 0
-	for tipo in state["jogador"]["tropas"]:
-		manut += int(Dados.TROPAS[tipo]["manut"]) * int(state["jogador"]["tropas"][tipo])
-	manut += int(state["jogador"]["guardas"]) * 4
-	state["jogador"]["ultima_manut"] = manut
-	if state["jogador"]["ouro"] >= manut:
-		state["jogador"]["ouro"] -= manut
+	# tropas em marcha também comem — só que do que carregam, e o Cerco
+	# cobra em dobro. Aqui paga-se pelo que está EM CASA.
+	var custo := upkeep_de(state["jogador"]["tropas"])
+	state["jogador"]["ultima_manut"] = int(custo["ouro"])
+	state["jogador"]["ultimo_upkeep"] = custo
+
+	var faltou: Array = []
+	# ouro
+	if int(state["jogador"]["ouro"]) >= int(custo["ouro"]):
+		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - int(custo["ouro"])
 		state["jogador"]["meses_sem_pagar"] = 0
 	else:
 		state["jogador"]["ouro"] = 0
 		state["jogador"]["meses_sem_pagar"] = int(state["jogador"].get("meses_sem_pagar", 0)) + 1
-		log.call("O tesouro zerou! Tropas sem soldo.")
-		if state["jogador"]["meses_sem_pagar"] >= 2:
-			for tipo in state["jogador"]["tropas"]:
-				var n: int = int(state["jogador"]["tropas"][tipo])
-				state["jogador"]["tropas"][tipo] = maxi(0, n - ceili(n * 0.3))
-			log.call("Tropas desertaram em massa.")
-			if state["jogador"]["guardas"] > 0 and state["terra"] != null and randf() < 0.5:
-				state["evento_pendente"] = {"tipo": "traicao_guardas"}
-				log.call("Um reino rival ofereceu ouro à sua guarda de elite...")
+		faltou.append("soldo")
+	# comida e madeira saem da terra; sem terra, o mercenário compra na estrada
+	var t = state.get("terra")
+	if t != null:
+		if int(t["alimento"]) >= int(custo["comida"]):
+			t["alimento"] = int(t["alimento"]) - int(custo["comida"])
+		else:
+			t["alimento"] = 0
+			faltou.append("comida")
+		if int(t["madeira"]) >= int(custo["madeira"]):
+			t["madeira"] = int(t["madeira"]) - int(custo["madeira"])
+		else:
+			t["madeira"] = 0
+			if int(custo["madeira"]) > 0:
+				faltou.append("madeira")
+	elif int(custo["comida"]) > 0 and int(state["jogador"]["ouro"]) < int(custo["comida"]) * 2:
+		faltou.append("comida")
+
+	# ---- moral: é ela que deserta, não o dado ----
+	if faltou.is_empty():
+		mudar_moral(state, 6)
+		return
+	mudar_moral(state, -12 * faltou.size())
+	log.call("Falta %s ao seu exército. A moral cai (%d)."
+		% [" e ".join(faltou), moral(state)])
+
+	if moral(state) <= 35:
+		var perdidos := 0
+		for tipo in state["jogador"]["tropas"]:
+			var n: int = int(state["jogador"]["tropas"][tipo])
+			if n <= 0:
+				continue
+			# quanto pior a moral, maior a sangria
+			var taxa: float = 0.10 + (35 - moral(state)) * 0.008
+			var vao: int = mini(n, ceili(n * taxa))
+			state["jogador"]["tropas"][tipo] = n - vao
+			perdidos += vao
+		if perdidos > 0:
+			log.call("%d homens desertaram na calada da noite." % perdidos)
+	if moral(state) <= 10 and int(state["jogador"]["guardas"]) > 0 \
+			and state["terra"] != null and randf() < 0.5:
+		state["evento_pendente"] = {"tipo": "traicao_guardas"}
+		log.call("Um reino rival ofereceu ouro à sua guarda de elite...")
