@@ -8,15 +8,21 @@ extends RefCounted
 const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 
+# `especialidade` é a classe em que o clã dá +20% (ver Combate.bonus_de):
+# contratar os Filhos da Estepe é escolher uma DOUTRINA, não só comprar homens.
 const CLAS := [
 	{"id": "cla_lobos", "nome": "Lobos de Ferro", "lider": "Ragnar Meio-Lobo",
-	 "contingente": {"lanceiro": 25}, "preco_base": 350, "soldo": 45, "renome_min": 20},
+	 "contingente": {"lanceiro": 25}, "preco_base": 350, "soldo": 45, "renome_min": 20,
+	 "especialidade": "inf"},
 	{"id": "cla_corvos", "nome": "Corvos da Névoa", "lider": "Sira Olho-Vazio",
-	 "contingente": {"arqueiro": 20}, "preco_base": 300, "soldo": 38, "renome_min": 15},
+	 "contingente": {"arqueiro": 20}, "preco_base": 300, "soldo": 38, "renome_min": 15,
+	 "especialidade": "arq"},
 	{"id": "cla_estepe", "nome": "Filhos da Estepe", "lider": "Khal Tembu",
-	 "contingente": {"cavaleiro": 8}, "preco_base": 500, "soldo": 60, "renome_min": 35},
+	 "contingente": {"cav_leve": 8}, "preco_base": 500, "soldo": 60, "renome_min": 35,
+	 "especialidade": "cav"},
 	{"id": "cla_machados", "nome": "Machados do Norte", "lider": "Ulf Barba-Gelo",
-	 "contingente": {"lanceiro": 15, "arqueiro": 8}, "preco_base": 400, "soldo": 50, "renome_min": 25},
+	 "contingente": {"barbaro": 15, "arqueiro": 8}, "preco_base": 400, "soldo": 50, "renome_min": 25,
+	 "especialidade": "inf"},
 ]
 
 static func cla_por_id(id: String) -> Dictionary:
@@ -69,7 +75,9 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			chance = maxf(chance, 0.9)
 		if randf() < chance and state["jogador"]["ouro"] >= m["oferta"]:
 			state["jogador"]["ouro"] -= m["oferta"]
-			state["clas_ativos"].append({"id": cla["id"], "meses": 6, "contingente": cla["contingente"].duplicate()})
+			state["clas_ativos"].append({"id": cla["id"], "meses": 6,
+				"contingente": cla["contingente"].duplicate(),
+				"especialidade": cla.get("especialidade", "")})
 			for tipo in cla["contingente"]:
 				state["jogador"]["tropas"][tipo] = int(state["jogador"]["tropas"].get(tipo, 0)) + int(cla["contingente"][tipo])
 			Dialogo.mudar_relacao(state, cla["id"], 10, "contrato")

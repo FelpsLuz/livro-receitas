@@ -28,7 +28,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 			"atributos": {"forca": Dados.ri(4, 7), "carisma": Dados.ri(4, 7),
 				"gestao": Dados.ri(4, 7), "intriga": Dados.ri(3, 6)},
 			"renome": 0, "ouro": 150, "crueldade": 0,
-			"tropas": {"campones": 0, "lanceiro": 5, "arqueiro": 0, "cavaleiro": 0},
+			"tropas": _tropas_zeradas({"lanceiro": 5}),
 			"equip": 0, "formacao": "linha", "guardas": 0,
 			"rei_de": "", "meses_reinando": 0, "meses_sem_pagar": 0, "meses_imperador": 0,
 		},
@@ -54,6 +54,15 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 	log.call("Ano 1. Você é %s: sem terras, sem título, com %d moedas e 5 lanceiros leais." %
 		[state["jogador"]["nome"], state["jogador"]["ouro"]])
 	return state
+
+## Um dicionário com TODAS as tropas do catálogo em zero, para o exército
+## nunca ter buracos. Sem isso, código que faz tropas["barbaro"] += 1 num
+## save antigo criaria a chave sozinho e a UI mostraria a lista incompleta.
+static func _tropas_zeradas(inicial: Dictionary = {}) -> Dictionary:
+	var t := {}
+	for tipo in Dados.TROPAS:
+		t[tipo] = int(inicial.get(tipo, 0))
+	return t
 
 static func log_para(state: Dictionary) -> Callable:
 	return func(msg: String):
@@ -302,6 +311,22 @@ static func _migrar(state: Dictionary) -> Dictionary:
 	for campo in ["relacoes_npc", "flagras"]:
 		if not state.has(campo):
 			state[campo] = {}
+	# tropas renomeadas (cavaleiro → cav_leve) e as oito novas, que um save
+	# anterior à Fase 3 não conhece
+	if state.get("jogador") != null and state["jogador"].get("tropas") != null:
+		var velhas: Dictionary = state["jogador"]["tropas"]
+		for antigo in Dados.TROPAS_RENOMEADAS:
+			if velhas.has(antigo):
+				var novo: String = Dados.TROPAS_RENOMEADAS[antigo]
+				velhas[novo] = int(velhas.get(novo, 0)) + int(velhas[antigo])
+				velhas.erase(antigo)
+		for tipo in Dados.TROPAS:
+			if not velhas.has(tipo):
+				velhas[tipo] = 0
+	# a fila também pode carregar um nome antigo
+	for item in state.get("fila_recrutamento", []):
+		if Dados.TROPAS_RENOMEADAS.has(item.get("tipo", "")):
+			item["tipo"] = Dados.TROPAS_RENOMEADAS[item["tipo"]]
 	if state.get("reinos") != null:
 		Geopolitica.inicializar(state)
 	return state

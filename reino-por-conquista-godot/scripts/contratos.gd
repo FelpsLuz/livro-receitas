@@ -56,6 +56,10 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 	else:
 		state["jogador"]["renome"] = maxi(0, state["jogador"]["renome"] - 5)
 		log.call("Contrato fracassou. Renome -5.")
+		# derrota esmagadora não é só perder: é ser CAPTURADO no campo
+		if rel.get("esmagado", false):
+			var Jogo = load("res://scripts/jogo.gd")
+			Jogo.prender(state, 3, log)
 	return rel
 
 static func titulo(state: Dictionary) -> String:

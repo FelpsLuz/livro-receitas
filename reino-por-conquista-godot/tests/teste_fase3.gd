@@ -73,14 +73,14 @@ func _init() -> void:
 	ok("fila esvaziou", Recrutamento.fila(s).is_empty())
 
 	# cavalaria demora muito mais que lança — é o trade-off do sistema
-	ok("cavaleiro treina muito mais devagar que lanceiro",
-		Recrutamento.tempo_de(s, "cavaleiro") > Recrutamento.tempo_de(s, "lanceiro") * 3)
+	ok("cavalaria pesada treina muito mais devagar que lanceiro",
+		Recrutamento.tempo_de(s, "cav_pesada") > Recrutamento.tempo_de(s, "lanceiro") * 3)
 
 	# teto de população conta o que está NA FILA (senão dá para burlar)
 	var s2 := com_terra(1)
 	s2["terra"]["populacao"] = 10
 	s2["jogador"]["ouro"] = 99999
-	s2["jogador"]["tropas"] = {"campones": 0, "lanceiro": 0, "arqueiro": 0, "cavaleiro": 0}
+	s2["jogador"]["tropas"] = Jogo._tropas_zeradas()
 	Recrutamento.enfileirar(s2, "lanceiro", 8)
 	var r2 := Recrutamento.enfileirar(s2, "lanceiro", 8)
 	ok("teto de população conta a fila, não só o exército", not r2["ok"], str(r2["msg"]))
@@ -88,7 +88,7 @@ func _init() -> void:
 	# fila sobrevive a save/load — a regressão mais cara de todas
 	var s3 := com_terra(2)
 	s3["jogador"]["ouro"] = 5000
-	Recrutamento.enfileirar(s3, "cavaleiro", 3)
+	Recrutamento.enfileirar(s3, "cav_pesada", 3)
 	Jogo.salvar(s3)
 	var s3b = Jogo.carregar()
 	ok("fila sobreviveu ao save/load", s3b != null
@@ -102,7 +102,7 @@ func _init() -> void:
 	var ouro_antes: int = int(s3["jogador"]["ouro"])
 	Recrutamento.cancelar(s3, 0)
 	ok("cancelar devolve metade do ouro",
-		int(s3["jogador"]["ouro"]) == ouro_antes + int(120 * 3 * 0.5))
+		int(s3["jogador"]["ouro"]) == ouro_antes + int(Dados.TROPAS["cav_pesada"]["custo"] * 3 * 0.5))
 
 	# passar_mes empurra o quartel sozinho
 	var s4 := com_terra(2)

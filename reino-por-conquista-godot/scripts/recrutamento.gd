@@ -33,10 +33,16 @@ static func tempo_de(state: Dictionary, tipo: String) -> int:
 ## Sem contar a fila, o jogador enfileira 500 cavaleiros com 20 camponeses.
 static func pop_usada(state: Dictionary) -> int:
 	var t := 0
+	# `.get` e não índice direto: um save antigo pode carregar uma chave de
+	# tropa que não existe mais no catálogo, e isso não pode derrubar o jogo
 	for tipo in state["jogador"]["tropas"]:
-		t += int(state["jogador"]["tropas"][tipo]) * int(Dados.TROPAS[tipo].get("pop", 1))
+		var d = Dados.TROPAS.get(tipo)
+		if d != null:
+			t += int(state["jogador"]["tropas"][tipo]) * int(d.get("pop", 1))
 	for item in fila(state):
-		t += int(item["restantes"]) * int(Dados.TROPAS[item["tipo"]].get("pop", 1))
+		var d2 = Dados.TROPAS.get(item["tipo"])
+		if d2 != null:
+			t += int(item["restantes"]) * int(d2.get("pop", 1))
 	return t
 
 ## Teto de população: sem terra, o mercenário sustenta um bando pequeno.
