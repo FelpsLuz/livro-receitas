@@ -79,3 +79,35 @@ static func criar() -> Theme:
 	t.set_stylebox("panel", "TabContainer", aba_painel)
 
 	return t
+
+## Fundo de um CARD de lista (tropa, lorde, reino, contrato).
+##
+## A moldura de madeira do PixelLab é ótima para um painel grande, mas ela tem
+## listras de tábua e o 9-slice as estica: numa faixa de 56px de altura as
+## listras caem exatamente em cima das linhas de texto. O card usa pergaminho
+## claro sobre o pergaminho da aba — separado pela borda, e legível.
+## Fundo OPACO para modal e tela de conversa.
+##
+## `painel_madeira` é uma moldura VAZADA — o miolo tem alpha zero. Isso serve
+## para emoldurar algo que já tem fundo, mas num modal deixava a aba inteira
+## aparecendo através do texto. Aqui o fundo é sólido, e a moldura de madeira
+## continua livre para entrar por cima quando alguém quiser.
+static func estilo_modal() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = PERGAMINHO
+	sb.border_color = OURO
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(8)
+	sb.set_content_margin_all(16)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 10
+	return sb
+
+static func estilo_card() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = PERGAMINHO_CLARO
+	sb.border_color = MADEIRA_CLARA
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(5)
+	sb.set_content_margin_all(10)
+	return sb

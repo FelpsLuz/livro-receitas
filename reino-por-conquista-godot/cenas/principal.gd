@@ -61,6 +61,7 @@ var conversa_input: LineEdit
 var conversa_retrato: TextureRect
 var conversa_titulo: Label
 var overlay_modal: Control
+var modal_centro: CenterContainer
 var input_nome: LineEdit
 
 func _ready() -> void:
@@ -165,6 +166,9 @@ func _montar_jogo() -> void:
 	for nome in ["Sua Terra", "Mapa", "Mercado", "Taverna", "Corte", "Exército", "Clãs", "Intrigas", "Família", "Crônica"]:
 		var rolagem := ScrollContainer.new()
 		rolagem.name = nome
+		# a aba rola só na vertical. Um card com um rótulo longo demais passa a
+		# quebrar linha em vez de abrir uma barra horizontal que ninguém usa.
+		rolagem.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		var conteudo := VBoxContainer.new()
 		conteudo.name = "Conteudo"
 		conteudo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -228,6 +232,30 @@ func _tique_quartel() -> void:
 		Sfx.tocar(self, "tique")
 		Jogo.salvar(state)
 		atualizar()          # só redesenha quando algo REALMENTE aconteceu
+		_narrar_estrada(r["marchas"])
+
+## Emboscada acontecia só na crônica: o jogador via homens sumindo do exército
+## sem nada na tela. Agora a estrada interrompe o jogo, com a arte do assalto.
+func _narrar_estrada(eventos: Array) -> void:
+	# um evento em casa (rebelião, traição, fim de jogo) tem prioridade sobre a
+	# estrada: dois modais na mesma tela se atropelam. A emboscada não volta,
+	# mas a crônica já guardou a linha dela.
+	if state.get("fim") != null or state.get("evento_pendente") != null:
+		return
+	for ev in eventos:
+		if str(ev.get("tipo", "")) != "emboscada":
+			continue
+		var roubado: Dictionary = ev.get("roubado", {})
+		var perdas := ""
+		for tipo in ev.get("perdidos", {}):
+			perdas += "%s −%d  " % [Dados.TROPAS[tipo]["nome"], int(ev["perdidos"][tipo])]
+		var corpo := "Sua coluna foi atacada no caminho.\n%s" % (perdas if perdas != "" else "Nenhuma baixa.")
+		if not roubado.is_empty():
+			corpo += "\nParte da carga ficou com eles."
+		Sfx.tocar(self, "alerta")
+		_modal("🏹 Emboscada na rota", corpo, [["Seguir marcha", func():
+			atualizar()]], Retratos.ilustracao("emboscada"))
+		return          # uma emboscada por vez: a próxima espera o clique
 
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")
@@ -279,18 +307,24 @@ func atualizar() -> void:
 		9: _aba_cronica(c)
 
 # ---------------- utilitários de UI ----------------
+## Texto de aba: TINTA sobre pergaminho.
+##
+## Antes o título saía em PERGAMINHO e o corpo num tom claro — cores herdadas
+## de quando o fundo era madeira escura. Com o painel Pro do PixelLab (fundo
+## claro, tanto na aba quanto dentro do card) isso virou pergaminho sobre
+## pergaminho: metade da interface estava sendo desenhada invisível.
 func _titulo_secao(c: Container, texto: String) -> void:
 	var l := Label.new()
 	l.text = texto
 	l.add_theme_font_size_override("font_size", 20)
-	l.add_theme_color_override("font_color", Tema.PERGAMINHO)
+	l.add_theme_color_override("font_color", Tema.SANGUE)
 	c.add_child(l)
 
 func _par(c: Container, texto: String) -> Label:
 	var l := Label.new()
 	l.text = texto
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.add_theme_color_override("font_color", Color("d4c090"))
+	l.add_theme_color_override("font_color", Tema.TINTA)
 	c.add_child(l)
 	return l
 
@@ -303,9 +337,13 @@ func _botao(c: Container, texto: String, cb: Callable) -> Button:
 
 func _card(c: Container) -> HBoxContainer:
 	var painel := PanelContainer.new()
+	painel.add_theme_stylebox_override("panel", Tema.estilo_card())
 	c.add_child(painel)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)
+	# a moldura de madeira do 9-slice só mostra o miolo com altura suficiente:
+	# num card raso os cantos escuros se atropelam e o texto some no contorno
+	h.custom_minimum_size = Vector2(0, 56)
 	painel.add_child(h)
 	return h
 
@@ -329,12 +367,44 @@ func _retrato(c: Container, id: String, tamanho: int = 52) -> void:
 	caixa.add_child(moldura)
 	c.add_child(caixa)
 
+## Coloca uma arte gerada num container. Aceita null de propósito: toda arte
+## do PixelLab é opcional, e a UI tem que continuar legível sem ela — é o
+## mesmo contrato dos ícones do mercado.
+func _arte(c: Container, tex: Texture2D, tamanho: int = 48) -> TextureRect:
+	if tex == null:
+		return null
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.custom_minimum_size = Vector2(tamanho, tamanho)
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	c.add_child(tr)
+	return tr
+
+## Ilustração grande de um momento (cerco, emboscada, inverno, coroação).
+##
+## As cenas do PixelLab saem QUADRADAS, 128×128. Esticá-las numa faixa larga
+## cortava três quartos do desenho — a vila na neve virava um pedaço de telhado.
+## Aqui a arte aparece inteira, ampliada e centrada na largura disponível.
+func _faixa(c: Container, tex: Texture2D, altura: int = 120) -> void:
+	if tex == null:
+		return
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.custom_minimum_size = Vector2(0, altura)
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.add_child(tr)
+
 func _aviso(msg: String) -> void:
 	if msg == "":
 		return
 	var linha := Label.new()
 	linha.text = "▸ " + msg
-	linha.add_theme_color_override("font_color", Tema.OURO)
+	linha.add_theme_color_override("font_color", Tema.SANGUE)
 	_conteudo_aba().add_child(linha)
 	var timer := get_tree().create_timer(3.5)
 	timer.timeout.connect(func():
@@ -378,6 +448,10 @@ func _aba_terra(c: Container) -> void:
 		if Estacoes.proxima(state) == "inverno" and Estacoes.meses_ate_virar(state) <= 2:
 			aviso_est += "  ❄ O inverno chega em %d mês(es)." % Estacoes.meses_ate_virar(state)
 		_par(c, aviso_est)
+		# no inverno a vila aparece coberta de neve: a estação que zera a colheita
+		# tem que ser vista, não lida numa linha de texto entre outras cinco
+		if Estacoes.e_inverno(state):
+			_faixa(c, Retratos.ilustracao("inverno"), 110)
 		if int(t["felicidade"]) <= 30:
 			_par(c, "⚠ O povo murmura. Felicidade baixa termina em foices e tochas.")
 		if int(t["nivel"]) < 5:
@@ -400,6 +474,18 @@ func _aba_terra(c: Container) -> void:
 
 func _aba_mapa(c: Container) -> void:
 	_titulo_secao(c, "Os Seis Reinos")
+	# o juramento é o contrato que rege o resto do mapa: enquanto vale, o
+	# suserano não marcha — e leva um quinto do seu ouro todo mês
+	var vs_mapa: Dictionary = Vassalagem.resumo(state)
+	if bool(vs_mapa.get("vassalo", false)):
+		var hv := _card(c)
+		_arte(hv, Retratos.ilustracao("juramento"), 72)
+		var lv := Label.new()
+		lv.text = "⚑ Vassalo de %s há %d meses — tributo estimado: %d 🪙 no próximo mês." % [
+			vs_mapa["nome"], int(vs_mapa["meses"]), int(vs_mapa["tributo_estimado"])]
+		lv.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hv.add_child(lv)
 	for g in state["guerras"]:
 		_par(c, "⚔ %s × %s — %d meses de guerra. Campos em chamas." % [g["a"], g["b"], g["meses"]])
 	if state["guerras"].is_empty():
@@ -458,6 +544,9 @@ func _aba_mapa(c: Container) -> void:
 				Jogo.salvar(state)
 				atualizar())
 		if not Intel.tem(state, alvo_id):
+			# a neblina só levanta com gente na estrada: o informante ao lado do
+			# botão diz de onde vem o número que hoje está "???"
+			_arte(lb, Retratos.sprite_gerado("informante"), 34)
 			_botao(lb, "🕵 Espionar (80 🪙)", func():
 				var r: Dictionary = Intriga.espionar(state, alvo_id)
 				if int(r.get("prender", 0)) > 0:
@@ -528,6 +617,59 @@ func _aba_taverna(c: Container) -> void:
 			state["contratos"] = state["contratos"].filter(func(x): return x["uid"] != ct["uid"])
 			Jogo.salvar(state)
 			_modal_batalha(rel_batalha))
+	# ---- serviços: informação vira dinheiro ----
+	# taverna.gd já resolvia rumor, rota e informante; faltava a porta de
+	# entrada. Cada serviço tem o rosto de quem o vende — é o que separa
+	# "clicar num botão" de "pagar um homem por uma informação".
+	_titulo_secao(c, "🗣 Serviços do balcão")
+	var h_rumor := _card(c)
+	_arte(h_rumor, Retratos.textura("taverneiro"), 48)
+	var l_rumor := Label.new()
+	l_rumor.text = "Rumor de mercado (%d 🪙) — um choque de preço antes de ele acontecer.\nNem todo boato é verdade." % Taverna.PRECO_RUMOR
+	l_rumor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l_rumor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h_rumor.add_child(l_rumor)
+	_botao(h_rumor, "Ouvir", func():
+		var r: Dictionary = Taverna.comprar_rumor(state)
+		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+		_aviso(r["msg"])
+		Jogo.salvar(state)
+		atualizar())
+
+	var h_rota := _card(c)
+	_arte(h_rota, Retratos.sprite_gerado("cartografo"), 48)
+	var l_rota := Label.new()
+	l_rota.text = "Rota comercial (%d 🪙) — onde comprar barato e onde vender caro, hoje." % Taverna.PRECO_ROTA
+	l_rota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l_rota.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h_rota.add_child(l_rota)
+	_botao(h_rota, "Comprar mapa", func():
+		var r: Dictionary = Taverna.comprar_rota(state)
+		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+		_aviso(r["msg"])
+		Jogo.salvar(state)
+		atualizar())
+
+	var h_inf := _card(c)
+	_arte(h_inf, Retratos.sprite_gerado("informante"), 48)
+	var ouvidos: Array = state.get("informantes", [])
+	var l_inf := Label.new()
+	l_inf.text = "Informante em %s (%d 🪙 + 25/mês) — notícia da corte todo mês.%s" % [
+		_reino_local()["nome"], Taverna.PRECO_INFORMANTE,
+		("\nOuvidos ativos: %d" % ouvidos.size()) if not ouvidos.is_empty() else ""]
+	l_inf.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l_inf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h_inf.add_child(l_inf)
+	if ouvidos.has(state["local"]):
+		_par(h_inf, "👂 já contratado")
+	else:
+		_botao(h_inf, "Contratar", func():
+			var r: Dictionary = Taverna.contratar_informante(state, str(state["local"]))
+			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+			_aviso(r["msg"])
+			Jogo.salvar(state)
+			atualizar())
+
 	_titulo_secao(c, "Fregueses")
 	for npc in NPCS_TAVERNA:
 		_card_npc(c, npc)
@@ -537,6 +679,46 @@ func _aba_corte(c: Container) -> void:
 	_titulo_secao(c, "👑 Corte de %s" % reino["capital"])
 	_card_npc(c, reino["rei"])
 	_par(c, "💡 Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
+
+	# ---- a SUA corte: gente que nasceu durante a partida ----
+	# Nenhum destes tem PNG próprio — cada retrato sai da base genérica de
+	# nobre recolorida na cor do ofício. É aqui que o retrato dinâmico prova
+	# que serve: a lista muda a cada saga e nunca fica com buraco.
+	var res_cid: Dictionary = Cidadaos.resumo(state)
+	if int(res_cid["total"]) > 0:
+		_titulo_secao(c, "🏛 Sua Corte — %d notáveis, %d jurados" % [
+			int(res_cid["total"]), int(res_cid["lordes"])])
+		for n in Cidadaos.lista(state):
+			var hn := _card(c)
+			_arte(hn, Retratos.textura_cidadao(n), 56)
+			var vn := VBoxContainer.new()
+			vn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hn.add_child(vn)
+			var selo_n := ""
+			if bool(n.get("lorde", false)):
+				selo_n = "  ⚜ seu lorde"
+			if bool(n.get("capturado", false)):
+				selo_n += "  ⛓ a ferros em terra inimiga"
+			_par(vn, "%s, %s%s" % [n["nome"], str(n["oficio"]), selo_n])
+			# riqueza e lealdade são status OCULTOS: o jogador lê a impressão,
+			# não o número, exatamente como leria um vassalo de verdade
+			var lealdade: int = int(n.get("lealdade", 50))
+			var leitura := "parece contente com o seu governo"
+			if lealdade < 40:
+				leitura = "evita o seu olhar nas assembleias"
+			elif lealdade < 60:
+				leitura = "cumpre o que deve, nada além"
+			var abastado := " · casa próspera" if int(n.get("riqueza", 0)) >= 280 else ""
+			_par(vn, "   %s%s" % [leitura, abastado])
+			if bool(n.get("capturado", false)):
+				var nome_preso: String = str(n["nome"])
+				_botao(vn, "💰 Pagar resgate (300 🪙)", func():
+					var r: Dictionary = Comandantes.resgatar(state, nome_preso)
+					Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+					_aviso(r["msg"])
+					Jogo.salvar(state)
+					atualizar())
+
 	var h := HBoxContainer.new()
 	c.add_child(h)
 	_botao(h, "🧠 IA Local (llama.cpp): " + ("configurada" if Llm.url() != "" else "desligada"), _modal_llm)
@@ -559,13 +741,32 @@ func _aba_exercito(c: Container) -> void:
 		[roundi(p["atq"]), roundi(p["def"]), p["homens"], str(j.get("ultima_manut", "—")), j["equip"]])
 	_par(c, "👥 População comprometida: %d de %d" %
 		[Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state)])
+	# ---- manutenção com ícones de economia ----
+	# O upkeep é a mecânica que mais mata exército, e um número no meio de texto
+	# passa batido. Os três ícones dão a leitura instantânea de EM QUE recurso
+	# o exército está sangrando.
 	var up: Dictionary = Economia.upkeep_de(j["tropas"])
-	_par(c, "📉 Manutenção mensal: %d 🪙 · %d 🌾 · %d 🪵   —   Moral do exército: %d/100" %
-		[int(up["ouro"]), int(up["comida"]), int(up["madeira"]), Economia.moral(state)])
+	var hu := _card(c)
+	for par_up in [["moedas", int(up["ouro"])], ["trigo", int(up["comida"])],
+			["madeira", int(up["madeira"])]]:
+		var ic_up := Icones.imagem(str(par_up[0]), 26)
+		if ic_up != null:
+			hu.add_child(ic_up)
+		var l_up := Label.new()
+		l_up.text = "%d/mês" % int(par_up[1])
+		hu.add_child(l_up)
+	var l_moral := Label.new()
+	l_moral.text = "   —   Moral do exército: %d/100" % Economia.moral(state)
+	l_moral.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hu.add_child(l_moral)
 	if Economia.moral(state) <= 35:
 		_par(c, "⚠ Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.")
 	for tipo in Dados.TROPAS:
 		var h := _card(c)
+		# a arte da unidade vem por cálculo: "tropa_" + a chave de Dados.TROPAS.
+		# Unidade nova no catálogo já nasce com retrato assim que o PNG existir,
+		# sem tocar nesta linha.
+		_arte(h, Retratos.textura_tropa(tipo), 52)
 		var l := Label.new()
 		l.text = "%s — você tem %d (custo %d, manut. %d/mês, treino %ds)" % [
 			Dados.TROPAS[tipo]["nome"], j["tropas"].get(tipo, 0),
@@ -611,6 +812,10 @@ func _aba_exercito(c: Container) -> void:
 		_titulo_secao(c, "🏇 Exércitos em marcha")
 		for mt in transito:
 			var hm := _card(c)
+			# acampamento de cerco na linha do exército sitiando: o cerco dura
+			# meses fora da tela, e a arte é o que faz ele existir para o jogador
+			if mt["fase"] == "cerco":
+				_arte(hm, Retratos.ilustracao("cerco"), 64)
 			var lm := Label.new()
 			var rumo: String = ""
 			match mt["fase"]:
@@ -655,8 +860,11 @@ func _aba_exercito(c: Container) -> void:
 		# o exército for obliterado, então escolher é apostar duas coisas
 		var escolhido: String = str(j.get("comandante_escolhido", "senhor"))
 		var hc := _card(c)
-		var lc := Label.new()
 		var atual_cmd: Dictionary = Comandantes.por_id(state, escolhido)
+		# o comandante tem CARA: se for um lorde que subiu de cidadão, é o mesmo
+		# retrato da Corte; se for contratado, é a arte do mercenário
+		_arte(hc, Retratos.textura_comandante(state, atual_cmd), 52)
+		var lc := Label.new()
 		var perfil: Dictionary = Comandantes.PERFIS.get(atual_cmd.get("perfil", "senhor"), {})
 		lc.text = "🎖 Comandante: %s — %s" % [
 			str(atual_cmd.get("nome", "—")), str(perfil.get("desc", ""))]
@@ -844,6 +1052,9 @@ func _reino_local() -> Dictionary:
 func _montar_conversa() -> void:
 	overlay_conversa = PanelContainer.new()
 	overlay_conversa.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# a moldura do PixelLab é vazada: sem um fundo sólido, a aba continuaria
+	# aparecendo por trás da conversa inteira
+	overlay_conversa.add_theme_stylebox_override("panel", Tema.estilo_modal())
 	add_child(overlay_conversa)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
@@ -947,20 +1158,38 @@ func _responder(resultado: Dictionary) -> void:
 
 # ---------------- MODAIS ----------------
 func _montar_modal() -> void:
-	overlay_modal = CenterContainer.new()
+	overlay_modal = Control.new()
 	overlay_modal.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay_modal)
+	# véu escuro: separa o modal do jogo e deixa claro que nada mais responde
+	var veu := ColorRect.new()
+	veu.color = Color(0, 0, 0, 0.6)
+	veu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_modal.add_child(veu)
+	modal_centro = CenterContainer.new()
+	modal_centro.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay_modal.add_child(modal_centro)
 
-func _modal(titulo: String, corpo: String, botoes: Array) -> void:
-	for filho in overlay_modal.get_children():
+## Painel do modal: fundo opaco e largura fixa. Devolve o VBox de conteúdo.
+func _painel_modal() -> VBoxContainer:
+	for filho in modal_centro.get_children():
 		filho.queue_free()
 	overlay_modal.visible = true
 	var painel := PanelContainer.new()
+	painel.add_theme_stylebox_override("panel", Tema.estilo_modal())
 	painel.custom_minimum_size = Vector2(460, 0)
-	overlay_modal.add_child(painel)
+	modal_centro.add_child(painel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	painel.add_child(v)
+	return v
+
+## O quarto argumento é a ILUSTRAÇÃO do momento (Retratos.ilustracao(...)).
+## Vem por último e aceita null porque nenhum modal depende dela para funcionar:
+## sem o PNG, é o mesmo modal de texto de sempre.
+func _modal(titulo: String, corpo: String, botoes: Array, arte: Texture2D = null) -> void:
+	var v := _painel_modal()
+	_faixa(v, arte, 150)
 	var l_titulo := Label.new()
 	l_titulo.text = titulo
 	l_titulo.add_theme_font_size_override("font_size", 22)
@@ -990,7 +1219,33 @@ func _modal_evento() -> void:
 					Jogo.resolver_evento(state, "conceder")
 					Jogo.salvar(state)
 					atualizar()],
-			])
+			], Retratos.ilustracao("rebeliao"))
+		"notavel_ambicioso":
+			# o rico que olha o seu assento com fome. Sem este ramo o evento
+			# caía no `_` e sumia — a ascensão de cidadãos ficava sem desfecho.
+			var nome_amb: String = str(ev["nome"])
+			var ficha_amb: Dictionary = {}
+			for n in Cidadaos.lista(state):
+				if str(n.get("nome", "")) == nome_amb:
+					ficha_amb = n
+			var ele: String = "dela" if str(ficha_amb.get("genero", "m")) == "f" else "dele"
+			var eleu: String = "ela" if str(ficha_amb.get("genero", "m")) == "f" else "ele"
+			_modal("💰 Uma casa rica demais",
+				"%s enriqueceu na sua vila e agora recebe visitas que não passam pela sua porta. Ou você compra o joelho dobrado %s, ou %s compra o seu."
+					% [nome_amb, ele, eleu], [
+				["🪙 Comprar a lealdade (250 🪙)", func():
+					_aviso(str(Jogo.resolver_evento(state, "comprar").get("msg", "")))
+					Jogo.salvar(state)
+					atualizar()],
+				["🚪 Exilar a família", func():
+					_aviso(str(Jogo.resolver_evento(state, "exilar").get("msg", "")))
+					Jogo.salvar(state)
+					atualizar()],
+				["🤐 Ignorar (por enquanto)", func():
+					_aviso(str(Jogo.resolver_evento(state, "ignorar").get("msg", "")))
+					Jogo.salvar(state)
+					atualizar()],
+			], null if ficha_amb.is_empty() else Retratos.textura_cidadao(ficha_amb))
 		"traicao_guardas":
 			_modal("🌙 Traição por Ouro", "Sua guarda está sem soldo — e um reino rival ofereceu o dobro para abrirem seus portões esta noite.", [
 				["💰 Pagar em dobro agora", func():
@@ -1023,7 +1278,19 @@ func _modal_batalha(rel: Dictionary) -> void:
 	_modal("🏆 VITÓRIA — %s" % rel["contexto"] if rel["vitoria"] else "☠ DERROTA — %s" % rel["contexto"],
 		corpo, [["Continuar", func():
 			Jogo.salvar(state)
-			atualizar()]])
+			atualizar()]], _arte_de_batalha(str(rel.get("contexto", ""))))
+
+## A ilustração sai do CONTEXTO que combate.gd já escreve ("Cerco a …",
+## "Rebelião camponesa"…), então nenhuma chamada precisa passar arte à mão.
+func _arte_de_batalha(contexto: String) -> Texture2D:
+	var t := contexto.to_lower()
+	if t.contains("cerco"):
+		return Retratos.ilustracao("cerco")
+	if t.contains("rebeli"):
+		return Retratos.ilustracao("rebeliao")
+	if t.contains("saque") or t.contains("estrada") or t.contains("embosc"):
+		return Retratos.ilustracao("emboscada")
+	return null
 
 func _modal_fim() -> void:
 	var vitoria: bool = state["fim"]["tipo"] == "vitoria"
@@ -1032,17 +1299,11 @@ func _modal_fim() -> void:
 		else "Sua linhagem chega ao fim. As crônicas mal lembrarão seu nome.",
 		[["Nova saga", func():
 			Jogo.apagar_save()
-			get_tree().reload_current_scene()]])
+			get_tree().reload_current_scene()]],
+		Retratos.ilustracao("coroacao") if vitoria else null)
 
 func _modal_llm() -> void:
-	for filho in overlay_modal.get_children():
-		filho.queue_free()
-	overlay_modal.visible = true
-	var painel := PanelContainer.new()
-	painel.custom_minimum_size = Vector2(460, 0)
-	overlay_modal.add_child(painel)
-	var v := VBoxContainer.new()
-	painel.add_child(v)
+	var v := _painel_modal()
 	var l := Label.new()
 	l.text = "🧠 IA Local — os personagens pensam no SEU processador.\n1. Baixe um modelo GGUF pequeno (ex.: Qwen2.5-1.5B Q4).\n2. Rode: llama-server -m modelo.gguf --port 8080\n3. Informe a URL abaixo (vazio = desligado):"
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

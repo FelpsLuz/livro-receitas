@@ -73,7 +73,11 @@ static func _p(img: Image, x: int, y: int, w: int, h: int, c: Color) -> void:
 			img.set_pixel(px, py, c)
 
 static func _desenhar(img: Image, id: String, humor: String) -> void:
-	var f := _ficha(id)
+	_desenhar_ficha(img, _ficha(id), humor)
+
+## O desenho de verdade, a partir de uma ficha já montada — é o que permite
+## um cidadão gerado em jogo usar o mesmo pincel dos personagens fixos.
+static func _desenhar_ficha(img: Image, f: Dictionary, humor: String) -> void:
 	var pele := Color(PELES[f["pele"]])
 	var cab := Color(CABELOS[f["cabelo"]])
 	var roupa := Color(f["roupa"])
@@ -222,3 +226,161 @@ static func humor_de(state: Dictionary, id: String) -> String:
 	if rel >= 25:
 		return "feliz"
 	return "neutro"
+
+# ============================================================
+# RETRATOS DINÂMICOS — para quem NASCE durante a partida.
+#
+# Um cidadão que enriquece vira Lorde no meio do jogo. Não existe PNG dele,
+# e chamar a API do PixelLab em tempo de execução está fora de questão (é
+# rede, é dinheiro e é lento). A saída tem três degraus, do melhor para o
+# pior, e nenhum deles deixa buraco na interface:
+#
+#   1. PNG próprio, se por acaso existir (assets/sprites/<nome>.png)
+#   2. base genérica de nobre RECOLORIDA para a cor daquela pessoa —
+#      preserva luz e sombra, troca só o tecido
+#   3. retrato procedural, agora semeado pelos dados REAIS do cidadão
+#      (ofício, gênero, riqueza) em vez de um hash cego
+# ============================================================
+
+## Bases recolorívies geradas uma vez pelo PixelLab.
+const BASE_LORDE := {"m": "lorde_generico", "f": "lorde_generica"}
+
+## O ofício vira cor de roupa e leitura: um ferreiro não se veste como um
+## mercador. É o que faz dois lordes gerados parecerem pessoas diferentes.
+const PALETA_OFICIO := {
+	# o próprio senhor: vermelho-sangue, a cor da casa
+	"senhor":     {"cor": "8b2635", "estilo": "medio",  "barba": "rala"},
+	"mercador":   {"cor": "2d4a8a", "estilo": "medio",  "barba": "cavanhaque"},
+	"ferreiro":   {"cor": "6b4a2d", "estilo": "curto",  "barba": "cheia"},
+	"moleiro":    {"cor": "b0925f", "estilo": "curto",  "barba": "rala"},
+	"taverneiro": {"cor": "7a5c38", "estilo": "careca", "barba": "bigode"},
+	"capataz":    {"cor": "5a5f66", "estilo": "coque",  "barba": ""},
+}
+
+## Ficha de aparência derivada dos dados do cidadão — nada de hash cego.
+static func ficha_de_cidadao(n: Dictionary) -> Dictionary:
+	var oficio: String = str(n.get("oficio", "mercador"))
+	var base: Dictionary = PALETA_OFICIO.get(oficio, PALETA_OFICIO["mercador"])
+	var h := hash(str(n.get("nome", "?")))
+	var rico: bool = int(n.get("riqueza", 0)) >= 400
+	return {
+		"pele": h % PELES.size(),
+		"cabelo": (h >> 3) % CABELOS.size(),
+		"estilo": str(base["estilo"]) if str(n.get("genero", "m")) == "m" else "longo",
+		"barba": str(base["barba"]) if str(n.get("genero", "m")) == "m" else "",
+		# lorde jurado ganha o colar de ofício; cidadão comum, nada
+		"chapeu": "tiara" if bool(n.get("lorde", false)) and str(n.get("genero", "m")) == "f" else "",
+		"roupa": str(base["cor"]),
+		# quem enriqueceu se veste melhor, e a UI mostra isso sem uma palavra
+		"cicatriz": bool(n.get("capturado", false)),
+		"gordo": rico and oficio == "taverneiro",
+	}
+
+## Cor pessoal de um cidadão: estável (mesma pessoa, mesma cor sempre) e
+## derivada do ofício, para o recolorido não sair aleatório.
+static func cor_de_cidadao(n: Dictionary) -> Color:
+	var oficio: String = str(n.get("oficio", "mercador"))
+	var base := Color(str(PALETA_OFICIO.get(oficio, PALETA_OFICIO["mercador"])["cor"]))
+	# um empurrãozinho de matiz por nome, para dois ferreiros não se confundirem
+	var desvio: float = float(absi(hash(str(n.get("nome", "?")))) % 60) / 600.0 - 0.05
+	return Color.from_hsv(fposmod(base.h + desvio, 1.0),
+		clampf(base.s + 0.1, 0.2, 0.9), clampf(base.v + 0.05, 0.25, 0.9))
+
+## Recolore uma base preservando LUZ e SOMBRA: troca o matiz do tecido e
+## deixa pele, metal e preto/branco em paz. Pintar tudo por cima achataria
+## o sprite e destruiria o trabalho do sombreamento.
+static func _recolorir(origem: Texture2D, alvo: Color) -> Texture2D:
+	var img: Image = origem.get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a < 0.1:
+				continue
+			# cinzas e quase-pretos são metal, couro e contorno: não mexer
+			if c.s < 0.18:
+				continue
+			# faixa de pele: deixar o rosto em paz
+			if c.h >= 0.02 and c.h <= 0.11 and c.s < 0.62:
+				continue
+			img.set_pixel(x, y, Color.from_hsv(alvo.h,
+				clampf(c.s * 0.55 + alvo.s * 0.45, 0.15, 0.95), c.v, c.a))
+	return ImageTexture.create_from_image(img)
+
+## Retrato de um cidadão/lorde criado durante a partida.
+## `n` é o dicionário de cidadaos.gd (nome, genero, oficio, riqueza, lorde…).
+static func textura_cidadao(n: Dictionary) -> Texture2D:
+	var nome: String = str(n.get("nome", "?"))
+	# a chave carrega tudo o que MUDA o desenho. Só o nome não bastava: dois
+	# cidadãos homônimos de ofícios diferentes recebiam a mesma cara, porque o
+	# primeiro a ser desenhado ficava no cache pelos dois.
+	var chave := "cidadao|%s|%s|%s|%s|%s" % [nome, str(n.get("oficio", "")),
+		str(n.get("genero", "m")), str(n.get("lorde", false)),
+		str(n.get("capturado", false))]
+	if _cache.has(chave):
+		return _cache[chave]
+
+	# 1) PNG próprio, se um dia alguém gerar um para este nome
+	var proprio := sprite_gerado(nome.to_lower().replace(" ", "_"))
+	if proprio != null:
+		_cache[chave] = proprio
+		return proprio
+
+	# 2) base genérica recolorida para a cor pessoal dele
+	var genero: String = str(n.get("genero", "m"))
+	var base := sprite_gerado(str(BASE_LORDE.get(genero, BASE_LORDE["m"])))
+	if base != null:
+		var tex := _recolorir(base, cor_de_cidadao(n))
+		_cache[chave] = tex
+		return tex
+
+	# 3) reserva final: retrato desenhado em código, semeado pelos dados dele
+	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	_desenhar_ficha(img, ficha_de_cidadao(n), "neutro")
+	var proc := ImageTexture.create_from_image(img)
+	_cache[chave] = proc
+	return proc
+
+## Retrato da tropa. O id da arte é SEMPRE "tropa_" + a chave de Dados.TROPAS,
+## então a UI acha a imagem por cálculo — sem tabela paralela que envelhece
+## toda vez que uma unidade nova entra no catálogo.
+static func textura_tropa(tipo: String) -> Texture2D:
+	return textura("tropa_" + tipo)
+
+## Ilustração de evento para os modais (cerco, emboscada, inverno…).
+## Devolve null quando a arte não existe: o modal segue só com texto.
+static func ilustracao(evento: String) -> Texture2D:
+	return sprite_gerado("evento_" + evento)
+
+## Arte de reserva por PERFIL de comandante — usada só quando a pessoa por trás
+## do cargo não tem retrato próprio (o capitão contratado não é um cidadão).
+const ARTE_PERFIL := {
+	"capitao": "mercenario_lanca",
+	"batedor": "mercenario_arco",
+	"quartel_mestre": "cartografo",
+}
+
+## Retrato de quem lidera a marcha. Resolve pela IDENTIDADE primeiro — um lorde
+## que subiu de cidadão leva a cara que ele já tinha na Corte — e só cai no
+## perfil quando não há pessoa: aí é a arte do ofício que responde.
+static func textura_comandante(state: Dictionary, cmd: Dictionary) -> Texture2D:
+	if cmd.is_empty():
+		return null
+	var id: String = str(cmd.get("id", ""))
+	if id == "senhor":
+		# o jogador também não tem PNG próprio: passa pelo mesmo recolorido dos
+		# lordes, para o card do comandante não misturar arte gerada com o
+		# desenho procedural cru bem ao lado dela
+		return textura_cidadao({"nome": str(cmd.get("nome", "senhor")),
+			"genero": str(state["jogador"].get("genero", "m")),
+			"oficio": "senhor", "lorde": true})
+	if id.begins_with("lorde:"):
+		var nome := id.substr(6)
+		var Cidadaos = load("res://scripts/cidadaos.gd")
+		for n in Cidadaos.lista(state):
+			if str(n.get("nome", "")) == nome:
+				return textura_cidadao(n)
+	elif id.begins_with("cla:"):
+		# os clãs têm ficha própria em FICHAS; textura() já sabe achá-la
+		return textura(id.substr(4))
+	return sprite_gerado(str(ARTE_PERFIL.get(str(cmd.get("perfil", "")), "")))

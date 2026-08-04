@@ -67,6 +67,15 @@ ESTILO = dict(
     text_guidance_scale=9.0,
     coverage_percentage=88.0,
 )
+# Assinatura de estilo repetida em TODO prompt. Um jogo com arte de IA vira
+# colcha de retalhos quando cada asset pede um estilo diferente — este texto
+# é o que faz o lanceiro e o rei parecerem do mesmo mundo.
+ESTILO_BASE = ("64x64 pixel art portrait, medieval fantasy, warm saturated palette, "
+               "rich greens and terracotta and cream, golden daylight, soft warm shadows, "
+               "crisp dark selective outline (sel-out), clean readable silhouette, "
+               "charming storybook medieval, detailed but not noisy, "
+               "clean transparent background")
+
 NEGATIVO = (
     "blurry, anti-aliased, smooth gradients, 3d render, photo, watermark, text, "
     "signature, modern clothing, guns, magic, fantasy monsters, glowing effects, "
@@ -177,21 +186,107 @@ APARENCIA = {
                   "lamellar armor of bone and leather, curved saber",
     "cla_machados": "old northern axeman, ice-white long beard, horned helm, "
                     "blue-grey mail under a heavy cloak, two-handed axe resting on his shoulder",
-    # tropas e inimigos das cenas de batalha
-    "tropa_campones": "ragged peasant levy, straw hat, patched tunic, wooden pitchfork, frightened posture",
-    "tropa_lanceiro": "disciplined spearman, conical helm, kite shield, gambeson and mail, long spear",
-    "tropa_arqueiro": "lean archer, leather cap, green hood, quiver on hip, drawing a longbow",
-    "tropa_cavaleiro": "armored knight on foot, closed helm, surcoat over full mail, longsword and heater shield",
-    "inimigo_bandido": "road bandit, dirty rags and mismatched armor pieces, hood, rusty falchion, crooked sneer",
+    # ---- AS OITO TROPAS ----
+    # O id é sempre "tropa_" + a chave de Dados.TROPAS, para a UI achar a arte
+    # por cálculo e não por tabela paralela que envelhece.
+    # Cada prompt carrega o CONTRA-JOGO da unidade: quem tem lança aparece
+    # segurando lança contra cavalo, e o jogador aprende a regra olhando.
+    "tropa_campones": "ragged peasant levy, straw hat, patched brown tunic, "
+                      "wooden pitchfork, frightened hunched posture, no armor",
+    "tropa_lanceiro": "disciplined militia spearman, conical nasal helm, tall kite shield "
+                      "planted forward, quilted gambeson over mail, very long braced spear "
+                      "angled up as if set against a charging horse",
+    "tropa_espadachim": "heavy infantry swordsman, closed kettle helm, thick padded coat "
+                        "under mail hauberk, broad round shield held high, arming sword, "
+                        "planted defensive stance like a wall",
+    "tropa_barbaro": "wild raider berserker, bare scarred chest with fur mantle, braided hair, "
+                     "no shield at all, two heavy axes raised, screaming charge, reckless",
+    "tropa_arqueiro": "lean longbow archer, leather cap and green hood, bracer on forearm, "
+                      "full quiver on hip, drawing a tall yew longbow, calm aiming eye",
+    "tropa_explorador": "light scout runner, no armor, dusty grey travel cloak and hood, "
+                        "coiled rope and small spyglass at belt, unarmed, crouched low "
+                        "and watching, built for speed not fighting",
+    "tropa_cav_leve": "light cavalry rider on a lean fast brown horse, open helm, "
+                      "leather lamellar, short lance couched, cloak streaming, mid-gallop",
+    "tropa_arq_cavalo": "horse archer on a small steppe pony, fur-trimmed cap, lamellar of "
+                        "bone and leather, twisting in the saddle to loose a recurve bow "
+                        "backwards, quiver at the saddle",
+    "tropa_cav_pesada": "heavy armored knight on a massive barded warhorse, full closed "
+                        "great helm, plate and mail, long lance couched, horse in steel "
+                        "barding, overwhelming mass, banner on the lance",
+    "inimigo_bandido": "road bandit, dirty rags and mismatched armor pieces, hood, "
+                       "rusty falchion, crooked sneer",
+
+    # ---- BASES GENÉRICAS PARA LORDES GERADOS EM JOGO ----
+    # Um cidadão que enriquece vira Lorde DURANTE a partida: não existe PNG
+    # dele, e não dá para chamar a API no meio do jogo. Estas duas bases são
+    # recoloridas em tempo de execução (retratos.gd) para dar a cada lorde um
+    # rosto distinto sem gerar nada novo.
+    "lorde_generico": "neutral minor nobleman portrait, plain but well-made tunic with a "
+                      "wide collar, short beard, calm neutral expression, simple chain of "
+                      "office, NO crown, NO heraldry, plain undecorated clothing in a "
+                      "single flat color that is easy to recolor",
+    "lorde_generica": "neutral minor noblewoman portrait, plain but well-made gown with a "
+                      "wide collar, hair pinned up, calm neutral expression, simple chain "
+                      "of office, NO crown, NO heraldry, plain undecorated clothing in a "
+                      "single flat color that is easy to recolor",
+
+    # ---- TAVERNA: cada um destes VENDE alguma coisa no jogo ----
+    "informante": "furtive informant in a tavern corner, deep hood over half his face, "
+                  "ink-stained fingers, whispering behind a raised hand, coin purse and "
+                  "folded notes on the table, eyes on the door",
+    "cartografo": "drunken old cartographer, ink-smudged spectacles, wine-stained shirt, "
+                  "unrolled trade-route map weighted with tankards, quill behind the ear, "
+                  "pointing at a road on the parchment",
+    "mercenario_lanca": "hulking mercenary spearman for hire, missing an ear, boiled leather "
+                        "and mismatched mail, spear resting on his shoulder, arms folded, "
+                        "sizing up the buyer, bored expression",
+    "mercenario_arco": "mercenary archer woman for hire, short practical hair, ranger leathers, "
+                       "unstrung bow across her knees, counting coins on the table, "
+                       "unimpressed half-smile",
+}
+
+# ---------------------------------------------------------------
+# CENAS — ilustrações pequenas para modais e eventos.
+# Não são personagens: são QUADROS. Por isso têm um construtor de prompt
+# próprio (montar_prompt_cena) — pedir "single character sprite, facing right"
+# para um acampamento de cerco devolveria um homem, não um cerco.
+# ---------------------------------------------------------------
+CENAS = {
+    "evento_cerco": "wide scene illustration, medieval siege camp at dusk seen from outside "
+                    "the walls, rows of canvas tents, campfires, a siege tower and ladders, "
+                    "banners planted in mud, besieged stone keep silhouetted behind",
+    "evento_emboscada": "wide scene illustration, ambush on a forest road at dawn, "
+                        "overturned supply cart, scattered crates, bandits emerging from "
+                        "the treeline with drawn weapons, soldiers caught mid-turn",
+    "evento_inverno": "wide scene illustration, medieval village buried in deep snow, "
+                      "frozen empty fields, smoke from a single chimney, wolves at the "
+                      "treeline, grey-blue winter light, no crops",
+    "evento_rebeliao": "wide scene illustration, peasant revolt at night, angry villagers "
+                       "with torches pitchforks and scythes marching on a manor gate, "
+                       "firelight on furious faces",
+    "evento_juramento": "wide scene illustration, feudal oath ceremony in a stone hall, "
+                        "a kneeling lord placing his hands between the hands of a seated "
+                        "king, courtiers watching from the shadows, banners overhead",
+    "evento_coroacao": "wide scene illustration, coronation in a candlelit cathedral, "
+                       "iron crown lowered onto a kneeling figure, kneeling crowd, "
+                       "shafts of light through high windows",
 }
 
 GRUPOS = {
     "reis": ["rei_imperio", "rei_touros", "rei_alvorecer", "rei_leoes", "rei_aguias", "rei_rosa"],
     "npcs": ["taverneiro", "capitao", "espiao"],
+    "taverna": ["informante", "cartografo", "mercenario_lanca", "mercenario_arco"],
+    "bases": ["lorde_generico", "lorde_generica"],
     "barbaros": ["cla_lobos", "cla_corvos", "cla_estepe", "cla_machados"],
-    "tropas": ["tropa_campones", "tropa_lanceiro", "tropa_arqueiro", "tropa_cavaleiro", "inimigo_bandido"],
+    # espelha as chaves de Dados.TROPAS: a UI monta o id por cálculo
+    "tropas": ["tropa_campones", "tropa_lanceiro", "tropa_espadachim", "tropa_barbaro",
+               "tropa_arqueiro", "tropa_explorador", "tropa_cav_leve", "tropa_arq_cavalo",
+               "tropa_cav_pesada", "inimigo_bandido"],
+    "cenas": list(CENAS),
 }
-GRUPOS["tudo"] = [i for g in ("reis", "npcs", "barbaros", "tropas") for i in GRUPOS[g]]
+GRUPOS["tudo"] = [i for g in ("reis", "npcs", "taverna", "bases", "barbaros", "tropas", "cenas")
+                  for i in GRUPOS[g]]
 
 TOM = {  # a personalidade da lore vira pose e expressão
     "cruel": "cruel arrogant expression, chin raised, one hand resting on a weapon",
@@ -203,8 +298,28 @@ TOM = {  # a personalidade da lore vira pose e expressão
 }
 
 
+def montar_prompt_cena(pid: str) -> str:
+    """Prompt de ILUSTRAÇÃO (modal/evento), não de personagem.
+
+    Um quadro pede enquadramento e profundidade; pedir "single character
+    sprite, facing right" para um acampamento de cerco devolve um homem
+    sozinho em pé. Por isso o construtor é separado.
+    """
+    return ", ".join([
+        CENAS[pid],
+        "no text, no ui frame, no border",
+        ESTILO_BASE.replace("64x64 pixel art portrait",
+                            "pixel art scene illustration, wide framing, "
+                            "layered depth with background hills and sky")
+                   .replace("clean transparent background",
+                            "full illustrated background"),
+    ])
+
+
 def montar_prompt(pid: str, lore: dict, fichas: dict) -> str:
     """Junta lore + aparência + personalidade num prompt de sprite."""
+    if pid in CENAS:
+        return montar_prompt_cena(pid)
     partes = ["full body character sprite, single character, centered, facing right"]
     partes.append(APARENCIA.get(pid, "medieval character"))
     f = fichas.get(pid, {})
@@ -215,6 +330,9 @@ def montar_prompt(pid: str, lore: dict, fichas: dict) -> str:
         # a crença guia a leitura silenciosa do personagem (postura, olhar)
         partes.append("character whose bearing suggests: " + l["crenca"][:110].rstrip(".,"))
     partes.append(AMBIENTACAO)
+    # a assinatura de estilo entra por ÚLTIMO e em todo prompt: é ela que
+    # segura a unidade visual entre um rei e um camponês
+    partes.append(ESTILO_BASE)
     return ", ".join(p for p in partes if p)
 
 
@@ -458,7 +576,7 @@ def main() -> int:
     else:
         ap.error("escolha --grupo, --tudo, --apenas ou --listar")
 
-    desconhecidos = [i for i in ids if i not in APARENCIA]
+    desconhecidos = [i for i in ids if i not in APARENCIA and i not in CENAS]
     if desconhecidos:
         print(f"❌ sem aparência definida para: {', '.join(desconhecidos)}", file=sys.stderr)
         return 2
