@@ -153,6 +153,34 @@ def _png(b64: str):
     return PIL.Image.open(BytesIO(base64.b64decode(b64))).convert("RGBA")
 
 
+def baixar_url(url: str):
+    """Alguns endpoints (map-objects, characters) não devolvem base64: entregam
+    um download_url. A imagem só chega por aqui — e a URL exige o mesmo Bearer."""
+    import requests
+    r = requests.get(url, headers={"Authorization": cabecalho()["Authorization"]},
+                     timeout=180, allow_redirects=True)
+    if not r.ok:
+        raise RuntimeError(f"download falhou: {erro(r)}")
+    import PIL.Image
+    return PIL.Image.open(BytesIO(r.content)).convert("RGBA")
+
+
+def _acha_urls(no, achadas=None):
+    """Varre a resposta atrás de download_url / image_url (em qualquer nível)."""
+    achadas = achadas if achadas is not None else []
+    if isinstance(no, dict):
+        for k, v in no.items():
+            if isinstance(v, str) and v.startswith("http") and (
+                    "download" in k or "url" in k):
+                achadas.append((no.get("direction") or no.get("name") or "", v))
+            else:
+                _acha_urls(v, achadas)
+    elif isinstance(no, list):
+        for v in no:
+            _acha_urls(v, achadas)
+    return achadas
+
+
 def _acha_imagens(no, achadas=None):
     """A v2 aninha as imagens de formas diferentes por endpoint; varre recursivo."""
     achadas = achadas if achadas is not None else []
@@ -225,9 +253,11 @@ def gerar_tileset(spec: dict, seed: int):
         "lower_description": spec["lower"], "upper_description": spec["upper"],
         "transition_description": spec.get("transicao", ""),
         "tile_size": {"width": tw, "height": th},
-        "mode": "pro", "view": "high top-down",
+        # mode "pro" exige conta Tier 1+ (erro 3006). "standard" gera o Wang
+        # tileset clássico e roda em qualquer tier.
+        "mode": os.environ.get("PIXELLAB_TILESET_MODE", "standard"), "view": "high top-down",
         "outline": "selective outline", "shading": "medium shading", "detail": "highly detailed",
-        "transition_size": 0.5, "raggedness": 0.35, "seed": seed,
+        "transition_size": 0.5, "seed": seed,
     }
     r = requests.post(f"{BASE}/create-tileset", json=corpo, headers=cabecalho(), timeout=180)
     if not r.ok:
@@ -242,18 +272,23 @@ def gerar_tileset(spec: dict, seed: int):
         except Exception:
             pass
     imgs = _acha_imagens(resultado)
-    if not imgs:
-        raise RuntimeError(f"tileset sem imagem: {json.dumps(resultado)[:200]}")
-    return [(n, _png(b)) for n, b in imgs], envio
+    if imgs:
+        return [(n, _png(b)) for n, b in imgs], envio
+    urls = _acha_urls(resultado)
+    if urls:
+        return [(n, baixar_url(u)) for n, u in urls], envio
+    raise RuntimeError(f"tileset sem imagem: {json.dumps(resultado)[:200]}")
 
 
 def gerar_objeto(spec: dict, seed: int):
     """POST /map-objects — assíncrono."""
     import requests
     w, h = spec["size"]
+    # ATENÇÃO: /map-objects tem enum PRÓPRIO de detail — 'high detail', e não
+    # 'highly detailed' como o pixflux/tileset. Enums divergem por endpoint.
     corpo = {"description": spec["desc"], "image_size": {"width": w, "height": h},
              "view": "side", "outline": "selective outline", "shading": "medium shading",
-             "detail": "highly detailed", "seed": seed}
+             "detail": "high detail", "seed": seed}
     r = requests.post(f"{BASE}/map-objects", json=corpo, headers=cabecalho(), timeout=180)
     if not r.ok:
         raise RuntimeError(erro(r))
@@ -266,9 +301,12 @@ def gerar_objeto(spec: dict, seed: int):
         except Exception:
             pass
     imgs = _acha_imagens(resultado)
-    if not imgs:
-        raise RuntimeError(f"objeto sem imagem: {json.dumps(resultado)[:200]}")
-    return [("", _png(imgs[0][1]))], envio
+    if imgs:
+        return [("", _png(imgs[0][1]))], envio
+    urls = _acha_urls(resultado)
+    if urls:
+        return [("", baixar_url(urls[0][1]))], envio
+    raise RuntimeError(f"objeto sem imagem: {json.dumps(resultado)[:200]}")
 
 
 def gerar_heroi(spec: dict, seed: int):
@@ -287,9 +325,12 @@ def gerar_heroi(spec: dict, seed: int):
     if cid:
         resultado = buscar(f"/characters/{cid}")
     imgs = _acha_imagens(resultado)
-    if not imgs:
-        raise RuntimeError(f"personagem sem imagens: {json.dumps(resultado)[:200]}")
-    return [(n or str(i), im) for i, (n, im) in enumerate((n, _png(b)) for n, b in imgs)], envio
+    if imgs:
+        return [(n or str(i), im) for i, (n, im) in enumerate((n, _png(b)) for n, b in imgs)], envio
+    urls = _acha_urls(resultado)
+    if urls:
+        return [(n or str(i), baixar_url(u)) for i, (n, u) in enumerate(urls)], envio
+    raise RuntimeError(f"personagem sem imagens: {json.dumps(resultado)[:200]}")
 
 
 GERADORES = {"ui": gerar_ui, "tileset": gerar_tileset, "objeto": gerar_objeto, "heroi": gerar_heroi}
