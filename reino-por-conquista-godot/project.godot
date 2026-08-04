@@ -11,6 +11,13 @@ config/description="De mercenário sem nome a rei — estratégia medieval offli
 run/main_scene="res://cenas/principal.tscn"
 config/features=PackedStringArray("4.3")
 
+[autoload]
+
+; Barramento de sinais. O núcleo NÃO cita este nome como identificador —
+; scripts/sinais.gd resolve o nó em runtime, senão os testes (que rodam com
+; --script, onde autoload não é registrado) não compilariam.
+Eventos="*res://scripts/eventos.gd"
+
 [display]
 
 window/size/viewport_width=960

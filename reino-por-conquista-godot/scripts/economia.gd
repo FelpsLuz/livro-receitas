@@ -86,6 +86,35 @@ static func tick_guerras(state: Dictionary, log: Callable) -> void:
 			vivas.append(g)
 	state["guerras"] = vivas
 
+## ---------- CHOQUES DE MERCADO ----------
+## Um choque é um empurrão com prazo: {reino, bem, oferta, demanda, meses}.
+## Qualquer sistema pode empilhar um — guerra, saque, rumor de taverna,
+## intriga — e todos passam pelo MESMO caminho até o preço. Sem isto, cada
+## novo evento vira um caso especial dentro de preco_de().
+static func abalar(state: Dictionary, reino: String, bem: String,
+		d_oferta: float, d_demanda: float, meses: int) -> void:
+	if not state.has("choques"):
+		state["choques"] = []
+	state["choques"].append({"reino": reino, "bem": bem,
+		"oferta": d_oferta, "demanda": d_demanda, "meses": meses})
+
+static func tick_choques(state: Dictionary) -> void:
+	if not state.has("choques"):
+		state["choques"] = []
+		return
+	var vivos: Array = []
+	for c in state["choques"]:
+		var mercado_reino = state["mercados"].get(c["reino"])
+		if mercado_reino == null:
+			continue
+		var m: Dictionary = mercado_reino[c["bem"]]
+		m["oferta"] = clampf(m["oferta"] + float(c["oferta"]), 0.2, 3.0)
+		m["demanda"] = clampf(m["demanda"] + float(c["demanda"]), 0.5, 3.0)
+		c["meses"] = int(c["meses"]) - 1
+		if int(c["meses"]) > 0:
+			vivos.append(c)
+	state["choques"] = vivos
+
 static func tick_mercados(state: Dictionary) -> void:
 	for r in state["reinos"]:
 		var em_guerra := _em_guerra(state, r["id"])

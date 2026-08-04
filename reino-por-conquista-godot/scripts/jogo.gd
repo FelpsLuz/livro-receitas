@@ -11,6 +11,11 @@ const Combate = preload("res://scripts/combate.gd")
 const Clas = preload("res://scripts/clas.gd")
 const Intriga = preload("res://scripts/intriga.gd")
 const Contratos = preload("res://scripts/contratos.gd")
+const Recrutamento = preload("res://scripts/recrutamento.gd")
+const Geopolitica = preload("res://scripts/geopolitica.gd")
+const Cidadaos = preload("res://scripts/cidadaos.gd")
+const Taverna = preload("res://scripts/taverna.gd")
+const Sinais = preload("res://scripts/sinais.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -34,8 +39,16 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"mensageiros": [], "clas_ativos": [], "cartas": [],
 		"cronica": [], "contratos": [], "evento_pendente": null, "chantagem_pendente": null,
 		"fim": null,
+		# ---- Fase 3 ----
+		"fila_recrutamento": [],   # lotes em treino (recrutamento.gd)
+		"relacoes_npc": {},        # opinião de cada par de reinos (geopolitica.gd)
+		"pactos": [],              # comércio e alianças entre NPCs
+		"choques": [],             # empurrões de preço com prazo (economia.gd)
+		"flagras": {},             # espiões seus pegos por reino (intriga.gd)
+		"informantes": [],         # ouvidos comprados na taverna
 	}
 	Economia.inicializar_mercados(state)
+	Geopolitica.inicializar(state)
 	state["contratos"] = Contratos.gerar(state)
 	var log := log_para(state)
 	log.call("Ano 1. Você é %s: sem terras, sem título, com %d moedas e 5 lanceiros leais." %
@@ -52,6 +65,24 @@ static func passar_mes(state: Dictionary) -> void:
 	if state["fim"] != null or state["evento_pendente"] != null:
 		return
 	var log := log_para(state)
+
+	# ---- CADEIA ----
+	# O tempo PASSA na masmorra (é essa a punição), mas o jogador não age.
+	# Modelar prisão como evento_pendente travaria o jogo: o guard acima
+	# retorna cedo e os meses nunca correriam.
+	if int(state["jogador"].get("preso_ate", 0)) > _mes_absoluto(state):
+		state["mes"] += 1
+		if state["mes"] > 12:
+			state["mes"] = 1
+			state["ano"] += 1
+		log.call("Mais um mês a ferros. As paredes escorrem.")
+		Economia.tick_mercados(state)         # o mundo segue sem você
+		Economia.tick_choques(state)
+		Economia.tick_guerras(state, log)
+		Geopolitica.tick(state, log)
+		# de propósito: sem tick_terra e sem tick_exercito — sua casa apodrece
+		return
+
 	state["mes"] += 1
 	if state["mes"] > 12:
 		state["mes"] = 1
@@ -61,9 +92,15 @@ static func passar_mes(state: Dictionary) -> void:
 			return
 	Economia.talvez_iniciar_guerra(state, log)
 	Economia.tick_guerras(state, log)
-	Economia.tick_mercados(state)
+	Economia.tick_choques(state)          # antes de tick_mercados: o choque
+	Economia.tick_mercados(state)         # empurra, o mercado então relaxa
 	Economia.tick_terra(state, log)
 	Economia.tick_exercito(state, log)
+	Geopolitica.tick(state, log)          # o mundo dos NPCs anda sozinho
+	Cidadaos.tick(state, log)             # a sua sociedade também
+	Taverna.tick(state, log)              # informantes cobram e reportam
+	# um mês de jogo vale SEG_POR_MES de treino no quartel
+	Recrutamento.avancar(state, Recrutamento.SEG_POR_MES, log)
 	Clas.tick(state, log)
 	Intriga.tick_familia(state, log)
 	state["contratos"] = Contratos.gerar(state)
@@ -135,19 +172,29 @@ static func melhorar_terra(state: Dictionary) -> Dictionary:
 	return {"ok": true, "msg": "Evoluiu para %s!" % prox["nome"]}
 
 # ---------- gestão do exército ----------
+## Recrutar agora ENFILEIRA: a tropa leva segundos para ficar pronta.
+## Mesma assinatura de antes, então a UI e os testes existentes seguem valendo.
 static func recrutar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
-	var custo: int = int(Dados.TROPAS[tipo]["custo"]) * qtd
-	if state["jogador"]["ouro"] < custo:
-		return {"ok": false, "msg": "Custa %d de ouro." % custo}
-	if tipo == "campones":
-		if state["terra"] == null:
-			return {"ok": false, "msg": "Camponeses vêm da SUA terra — e você não tem uma."}
-		var disponiveis: int = int(state["terra"]["populacao"]) - int(state["jogador"]["tropas"].get("campones", 0))
-		if qtd > disponiveis:
-			return {"ok": false, "msg": "Só há %d camponeses disponíveis." % disponiveis}
-	state["jogador"]["ouro"] -= custo
-	state["jogador"]["tropas"][tipo] = int(state["jogador"]["tropas"].get(tipo, 0)) + qtd
-	return {"ok": true, "msg": "Recrutou %d× %s." % [qtd, Dados.TROPAS[tipo]["nome"]]}
+	return Recrutamento.enfileirar(state, tipo, qtd)
+
+## Mês absoluto — usado pela cadeia e por qualquer prazo em meses.
+static func _mes_absoluto(state: Dictionary) -> int:
+	return int(state["ano"]) * 12 + int(state["mes"])
+
+## Aplica a pena de prisão. Chamada por quem detecta o crime (intriga.gd
+## devolve {"prender": N} em vez de chamar isto, para não fechar ciclo).
+static func prender(state: Dictionary, meses: int, log: Callable) -> void:
+	var j: Dictionary = state["jogador"]
+	j["preso_ate"] = _mes_absoluto(state) + meses
+	j["ouro"] = int(int(j["ouro"]) * 0.4)
+	j["renome"] = maxi(0, int(j["renome"]) - 30)
+	for tipo in j["tropas"]:
+		j["tropas"][tipo] = int(int(j["tropas"][tipo]) * 0.5)
+	Sinais.emitir(&"preso", {"meses": meses})
+	log.call("Capturado. %d meses a ferros." % meses)
+
+static func esta_preso(state: Dictionary) -> bool:
+	return int(state["jogador"].get("preso_ate", 0)) > _mes_absoluto(state)
 
 static func contratar_guardas(state: Dictionary, qtd: int) -> Dictionary:
 	var custo := 60 * qtd
@@ -208,6 +255,9 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 				state["terra"]["alimento"] = int(state["terra"]["alimento"]) + 60
 				state["terra"]["felicidade"] = 55
 				log.call("Você abriu os celeiros (-%d ouro). O povo abaixa as foices." % custo)
+		"notavel_ambicioso":
+			# escolha: "comprar" (lealdade por ouro), "exilar" ou ignorar
+			resultado = {"msg": Cidadaos.resolver_ambicioso(state, ev["nome"], escolha, log)}
 		"traicao_guardas":
 			var custo_g: int = int(state["jogador"]["guardas"]) * 15
 			if escolha == "pagar" and state["jogador"]["ouro"] >= custo_g:
@@ -240,7 +290,21 @@ static func carregar() -> Variant:
 	var dados = JSON.parse_string(f.get_as_text())
 	if dados == null:
 		return null
-	return _normalizar(dados)
+	return _migrar(_normalizar(dados))
+
+## Save de antes da Fase 3 não tem os campos novos. Preencher aqui (e não
+## com `.get()` espalhado por dez arquivos) mantém o resto do código simples
+## e garante que um save antigo carregue sem quebrar.
+static func _migrar(state: Dictionary) -> Dictionary:
+	for campo in ["fila_recrutamento", "pactos", "choques", "informantes"]:
+		if not state.has(campo):
+			state[campo] = []
+	for campo in ["relacoes_npc", "flagras"]:
+		if not state.has(campo):
+			state[campo] = {}
+	if state.get("reinos") != null:
+		Geopolitica.inicializar(state)
+	return state
 
 static func apagar_save() -> void:
 	if tem_save():

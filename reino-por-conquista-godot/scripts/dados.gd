@@ -37,10 +37,16 @@ const REINOS_BASE := [
 ]
 
 const TROPAS := {
-	"campones":  {"nome": "Camponeses", "custo": 5,   "manut": 1, "atq": 1, "def": 1},
-	"lanceiro":  {"nome": "Lanceiros",  "custo": 20,  "manut": 2, "atq": 3, "def": 4},
-	"arqueiro":  {"nome": "Arqueiros",  "custo": 25,  "manut": 2, "atq": 4, "def": 2},
-	"cavaleiro": {"nome": "Cavaleiros", "custo": 120, "manut": 6, "atq": 8, "def": 7},
+	"campones":  {"nome": "Camponeses", "custo": 5,   "manut": 1, "atq": 1, "def": 1, "pop": 1},
+	"lanceiro":  {"nome": "Lanceiros",  "custo": 20,  "manut": 2, "atq": 3, "def": 4, "pop": 1},
+	"arqueiro":  {"nome": "Arqueiros",  "custo": 25,  "manut": 2, "atq": 4, "def": 2, "pop": 1},
+	"cavaleiro": {"nome": "Cavaleiros", "custo": 120, "manut": 6, "atq": 8, "def": 7, "pop": 4},
+}
+
+## Segundos de treino por unidade. Cavalaria demora muito mais que lança —
+## é o que faz o jogador escolher entre um exército rápido e um exército bom.
+const TEMPO_TREINO := {
+	"campones": 20, "lanceiro": 60, "arqueiro": 105, "cavaleiro": 240,
 }
 
 # linha vence cunha; cunha vence cerco; cerco vence linha

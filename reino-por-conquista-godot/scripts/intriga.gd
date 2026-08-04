@@ -6,19 +6,115 @@ extends RefCounted
 const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Combate = preload("res://scripts/combate.gd")
+const Economia = preload("res://scripts/economia.gd")
+const Geopolitica = preload("res://scripts/geopolitica.gd")
 
+## Espionagem com MEMÓRIA: 30% de falha fixa, aliviada pelo atributo intriga.
+## Quando o espião é pego, o reino LEMBRA — e na terceira vez eles não vêm
+## atrás do espião, vêm atrás de você.
 static func espionar(state: Dictionary, reino_id: String) -> Dictionary:
 	if state["jogador"]["ouro"] < 80:
 		return {"ok": false, "msg": "Espiões custam 80 de ouro."}
 	state["jogador"]["ouro"] -= 80
-	var chance: float = 0.4 + state["jogador"]["atributos"]["intriga"] * 0.05
-	if randf() > chance:
-		if randf() < 0.3:
-			Dialogo.mudar_relacao(state, "rei_" + reino_id, -15, "espião capturado")
-			return {"ok": true, "msg": "Espião CAPTURADO! Relação -15."}
-		return {"ok": true, "msg": "Espião voltou de mãos vazias."}
-	state["segredos"].append({"reino": reino_id, "usado": false})
-	return {"ok": true, "msg": "SEGREDO descoberto sobre o rei de %s." % reino_id}
+	var falha: float = maxf(0.10, 0.30 - int(state["jogador"]["atributos"]["intriga"]) * 0.02)
+	if randf() >= falha:
+		state["segredos"].append({"reino": reino_id, "usado": false})
+		return {"ok": true, "msg": "SEGREDO descoberto sobre o rei de %s." % reino_id}
+
+	if not state.has("flagras"):
+		state["flagras"] = {}
+	state["flagras"][reino_id] = int(state["flagras"].get(reino_id, 0)) + 1
+	Dialogo.mudar_relacao(state, "rei_" + reino_id, -15, "espião capturado")
+	var n: int = int(state["flagras"][reino_id])
+	if n >= 3:
+		state["flagras"][reino_id] = 0
+		# devolve a pena: quem executa é jogo.gd, para não criar ciclo de import
+		return {"ok": true, "prender": 3,
+			"msg": "Terceiro espião capturado. Desta vez vieram atrás de VOCÊ."}
+	return {"ok": true, "msg": "Espião CAPTURADO (%d de 3). Relação -15." % n}
+
+## ---------- FABRICAR INTRIGA ----------
+## Sai do flavor text: planta uma discórdia REAL entre dois reinos NPCs,
+## derrubando a relação deles na geopolítica. Bem feito, faz dois vizinhos
+## fortes se estraçalharem enquanto você cresce em paz.
+static func fabricar_intriga(state: Dictionary, alvo_a: String, alvo_b: String) -> Dictionary:
+	if alvo_a == alvo_b:
+		return {"ok": false, "msg": "Não se semeia ódio entre um homem e ele mesmo."}
+	var custo := 120
+	if int(state["jogador"]["ouro"]) < custo:
+		return {"ok": false, "msg": "Falsários e mensageiros custam %d." % custo}
+	state["jogador"]["ouro"] -= custo
+	var chance: float = 0.35 + int(state["jogador"]["atributos"]["intriga"]) * 0.055
+	# ter um segredo sobre um dos dois torna a mentira crível
+	for s in state["segredos"]:
+		if not s["usado"] and (s["reino"] == alvo_a or s["reino"] == alvo_b):
+			chance += 0.20
+			break
+	if randf() < clampf(chance, 0.1, 0.85):
+		Geopolitica.mudar_relacao(state, alvo_a, alvo_b, -Dados.ri(25, 45))
+		return {"ok": true, "sucesso": true,
+			"msg": "A carta forjada chegou às mãos certas. %s e %s se olham torto agora."
+				% [alvo_a, alvo_b]}
+	# exposto: os DOIS descobrem quem plantou
+	Dialogo.mudar_relacao(state, "rei_" + alvo_a, -30, "intriga exposta")
+	Dialogo.mudar_relacao(state, "rei_" + alvo_b, -30, "intriga exposta")
+	return {"ok": true, "sucesso": false,
+		"msg": "A intriga foi rastreada até você. Ambos os reinos sabem."}
+
+## ---------- REIVINDICAR FEUDO ----------
+## O segundo uso do documento forjado: tomar terra pela CORTE, sem guerra e
+## sem a penalidade diplomática de uma agressão. É a rota do intrigante —
+## mais barata em sangue, mais cara em risco de vergonha pública.
+static func reivindicar_feudo(state: Dictionary, reino_id: String) -> Dictionary:
+	if not state["casus_belli"].has(reino_id):
+		return {"ok": false, "msg": "Sem documento que sustente a reivindicação."}
+	var rel: int = int(state["tags"].get("rei_" + reino_id, {"relacao": 0})["relacao"])
+	var chance: float = 0.25 + int(state["jogador"]["renome"]) * 0.002 + rel * 0.003
+	state["casus_belli"].erase(reino_id)          # o papel é gasto de todo jeito
+	if randf() < clampf(chance, 0.05, 0.75):
+		for r in state["reinos"]:
+			if r["id"] == reino_id:
+				r["dominado_por"] = "jogador"
+		if state["jogador"]["rei_de"] == "":
+			state["jogador"]["rei_de"] = reino_id
+		state["jogador"]["renome"] = int(state["jogador"]["renome"]) + 25
+		return {"ok": true, "sucesso": true,
+			"msg": "A corte reconheceu seu direito. O feudo é seu — sem uma flecha disparada."}
+	for r in state["reinos"]:
+		Dialogo.mudar_relacao(state, "rei_" + r["id"], -25, "fraude na corte")
+	return {"ok": true, "sucesso": false,
+		"msg": "A fraude foi exposta diante de toda a corte. Todos os reinos souberam."}
+
+## ---------- INCITAR REBELIÃO ----------
+## Usa um segredo para virar o povo de um reino contra o próprio rei:
+## derruba a força militar dele e queima o tesouro. É o golpe que prepara
+## uma conquista futura sem custar um soldado seu.
+static func incitar_rebeliao(state: Dictionary, reino_id: String) -> Dictionary:
+	var idx := -1
+	for i in state["segredos"].size():
+		if state["segredos"][i]["reino"] == reino_id and not state["segredos"][i]["usado"]:
+			idx = i
+			break
+	if idx < 0:
+		return {"ok": false, "msg": "Sem um segredo, ninguém acredita em você."}
+	if int(state["jogador"]["ouro"]) < 200:
+		return {"ok": false, "msg": "Comprar arautos e foices custa 200."}
+	state["jogador"]["ouro"] -= 200
+	state["segredos"][idx]["usado"] = true
+	Geopolitica.inicializar(state)
+	var r := Geopolitica.reino_por_id(state, reino_id)
+	if r.is_empty():
+		return {"ok": false, "msg": "Esse reino não existe mais."}
+	if randf() < 0.5 + int(state["jogador"]["atributos"]["intriga"]) * 0.04:
+		r["forca"] = maxi(5, int(int(r["forca"]) * 0.65))
+		r["tesouro"] = int(int(r["tesouro"]) * 0.5)
+		Economia.abalar(state, reino_id, "trigo", -0.5, 0.6, 4)
+		return {"ok": true, "sucesso": true,
+			"msg": "%s arde em revolta. O exército do rei está ocupado com o próprio povo."
+				% r["nome"]}
+	Dialogo.mudar_relacao(state, "rei_" + reino_id, -40, "sedição descoberta")
+	return {"ok": true, "sucesso": false,
+		"msg": "A sedição foi esmagada em uma semana, e seu nome estava nas confissões."}
 
 static func forjar_documento(state: Dictionary, reino_id: String) -> Dictionary:
 	if state["jogador"]["ouro"] < 150:

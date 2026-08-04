@@ -23,6 +23,10 @@ const CidadeView = preload("res://scripts/cidade_view.gd")
 const CidadeCena = preload("res://scripts/cidade_cena.gd")
 const VilaCena = preload("res://scripts/vila_cena.gd")
 const Icones = preload("res://scripts/icones.gd")
+const Recrutamento = preload("res://scripts/recrutamento.gd")
+const Geopolitica = preload("res://scripts/geopolitica.gd")
+const Cidadaos = preload("res://scripts/cidadaos.gd")
+const Taverna = preload("res://scripts/taverna.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -42,6 +46,7 @@ var tela_jogo: Control
 var status_label: Label
 var tabs: TabContainer
 var cidade_view: Control
+var quartel: Timer
 var overlay_conversa: Control
 var conversa_hist: RichTextLabel
 var conversa_input: LineEdit
@@ -177,6 +182,7 @@ func _montar_jogo() -> void:
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
 	# procedural de sempre. As duas cenas têm a mesma API (.estado, semear_npcs).
 	cidade_view = VilaCena.new() if VilaCena.disponivel() else CidadeCena.new()
+	_montar_quartel()
 
 ## A cidade_view sai da árvore quando outra aba está ativa (atualizar() a
 ## remove do pai). Node não é ref-counted: sem isto, fechar o jogo em qualquer
@@ -186,6 +192,32 @@ func _exit_tree() -> void:
 	if cidade_view != null and cidade_view.get_parent() == null:
 		cidade_view.free()
 		cidade_view = null
+
+## mm:ss para a fila do quartel.
+func _mmss(seg: int) -> String:
+	return "%d:%02d" % [int(seg / 60.0), seg % 60]
+
+## ---------- O TIMER DO QUARTEL ----------
+## Um Timer é um nó da cena; o save é um Dictionary. Por isso ele NÃO guarda
+## o tempo restante — quem guarda é a fila, dentro do state. O Timer só
+## empurra o relógio 1 segundo por vez, exatamente como o turno mensal faz
+## com 600 de uma vez. Salvar no meio do treino não perde nada.
+func _montar_quartel() -> void:
+	quartel = Timer.new()
+	quartel.wait_time = 1.0
+	quartel.timeout.connect(_tique_quartel)
+	add_child(quartel)
+	quartel.start()
+
+func _tique_quartel() -> void:
+	if state.is_empty() or state.get("fim") != null:
+		return
+	if Recrutamento.fila(state).is_empty():
+		return
+	if Recrutamento.avancar(state, 1, Jogo.log_para(state)) > 0:
+		Sfx.tocar(self, "tique")
+		Jogo.salvar(state)
+		atualizar()          # só redesenha quando algo REALMENTE saiu do quartel
 
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")
@@ -455,12 +487,15 @@ func _aba_exercito(c: Container) -> void:
 	var p := Combate.poder(j["tropas"], j["equip"])
 	_par(c, "Ataque %d · Defesa %d · %d homens · Manutenção %s 🪙/mês · Equipamento %d/3" %
 		[roundi(p["atq"]), roundi(p["def"]), p["homens"], str(j.get("ultima_manut", "—")), j["equip"]])
+	_par(c, "👥 População comprometida: %d de %d" %
+		[Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state)])
 	for tipo in Dados.TROPAS:
 		var h := _card(c)
 		var l := Label.new()
-		l.text = "%s — você tem %d (custo %d, manut. %d/mês)" % [
+		l.text = "%s — você tem %d (custo %d, manut. %d/mês, treino %ds)" % [
 			Dados.TROPAS[tipo]["nome"], j["tropas"].get(tipo, 0),
-			Dados.TROPAS[tipo]["custo"], Dados.TROPAS[tipo]["manut"]]
+			Dados.TROPAS[tipo]["custo"], Dados.TROPAS[tipo]["manut"],
+			Recrutamento.tempo_de(state, tipo)]
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(l)
 		_botao(h, "Recrutar 5", func():
@@ -469,6 +504,30 @@ func _aba_exercito(c: Container) -> void:
 			_aviso(r["msg"])
 			Jogo.salvar(state)
 			atualizar())
+
+	# ---- fila do quartel ----
+	# Sem isto o jogador clica em "Recrutar" e não vê nada mudar, porque a
+	# tropa agora leva tempo. A fila É o feedback.
+	var fila: Array = Recrutamento.fila(state)
+	if not fila.is_empty():
+		_titulo_secao(c, "⏳ Quartel — %s até o último recruta"
+			% _mmss(Recrutamento.segundos_restantes(state)))
+		for i in fila.size():
+			var item: Dictionary = fila[i]
+			var hf2 := _card(c)
+			var lf := Label.new()
+			lf.text = "%s ×%d — próximo em %s" % [
+				Dados.TROPAS[item["tipo"]]["nome"], item["restantes"],
+				_mmss(int(item["restante_seg"]))]
+			lf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hf2.add_child(lf)
+			var idx := i
+			_botao(hf2, "Cancelar", func():
+				var r: Dictionary = Recrutamento.cancelar(state, idx)
+				Sfx.tocar(self, "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
 	_titulo_secao(c, "Formação de batalha")
 	var hf := HBoxContainer.new()
 	c.add_child(hf)
