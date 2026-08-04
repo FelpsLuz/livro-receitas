@@ -45,6 +45,12 @@ const Cidade = (() => {
     if (!PERS[arq]) { const im = new Image(); im.src = 'img/duelo/' + arq + '.png'; PERS[arq] = im; }
     return PERS[arq];
   }
+  // moradores da vila ficam em img/pessoas (folhas 32×48 do tileset)
+  function povoImg(arq) {
+    const k = 'povo_' + arq;
+    if (!PERS[k]) { const im = new Image(); im.src = 'img/pessoas/' + arq + '.png'; PERS[k] = im; }
+    return PERS[k];
+  }
   // desenha um quadro recortado (só o corpo) da folha, ancorado embaixo-centro
   function desenhaFrame(x, arq, fw, frames, quadro, cx, baseY, altAlvo, flip) {
     const im = persImg(arq);
@@ -74,26 +80,28 @@ const Cidade = (() => {
 
   // ---------- paletas com hue-shifting ----------
   const RAMPAS = {
+    // Paletas SATURADAS, no espírito do pixel art de fazenda: verdes vivos,
+    // luz amarelada e sombras puxadas para o roxo/azul (nunca cinza morto).
     primavera: {
-      ceu: ['#79b7e6', '#a8d2ea', '#d8ecdf'], sol: ['#fff8d8', '#ffe98f'],
-      grama: ['#3c6b52', '#579050', '#74a94c', '#9cc45e'],
-      arvore: ['#2e5b45', '#3f7a4a', '#5b9a50', '#8bbf62'],
-      campo: ['#5d4a30', '#77603c', '#8fba55'],
-      montanha: ['#5e6b85', '#7c88a0', '#a3adc0'], neve: false, tiles: true,
+      ceu: ['#5fb2ec', '#9ad6f0', '#dff0d8'], sol: ['#fffbe0', '#ffe870'],
+      grama: ['#356b45', '#4f9c48', '#6fbf46', '#9ede5c'],
+      arvore: ['#25563a', '#357f42', '#4fa84a', '#86d05f'],
+      campo: ['#5d4a30', '#7d6238', '#8fce4e'],
+      montanha: ['#5a6a8c', '#7d8bad', '#a8b3ce'], neve: false, tiles: true,
     },
     verao: {
-      ceu: ['#6fb0e0', '#a5cfe0', '#ead9a8'], sol: ['#fff6c8', '#ffdf78'],
-      grama: ['#41684a', '#5f8c48', '#7fa746', '#a8c258'],
-      arvore: ['#31593f', '#457546', '#63954a', '#93b85c'],
-      campo: ['#5d4a30', '#77603c', '#d0af52'],
-      montanha: ['#606d86', '#7e8aa2', '#a5afc2'], neve: false, tiles: true,
+      ceu: ['#4fabec', '#93cfea', '#f2e2a8'], sol: ['#fffad0', '#ffd85c'],
+      grama: ['#3a6a42', '#579644', '#78b944', '#a8da52'],
+      arvore: ['#2a5638', '#3d7f42', '#5cad48', '#93cf58'],
+      campo: ['#5d4a30', '#7d6238', '#e0bb44'],
+      montanha: ['#5c6c8e', '#7f8daf', '#aab5d0'], neve: false, tiles: true,
     },
     outono: {
-      ceu: ['#8998b5', '#b3b3c0', '#e3cfa5'], sol: ['#fdf2c8', '#f5cf78'],
-      grama: ['#575a3a', '#6f7440', '#8d8a48', '#aca258'],
-      arvore: ['#6b3a26', '#95542c', '#bd7a35', '#d9a44a'],
-      campo: ['#4f3e28', '#655034', '#8a7440'],
-      montanha: ['#5c6880', '#7a869e', '#a1abbe'], neve: false,
+      ceu: ['#7f95c0', '#b4b8cf', '#f0d9a4'], sol: ['#fff4c8', '#ffcf60'],
+      grama: ['#5a5a34', '#7a7a38', '#9e9440', '#c4b452'],
+      arvore: ['#7a3520', '#ab5624', '#d8862c', '#f0b840'],
+      campo: ['#4f3e28', '#6b5434', '#9a7f40'],
+      montanha: ['#57678c', '#7a86a8', '#a4aeca'], neve: false,
     },
     inverno: {
       ceu: ['#9fb2c4', '#c3d0da', '#eef3f6'], sol: ['#fdfbe8', '#f2ead0'],
@@ -103,8 +111,10 @@ const Cidade = (() => {
       montanha: ['#6b7890', '#8b97ac', '#c8d2de'], neve: true,
     },
   };
-  const SOMBRA = 'rgba(38,54,74,.30)';   // sombra projetada (azulada, nunca preta)
-  const SOMBRA_FORTE = 'rgba(38,54,74,.42)';
+  // sombras puxadas para o ROXO-AZUL: é o contraste com a luz amarelada que
+  // faz a cena "brilhar" no pixel art de fazenda (cinza puro achata tudo)
+  const SOMBRA = 'rgba(58,48,96,.30)';
+  const SOMBRA_FORTE = 'rgba(52,42,88,.44)';
 
   function estacao(mes) {
     if (mes >= 3 && mes <= 5) return 'primavera';
@@ -432,16 +442,24 @@ const Cidade = (() => {
         if (i % 7 === 0) P(tx + 1, ty + larg / 2, 3, 1, '#6b5334');   // marca de roda
       }
     }
-    // trilha estreita que segue do acampamento até a travessia do rio
-    const tPonte = 0.52;
+    // trilha que sai do assentamento, ATRAVESSA a ponte e continua na outra
+    // margem — antes ela morria antes da travessia e a ponte ficava solta
+    const tPonte = 0.46;
     const pPonte = rioEixo(tPonte);
-    rua(322, 292, pPonte.x - 22, pPonte.y - 10, 8);
+    const dirP = { x: rioEixo(tPonte + 0.04).x - rioEixo(tPonte - 0.04).x,
+                   y: rioEixo(tPonte + 0.04).y - rioEixo(tPonte - 0.04).y };
+    const nrm = Math.hypot(dirP.x, dirP.y) || 1;
+    const perp = { x: -dirP.y / nrm, y: dirP.x / nrm };      // atravessa o rio
+    const bocaA = { x: pPonte.x - perp.x * (pPonte.larg / 2 + 14), y: pPonte.y - perp.y * (pPonte.larg / 2 + 14) };
+    const bocaB = { x: pPonte.x + perp.x * (pPonte.larg / 2 + 14), y: pPonte.y + perp.y * (pPonte.larg / 2 + 14) };
+    rua(326, 290, bocaA.x, bocaA.y, 9);                       // acesso deste lado
+    rua(bocaB.x, bocaB.y, bocaB.x + 54, bocaB.y + 26, 9);     // some na outra margem
 
     // ---------- ponte de madeira, atravessando o rio na perpendicular ----------
     (function ponte() {
       const p0 = rioEixo(tPonte - 0.04), p1 = rioEixo(tPonte + 0.04);
       const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x) + Math.PI / 2;  // perpendicular ao fluxo
-      const comp = pPonte.larg + 26, larg = 13;
+      const comp = pPonte.larg + 30, larg = 15;
       x.save();
       x.translate(pPonte.x, pPonte.y);
       x.rotate(ang);
@@ -1378,16 +1396,24 @@ const Cidade = (() => {
   let andarilhos = [];
   // as folhas têm muito espaço vazio: recorte vertical aproximado do corpo (topo%..base%)
   const RECORTE = { guerreiro_idle: [0.30, 0.98], heroi_idle: [0.18, 0.95], heroi_run: [0.18, 0.95] };
+  // MORADORES: sprites 32×48 do tileset, desenhados GRANDES (rosto, roupa e
+  // passada visíveis). Antes eram vultos de poucos pixels, sem carisma nenhum.
+  const POVO = { arq: 'heroi_anda_lado', fw: 32, fh: 48, frames: 5 };
   function seedAndarilhos(nivel) {
     andarilhos = [];
-    if (nivel < 1) { andarilhos.push({ x: 300, y: 300, vx: 0.28, arq: 'guerreiro_idle', fw: 150, frames: 8, alt: 60 }); return; }
-    const n = nivel >= 4 ? 3 : 2;
+    const guarda = (x, y, vx) => ({ x, y, vx, arq: 'guerreiro_idle', fw: 150, frames: 8, alt: 64 });
+    if (nivel < 1) {
+      andarilhos.push(guarda(300, 300, 0.28));
+      andarilhos.push({ x: 210, y: 316, vx: -0.24, povo: true, tom: 0 });
+      return;
+    }
+    const n = nivel >= 4 ? 4 : 3;
     for (let i = 0; i < n; i++) {
+      if (i % 3 === 2) { andarilhos.push(guarda(140 + i * 150, 302 + (i % 2) * 6, i % 2 ? 0.3 : -0.28)); continue; }
       andarilhos.push({
-        x: 120 + i * 170, y: 300 + (i % 2) * 8,
-        vx: (i % 2 ? 0.34 : -0.30),
-        arq: i % 2 ? 'guerreiro_idle' : 'heroi_idle',
-        fw: i % 2 ? 150 : 128, frames: i % 2 ? 8 : 5, alt: i % 2 ? 62 : 56,
+        x: 120 + i * 150, y: 306 + (i % 2) * 10,
+        vx: (i % 2 ? 0.30 : -0.26),
+        povo: true, tom: i % 3,
       });
     }
   }
@@ -1396,12 +1422,30 @@ const Cidade = (() => {
       a.x += a.vx;
       if (a.x < 90) a.vx = Math.abs(a.vx);
       if (a.x > 545) a.vx = -Math.abs(a.vx);
-      // sombra suave sob o personagem
-      ctx.fillStyle = 'rgba(24,38,54,.30)';
-      ctx.beginPath(); ctx.ellipse(a.x, a.y + 2, 12, 3.5, 0, 0, 7); ctx.fill();
+      // sombra sob o personagem (fria, como as demais)
+      ctx.fillStyle = 'rgba(58,48,96,.32)';
+      ctx.beginPath(); ctx.ellipse(a.x, a.y + 2, a.povo ? 9 : 12, 3.5, 0, 0, 7); ctx.fill();
       const quadro = Math.floor(anim / 8);
+      if (a.povo) {
+        // aldeão do tileset em 32×48, ampliado 1,6× → rosto e roupas legíveis
+        const im = povoImg(POVO.arq);
+        if (im && im.complete && im.naturalWidth) {
+          const esc = 1.6, w = POVO.fw * esc, h = POVO.fh * esc;
+          const fi = quadro % POVO.frames;
+          ctx.save();
+          ctx.translate(Math.round(a.x - w / 2), Math.round(a.y - h + 3));
+          if (a.vx < 0) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+          // matiz sutil por morador, para não parecerem clones
+          if (a.tom) { ctx.filter = a.tom === 1 ? 'hue-rotate(-25deg)' : 'hue-rotate(30deg) saturate(1.15)'; }
+          ctx.drawImage(im, fi * POVO.fw, 0, POVO.fw, POVO.fh, 0, 0, w, h);
+          ctx.filter = 'none';
+          ctx.restore();
+          continue;
+        }
+        ctx.fillStyle = '#3a2a1c'; ctx.fillRect(Math.round(a.x - 5), Math.round(a.y - 40), 10, 40);
+        continue;
+      }
       if (!desenhaFrame(ctx, a.arq, a.fw, a.frames, quadro, a.x, a.y, a.alt, a.vx < 0)) {
-        // enquanto a folha não carrega, um vulto discreto marca a posição
         ctx.fillStyle = '#3a2a1c'; ctx.fillRect(Math.round(a.x - 4), Math.round(a.y - a.alt + 8), 8, a.alt - 8);
       }
     }

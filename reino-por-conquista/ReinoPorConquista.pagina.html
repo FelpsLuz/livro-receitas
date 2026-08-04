@@ -166,6 +166,22 @@ main#conteudo.trocando { animation: trocaAba .15s ease-out; }
 }
 .card-barbaro .linha-botoes { margin-top: 6px; }
 .premio-barbaro { color: #6b7a3a; font-weight: bold; }
+/* ---------- mesa de escambo ---------- */
+.escambo-grade { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0; text-align: left; }
+.escambo-lado { flex: 1; min-width: 210px; border: 2px solid rgba(120,90,50,.5); padding: 8px; background: rgba(0,0,0,.10); }
+.escambo-lado h3 { margin: 0 0 6px; font-size: .95rem; color: var(--ouro); }
+.escambo-linha { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: .85rem; }
+.escambo-rot { flex: 1; }
+.escambo-disp { opacity: .65; font-size: .75rem; }
+.escambo-num {
+  width: 62px; padding: 3px 5px; font-family: inherit; font-size: .85rem;
+  background: #f5ecd4; border: 2px solid var(--madeira-clara); color: var(--tinta);
+}
+.escambo-balanca { margin: 6px 0; }
+.escambo-barra { height: 12px; background: rgba(0,0,0,.28); border: 1px solid #26160e; overflow: hidden; }
+.escambo-barra > span { display: block; height: 100%; background: #a8862d; transition: width .18s; }
+.escambo-barra > span.bom { background: #5b9a50; }
+.escambo-barra > span.ruim { background: #8b2635; }
 .falatorio { border-left: 3px solid var(--ouro); padding-left: 8px; font-style: italic; }
 .card-reino.brilho { animation: brilhoCard 1.2s ease-out; }
 @keyframes brilhoCard {
@@ -3070,7 +3086,7 @@ const Dialogo = (() => {
       'incompetente','mentiroso','mentirosa','farsante','vergonha','otario','otaria','babaca','panaca',
       'escroto','trouxa','jumento','asno','mula','cretino','cretina','estupido','estupida','arrogante',
       'corno','pilantra','vagabundo','vagabunda','fracassado','fracassada','covardia','morra','te odeio'] },
-    { id: 'elogio', palavras: ['sabio','sabia','sabedoria','forte','grande','magnifico','magnifica',
+    { id: 'elogio', palavras: ['sabio','sabia','sabedoria','forte','magnifico','magnifica',
       'honrado','honrada','bela','belo','glorioso','gloriosa','admiro','respeito','corajoso','corajosa',
       'justo','justa','generoso','generosa','lendario','lendaria','brilhante','poderoso','poderosa',
       'nobre','maravilhoso','maravilhosa','excelente','incrivel','esplendido','esplendida'] },
@@ -3101,10 +3117,20 @@ const Dialogo = (() => {
     { id: 'desculpar', palavras: ['desculpa', 'desculpe', 'perdao', 'me perdoe', 'perdoe me', 'sinto muito',
       'me arrependo', 'retiro o que disse', 'fui injusto', 'fui injusta', 'errei com voce', 'nao devia ter dito'] },
     // "quero comprar seu castelo/exército/reino" — não se compra um trono, toma-se
-    { id: 'tomar_posse', palavras: ['comprar seu', 'comprar teu', 'comprar sua', 'comprar tua',
-      'quero seu', 'quero sua', 'me da seu', 'me da sua', 'me de seu', 'tomar seu', 'tomar sua',
-      'seu exercito', 'seu castelo', 'seu reino', 'seu trono', 'sua coroa', 'suas terras',
-      'seus soldados', 'seu ouro', 'suas tropas', 'seu tesouro', 'sua fortaleza'] },
+    // cobiçar o PODER dele (trono, terras, exército) — não confundir com pedir ajuda
+    { id: 'tomar_posse', palavras: ['comprar seu reino', 'comprar seu castelo', 'comprar seu exercito',
+      'quero seu reino', 'quero seu trono', 'quero sua coroa', 'quero suas terras',
+      'tomar seu reino', 'tomar seu trono', 'tomar suas terras', 'me de seu reino', 'me de seu trono',
+      'seu castelo', 'seu reino', 'seu trono', 'sua coroa', 'suas terras', 'sua fortaleza'] },
+    // PEDIR ouro/ajuda material — esmola, empréstimo, patrocínio
+    { id: 'pedir_ouro', palavras: ['me de ouro', 'me da ouro', 'me de moedas', 'preciso de ouro',
+      'me empreste', 'me empresta', 'um emprestimo', 'uma esmola', 'esmola', 'me ajude com ouro',
+      'me ajuda com ouro', 'preciso de dinheiro', 'me financie', 'patrocine', 'me de umas moedas',
+      'preciso de moedas', 'sem um tostao', 'estou sem nada', 'me de algum ouro'] },
+    // abrir NEGOCIAÇÃO material (o painel de escambo)
+    { id: 'negociar', palavras: ['quero negociar', 'vamos negociar', 'quero trocar', 'vamos trocar',
+      'proposta de troca', 'quero comprar tropas', 'me venda', 'quero vender', 'tenho uma proposta',
+      'fazer negocio', 'quero comerciar', 'troca justa', 'negocio entre nos'] },
     // "te amo", "quero ser seu amigo" — afeto / amizade
     { id: 'afeto', palavras: ['te amo', 'te adoro', 'gosto de voce', 'gosto de ti', 'quero ser seu amigo',
       'seja meu amigo', 'quero sua amizade', 'gosto muito de voce', 'voce e especial', 'me apaixonei'] },
@@ -3182,6 +3208,15 @@ const Dialogo = (() => {
     if (/\b(dou|dar|pago|pagar|ofereco|oferto)\b/.test(t) && /\b\d{2,6}\b/.test(t) && /\bouro\b/.test(t)) {
       const j = achadas.find(a => a.id === 'subornar');
       if (j) j.peso += 2; else achadas.push({ id: 'subornar', peso: 2 });
+    }
+    // "me dê 500 de ouro": verbo de PEDIR + ouro (com ou sem número no meio)
+    if (/\b(me d[e]|me da|me arranje|me empreste|preciso de|arranja|arranje|cede|cedas)\b/.test(t) &&
+        /\b(ouro|moeda|moedas|dinheiro|tostao|prata)\b/.test(t)) {
+      const j = achadas.find(a => a.id === 'pedir_ouro');
+      if (j) j.peso += 3; else achadas.push({ id: 'pedir_ouro', peso: 3 });
+      // pedir ouro não é cobiçar o trono
+      const ip = achadas.findIndex(a => a.id === 'tomar_posse');
+      if (ip !== -1) achadas.splice(ip, 1);
     }
     // "queimar seu castelo" é AMEAÇA, não compra: verbo destrutivo anula tomar_posse
     if (/\b(queimar|incendiar|destruir|destroi|arrasar|saquear|saque|invadir|matar|derrubar)\b/.test(t)) {
@@ -3361,6 +3396,15 @@ const Dialogo = (() => {
     let principal = intencoes[0] ? intencoes[0].id : null;
     // saudação acompanhada de pedido real: responde ao pedido (a cortesia fica implícita)
     if (principal === 'saudacao' && intencoes.length > 1) principal = intencoes[1].id;
+    // NARRATIVA vence palavra solta: quem CONTA uma história longa no passado
+    // ("lembra da guerra em que pilhou a cidade?") não está perguntando sobre a
+    // guerra atual — uma keyword fraca não pode sequestrar a fala.
+    const TOPICO_FRACO = ['perguntar_guerra', 'perguntar_preco', 'como_vai', 'opiniao', 'perguntar_segredo', 'saudacao'];
+    if (principal && TOPICO_FRACO.includes(principal) && (intencoes[0] || {}).peso <= 1) {
+      const nPal = textoJogador.trim().split(/\s+/).length;
+      const passado = /\b(lembra|lembre|recorda|naquele|naquela|quando|apos|depois de|antes de|era|foi|fui|estava|havia|tinha|anos atras|ha muito)\b/.test(textoNorm);
+      if (nPal >= 8 && passado) principal = null;   // cai na escuta narrativa
+    }
 
     const memoriaPrefixo = () => {
       // cita as PALAVRAS EXATAS de conversas antigas (sem repetir toda vez)
@@ -3631,7 +3675,74 @@ const Dialogo = (() => {
         if (tags.relacao > -20 && tags.relacao < 40) efeitos.push(mudarRelacao(state, npc.id, alta ? 3 : 1, 'afeto').tag);
         break;
       }
+      case 'pedir_ouro': {
+        // quanto ele pede? "me dê 500 de ouro" → 500; sem número, um pedido vago
+        const mv = textoNorm.match(/\b(\d{1,6})\b/);
+        const pedido = mv ? parseInt(mv[1], 10) : null;
+        const rel = tags.relacao;
+        // quem alegou ser do sangue dele muda o peso do pedido (para bem ou para mal)
+        const alegouSangue = !!tags.flags.alegouParentesco;
+        const cofre = npc.id.startsWith('rei_') ? 4000 : 400;
+        const teto = Math.max(50, Math.round(cofre * (rel + 100) / 500));   // generosidade pela relação
+        tags.flags.pediuEsmola = (tags.flags.pediuEsmola || 0) + 1;
+        const insiste = tags.flags.pediuEsmola >= 3;
+
+        if (insiste && rel < 40) {
+          resposta = npc.personalidade === 'cruel'
+            ? '*estala os dedos e um guarda dá um passo à frente* Pedir uma vez é necessidade. Três vezes é profissão. Suma.'
+            : 'Já lhe disse o que tinha a dizer sobre ouro. Não me faça repetir uma terceira vez.';
+          efeitos.push(mudarRelacao(state, npc.id, -4, 'insistência por ouro').tag);
+          break;
+        }
+        if (rel <= -20) {
+          resposta = alegouSangue
+            ? `Ouro? Para você, que ainda por cima se diz do meu sangue? *ri sem humor* Se fosse mesmo, teria vergonha de estender a mão.`
+            : rnd(['Ouro? Para VOCÊ? Prefiro jogar no rio: ao menos faz barulho bonito.',
+                   'Não dou moeda a quem não me deu motivo. E você me deu o oposto.']);
+          break;
+        }
+        const valor = pedido === null ? Math.round(teto * 0.5) : pedido;
+        const podeDar = valor <= teto && rel >= 10;
+        if (podeDar) {
+          const dado = Math.max(20, Math.min(valor, teto));
+          state.jogador.ouro += dado;
+          efeitos.push(`[+${dado} ouro]`);
+          efeitos.push(mudarRelacao(state, npc.id, -2, 'pediu ouro').tag);
+          lembrar(state, npc.id, 'pediu_ouro', textoJogador);
+          const DEU = {
+            orgulhoso: `*joga uma bolsa aos seus pés* ${dado} de ouro. Não confunda generosidade com fraqueza — e não volte tão cedo.`,
+            calculista: `${dado} de ouro. Considere um investimento: eu cobro dividendos, e não é em moeda.`,
+            ganancioso: `*conta as moedas duas vezes antes de entregar* ${dado}. Está anotado no meu livro, e livros meus sempre se acertam.`,
+            honrado: `Ninguém sai da minha corte com fome. Tome ${dado} de ouro — e use bem, porque não é caridade, é confiança.`,
+            cruel: `${dado} de ouro. *sorri* Agora você me deve algo, e eu escolho quando cobrar.`,
+            romantica: `*ri e lhe entrega a bolsa* ${dado} de ouro. Adoro uma boa história — e a sua vale ao menos isso.`,
+          };
+          resposta = (alegouSangue ? 'Você que se diz do meu sangue... ' : '') + (DEU[npc.personalidade] || DEU.honrado);
+        } else if (rel < 10) {
+          resposta = npc.personalidade === 'ganancioso'
+            ? 'Ouro se empresta a quem tem crédito. O seu comigo ainda é zero. Faça-se útil primeiro.'
+            : 'Não damos ouro a estranhos, e é isso que você ainda é para mim. Preste um serviço e reveja essa conversa.';
+          acoes.push({ tipo: 'oferecer_contratos' });
+        } else {
+          // valor alto demais: contrapropõe e abre a mesa de troca
+          resposta = `${valor} de ouro? *assobia* Isso é dinheiro de exército, não de esmola. Posso chegar a ${teto} — ` +
+                     `mas nada nesta corte é de graça. Ponha algo na mesa e conversamos.`;
+          acoes.push({ tipo: 'abrir_escambo', motivo: 'pedido_ouro', teto });
+        }
+        break;
+      }
+      case 'negociar': {
+        resposta = npc.personalidade === 'ganancioso'
+          ? '*esfrega as mãos* Agora sim você fala a minha língua. Mostre o que tem, que eu mostro o que quero.'
+          : npc.personalidade === 'cruel'
+          ? 'Uma troca. *inclina a cabeça* Cuidado com o que oferece — eu sempre peço mais.'
+          : 'Muito bem. Ponha suas cartas na mesa e vejamos se há negócio entre nós.';
+        acoes.push({ tipo: 'abrir_escambo', motivo: 'negociar' });
+        break;
+      }
       case 'parentesco': {
+        tags.flags.alegouParentesco = true;      // o mundo LEMBRA que você se diz do sangue dele
+        lembrar(state, npc.id, 'parentesco', textoJogador);
         const PAR = {
           orgulhoso: '*ergue a sobrancelha* Meu sangue? Minha linhagem está gravada em pedra e pergaminho, e o seu nome não consta. Bela tentativa.',
           calculista: 'Parente meu? *sorri de canto* Curioso — meus genealogistas nunca o mencionaram. Prove com documentos e talvez conversemos sobre herança.',
@@ -3673,8 +3784,11 @@ const Dialogo = (() => {
         // decodificação de segunda camada: reino mencionado? sim/não?
         const alvoReino = reinoMencionado(state, textoNorm, null);
         if (alvoReino) { resposta = respostaOpiniao(state, npc, textoNorm); break; }
-        const disseSim = /\b(sim|claro|aceito|com certeza)\b/.test(textoNorm);
-        const disseNao = /\b(nao|jamais|nunca|recuso)\b/.test(textoNorm);
+        // "sim"/"não" só valem como RESPOSTA em frases curtas: numa narrativa
+        // ("Não se lembra da guerra em que...?") o "não" faz parte da história.
+        const curta = textoJogador.trim().split(/\s+/).length <= 6;
+        const disseSim = curta && /\b(sim|claro|aceito|com certeza)\b/.test(textoNorm);
+        const disseNao = curta && /\b(nao|jamais|nunca|recuso)\b/.test(textoNorm);
         // MULTI-TURNO: se o NPC fez uma pergunta, o sim/não responde a ELA
         if (tags.flags.perguntaPendente === 'recrutamento' && (disseSim || disseNao)) {
           tags.flags.perguntaPendente = null;
@@ -3696,6 +3810,50 @@ const Dialogo = (() => {
         }
         if (disseNao) {
           resposta = npc.personalidade === 'cruel' ? '*estreita os olhos* "Não" é uma palavra cara aqui.' : 'Como preferir. A porta é a mesma.';
+          break;
+        }
+        // NARRATIVA: o jogador está CONTANDO uma história (frase longa, passado,
+        // detalhes). O NPC escuta e responde no fio do que foi dito — e se ele já
+        // alegou parentesco, a conversa continua de onde parou, não do zero.
+        const nPalavras = textoJogador.trim().split(/\s+/).length;
+        const temPassado = /\b(era|foi|fui|estava|havia|tinha|lembra|lembre|naquele|naquela|quando|depois|antes|ha \d+|anos atras)\b/.test(textoNorm);
+        if (nPalavras >= 7 && temPassado) {
+          tags.flags.ouviuHistoria = (tags.flags.ouviuHistoria || 0) + 1;
+          lembrar(state, npc.id, 'historia', textoJogador);
+          if (tags.flags.alegouParentesco) {
+            const SANGUE = {
+              orgulhoso: ['*fica muito quieto* Você fala de coisas que ninguém deveria saber. Isso não prova nada — mas comprou minha atenção. Continue.',
+                'Guerras têm muitas noites e poucos registros. *cerra o maxilar* Diga logo o que quer de mim, criatura.'],
+              calculista: ['*mede você dos pés à cabeça* A história é boa. Boa demais. E histórias boas costumam ter preço. Qual é o seu?',
+                'Interessante. Se for invenção, é bem construída. Se for verdade... também é. O que você quer, exatamente?'],
+              ganancioso: ['*ri sem jeito* Toda cidade saqueada rende um filho ou dez. Se veio pela herança, chegou muito cedo — e muito pobre.',
+                'Já ouvi essa história antes, de outras bocas. Vá ao ponto: o que custa para você sumir com ela?'],
+              honrado: ['*abaixa a taça devagar* Se há verdade nisso, então há uma dívida minha com sua mãe que eu jamais paguei. Fale — o que precisa?',
+                'Não nego o que fiz na guerra, nem o que não soube. Diga o que veio pedir e eu ouvirei até o fim.'],
+              cruel: ['*sorri lentamente* Que história comovente. Sabe o que faço com quem reivindica meu sangue? Ainda não decidi. Continue falando.',
+                'Se for mentira, é ousada. Se for verdade, é perigosa. Nos dois casos, você me interessa. Prossiga.'],
+              romantica: ['*leva a mão ao peito* Que história... Verdadeira ou não, mereceu ser contada. Diga, então: o que busca?',
+                'Ah, os fantasmas da guerra sempre voltam de alguma forma. Continue, estou ouvindo de verdade.'],
+            };
+            resposta = semRepetir(SANGUE[npc.personalidade] || SANGUE.honrado, tags, 'sang');
+            if (tags.relacao < 30) efeitos.push(mudarRelacao(state, npc.id, 3, 'história que tocou').tag);
+            break;
+          }
+          const ESCUTA = {
+            orgulhoso: ['*ouve sem interromper, o que é raro* Histórias antigas. Prossiga — e chegue ao ponto.',
+              'Você conta bem. Não sei se acredito, mas conta bem. E daí?'],
+            calculista: ['*anota mentalmente cada detalhe* Continue. Histórias são dados, e dados eu sempre uso.',
+              'Curioso. Guardo essa versão dos fatos. Agora, o que ela tem a ver comigo?'],
+            ganancioso: ['*apoia o queixo na mão* História boa. Mas história não paga cerveja — onde entra o negócio?',
+              'Já ouvi mil dessas. Se essa termina em ouro, eu escuto até o fim.'],
+            honrado: ['*acena devagar* O passado pesa em todos nós. Continue, estou ouvindo.',
+              'Entendo. Guerras deixam mais ruínas do que as que se veem. Vá em frente.'],
+            cruel: ['*acompanha com um olhar de gato* Bonita história. Termine-a antes que eu me entedie.',
+              'Continue. Estou decidindo se isso me diverte ou me irrita.'],
+            romantica: ['Que história! Continue, por favor — não me deixe no meio dela.',
+              'Adoro quando alguém traz o passado para dentro da sala. Prossiga.'],
+          };
+          resposta = semRepetir(ESCUTA[npc.personalidade] || ESCUTA.honrado, tags, 'esc');
           break;
         }
         // SEM INTENÇÃO CLARA: o rei nunca "não entende como um robô".
@@ -4980,6 +5138,206 @@ const Intriga = (() => {
 </script>
 <script>
 // ============================================================
+// ESCAMBO — a mesa de troca que a CONVERSA abre.
+// Quando o diálogo chega num ponto de negócio ("me dê ouro",
+// "vamos negociar", "quero seus soldados"), abre-se um inventário
+// de dois lados: o que você põe na mesa e o que pede em troca.
+// O NPC avalia pelo VALOR real, ajustado por relação, personalidade
+// e pelo que ele mesmo precisa naquele mês (guerra, fome, cofres).
+// ============================================================
+'use strict';
+
+const Escambo = (() => {
+  // valor de referência de cada coisa negociável
+  const VALOR_TROPA = { campones: 8, lanceiro: 26, arqueiro: 32, cavaleiro: 150 };
+
+  function valorMercadoria(state, id) {
+    const base = MERCADORIAS[id] ? MERCADORIAS[id].precoBase : 10;
+    try { return Economia.precoDe(state, state.local, id) || base; } catch (e) { return base; }
+  }
+
+  // o que o NPC tem para oferecer (estimado pelo cargo e pelo mundo)
+  function estoqueDele(state, npc) {
+    const rei = npc.id.startsWith('rei_');
+    const reino = rei ? state.reinos.find(r => r.id === npc.id.slice(4)) : null;
+    const emGuerra = reino && (state.guerras || []).some(g => g.a === reino.id || g.b === reino.id);
+    const rel = Dialogo.tagsDe(state, npc.id).relacao;
+    const escala = Math.max(0.2, (rel + 100) / 200);          // amigos abrem mais o cofre
+    const est = { ouro: Math.round((rei ? 3000 : 400) * escala), tropas: {}, bens: {} };
+    if (rei) {
+      // um rei em guerra não vende os próprios soldados
+      est.tropas = emGuerra
+        ? { campones: Math.round(20 * escala) }
+        : { campones: Math.round(40 * escala), lanceiro: Math.round(18 * escala), arqueiro: Math.round(12 * escala),
+            cavaleiro: Math.round(4 * escala) };
+      for (const g of (reino.producao || [])) est.bens[g] = Math.round(30 * escala);
+      est.bens.trigo = Math.round((est.bens.trigo || 0) + 20 * escala);
+    } else if (npc.barbaro) {
+      est.tropas = { campones: Math.round(25 * escala), lanceiro: Math.round(14 * escala) };
+      est.bens = { madeira: Math.round(25 * escala), trigo: Math.round(15 * escala) };
+    } else {
+      est.tropas = { campones: Math.round(10 * escala) };
+      est.bens = { trigo: Math.round(20 * escala), sal: Math.round(10 * escala) };
+    }
+    return est;
+  }
+
+  // quanto o NPC PRECISA de cada coisa neste mês (multiplica o valor que ele enxerga)
+  function apetite(state, npc) {
+    const ap = { ouro: 1, campones: 1, lanceiro: 1, arqueiro: 1, cavaleiro: 1 };
+    for (const g of Object.keys(MERCADORIAS)) ap[g] = 1;
+    const rei = npc.id.startsWith('rei_');
+    const reino = rei ? state.reinos.find(r => r.id === npc.id.slice(4)) : null;
+    if (reino) {
+      const emGuerra = (state.guerras || []).some(g => g.a === reino.id || g.b === reino.id);
+      if (emGuerra) { ap.armas = 1.8; ap.ferro = 1.6; ap.trigo = 1.5; ap.lanceiro = 1.4; ap.cavaleiro = 1.4; ap.ouro = 0.9; }
+      for (const g of (reino.producao || [])) ap[g] = 0.6;   // o que ele já produz vale pouco
+    }
+    if (npc.personalidade === 'ganancioso') ap.ouro = 1.3;
+    if (npc.barbaro) { ap.armas = 1.5; ap.trigo = 1.4; ap.ouro = 0.85; }
+    return ap;
+  }
+
+  // valor total de um lado da mesa, sob a ótica do NPC
+  function avaliar(state, npc, lado) {
+    const ap = apetite(state, npc);
+    let v = (lado.ouro || 0) * (ap.ouro || 1);
+    for (const [t, n] of Object.entries(lado.tropas || {})) v += (VALOR_TROPA[t] || 10) * n * (ap[t] || 1);
+    for (const [g, n] of Object.entries(lado.bens || {})) v += valorMercadoria(state, g) * n * (ap[g] || 1);
+    return Math.round(v);
+  }
+
+  // margem que ele exige para fechar: inimigo cobra caro, amigo faz favor
+  function margemExigida(state, npc) {
+    const rel = Dialogo.tagsDe(state, npc.id).relacao;
+    const base = { ganancioso: 1.35, calculista: 1.25, cruel: 1.3, orgulhoso: 1.2, honrado: 1.1, romantica: 1.1 };
+    const m = (base[npc.personalidade] || 1.2) - (rel / 100) * 0.35;
+    return Math.max(0.75, Math.round(m * 100) / 100);
+  }
+
+  function podePagar(state, lado) {
+    if ((lado.ouro || 0) > state.jogador.ouro) return 'Você não tem esse ouro.';
+    for (const [t, n] of Object.entries(lado.tropas || {}))
+      if (n > (state.jogador.tropas[t] || 0)) return `Você não tem ${n} ${TROPAS[t].nome.toLowerCase()}.`;
+    for (const [g, n] of Object.entries(lado.bens || {}))
+      if (n > (state.carga[g] || 0)) return `Você não tem ${n}× ${MERCADORIAS[g].nome}.`;
+    return null;
+  }
+
+  function eleTem(state, npc, lado) {
+    const est = estoqueDele(state, npc);
+    if ((lado.ouro || 0) > est.ouro) return `${npc.nome} não tem tanto ouro assim à mão (até ${est.ouro}).`;
+    for (const [t, n] of Object.entries(lado.tropas || {}))
+      if (n > (est.tropas[t] || 0)) return `${npc.nome} não cede ${n} ${TROPAS[t].nome.toLowerCase()} (até ${est.tropas[t] || 0}).`;
+    for (const [g, n] of Object.entries(lado.bens || {}))
+      if (n > (est.bens[g] || 0)) return `${npc.nome} não tem ${n}× ${MERCADORIAS[g].nome} para dar (até ${est.bens[g] || 0}).`;
+    return null;
+  }
+
+  const vazio = (lado) => !(lado.ouro || 0) &&
+    !Object.values(lado.tropas || {}).some(Boolean) && !Object.values(lado.bens || {}).some(Boolean);
+
+  // ---------- a proposta ----------
+  function propor(state, npc, ofereco, peco, log) {
+    const falta = podePagar(state, ofereco);
+    if (falta) return { ok: false, msg: falta };
+    const semEstoque = eleTem(state, npc, peco);
+    if (semEstoque) return { ok: false, msg: semEstoque };
+    if (vazio(ofereco) && vazio(peco)) return { ok: false, msg: 'A mesa está vazia. Ponha algo nela.' };
+
+    const vOf = avaliar(state, npc, ofereco), vPe = avaliar(state, npc, peco);
+    const margem = margemExigida(state, npc);
+    const rel = Dialogo.tagsDe(state, npc.id).relacao;
+
+    // presente puro (só oferece, não pede nada): relação sobe pelo valor
+    if (vazio(peco)) {
+      transferir(state, npc, ofereco, 'jogador->npc');
+      const ganho = Math.max(2, Math.min(25, Math.round(vOf / 80)));
+      const tag = Dialogo.mudarRelacao(state, npc.id, ganho, 'presente').tag;
+      Dialogo.lembrar(state, npc.id, 'presente', `presente no valor de ${vOf}`);
+      log(`🎁 Você entrega o presente a ${npc.nome}. ${tag}`);
+      return { ok: true, aceito: true, efeitos: [tag],
+        fala: falaPresente(npc, vOf), msg: 'Presente entregue.' };
+    }
+    // pedido puro (só pede, não oferece): é esmola — depende de relação
+    if (vazio(ofereco)) {
+      const limite = Math.max(60, (rel + 40) * 12);
+      if (rel >= 25 && vPe <= limite) {
+        transferir(state, npc, peco, 'npc->jogador');
+        const tag = Dialogo.mudarRelacao(state, npc.id, -3, 'pediu de graça').tag;
+        log(`🤲 ${npc.nome} cede sem cobrar. ${tag}`);
+        return { ok: true, aceito: true, efeitos: [tag],
+          fala: `*empurra na sua direção* Leve. Mas favor cobrado é favor perdido — não faça disso hábito.`,
+          msg: 'Ele cedeu de graça.' };
+      }
+      return { ok: true, aceito: false, efeitos: [],
+        fala: rel < 25
+          ? 'De graça? *ri* Nem para meus próprios lordes. Ponha ALGO na mesa.'
+          : 'Isso é muito para um pedido sem contrapartida. Ofereça algo e reconsidero.',
+        msg: 'Recusado: ele quer contrapartida.' };
+    }
+
+    const razao = vOf / Math.max(1, vPe);
+    if (razao >= margem) {
+      transferir(state, npc, ofereco, 'jogador->npc');
+      transferir(state, npc, peco, 'npc->jogador');
+      const bonus = razao >= margem * 1.4 ? 6 : 3;
+      const tag = Dialogo.mudarRelacao(state, npc.id, bonus, 'negócio fechado').tag;
+      Dialogo.lembrar(state, npc.id, 'negocio', `troca fechada (${vOf} por ${vPe})`);
+      log(`🤝 Negócio fechado com ${npc.nome}.`);
+      return { ok: true, aceito: true, efeitos: [tag], fala: falaAceite(npc, razao, margem), msg: 'Negócio fechado!' };
+    }
+    // recusa com CONTRAPROPOSTA concreta — a mesa continua aberta
+    const faltaOuro = Math.max(1, Math.round(vPe * margem - vOf));
+    const tagR = razao < margem * 0.5 ? Dialogo.mudarRelacao(state, npc.id, -3, 'proposta ofensiva').tag : null;
+    return { ok: true, aceito: false, efeitos: tagR ? [tagR] : [],
+      contraproposta: { ouroFaltante: faltaOuro },
+      fala: razao < margem * 0.5
+        ? `*empurra tudo de volta* Você me insulta. Isso não paga nem metade do que pede. Acrescente uns ${faltaOuro} de ouro e talvez eu ouça.`
+        : `Perto, mas não fecha. Junte mais ${faltaOuro} de ouro (ou o equivalente) e apertamos as mãos.`,
+      msg: `Recusado. Faltam cerca de ${faltaOuro} de ouro em valor.` };
+  }
+
+  function falaAceite(npc, razao, margem) {
+    const generoso = razao >= margem * 1.4;
+    const F = {
+      orgulhoso: generoso ? 'Aceito. E note que fui eu quem levou vantagem em ser generoso com você.' : 'Feito. Que fique registrado que cumpri minha parte.',
+      calculista: generoso ? '*sorri* Você paga acima do valor. Ou é tolo, ou quer algo mais. Vou descobrir qual.' : 'Os números fecham. Negócio feito.',
+      ganancioso: generoso ? '*abraça a bolsa* AGORA sim! Volte sempre, amigo.' : 'Fechado. Aperto de mão vale mais que pergaminho — quase.',
+      honrado: 'Mão dada, palavra dada. Está feito.',
+      cruel: generoso ? '*guarda tudo sem pressa* Aceito. E ainda fico com a impressão de que você precisava mais do que eu.' : 'Feito. Não me faça arrepender.',
+      romantica: 'Que negociação encantadora. Feito!',
+    };
+    return F[npc.personalidade] || F.honrado;
+  }
+  function falaPresente(npc, valor) {
+    const grande = valor >= 800;
+    const F = {
+      orgulhoso: grande ? '*ergue as sobrancelhas* Isto não é um presente, é uma declaração. Recebida.' : 'Um presente. Hm. Registrado.',
+      calculista: grande ? 'Generosidade desse tamanho sempre cobra depois. Aceito — e aguardo o depois.' : 'Aceito. Anotado na coluna certa.',
+      ganancioso: grande ? '*olhos brilhando* Você entende como o mundo funciona!' : 'Aceito, claro. Nunca recusei nada de graça.',
+      honrado: grande ? 'Isto é demais. Aceito, mas fique sabendo: agora a dívida é minha.' : 'Gentileza reconhecida. Obrigado.',
+      cruel: grande ? '*sorri de lado* Presentes assim compram silêncio... ou tempo. Qual dos dois você quer?' : 'Aceito. Continue.',
+      romantica: 'Um presente! Você sabe conquistar as pessoas.',
+    };
+    return F[npc.personalidade] || F.honrado;
+  }
+
+  function transferir(state, npc, lado, direcao) {
+    const s = direcao === 'jogador->npc' ? -1 : 1;
+    state.jogador.ouro += s * (lado.ouro || 0);
+    for (const [t, n] of Object.entries(lado.tropas || {}))
+      state.jogador.tropas[t] = Math.max(0, (state.jogador.tropas[t] || 0) + s * n);
+    for (const [g, n] of Object.entries(lado.bens || {}))
+      state.carga[g] = Math.max(0, (state.carga[g] || 0) + s * n);
+  }
+
+  return { propor, avaliar, estoqueDele, margemExigida, VALOR_TROPA, valorMercadoria };
+})();
+
+</script>
+<script>
+// ============================================================
 // PIXEL ART DO ASSENTAMENTO — v3 "Stardew"
 // Regras desta versão (crítica do design):
 //  1. GRADE ÚNICA: 640×360, tudo em pixels inteiros, sem mixels.
@@ -5026,6 +5384,12 @@ const Cidade = (() => {
     if (!PERS[arq]) { const im = new Image(); im.src = 'img/duelo/' + arq + '.png'; PERS[arq] = im; }
     return PERS[arq];
   }
+  // moradores da vila ficam em img/pessoas (folhas 32×48 do tileset)
+  function povoImg(arq) {
+    const k = 'povo_' + arq;
+    if (!PERS[k]) { const im = new Image(); im.src = 'img/pessoas/' + arq + '.png'; PERS[k] = im; }
+    return PERS[k];
+  }
   // desenha um quadro recortado (só o corpo) da folha, ancorado embaixo-centro
   function desenhaFrame(x, arq, fw, frames, quadro, cx, baseY, altAlvo, flip) {
     const im = persImg(arq);
@@ -5055,26 +5419,28 @@ const Cidade = (() => {
 
   // ---------- paletas com hue-shifting ----------
   const RAMPAS = {
+    // Paletas SATURADAS, no espírito do pixel art de fazenda: verdes vivos,
+    // luz amarelada e sombras puxadas para o roxo/azul (nunca cinza morto).
     primavera: {
-      ceu: ['#79b7e6', '#a8d2ea', '#d8ecdf'], sol: ['#fff8d8', '#ffe98f'],
-      grama: ['#3c6b52', '#579050', '#74a94c', '#9cc45e'],
-      arvore: ['#2e5b45', '#3f7a4a', '#5b9a50', '#8bbf62'],
-      campo: ['#5d4a30', '#77603c', '#8fba55'],
-      montanha: ['#5e6b85', '#7c88a0', '#a3adc0'], neve: false, tiles: true,
+      ceu: ['#5fb2ec', '#9ad6f0', '#dff0d8'], sol: ['#fffbe0', '#ffe870'],
+      grama: ['#356b45', '#4f9c48', '#6fbf46', '#9ede5c'],
+      arvore: ['#25563a', '#357f42', '#4fa84a', '#86d05f'],
+      campo: ['#5d4a30', '#7d6238', '#8fce4e'],
+      montanha: ['#5a6a8c', '#7d8bad', '#a8b3ce'], neve: false, tiles: true,
     },
     verao: {
-      ceu: ['#6fb0e0', '#a5cfe0', '#ead9a8'], sol: ['#fff6c8', '#ffdf78'],
-      grama: ['#41684a', '#5f8c48', '#7fa746', '#a8c258'],
-      arvore: ['#31593f', '#457546', '#63954a', '#93b85c'],
-      campo: ['#5d4a30', '#77603c', '#d0af52'],
-      montanha: ['#606d86', '#7e8aa2', '#a5afc2'], neve: false, tiles: true,
+      ceu: ['#4fabec', '#93cfea', '#f2e2a8'], sol: ['#fffad0', '#ffd85c'],
+      grama: ['#3a6a42', '#579644', '#78b944', '#a8da52'],
+      arvore: ['#2a5638', '#3d7f42', '#5cad48', '#93cf58'],
+      campo: ['#5d4a30', '#7d6238', '#e0bb44'],
+      montanha: ['#5c6c8e', '#7f8daf', '#aab5d0'], neve: false, tiles: true,
     },
     outono: {
-      ceu: ['#8998b5', '#b3b3c0', '#e3cfa5'], sol: ['#fdf2c8', '#f5cf78'],
-      grama: ['#575a3a', '#6f7440', '#8d8a48', '#aca258'],
-      arvore: ['#6b3a26', '#95542c', '#bd7a35', '#d9a44a'],
-      campo: ['#4f3e28', '#655034', '#8a7440'],
-      montanha: ['#5c6880', '#7a869e', '#a1abbe'], neve: false,
+      ceu: ['#7f95c0', '#b4b8cf', '#f0d9a4'], sol: ['#fff4c8', '#ffcf60'],
+      grama: ['#5a5a34', '#7a7a38', '#9e9440', '#c4b452'],
+      arvore: ['#7a3520', '#ab5624', '#d8862c', '#f0b840'],
+      campo: ['#4f3e28', '#6b5434', '#9a7f40'],
+      montanha: ['#57678c', '#7a86a8', '#a4aeca'], neve: false,
     },
     inverno: {
       ceu: ['#9fb2c4', '#c3d0da', '#eef3f6'], sol: ['#fdfbe8', '#f2ead0'],
@@ -5084,8 +5450,10 @@ const Cidade = (() => {
       montanha: ['#6b7890', '#8b97ac', '#c8d2de'], neve: true,
     },
   };
-  const SOMBRA = 'rgba(38,54,74,.30)';   // sombra projetada (azulada, nunca preta)
-  const SOMBRA_FORTE = 'rgba(38,54,74,.42)';
+  // sombras puxadas para o ROXO-AZUL: é o contraste com a luz amarelada que
+  // faz a cena "brilhar" no pixel art de fazenda (cinza puro achata tudo)
+  const SOMBRA = 'rgba(58,48,96,.30)';
+  const SOMBRA_FORTE = 'rgba(52,42,88,.44)';
 
   function estacao(mes) {
     if (mes >= 3 && mes <= 5) return 'primavera';
@@ -5413,16 +5781,24 @@ const Cidade = (() => {
         if (i % 7 === 0) P(tx + 1, ty + larg / 2, 3, 1, '#6b5334');   // marca de roda
       }
     }
-    // trilha estreita que segue do acampamento até a travessia do rio
-    const tPonte = 0.52;
+    // trilha que sai do assentamento, ATRAVESSA a ponte e continua na outra
+    // margem — antes ela morria antes da travessia e a ponte ficava solta
+    const tPonte = 0.46;
     const pPonte = rioEixo(tPonte);
-    rua(322, 292, pPonte.x - 22, pPonte.y - 10, 8);
+    const dirP = { x: rioEixo(tPonte + 0.04).x - rioEixo(tPonte - 0.04).x,
+                   y: rioEixo(tPonte + 0.04).y - rioEixo(tPonte - 0.04).y };
+    const nrm = Math.hypot(dirP.x, dirP.y) || 1;
+    const perp = { x: -dirP.y / nrm, y: dirP.x / nrm };      // atravessa o rio
+    const bocaA = { x: pPonte.x - perp.x * (pPonte.larg / 2 + 14), y: pPonte.y - perp.y * (pPonte.larg / 2 + 14) };
+    const bocaB = { x: pPonte.x + perp.x * (pPonte.larg / 2 + 14), y: pPonte.y + perp.y * (pPonte.larg / 2 + 14) };
+    rua(326, 290, bocaA.x, bocaA.y, 9);                       // acesso deste lado
+    rua(bocaB.x, bocaB.y, bocaB.x + 54, bocaB.y + 26, 9);     // some na outra margem
 
     // ---------- ponte de madeira, atravessando o rio na perpendicular ----------
     (function ponte() {
       const p0 = rioEixo(tPonte - 0.04), p1 = rioEixo(tPonte + 0.04);
       const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x) + Math.PI / 2;  // perpendicular ao fluxo
-      const comp = pPonte.larg + 26, larg = 13;
+      const comp = pPonte.larg + 30, larg = 15;
       x.save();
       x.translate(pPonte.x, pPonte.y);
       x.rotate(ang);
@@ -6359,16 +6735,24 @@ const Cidade = (() => {
   let andarilhos = [];
   // as folhas têm muito espaço vazio: recorte vertical aproximado do corpo (topo%..base%)
   const RECORTE = { guerreiro_idle: [0.30, 0.98], heroi_idle: [0.18, 0.95], heroi_run: [0.18, 0.95] };
+  // MORADORES: sprites 32×48 do tileset, desenhados GRANDES (rosto, roupa e
+  // passada visíveis). Antes eram vultos de poucos pixels, sem carisma nenhum.
+  const POVO = { arq: 'heroi_anda_lado', fw: 32, fh: 48, frames: 5 };
   function seedAndarilhos(nivel) {
     andarilhos = [];
-    if (nivel < 1) { andarilhos.push({ x: 300, y: 300, vx: 0.28, arq: 'guerreiro_idle', fw: 150, frames: 8, alt: 60 }); return; }
-    const n = nivel >= 4 ? 3 : 2;
+    const guarda = (x, y, vx) => ({ x, y, vx, arq: 'guerreiro_idle', fw: 150, frames: 8, alt: 64 });
+    if (nivel < 1) {
+      andarilhos.push(guarda(300, 300, 0.28));
+      andarilhos.push({ x: 210, y: 316, vx: -0.24, povo: true, tom: 0 });
+      return;
+    }
+    const n = nivel >= 4 ? 4 : 3;
     for (let i = 0; i < n; i++) {
+      if (i % 3 === 2) { andarilhos.push(guarda(140 + i * 150, 302 + (i % 2) * 6, i % 2 ? 0.3 : -0.28)); continue; }
       andarilhos.push({
-        x: 120 + i * 170, y: 300 + (i % 2) * 8,
-        vx: (i % 2 ? 0.34 : -0.30),
-        arq: i % 2 ? 'guerreiro_idle' : 'heroi_idle',
-        fw: i % 2 ? 150 : 128, frames: i % 2 ? 8 : 5, alt: i % 2 ? 62 : 56,
+        x: 120 + i * 150, y: 306 + (i % 2) * 10,
+        vx: (i % 2 ? 0.30 : -0.26),
+        povo: true, tom: i % 3,
       });
     }
   }
@@ -6377,12 +6761,30 @@ const Cidade = (() => {
       a.x += a.vx;
       if (a.x < 90) a.vx = Math.abs(a.vx);
       if (a.x > 545) a.vx = -Math.abs(a.vx);
-      // sombra suave sob o personagem
-      ctx.fillStyle = 'rgba(24,38,54,.30)';
-      ctx.beginPath(); ctx.ellipse(a.x, a.y + 2, 12, 3.5, 0, 0, 7); ctx.fill();
+      // sombra sob o personagem (fria, como as demais)
+      ctx.fillStyle = 'rgba(58,48,96,.32)';
+      ctx.beginPath(); ctx.ellipse(a.x, a.y + 2, a.povo ? 9 : 12, 3.5, 0, 0, 7); ctx.fill();
       const quadro = Math.floor(anim / 8);
+      if (a.povo) {
+        // aldeão do tileset em 32×48, ampliado 1,6× → rosto e roupas legíveis
+        const im = povoImg(POVO.arq);
+        if (im && im.complete && im.naturalWidth) {
+          const esc = 1.6, w = POVO.fw * esc, h = POVO.fh * esc;
+          const fi = quadro % POVO.frames;
+          ctx.save();
+          ctx.translate(Math.round(a.x - w / 2), Math.round(a.y - h + 3));
+          if (a.vx < 0) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+          // matiz sutil por morador, para não parecerem clones
+          if (a.tom) { ctx.filter = a.tom === 1 ? 'hue-rotate(-25deg)' : 'hue-rotate(30deg) saturate(1.15)'; }
+          ctx.drawImage(im, fi * POVO.fw, 0, POVO.fw, POVO.fh, 0, 0, w, h);
+          ctx.filter = 'none';
+          ctx.restore();
+          continue;
+        }
+        ctx.fillStyle = '#3a2a1c'; ctx.fillRect(Math.round(a.x - 5), Math.round(a.y - 40), 10, 40);
+        continue;
+      }
       if (!desenhaFrame(ctx, a.arq, a.fw, a.frames, quadro, a.x, a.y, a.alt, a.vx < 0)) {
-        // enquanto a folha não carrega, um vulto discreto marca a posição
         ctx.fillStyle = '#3a2a1c'; ctx.fillRect(Math.round(a.x - 4), Math.round(a.y - a.alt + 8), 8, a.alt - 8);
       }
     }
@@ -7374,9 +7776,14 @@ const UI = (() => {
       `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>` +
       (iaLigada ? '<br><small class="ia-ativa">🧠 IA ligada</small>' : '')));
     cab.appendChild(lado);
+    const acoesCab = el('div', 'linha-botoes');
+    const bTroca = el('button', 'btn mini', '⚖️ Propor troca');
+    bTroca.title = 'Abrir a mesa: ouro, soldados e carga';
+    bTroca.onclick = () => abrirEscambo(npc, { motivo: 'negociar' }, () => renderTudo());
     const bSair = el('button', 'btn mini', '← Sair da conversa');
     bSair.onclick = () => { npcAtual = null; renderTudo(); };
-    cab.appendChild(bSair);
+    acoesCab.appendChild(bTroca); acoesCab.appendChild(bSair);
+    cab.appendChild(acoesCab);
     painel.appendChild(cab);
 
     const hist = el('div', 'conversa-hist');
@@ -7444,13 +7851,16 @@ const UI = (() => {
             s.historicoConversa.linhas.push({ de: 'npc', texto: r.resposta, efeitos: r.efeitos });
             enviando = false;
             input.placeholder = 'Diga o que quiser...';
+            let abriuMesa = false;
             for (const a of r.acoes) {
               if (a.tipo === 'fim_conversa') { npcAtual = null; }
               if (a.tipo === 'casamento') Intriga.realizarCasamento(s, a.reino, false);
               if (a.tipo === 'oferecer_contratos') { abaAtual = 'taverna'; npcAtual = null; }
+              // a própria conversa abre a mesa de troca
+              if (a.tipo === 'abrir_escambo') { abriuMesa = true; setTimeout(() => abrirEscambo(npc, a, () => renderTudo()), 380); }
             }
             Jogo.salvar();
-            renderTudo();
+            if (!abriuMesa) renderTudo();
           }
         }, 26);
       })();
@@ -7802,6 +8212,104 @@ const UI = (() => {
     const bNao = el('button', 'btn sec', 'Ainda não');
     bNao.onclick = () => { modal.style.display = 'none'; };
     box.appendChild(bOk); box.appendChild(bNao);
+  }
+
+  // ---------- MESA DE ESCAMBO: aberta pela própria conversa ----------
+  // Dois lados: o que você põe na mesa e o que pede. Ouro, soldados e carga.
+  function abrirEscambo(npc, contexto, aoFechar) {
+    const s = Jogo.state;
+    const modal = $('#modal');
+    modal.style.display = 'flex';
+    const box = $('#modal-box');
+    box.innerHTML = '';
+    box.appendChild(el('h2', null, '⚖️ Mesa de troca com ' + esc(npc.nome)));
+    const est = Escambo.estoqueDele(s, npc);
+    box.appendChild(el('p', 'flavor',
+      (contexto && contexto.motivo === 'pedido_ouro'
+        ? 'Ele topa conversar sobre ouro — mas quer algo em troca. '
+        : '') +
+      'Ponha o que oferece de um lado e o que pede do outro. Ele avalia pelo valor real, pela relação de vocês e pelo que precisa este mês.'));
+
+    const ofereco = { ouro: 0, tropas: {}, bens: {} };
+    const peco = { ouro: 0, tropas: {}, bens: {} };
+
+    // uma linha de item: rótulo, disponível e campo numérico
+    const linha = (caixa, rotulo, disp, ler, gravar) => {
+      const l = el('div', 'escambo-linha');
+      l.appendChild(el('span', 'escambo-rot', rotulo));
+      l.appendChild(el('span', 'escambo-disp', 'até ' + disp));
+      const inp = el('input', 'escambo-num');
+      inp.type = 'number'; inp.min = '0'; inp.max = String(disp); inp.value = '0';
+      inp.oninput = () => {
+        let v = Math.max(0, Math.min(disp, parseInt(inp.value || '0', 10) || 0));
+        inp.value = String(v); gravar(v); atualizar();
+      };
+      l.appendChild(inp);
+      caixa.appendChild(l);
+      return inp;
+    };
+
+    const grade = el('div', 'escambo-grade');
+    // --- lado do jogador
+    const meu = el('div', 'escambo-lado');
+    meu.appendChild(el('h3', null, '🫱 Você oferece'));
+    linha(meu, '🪙 Ouro', s.jogador.ouro, () => ofereco.ouro, v => { ofereco.ouro = v; });
+    for (const [t, dados] of Object.entries(TROPAS)) {
+      const disp = s.jogador.tropas[t] || 0;
+      if (disp > 0) linha(meu, `${dados.icone} ${dados.nome}`, disp, () => ofereco.tropas[t] || 0, v => { ofereco.tropas[t] = v; });
+    }
+    for (const [g, dados] of Object.entries(MERCADORIAS)) {
+      const disp = s.carga[g] || 0;
+      if (disp > 0) linha(meu, `${dados.icone} ${dados.nome}`, disp, () => ofereco.bens[g] || 0, v => { ofereco.bens[g] = v; });
+    }
+    if (meu.children.length <= 2) meu.appendChild(el('p', 'flavor', 'Você não tem nada além de ouro para pôr na mesa.'));
+    // --- lado do NPC
+    const dele = el('div', 'escambo-lado');
+    dele.appendChild(el('h3', null, '🫲 Você pede'));
+    linha(dele, '🪙 Ouro', est.ouro, () => peco.ouro, v => { peco.ouro = v; });
+    for (const [t, n] of Object.entries(est.tropas))
+      if (n > 0) linha(dele, `${TROPAS[t].icone} ${TROPAS[t].nome}`, n, () => peco.tropas[t] || 0, v => { peco.tropas[t] = v; });
+    for (const [g, n] of Object.entries(est.bens))
+      if (n > 0) linha(dele, `${MERCADORIAS[g].icone} ${MERCADORIAS[g].nome}`, n, () => peco.bens[g] || 0, v => { peco.bens[g] = v; });
+    grade.appendChild(meu); grade.appendChild(dele);
+    box.appendChild(grade);
+
+    // balança: mostra ao vivo como ELE enxerga a proposta
+    const balanca = el('div', 'escambo-balanca');
+    box.appendChild(balanca);
+    const resultado = el('p', 'ia-status');
+    box.appendChild(resultado);
+    function atualizar() {
+      const vOf = Escambo.avaliar(s, npc, ofereco), vPe = Escambo.avaliar(s, npc, peco);
+      const margem = Escambo.margemExigida(s, npc);
+      const pct = vPe > 0 ? Math.min(100, Math.round((vOf / (vPe * margem)) * 100)) : (vOf > 0 ? 100 : 0);
+      const clima = pct >= 100 ? 'bom' : pct >= 70 ? '' : 'ruim';
+      balanca.innerHTML =
+        `<div class="escambo-barra"><span class="${clima}" style="width:${pct}%"></span></div>` +
+        `<small>Aos olhos dele: você oferece <b>${vOf}</b> e pede <b>${vPe}</b>` +
+        (vPe > 0 ? ` — ele exige cerca de <b>${Math.round(vPe * margem)}</b> para fechar.` : '.') + '</small>';
+    }
+    atualizar();
+
+    const botoes = el('div', 'ia-botoes');
+    const bProp = el('button', 'btn destaque', '🤝 Propor');
+    bProp.onclick = () => {
+      const r = Escambo.propor(s, npc, ofereco, peco, Jogo.log);
+      if (!r.ok) { resultado.className = 'ia-status ruim'; resultado.textContent = '⚠️ ' + r.msg; return; }
+      if (r.aceito) Sfx.vitoria(); else Sfx.alerta();
+      resultado.className = 'ia-status ' + (r.aceito ? 'bom' : 'ruim');
+      resultado.textContent = (r.aceito ? '✅ ' : '❌ ') + r.msg;
+      // a fala dele entra na conversa, como qualquer outra
+      if (s.historicoConversa && s.historicoConversa.npc === npc.id)
+        s.historicoConversa.linhas.push({ de: 'npc', texto: r.fala, efeitos: r.efeitos || [] });
+      Jogo.salvar();
+      if (r.aceito) { modal.style.display = 'none'; if (aoFechar) aoFechar(); }
+      else atualizar();
+    };
+    const bSair = el('button', 'btn sec', 'Sair da mesa');
+    bSair.onclick = () => { modal.style.display = 'none'; if (aoFechar) aoFechar(); };
+    botoes.appendChild(bProp); botoes.appendChild(bSair);
+    box.appendChild(botoes);
   }
 
   // ---------- terras bárbaras: aço ou pacto ----------

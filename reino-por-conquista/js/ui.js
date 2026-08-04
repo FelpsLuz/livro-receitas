@@ -570,9 +570,14 @@ const UI = (() => {
       `<b>${npc.nome}</b><br><small>relação: <b class="${tags.relacao <= -25 ? 'ruim' : tags.relacao >= 25 ? 'bom' : ''}">${Dialogo.nomeRelacao(tags.relacao)} (${tags.relacao})</b></small>` +
       (iaLigada ? '<br><small class="ia-ativa">🧠 IA ligada</small>' : '')));
     cab.appendChild(lado);
+    const acoesCab = el('div', 'linha-botoes');
+    const bTroca = el('button', 'btn mini', '⚖️ Propor troca');
+    bTroca.title = 'Abrir a mesa: ouro, soldados e carga';
+    bTroca.onclick = () => abrirEscambo(npc, { motivo: 'negociar' }, () => renderTudo());
     const bSair = el('button', 'btn mini', '← Sair da conversa');
     bSair.onclick = () => { npcAtual = null; renderTudo(); };
-    cab.appendChild(bSair);
+    acoesCab.appendChild(bTroca); acoesCab.appendChild(bSair);
+    cab.appendChild(acoesCab);
     painel.appendChild(cab);
 
     const hist = el('div', 'conversa-hist');
@@ -640,13 +645,16 @@ const UI = (() => {
             s.historicoConversa.linhas.push({ de: 'npc', texto: r.resposta, efeitos: r.efeitos });
             enviando = false;
             input.placeholder = 'Diga o que quiser...';
+            let abriuMesa = false;
             for (const a of r.acoes) {
               if (a.tipo === 'fim_conversa') { npcAtual = null; }
               if (a.tipo === 'casamento') Intriga.realizarCasamento(s, a.reino, false);
               if (a.tipo === 'oferecer_contratos') { abaAtual = 'taverna'; npcAtual = null; }
+              // a própria conversa abre a mesa de troca
+              if (a.tipo === 'abrir_escambo') { abriuMesa = true; setTimeout(() => abrirEscambo(npc, a, () => renderTudo()), 380); }
             }
             Jogo.salvar();
-            renderTudo();
+            if (!abriuMesa) renderTudo();
           }
         }, 26);
       })();
@@ -998,6 +1006,104 @@ const UI = (() => {
     const bNao = el('button', 'btn sec', 'Ainda não');
     bNao.onclick = () => { modal.style.display = 'none'; };
     box.appendChild(bOk); box.appendChild(bNao);
+  }
+
+  // ---------- MESA DE ESCAMBO: aberta pela própria conversa ----------
+  // Dois lados: o que você põe na mesa e o que pede. Ouro, soldados e carga.
+  function abrirEscambo(npc, contexto, aoFechar) {
+    const s = Jogo.state;
+    const modal = $('#modal');
+    modal.style.display = 'flex';
+    const box = $('#modal-box');
+    box.innerHTML = '';
+    box.appendChild(el('h2', null, '⚖️ Mesa de troca com ' + esc(npc.nome)));
+    const est = Escambo.estoqueDele(s, npc);
+    box.appendChild(el('p', 'flavor',
+      (contexto && contexto.motivo === 'pedido_ouro'
+        ? 'Ele topa conversar sobre ouro — mas quer algo em troca. '
+        : '') +
+      'Ponha o que oferece de um lado e o que pede do outro. Ele avalia pelo valor real, pela relação de vocês e pelo que precisa este mês.'));
+
+    const ofereco = { ouro: 0, tropas: {}, bens: {} };
+    const peco = { ouro: 0, tropas: {}, bens: {} };
+
+    // uma linha de item: rótulo, disponível e campo numérico
+    const linha = (caixa, rotulo, disp, ler, gravar) => {
+      const l = el('div', 'escambo-linha');
+      l.appendChild(el('span', 'escambo-rot', rotulo));
+      l.appendChild(el('span', 'escambo-disp', 'até ' + disp));
+      const inp = el('input', 'escambo-num');
+      inp.type = 'number'; inp.min = '0'; inp.max = String(disp); inp.value = '0';
+      inp.oninput = () => {
+        let v = Math.max(0, Math.min(disp, parseInt(inp.value || '0', 10) || 0));
+        inp.value = String(v); gravar(v); atualizar();
+      };
+      l.appendChild(inp);
+      caixa.appendChild(l);
+      return inp;
+    };
+
+    const grade = el('div', 'escambo-grade');
+    // --- lado do jogador
+    const meu = el('div', 'escambo-lado');
+    meu.appendChild(el('h3', null, '🫱 Você oferece'));
+    linha(meu, '🪙 Ouro', s.jogador.ouro, () => ofereco.ouro, v => { ofereco.ouro = v; });
+    for (const [t, dados] of Object.entries(TROPAS)) {
+      const disp = s.jogador.tropas[t] || 0;
+      if (disp > 0) linha(meu, `${dados.icone} ${dados.nome}`, disp, () => ofereco.tropas[t] || 0, v => { ofereco.tropas[t] = v; });
+    }
+    for (const [g, dados] of Object.entries(MERCADORIAS)) {
+      const disp = s.carga[g] || 0;
+      if (disp > 0) linha(meu, `${dados.icone} ${dados.nome}`, disp, () => ofereco.bens[g] || 0, v => { ofereco.bens[g] = v; });
+    }
+    if (meu.children.length <= 2) meu.appendChild(el('p', 'flavor', 'Você não tem nada além de ouro para pôr na mesa.'));
+    // --- lado do NPC
+    const dele = el('div', 'escambo-lado');
+    dele.appendChild(el('h3', null, '🫲 Você pede'));
+    linha(dele, '🪙 Ouro', est.ouro, () => peco.ouro, v => { peco.ouro = v; });
+    for (const [t, n] of Object.entries(est.tropas))
+      if (n > 0) linha(dele, `${TROPAS[t].icone} ${TROPAS[t].nome}`, n, () => peco.tropas[t] || 0, v => { peco.tropas[t] = v; });
+    for (const [g, n] of Object.entries(est.bens))
+      if (n > 0) linha(dele, `${MERCADORIAS[g].icone} ${MERCADORIAS[g].nome}`, n, () => peco.bens[g] || 0, v => { peco.bens[g] = v; });
+    grade.appendChild(meu); grade.appendChild(dele);
+    box.appendChild(grade);
+
+    // balança: mostra ao vivo como ELE enxerga a proposta
+    const balanca = el('div', 'escambo-balanca');
+    box.appendChild(balanca);
+    const resultado = el('p', 'ia-status');
+    box.appendChild(resultado);
+    function atualizar() {
+      const vOf = Escambo.avaliar(s, npc, ofereco), vPe = Escambo.avaliar(s, npc, peco);
+      const margem = Escambo.margemExigida(s, npc);
+      const pct = vPe > 0 ? Math.min(100, Math.round((vOf / (vPe * margem)) * 100)) : (vOf > 0 ? 100 : 0);
+      const clima = pct >= 100 ? 'bom' : pct >= 70 ? '' : 'ruim';
+      balanca.innerHTML =
+        `<div class="escambo-barra"><span class="${clima}" style="width:${pct}%"></span></div>` +
+        `<small>Aos olhos dele: você oferece <b>${vOf}</b> e pede <b>${vPe}</b>` +
+        (vPe > 0 ? ` — ele exige cerca de <b>${Math.round(vPe * margem)}</b> para fechar.` : '.') + '</small>';
+    }
+    atualizar();
+
+    const botoes = el('div', 'ia-botoes');
+    const bProp = el('button', 'btn destaque', '🤝 Propor');
+    bProp.onclick = () => {
+      const r = Escambo.propor(s, npc, ofereco, peco, Jogo.log);
+      if (!r.ok) { resultado.className = 'ia-status ruim'; resultado.textContent = '⚠️ ' + r.msg; return; }
+      if (r.aceito) Sfx.vitoria(); else Sfx.alerta();
+      resultado.className = 'ia-status ' + (r.aceito ? 'bom' : 'ruim');
+      resultado.textContent = (r.aceito ? '✅ ' : '❌ ') + r.msg;
+      // a fala dele entra na conversa, como qualquer outra
+      if (s.historicoConversa && s.historicoConversa.npc === npc.id)
+        s.historicoConversa.linhas.push({ de: 'npc', texto: r.fala, efeitos: r.efeitos || [] });
+      Jogo.salvar();
+      if (r.aceito) { modal.style.display = 'none'; if (aoFechar) aoFechar(); }
+      else atualizar();
+    };
+    const bSair = el('button', 'btn sec', 'Sair da mesa');
+    bSair.onclick = () => { modal.style.display = 'none'; if (aoFechar) aoFechar(); };
+    botoes.appendChild(bProp); botoes.appendChild(bSair);
+    box.appendChild(botoes);
   }
 
   // ---------- terras bárbaras: aço ou pacto ----------

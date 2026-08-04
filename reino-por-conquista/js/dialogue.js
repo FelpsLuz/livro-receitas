@@ -32,7 +32,7 @@ const Dialogo = (() => {
       'incompetente','mentiroso','mentirosa','farsante','vergonha','otario','otaria','babaca','panaca',
       'escroto','trouxa','jumento','asno','mula','cretino','cretina','estupido','estupida','arrogante',
       'corno','pilantra','vagabundo','vagabunda','fracassado','fracassada','covardia','morra','te odeio'] },
-    { id: 'elogio', palavras: ['sabio','sabia','sabedoria','forte','grande','magnifico','magnifica',
+    { id: 'elogio', palavras: ['sabio','sabia','sabedoria','forte','magnifico','magnifica',
       'honrado','honrada','bela','belo','glorioso','gloriosa','admiro','respeito','corajoso','corajosa',
       'justo','justa','generoso','generosa','lendario','lendaria','brilhante','poderoso','poderosa',
       'nobre','maravilhoso','maravilhosa','excelente','incrivel','esplendido','esplendida'] },
@@ -63,10 +63,20 @@ const Dialogo = (() => {
     { id: 'desculpar', palavras: ['desculpa', 'desculpe', 'perdao', 'me perdoe', 'perdoe me', 'sinto muito',
       'me arrependo', 'retiro o que disse', 'fui injusto', 'fui injusta', 'errei com voce', 'nao devia ter dito'] },
     // "quero comprar seu castelo/exército/reino" — não se compra um trono, toma-se
-    { id: 'tomar_posse', palavras: ['comprar seu', 'comprar teu', 'comprar sua', 'comprar tua',
-      'quero seu', 'quero sua', 'me da seu', 'me da sua', 'me de seu', 'tomar seu', 'tomar sua',
-      'seu exercito', 'seu castelo', 'seu reino', 'seu trono', 'sua coroa', 'suas terras',
-      'seus soldados', 'seu ouro', 'suas tropas', 'seu tesouro', 'sua fortaleza'] },
+    // cobiçar o PODER dele (trono, terras, exército) — não confundir com pedir ajuda
+    { id: 'tomar_posse', palavras: ['comprar seu reino', 'comprar seu castelo', 'comprar seu exercito',
+      'quero seu reino', 'quero seu trono', 'quero sua coroa', 'quero suas terras',
+      'tomar seu reino', 'tomar seu trono', 'tomar suas terras', 'me de seu reino', 'me de seu trono',
+      'seu castelo', 'seu reino', 'seu trono', 'sua coroa', 'suas terras', 'sua fortaleza'] },
+    // PEDIR ouro/ajuda material — esmola, empréstimo, patrocínio
+    { id: 'pedir_ouro', palavras: ['me de ouro', 'me da ouro', 'me de moedas', 'preciso de ouro',
+      'me empreste', 'me empresta', 'um emprestimo', 'uma esmola', 'esmola', 'me ajude com ouro',
+      'me ajuda com ouro', 'preciso de dinheiro', 'me financie', 'patrocine', 'me de umas moedas',
+      'preciso de moedas', 'sem um tostao', 'estou sem nada', 'me de algum ouro'] },
+    // abrir NEGOCIAÇÃO material (o painel de escambo)
+    { id: 'negociar', palavras: ['quero negociar', 'vamos negociar', 'quero trocar', 'vamos trocar',
+      'proposta de troca', 'quero comprar tropas', 'me venda', 'quero vender', 'tenho uma proposta',
+      'fazer negocio', 'quero comerciar', 'troca justa', 'negocio entre nos'] },
     // "te amo", "quero ser seu amigo" — afeto / amizade
     { id: 'afeto', palavras: ['te amo', 'te adoro', 'gosto de voce', 'gosto de ti', 'quero ser seu amigo',
       'seja meu amigo', 'quero sua amizade', 'gosto muito de voce', 'voce e especial', 'me apaixonei'] },
@@ -144,6 +154,15 @@ const Dialogo = (() => {
     if (/\b(dou|dar|pago|pagar|ofereco|oferto)\b/.test(t) && /\b\d{2,6}\b/.test(t) && /\bouro\b/.test(t)) {
       const j = achadas.find(a => a.id === 'subornar');
       if (j) j.peso += 2; else achadas.push({ id: 'subornar', peso: 2 });
+    }
+    // "me dê 500 de ouro": verbo de PEDIR + ouro (com ou sem número no meio)
+    if (/\b(me d[e]|me da|me arranje|me empreste|preciso de|arranja|arranje|cede|cedas)\b/.test(t) &&
+        /\b(ouro|moeda|moedas|dinheiro|tostao|prata)\b/.test(t)) {
+      const j = achadas.find(a => a.id === 'pedir_ouro');
+      if (j) j.peso += 3; else achadas.push({ id: 'pedir_ouro', peso: 3 });
+      // pedir ouro não é cobiçar o trono
+      const ip = achadas.findIndex(a => a.id === 'tomar_posse');
+      if (ip !== -1) achadas.splice(ip, 1);
     }
     // "queimar seu castelo" é AMEAÇA, não compra: verbo destrutivo anula tomar_posse
     if (/\b(queimar|incendiar|destruir|destroi|arrasar|saquear|saque|invadir|matar|derrubar)\b/.test(t)) {
@@ -323,6 +342,15 @@ const Dialogo = (() => {
     let principal = intencoes[0] ? intencoes[0].id : null;
     // saudação acompanhada de pedido real: responde ao pedido (a cortesia fica implícita)
     if (principal === 'saudacao' && intencoes.length > 1) principal = intencoes[1].id;
+    // NARRATIVA vence palavra solta: quem CONTA uma história longa no passado
+    // ("lembra da guerra em que pilhou a cidade?") não está perguntando sobre a
+    // guerra atual — uma keyword fraca não pode sequestrar a fala.
+    const TOPICO_FRACO = ['perguntar_guerra', 'perguntar_preco', 'como_vai', 'opiniao', 'perguntar_segredo', 'saudacao'];
+    if (principal && TOPICO_FRACO.includes(principal) && (intencoes[0] || {}).peso <= 1) {
+      const nPal = textoJogador.trim().split(/\s+/).length;
+      const passado = /\b(lembra|lembre|recorda|naquele|naquela|quando|apos|depois de|antes de|era|foi|fui|estava|havia|tinha|anos atras|ha muito)\b/.test(textoNorm);
+      if (nPal >= 8 && passado) principal = null;   // cai na escuta narrativa
+    }
 
     const memoriaPrefixo = () => {
       // cita as PALAVRAS EXATAS de conversas antigas (sem repetir toda vez)
@@ -593,7 +621,74 @@ const Dialogo = (() => {
         if (tags.relacao > -20 && tags.relacao < 40) efeitos.push(mudarRelacao(state, npc.id, alta ? 3 : 1, 'afeto').tag);
         break;
       }
+      case 'pedir_ouro': {
+        // quanto ele pede? "me dê 500 de ouro" → 500; sem número, um pedido vago
+        const mv = textoNorm.match(/\b(\d{1,6})\b/);
+        const pedido = mv ? parseInt(mv[1], 10) : null;
+        const rel = tags.relacao;
+        // quem alegou ser do sangue dele muda o peso do pedido (para bem ou para mal)
+        const alegouSangue = !!tags.flags.alegouParentesco;
+        const cofre = npc.id.startsWith('rei_') ? 4000 : 400;
+        const teto = Math.max(50, Math.round(cofre * (rel + 100) / 500));   // generosidade pela relação
+        tags.flags.pediuEsmola = (tags.flags.pediuEsmola || 0) + 1;
+        const insiste = tags.flags.pediuEsmola >= 3;
+
+        if (insiste && rel < 40) {
+          resposta = npc.personalidade === 'cruel'
+            ? '*estala os dedos e um guarda dá um passo à frente* Pedir uma vez é necessidade. Três vezes é profissão. Suma.'
+            : 'Já lhe disse o que tinha a dizer sobre ouro. Não me faça repetir uma terceira vez.';
+          efeitos.push(mudarRelacao(state, npc.id, -4, 'insistência por ouro').tag);
+          break;
+        }
+        if (rel <= -20) {
+          resposta = alegouSangue
+            ? `Ouro? Para você, que ainda por cima se diz do meu sangue? *ri sem humor* Se fosse mesmo, teria vergonha de estender a mão.`
+            : rnd(['Ouro? Para VOCÊ? Prefiro jogar no rio: ao menos faz barulho bonito.',
+                   'Não dou moeda a quem não me deu motivo. E você me deu o oposto.']);
+          break;
+        }
+        const valor = pedido === null ? Math.round(teto * 0.5) : pedido;
+        const podeDar = valor <= teto && rel >= 10;
+        if (podeDar) {
+          const dado = Math.max(20, Math.min(valor, teto));
+          state.jogador.ouro += dado;
+          efeitos.push(`[+${dado} ouro]`);
+          efeitos.push(mudarRelacao(state, npc.id, -2, 'pediu ouro').tag);
+          lembrar(state, npc.id, 'pediu_ouro', textoJogador);
+          const DEU = {
+            orgulhoso: `*joga uma bolsa aos seus pés* ${dado} de ouro. Não confunda generosidade com fraqueza — e não volte tão cedo.`,
+            calculista: `${dado} de ouro. Considere um investimento: eu cobro dividendos, e não é em moeda.`,
+            ganancioso: `*conta as moedas duas vezes antes de entregar* ${dado}. Está anotado no meu livro, e livros meus sempre se acertam.`,
+            honrado: `Ninguém sai da minha corte com fome. Tome ${dado} de ouro — e use bem, porque não é caridade, é confiança.`,
+            cruel: `${dado} de ouro. *sorri* Agora você me deve algo, e eu escolho quando cobrar.`,
+            romantica: `*ri e lhe entrega a bolsa* ${dado} de ouro. Adoro uma boa história — e a sua vale ao menos isso.`,
+          };
+          resposta = (alegouSangue ? 'Você que se diz do meu sangue... ' : '') + (DEU[npc.personalidade] || DEU.honrado);
+        } else if (rel < 10) {
+          resposta = npc.personalidade === 'ganancioso'
+            ? 'Ouro se empresta a quem tem crédito. O seu comigo ainda é zero. Faça-se útil primeiro.'
+            : 'Não damos ouro a estranhos, e é isso que você ainda é para mim. Preste um serviço e reveja essa conversa.';
+          acoes.push({ tipo: 'oferecer_contratos' });
+        } else {
+          // valor alto demais: contrapropõe e abre a mesa de troca
+          resposta = `${valor} de ouro? *assobia* Isso é dinheiro de exército, não de esmola. Posso chegar a ${teto} — ` +
+                     `mas nada nesta corte é de graça. Ponha algo na mesa e conversamos.`;
+          acoes.push({ tipo: 'abrir_escambo', motivo: 'pedido_ouro', teto });
+        }
+        break;
+      }
+      case 'negociar': {
+        resposta = npc.personalidade === 'ganancioso'
+          ? '*esfrega as mãos* Agora sim você fala a minha língua. Mostre o que tem, que eu mostro o que quero.'
+          : npc.personalidade === 'cruel'
+          ? 'Uma troca. *inclina a cabeça* Cuidado com o que oferece — eu sempre peço mais.'
+          : 'Muito bem. Ponha suas cartas na mesa e vejamos se há negócio entre nós.';
+        acoes.push({ tipo: 'abrir_escambo', motivo: 'negociar' });
+        break;
+      }
       case 'parentesco': {
+        tags.flags.alegouParentesco = true;      // o mundo LEMBRA que você se diz do sangue dele
+        lembrar(state, npc.id, 'parentesco', textoJogador);
         const PAR = {
           orgulhoso: '*ergue a sobrancelha* Meu sangue? Minha linhagem está gravada em pedra e pergaminho, e o seu nome não consta. Bela tentativa.',
           calculista: 'Parente meu? *sorri de canto* Curioso — meus genealogistas nunca o mencionaram. Prove com documentos e talvez conversemos sobre herança.',
@@ -635,8 +730,11 @@ const Dialogo = (() => {
         // decodificação de segunda camada: reino mencionado? sim/não?
         const alvoReino = reinoMencionado(state, textoNorm, null);
         if (alvoReino) { resposta = respostaOpiniao(state, npc, textoNorm); break; }
-        const disseSim = /\b(sim|claro|aceito|com certeza)\b/.test(textoNorm);
-        const disseNao = /\b(nao|jamais|nunca|recuso)\b/.test(textoNorm);
+        // "sim"/"não" só valem como RESPOSTA em frases curtas: numa narrativa
+        // ("Não se lembra da guerra em que...?") o "não" faz parte da história.
+        const curta = textoJogador.trim().split(/\s+/).length <= 6;
+        const disseSim = curta && /\b(sim|claro|aceito|com certeza)\b/.test(textoNorm);
+        const disseNao = curta && /\b(nao|jamais|nunca|recuso)\b/.test(textoNorm);
         // MULTI-TURNO: se o NPC fez uma pergunta, o sim/não responde a ELA
         if (tags.flags.perguntaPendente === 'recrutamento' && (disseSim || disseNao)) {
           tags.flags.perguntaPendente = null;
@@ -658,6 +756,50 @@ const Dialogo = (() => {
         }
         if (disseNao) {
           resposta = npc.personalidade === 'cruel' ? '*estreita os olhos* "Não" é uma palavra cara aqui.' : 'Como preferir. A porta é a mesma.';
+          break;
+        }
+        // NARRATIVA: o jogador está CONTANDO uma história (frase longa, passado,
+        // detalhes). O NPC escuta e responde no fio do que foi dito — e se ele já
+        // alegou parentesco, a conversa continua de onde parou, não do zero.
+        const nPalavras = textoJogador.trim().split(/\s+/).length;
+        const temPassado = /\b(era|foi|fui|estava|havia|tinha|lembra|lembre|naquele|naquela|quando|depois|antes|ha \d+|anos atras)\b/.test(textoNorm);
+        if (nPalavras >= 7 && temPassado) {
+          tags.flags.ouviuHistoria = (tags.flags.ouviuHistoria || 0) + 1;
+          lembrar(state, npc.id, 'historia', textoJogador);
+          if (tags.flags.alegouParentesco) {
+            const SANGUE = {
+              orgulhoso: ['*fica muito quieto* Você fala de coisas que ninguém deveria saber. Isso não prova nada — mas comprou minha atenção. Continue.',
+                'Guerras têm muitas noites e poucos registros. *cerra o maxilar* Diga logo o que quer de mim, criatura.'],
+              calculista: ['*mede você dos pés à cabeça* A história é boa. Boa demais. E histórias boas costumam ter preço. Qual é o seu?',
+                'Interessante. Se for invenção, é bem construída. Se for verdade... também é. O que você quer, exatamente?'],
+              ganancioso: ['*ri sem jeito* Toda cidade saqueada rende um filho ou dez. Se veio pela herança, chegou muito cedo — e muito pobre.',
+                'Já ouvi essa história antes, de outras bocas. Vá ao ponto: o que custa para você sumir com ela?'],
+              honrado: ['*abaixa a taça devagar* Se há verdade nisso, então há uma dívida minha com sua mãe que eu jamais paguei. Fale — o que precisa?',
+                'Não nego o que fiz na guerra, nem o que não soube. Diga o que veio pedir e eu ouvirei até o fim.'],
+              cruel: ['*sorri lentamente* Que história comovente. Sabe o que faço com quem reivindica meu sangue? Ainda não decidi. Continue falando.',
+                'Se for mentira, é ousada. Se for verdade, é perigosa. Nos dois casos, você me interessa. Prossiga.'],
+              romantica: ['*leva a mão ao peito* Que história... Verdadeira ou não, mereceu ser contada. Diga, então: o que busca?',
+                'Ah, os fantasmas da guerra sempre voltam de alguma forma. Continue, estou ouvindo de verdade.'],
+            };
+            resposta = semRepetir(SANGUE[npc.personalidade] || SANGUE.honrado, tags, 'sang');
+            if (tags.relacao < 30) efeitos.push(mudarRelacao(state, npc.id, 3, 'história que tocou').tag);
+            break;
+          }
+          const ESCUTA = {
+            orgulhoso: ['*ouve sem interromper, o que é raro* Histórias antigas. Prossiga — e chegue ao ponto.',
+              'Você conta bem. Não sei se acredito, mas conta bem. E daí?'],
+            calculista: ['*anota mentalmente cada detalhe* Continue. Histórias são dados, e dados eu sempre uso.',
+              'Curioso. Guardo essa versão dos fatos. Agora, o que ela tem a ver comigo?'],
+            ganancioso: ['*apoia o queixo na mão* História boa. Mas história não paga cerveja — onde entra o negócio?',
+              'Já ouvi mil dessas. Se essa termina em ouro, eu escuto até o fim.'],
+            honrado: ['*acena devagar* O passado pesa em todos nós. Continue, estou ouvindo.',
+              'Entendo. Guerras deixam mais ruínas do que as que se veem. Vá em frente.'],
+            cruel: ['*acompanha com um olhar de gato* Bonita história. Termine-a antes que eu me entedie.',
+              'Continue. Estou decidindo se isso me diverte ou me irrita.'],
+            romantica: ['Que história! Continue, por favor — não me deixe no meio dela.',
+              'Adoro quando alguém traz o passado para dentro da sala. Prossiga.'],
+          };
+          resposta = semRepetir(ESCUTA[npc.personalidade] || ESCUTA.honrado, tags, 'esc');
           break;
         }
         // SEM INTENÇÃO CLARA: o rei nunca "não entende como um robô".
