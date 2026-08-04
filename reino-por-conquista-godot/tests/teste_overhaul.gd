@@ -168,7 +168,7 @@ func _initialize() -> void:
 	# ---------- IMPORTAÇÃO ----------
 	# todo PNG em assets_v2 precisa do .import, senão o Godot não o carrega no build
 	var sem_import: Array = []
-	for pasta in ["ui", "characters", "tilesets", "objects"]:
+	for pasta in ["ui", "characters", "tilesets", "objects", "vfx", "icons"]:
 		var caminho: String = "res://assets_v2/" + pasta
 		var d := DirAccess.open(caminho)
 		if d == null:

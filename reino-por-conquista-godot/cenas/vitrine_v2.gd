@@ -11,6 +11,8 @@ const UIv2 = preload("res://scripts/ui_v2.gd")
 const MapaV2 = preload("res://scripts/mapa_v2.gd")
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const Tema = preload("res://scripts/tema.gd")
+const Vfx = preload("res://scripts/vfx.gd")
+const Icones = preload("res://scripts/icones.gd")
 
 func _ready() -> void:
 	theme = Tema.criar()
@@ -24,14 +26,17 @@ func _ready() -> void:
 		if camada != null:
 			camada.scale = Vector2(2, 2)
 			mundo.add_child(camada)
-			# tile 0,0 é o terreno base do atlas Wang
-			MapaV2.preencher(camada, Rect2i(0, 0, 16, 9), Vector2i(0, 0))
+			# o tile PURO do material de cima (grama) — carimbar um tile de
+			# transição vira papel de parede de pedras
+			MapaV2.preencher(camada, Rect2i(0, 0, 16, 9), MapaV2.TILE_CHEIO)
 
 	# ---------- 2. OBJETOS: Sprite2D com os PNG de map-objects ----------
 	var objetos := ["arvore_carvalho", "casa_camponesa", "torre_castelo",
 		"poco_pedra", "bau_tesouro", "fogueira_acampamento", "barril_carga", "arvore_pinheiro",
-		"ferraria", "moinho_vento", "muralha_pedra", "portao_fortificado", "barraca_mercado"]
-	# duas fileiras: com 13 objetos, uma só sairia da tela
+		"ferraria", "moinho_vento", "muralha_pedra", "portao_fortificado", "barraca_mercado",
+		"tenda_simples", "tenda_grande", "carroca", "sacos_carga", "tocha_estaca", "ponte_madeira"]
+	# grade compacta na METADE ESQUERDA — a UI mora na direita, e sobrepor
+	# os dois transformava a vitrine numa colagem ilegível
 	var col := 0
 	for nome in objetos:
 		var caminho: String = "res://assets_v2/objects/" + nome + ".png"
@@ -40,43 +45,51 @@ func _ready() -> void:
 		var s := Sprite2D.new()
 		s.texture = load(caminho)
 		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		s.position = Vector2(90 + (col % 7) * 118, 210 + int(col / 7) * 120)
+		s.position = Vector2(64 + (col % 7) * 66, 110 + int(col / 7) * 95)
+		s.scale = Vector2(0.55, 0.55)
 		s.centered = true
+		# a vitrine também prova os VFX: fumaça na forja, fogo na fogueira
+		if nome == "ferraria":
+			var fu := Vfx.fumaca(Vector2(35, -70), true)
+			if fu != null:
+				s.add_child(fu)
+		elif nome == "fogueira_acampamento":
+			s.add_child(Vfx.fogo(Vector2(0, 6), 0.8))
 		mundo.add_child(s)
 		col += 1
 
 	# ---------- 3. PERSONAGENS: AnimatedSprite2D ----------
 	var elenco := ["rei_touros", "rei_imperio", "capitao", "cla_lobos", "heroi_jogador"]
-	var px := 110
+	var px := 85
 	for id in elenco:
-		var p: AnimatedSprite2D = PersonagensV2.criar(id, 2)
-		p.position = Vector2(px, 470)
+		var p: AnimatedSprite2D = PersonagensV2.criar(id, 1.1)
+		p.position = Vector2(px, 362)
 		mundo.add_child(p)
 		var eti := Label.new()
-		eti.text = id + (" (8 dir)" if PersonagensV2.tem_rotacoes(id) else "")
+		eti.text = id.trim_prefix("rei_").trim_prefix("cla_")
 		if PersonagensV2.tem_caminhada(id):
 			eti.text += " ✦"
-		eti.position = Vector2(px - 60, 530)
-		eti.add_theme_font_size_override("font_size", 11)
+		eti.position = Vector2(px - 40, 418)
+		eti.add_theme_font_size_override("font_size", 10)
 		add_child(eti)
-		px += 150
+		px += 95
 
 	# o herói caminhando: as 8 direções em movimento, uma ao lado da outra —
 	# é a prova de que os quadros do animate-character viraram animação
 	var andarilhos: Array = []
 	if PersonagensV2.tem_caminhada("heroi_jogador"):
-		var ax := 90
+		var ax := 75
 		for dir in PersonagensV2.DIRECOES:
-			var a: AnimatedSprite2D = PersonagensV2.criar("heroi_jogador", 2)
+			var a: AnimatedSprite2D = PersonagensV2.criar("heroi_jogador", 1.05)
 			PersonagensV2.mover(a, dir, true)
-			a.position = Vector2(ax, 620)
+			a.position = Vector2(ax, 472)
 			mundo.add_child(a)
 			andarilhos.append(a)
-			ax += 115
+			ax += 110
 		var leg := Label.new()
-		leg.text = "heroi_jogador · caminhada nas 8 direções"
-		leg.position = Vector2(30, 570)
-		leg.add_theme_font_size_override("font_size", 12)
+		leg.text = "caminhada nas 8 direções"
+		leg.position = Vector2(30, 438)
+		leg.add_theme_font_size_override("font_size", 11)
 		leg.add_theme_color_override("font_color", Color("c9a227"))
 		add_child(leg)
 
@@ -97,13 +110,14 @@ func _ready() -> void:
 		moldura.position = Vector2(600, 100)
 		moldura.size = Vector2(96, 96)
 		add_child(moldura)
-	# slots de inventário, cada um um NinePatchRect
-	for i in 4:
-		var slot := UIv2.criar_painel("quadro_inventario")
-		if slot == null:
-			break
-		slot.position = Vector2(720 + i * 50, 110)
-		slot.size = Vector2(44, 44)
+	# slots de inventário POPULADOS: a moldura 9-slice com os ícones gerados.
+	# A grade mora DENTRO do pergaminho (interior útil: 593..887 × 73..187) —
+	# antes ela cobria a tábua direita da moldura e vazava na grama
+	var mostruario := ["trigo", "madeira", "ferro", "sal",
+		"espada", "escudo", "cerveja", "coroa"]
+	for i in mostruario.size():
+		var slot := Icones.slot(mostruario[i], 44)
+		slot.position = Vector2(700 + (i % 4) * 48, 100 + int(i / 4) * 48)
 		add_child(slot)
 	# barra de HUD esticada na largura
 	var barra := UIv2.criar_painel("barra_hud")

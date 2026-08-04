@@ -22,6 +22,7 @@ const Llm = preload("res://scripts/llm.gd")
 const CidadeView = preload("res://scripts/cidade_view.gd")
 const CidadeCena = preload("res://scripts/cidade_cena.gd")
 const VilaCena = preload("res://scripts/vila_cena.gd")
+const Icones = preload("res://scripts/icones.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -116,7 +117,12 @@ func continuar_jogo() -> void:
 	_entrar_no_jogo()
 
 func _entrar_no_jogo() -> void:
-	tela_titulo.visible = false
+	# liberar, não esconder: visible=false NÃO para o _process — a vitrine do
+	# título (uma vila nível 5 inteira, com herói, aldeões e partículas)
+	# continuaria simulando escondida a sessão toda
+	if is_instance_valid(tela_titulo):
+		tela_titulo.queue_free()
+		tela_titulo = null
 	tela_jogo.visible = true
 	cidade_view.estado = state
 	cidade_view.semear_npcs()
@@ -171,6 +177,15 @@ func _montar_jogo() -> void:
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
 	# procedural de sempre. As duas cenas têm a mesma API (.estado, semear_npcs).
 	cidade_view = VilaCena.new() if VilaCena.disponivel() else CidadeCena.new()
+
+## A cidade_view sai da árvore quando outra aba está ativa (atualizar() a
+## remove do pai). Node não é ref-counted: sem isto, fechar o jogo em qualquer
+## aba que não a "Sua Terra" vazava a vila inteira — SubViewport, TileMaps,
+## sprites e partículas.
+func _exit_tree() -> void:
+	if cidade_view != null and cidade_view.get_parent() == null:
+		cidade_view.free()
+		cidade_view = null
 
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")
@@ -369,6 +384,10 @@ func _aba_mercado(c: Container) -> void:
 		var h := _card(c)
 		var preco := Economia.preco_de(state, state["local"], g_id)
 		var carga: int = int(state["carga"].get(g_id, 0))
+		# ícone Pro da mercadoria — sem o PNG, o card segue só com texto
+		var ic := Icones.imagem(g_id, 28)
+		if ic != null:
+			h.add_child(ic)
 		var l := Label.new()
 		l.text = "%s — %d 🪙 · carga: %d" % [Dados.MERCADORIAS[g_id]["nome"], preco, carga]
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL

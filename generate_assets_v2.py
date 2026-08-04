@@ -123,6 +123,77 @@ CATALOGO = {
         upper="pale golden beach sand with scattered pebbles and shells",
         transicao="wet sand with foam line where the water meets the shore"),
 
+    # ---------- ETAPA 3: ACAMPAMENTO, FLORESTA, VFX E ÍCONES ----------
+    # Acampamento habitado: o nível -1 tinha só fogueira e barris, parecia
+    # um piquenique. Tendas, carroça e suprimentos contam "mercenários moram aqui".
+    "tenda_simples": dict(grupo="objects", tipo="objeto", size=(96, 96),
+        desc="small medieval military tent, worn canvas over wooden poles, rope "
+             "pegs, patched fabric, closed flap, " + ESTILO_MUNDO),
+    "tenda_grande": dict(grupo="objects", tipo="objeto", size=(128, 112),
+        desc="large medieval war-camp commander tent, dark canvas with a red "
+             "banner on the center pole, open flap showing shadow inside, " + ESTILO_MUNDO),
+    "carroca": dict(grupo="objects", tipo="objeto", size=(128, 96),
+        desc="wooden supply cart with two large spoked wheels, loaded with sacks "
+             "and a rolled tarp, no horse, " + ESTILO_MUNDO),
+    "sacos_carga": dict(grupo="objects", tipo="objeto", size=(80, 64),
+        desc="pile of burlap grain sacks and a small wooden crate, camp supplies, "
+             + ESTILO_MUNDO),
+    "tocha_estaca": dict(grupo="objects", tipo="objeto", size=(48, 96),
+        desc="standing torch, wooden stake driven into the ground with a burning "
+             "oil-soaked head, small flame, " + ESTILO_MUNDO),
+    "ponte_madeira": dict(grupo="objects", tipo="objeto", size=(112, 160),
+        desc="vertical wooden plank bridge crossing water, seen from high top-down, "
+             "worn planks with rope railings on both sides, " + ESTILO_MUNDO),
+    # Floresta fechada para emoldurar o mapa — o limite do mundo deixa de ser
+    # grama cortada na borda da tela.
+    "grama_floresta": dict(grupo="tilesets", tipo="tileset", tile=(32, 32),
+        lower="green meadow grass with tiny flowers",
+        upper="dense dark forest canopy seen from above, packed treetops in deep "
+              "green with small highlights",
+        transicao="forest edge with bushes, ferns and scattered saplings"),
+    # VFX: texturas mínimas para CPUParticles2D — o movimento vem do Godot,
+    # a API só entrega o "material" (um tufo de fumaça, uma brasa).
+    "fumaca_nuvem": dict(grupo="vfx", tipo="icone", size=(48, 48),
+        desc="single soft puff of grey smoke, round fluffy cloud shape, "
+             "semi-transparent wispy edges, isolated sprite"),
+    "brasa_fagulha": dict(grupo="vfx", tipo="icone", size=(32, 32),
+        desc="single tiny glowing orange fire ember, bright hot center with "
+             "warm falloff, isolated spark sprite"),
+    # Ícones de inventário/mercado para os slots da UI Pro (quadro_inventario).
+    "icone_moedas": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, small pile of gold coins, " + ESTILO_MUNDO),
+    "icone_trigo": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, tied sheaf of golden wheat, " + ESTILO_MUNDO),
+    "icone_madeira": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, three stacked cut logs, " + ESTILO_MUNDO),
+    "icone_espada": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, iron arming sword with leather grip, " + ESTILO_MUNDO),
+    "icone_escudo": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, round wooden shield with iron boss, " + ESTILO_MUNDO),
+    "icone_arco": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, wooden longbow with a single arrow, " + ESTILO_MUNDO),
+    "icone_lanca": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, war spear with iron tip, diagonal, " + ESTILO_MUNDO),
+    "icone_pao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, rustic round bread loaf with cut slice, " + ESTILO_MUNDO),
+    "icone_cerveja": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, wooden tankard of ale with foam, " + ESTILO_MUNDO),
+    "icone_pergaminho": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, rolled parchment scroll with red wax seal, " + ESTILO_MUNDO),
+    "icone_gema": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, cut red ruby gemstone, " + ESTILO_MUNDO),
+    "icone_coroa": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, golden crown with small jewels, " + ESTILO_MUNDO),
+    # as MERCADORIAS de dados.gd que faltavam — o mercado é quem mais usa ícone
+    "icone_ferro": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, three stacked grey iron ingots, " + ESTILO_MUNDO),
+    "icone_sal": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, open burlap pouch of white salt crystals, " + ESTILO_MUNDO),
+    "icone_tecidos": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, folded bolts of dyed cloth in red and blue, " + ESTILO_MUNDO),
+    "icone_cavalos": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, brown horse head with bridle, side profile, " + ESTILO_MUNDO),
+
     # ---------- ANIMAÇÕES (a partir de um personagem já criado) ----------
     "heroi_caminhando": dict(grupo="characters", tipo="animacao",
         personagem="heroi_jogador", acao="walking, steady march, arms swinging",
@@ -145,6 +216,7 @@ CUSTO = {
     "objeto1d": 0.095,  # create-1-direction-object, até 168×168
     "heroi": 0.041,     # create-character-v3, 64×64 (8 rotações)
     "animacao": 0.116,  # animate-character v3: ~0,0145 por direção × 8
+    "icone": 0.0084,    # create-image-pixflux, 64×64 com alfa
 }
 
 
@@ -384,6 +456,30 @@ def gerar_heroi(spec: dict, seed: int):
     raise RuntimeError(f"personagem sem imagens: {json.dumps(resultado)[:200]}")
 
 
+def gerar_icone(spec: dict, seed: int):
+    """POST /create-image-pixflux — síncrono, com alfa. Serve ícones e VFX:
+    imagem pequena, um objeto só, fundo transparente."""
+    import requests
+    w, h = spec["size"]
+    corpo = {
+        "description": spec["desc"],
+        "negative_description": "background, frame, border, text, watermark",
+        "image_size": {"width": w, "height": h},
+        "outline": "selective outline", "shading": "medium shading",
+        "detail": "highly detailed", "view": "side",
+        "isometric": False, "no_background": True, "seed": seed,
+    }
+    r = requests.post(f"{BASE}/create-image-pixflux", json=corpo,
+                      headers=cabecalho(), timeout=300)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    dados = r.json()
+    imgs = _acha_imagens(dados)
+    if not imgs:
+        raise RuntimeError(f"sem imagem: {json.dumps(dados)[:200]}")
+    return [("", _png(imgs[0][1]))], dados
+
+
 def _meta_personagens(pasta: Path) -> dict:
     """character_id de cada personagem já criado (para animar depois)."""
     arq = pasta / "personagens.json"
@@ -450,7 +546,7 @@ def gerar_animacao(spec: dict, seed: int, pasta: Path):
 
 
 GERADORES = {"ui": gerar_ui, "tileset": gerar_tileset, "objeto": gerar_objeto,
-             "heroi": gerar_heroi, "animacao": gerar_animacao}
+             "heroi": gerar_heroi, "animacao": gerar_animacao, "icone": gerar_icone}
 
 
 def indexar_animacoes(pasta: Path) -> dict:
@@ -509,7 +605,7 @@ def montar_atlas(pasta: Path, pid: str, tile: int = 32) -> Path | None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Gera os assets Pro do jogo (PixelLab v2).")
-    ap.add_argument("--grupo", choices=["ui", "tilesets", "objects", "characters"])
+    ap.add_argument("--grupo", choices=["ui", "tilesets", "objects", "characters", "vfx", "icons"])
     ap.add_argument("--apenas", metavar="ID")
     ap.add_argument("--tudo", action="store_true")
     ap.add_argument("--listar", action="store_true")

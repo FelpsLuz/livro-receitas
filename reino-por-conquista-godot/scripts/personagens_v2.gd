@@ -105,7 +105,9 @@ static func quadros(id: String, fps: float = 6.0) -> SpriteFrames:
 	return sf
 
 ## Nó pronto para a cena: AnimatedSprite2D configurado para pixel art.
-static func criar(id: String, escala: int = 2) -> AnimatedSprite2D:
+## `escala` aceita fração: a vila desenha o herói a 0.55 para as casas
+## parecerem CASAS (o cânone do gênero é o personagem com ~metade da porta).
+static func criar(id: String, escala: float = 2.0) -> AnimatedSprite2D:
 	var no := AnimatedSprite2D.new()
 	no.name = "Personagem_" + id
 	no.sprite_frames = quadros(id)

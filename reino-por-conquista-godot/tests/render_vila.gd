@@ -19,15 +19,16 @@ func _initialize() -> void:
 	for i in 8:
 		await process_frame
 
-	# herói ACIMA de uma casa: tem que ser desenhado ATRÁS dela
-	vila.heroi.position = Vector2(520, 520)
+	# herói ACIMA de uma casa (casa em 560,610): o corpo some atrás do telhado,
+	# só a cabeça aparece por cima — a prova clássica do Y-Sort
+	vila.heroi.position = Vector2(600, 565)
 	vila._rota = []                      # congela a ronda para o retrato
 	for i in 4:
 		await process_frame
 	await _salvar(vila, "atras")
 
-	# herói ABAIXO da mesma casa: tem que ser desenhado NA FRENTE
-	vila.heroi.position = Vector2(520, 700)
+	# herói ABAIXO da mesma casa: inteiro, na frente da porta
+	vila.heroi.position = Vector2(600, 660)
 	for i in 4:
 		await process_frame
 	await _salvar(vila, "frente")
@@ -53,6 +54,20 @@ func _initialize() -> void:
 	for i in 10:
 		await process_frame
 	await _salvar(aba, "aba_real")
+
+	# ---- a vitrine, com os ícones novos nos slots ----
+	aba.queue_free()
+	vila.queue_free()
+	var cena_v := load("res://cenas/vitrine_v2.tscn")
+	if cena_v != null:
+		var inst = cena_v.instantiate()
+		root.add_child(inst)
+		for i in 10:
+			await process_frame
+		var img_v: Image = root.get_texture().get_image()
+		img_v.save_png("user://render_vitrine.png")
+		print("  salvo user://render_vitrine.png  (%dx%d)" % [img_v.get_width(), img_v.get_height()])
+		inst.queue_free()
 
 	print("pronto: ", ProjectSettings.globalize_path("user://"))
 	quit(0)

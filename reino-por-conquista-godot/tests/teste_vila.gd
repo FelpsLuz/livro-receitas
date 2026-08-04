@@ -10,6 +10,8 @@ extends SceneTree
 const VilaCena = preload("res://scripts/vila_cena.gd")
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const MapaV2 = preload("res://scripts/mapa_v2.gd")
+const Vfx = preload("res://scripts/vfx.gd")
+const Icones = preload("res://scripts/icones.gd")
 
 var passou := 0
 var falhou := 0
@@ -100,6 +102,44 @@ func _initialize() -> void:
 		"portao_fortificado" in vila._planta(3).map(func(p): return p[0])
 		and not ("portao_fortificado" in ids1))
 
+	# ---------- INTEGRAÇÃO: sombras, escala e efeitos ----------
+	# uma colagem de PNGs vira cena quando cada coisa está ancorada por uma
+	# sombra, na proporção certa, e o que queima solta fumaça e luz
+	var sem_sombra: Array = []
+	for f in vila.mundo.get_children():
+		if str(f.name).begins_with("Obj_ponte"):
+			continue          # a ponte deita sobre a água: sem sombra mesmo
+		var achou := false
+		for filho in f.get_children():
+			if filho.name == "Sombra":
+				achou = true
+		if not achou:
+			sem_sombra.append(str(f.name))
+	ok("todo objeto e personagem tem sombra", sem_sombra.is_empty(),
+		", ".join(sem_sombra))
+	ok("herói na escala da vila (casas parecem casas)",
+		vila.heroi.scale.is_equal_approx(Vector2(VilaCena.ESCALA_HEROI, VilaCena.ESCALA_HEROI)))
+	var barril = vila.mundo.get_node_or_null("Obj_barril_carga")
+	ok("objetos pequenos em escala própria (barril < casa)",
+		barril != null and barril.scale.x < 0.6, str(barril.scale.x if barril else -1.0))
+	var casa = vila.mundo.get_node_or_null("Obj_casa_camponesa")
+	ok("chaminé da casa solta fumaça",
+		casa != null and casa.get_node_or_null("Fumaca") != null)
+	var tocha = vila.mundo.get_node_or_null("Obj_tocha_estaca")
+	ok("tocha do portão com fogo e luz",
+		tocha != null and tocha.get_node_or_null("Fogo") != null)
+	ok("moldura de floresta pintada",
+		vila.floresta != null and vila.floresta.get_used_cells().size() > 0,
+		"%d células" % (vila.floresta.get_used_cells().size() if vila.floresta else -1))
+	var ponte = vila.mundo.get_node_or_null("Obj_ponte_madeira")
+	ok("ponte cruzando o rio", ponte != null)
+	if ponte != null:
+		# o tabuleiro precisa ENCOSTAR na linha da areia (y=830), onde a rua
+		# termina — o eixo portão→praça→ponte é o que costura a composição
+		var topo: float = ponte.position.y - ponte.texture.get_height() * ponte.scale.y
+		ok("ponte encosta onde a rua termina", absf(topo - 830.0) < 4.0,
+			"topo em y=%.0f" % topo)
+
 	# ---------- o herói caminha e vira ----------
 	ok("herói animado na cena", vila.heroi is AnimatedSprite2D)
 	if vila.heroi != null:
@@ -116,15 +156,63 @@ func _initialize() -> void:
 		vila._process(0.05)
 		ok("rota é um laço fechado", vila._alvo == 0, "alvo=%d" % vila._alvo)
 
+	# ---------- WANG: as transições saem da máscara certa ----------
+	# pinta um único canto "cheio" em (1,1) e confere as 4 células vizinhas
+	# contra o dicionário WANG — se o layout embaralhar, isto pega
+	var unit: TileMapLayer = MapaV2.criar_camada("campo_terra_atlas", 32)
+	if unit != null:
+		MapaV2.pintar_wang(unit, Rect2i(0, 0, 2, 2),
+			func(c: Vector2i) -> bool: return c == Vector2i(1, 1))
+		var esperado := {
+			Vector2i(0, 0): MapaV2.WANG[8],   # cheio só no canto inferior-direito
+			Vector2i(1, 0): MapaV2.WANG[4],   # ... inferior-esquerdo
+			Vector2i(0, 1): MapaV2.WANG[2],   # ... superior-direito
+			Vector2i(1, 1): MapaV2.WANG[1],   # ... superior-esquerdo
+		}
+		var wang_errados: Array = []
+		for cel in esperado:
+			if unit.get_cell_atlas_coords(cel) != esperado[cel]:
+				wang_errados.append("%s→%s (esperava %s)" %
+					[cel, unit.get_cell_atlas_coords(cel), esperado[cel]])
+		ok("máscara de cantos escolhe o tile Wang certo", wang_errados.is_empty(),
+			", ".join(wang_errados))
+		unit.free()
+
 	# ---------- a vila acompanha o nível da terra ----------
 	# o chão conta a mesma história que as construções
 	ok("cidade murada tem rua calçada", vila.rua.get_used_cells().size() > 0,
 		"%d células" % vila.rua.get_used_cells().size())
+	# a lavoura EXISTE no nível alto: alguma célula da região arada tem tile
+	# de transição/terra (não só grama pura) — se tem_lavoura morrer, isto pega
+	var arada_n5 := 0
+	for lav in VilaCena.LAVOURAS:
+		for y in range(lav.position.y - 1, lav.end.y + 1):
+			for x in range(lav.position.x - 1, lav.end.x + 1):
+				if vila.terreno.get_cell_atlas_coords(Vector2i(x, y)) != MapaV2.TILE_CHEIO:
+					arada_n5 += 1
+	ok("lavouras aradas no nível 5", arada_n5 > 0, "%d células" % arada_n5)
+	# remontar de verdade não pode DUPLICAR nós na cena (o array _objetos
+	# sempre volta do mesmo tamanho; o que denuncia vazamento é a árvore)
+	var filhos_antes: int = vila.mundo.get_child_count()
+	vila.semear_npcs()
+	await process_frame
+	await process_frame          # o queue_free dos antigos precisa de um quadro
+	ok("remontagem não duplica nós na árvore",
+		vila.mundo.get_child_count() == filhos_antes,
+		"%d ≠ %d" % [vila.mundo.get_child_count(), filhos_antes])
 	var no_5: int = vila._objetos.size()
 	vila.estado = {"terra": {"nivel": 1, "nome": "Teste"}, "mes": 6}
 	await process_frame
 	ok("vila menor no nível 1 que no 5", vila._objetos.size() < no_5,
 		"%d < %d" % [vila._objetos.size(), no_5])
+	# nível 0 é a terra RECÉM-COMPRADA (jogo.gd cria com nivel 0) e também o
+	# resultado de um saque: precisa mostrar o acampamento, não uma clareira
+	vila.estado = {"terra": {"nivel": 0, "nome": "Teste"}, "mes": 6}
+	await process_frame
+	ok("nível 0 (terra comprada) mostra o acampamento",
+		vila.mundo.get_node_or_null("Obj_tenda_grande") != null
+		and vila.mundo.get_node_or_null("Obj_fogueira_acampamento") != null,
+		"%d objetos" % vila._objetos.size())
 	# sem terra nenhuma: acampamento, e nada pode quebrar
 	vila.estado = {"terra": null, "mes": 1}
 	await process_frame
@@ -132,6 +220,14 @@ func _initialize() -> void:
 		"%d objetos" % vila._objetos.size())
 	ok("acampamento não tem rua calçada", vila.rua.get_used_cells().is_empty(),
 		"%d células" % vila.rua.get_used_cells().size())
+	# acampamento HABITADO: tendas, fogueira acesa, e a ponte que é geografia
+	ok("acampamento tem tendas", vila.mundo.get_node_or_null("Obj_tenda_grande") != null
+		and vila.mundo.get_node_or_null("Obj_tenda_simples") != null)
+	var fogueira = vila.mundo.get_node_or_null("Obj_fogueira_acampamento")
+	ok("fogueira acesa (brasas + luz)",
+		fogueira != null and fogueira.get_node_or_null("Fogo") != null)
+	ok("ponte permanece no acampamento",
+		vila.mundo.get_node_or_null("Obj_ponte_madeira") != null)
 	# sem terra não há lavoura: o chão é só grama, sem tile de terra arada
 	var arada := 0
 	for c in vila.terreno.get_used_cells():
@@ -145,6 +241,22 @@ func _initialize() -> void:
 	vila.semear_npcs()
 	ok("semear_npcs() não duplica objetos", vila._objetos.size() == antes_semear,
 		"%d = %d" % [vila._objetos.size(), antes_semear])
+
+	# ---------- ÍCONES DE INVENTÁRIO ----------
+	var inv_i: Dictionary = Icones.inventario()
+	ok("os %d ícones do catálogo gerados" % Icones.TODOS.size(),
+		inv_i["falta"].is_empty(), ", ".join(inv_i["falta"]))
+	var slot := Icones.slot("trigo", 48)
+	var com_icone := false
+	for f3 in slot.get_children():
+		if f3 is TextureRect and f3.texture != null:
+			com_icone = true
+	ok("slot() monta a moldura Pro com o ícone dentro", com_icone)
+	slot.free()
+	ok("toda MERCADORIA do mercado tem ícone",
+		Icones.de_mercadoria("trigo") != null and Icones.de_mercadoria("cavalos") != null
+		and Icones.de_mercadoria("ferro") != null and Icones.de_mercadoria("sal") != null
+		and Icones.de_mercadoria("tecidos") != null and Icones.de_mercadoria("madeira") != null)
 
 	vila.queue_free()
 	print("=====================================")
