@@ -84,6 +84,9 @@ func _montar_titulo() -> void:
 	tela_titulo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(tela_titulo)
 	var caixa := PanelContainer.new()
+	# fundo opaco: a moldura de madeira é vazada e o subtítulo em tinta escura
+	# desaparecia contra o fundo de madeira da janela
+	caixa.add_theme_stylebox_override("panel", Tema.estilo_modal())
 	caixa.custom_minimum_size = Vector2(520, 0)
 	tela_titulo.add_child(caixa)
 	var v := VBoxContainer.new()
@@ -323,7 +326,12 @@ func _titulo_secao(c: Container, texto: String) -> void:
 func _par(c: Container, texto: String) -> Label:
 	var l := Label.new()
 	l.text = texto
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# quebrar linha numa COLUNA é o certo; numa LINHA é desastre. Num HBox o
+	# label com autowrap encolhe até a largura da maior palavra e desce em
+	# coluna de letras, esticando o card inteiro junto ("📍 Você está aqui"
+	# virava uma torre de 350px que empurrava os botões do reino para baixo).
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF if c is HBoxContainer \
+		else TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_color_override("font_color", Tema.TINTA)
 	c.add_child(l)
 	return l
@@ -361,6 +369,9 @@ func _retrato(c: Container, id: String, tamanho: int = 52) -> void:
 		return
 	var caixa := Control.new()
 	caixa.custom_minimum_size = Vector2(tamanho, tamanho)
+	# num card mais alto que o retrato, o HBox esticaria esta caixa na vertical
+	# e a moldura ornamentada sairia alongada junto
+	caixa.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
 	moldura.set_anchors_preset(Control.PRESET_FULL_RECT)
 	caixa.add_child(tr)

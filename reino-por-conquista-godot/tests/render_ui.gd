@@ -20,7 +20,11 @@ func _initialize() -> void:
 	# ESCALA. Dar 1100 de largura ao Control joga 140px de interface para fora
 	# da imagem — e o retrato do problema vira o retrato do harness.
 	root.add_child(jogo)
-	await process_frame
+	# a tela de título tem uma vila nível 5 rodando dentro dela: precisa de
+	# quadros para o TileMap, o herói e as partículas assentarem
+	for i in 40:
+		await process_frame
+	await _quadro(jogo, "titulo")
 
 	jogo.iniciar_jogo("Aldric de Vau")
 	var st: Dictionary = jogo.state
@@ -54,6 +58,13 @@ func _initialize() -> void:
 	# marcha só chega quando o relógio passa por ela
 	Relogio.avancar(st, 340, Jogo.log_para(st))
 
+	# a vila precisa de quadros próprios depois de entrar no jogo
+	await _tirar(jogo, 0, "terra", 0, 40)
+	await _tirar(jogo, 1, "mapa")          # neblina de guerra + espionagem
+	await _tirar(jogo, 1, "mapa_rolado", 260)
+	await _tirar(jogo, 2, "mercado")       # ícones de mercadoria
+	await _tirar(jogo, 6, "clas")
+	await _tirar(jogo, 7, "intrigas")      # ícone de espião nas operações
 	await _tirar(jogo, 5, "exercito")      # tropas, manutenção, cerco, comandante
 	await _tirar(jogo, 5, "exercito_marcha", 620)
 	await _tirar(jogo, 4, "corte")         # lordes gerados em partida
@@ -78,6 +89,12 @@ func _initialize() -> void:
 	jogo._modal_batalha({"vitoria": true, "contexto": "Cerco a Império Central",
 		"rodadas": [], "debandada": "", "baixas_jogador": 14})
 	await _quadro(jogo, "modal_cerco")
+	jogo.overlay_modal.visible = false
+
+	# a tela de conversa, com retrato e máquina de escrever
+	jogo.abrir_conversa({"id": "rei_imperio", "nome": "Touro Bill",
+		"personalidade": "cruel"})
+	await _quadro(jogo, "conversa")
 
 	print("pronto — PNGs em ", ProjectSettings.globalize_path("user://"))
 	quit()
@@ -93,10 +110,11 @@ func _quadro(jogo: Control, nome: String) -> void:
 	img.save_png("user://ui_%s.png" % nome)
 	print("  ▸ ui_%s.png  %dx%d" % [nome, img.get_width(), img.get_height()])
 
-func _tirar(jogo: Control, aba: int, nome: String, rolar: float = 0.0) -> void:
+func _tirar(jogo: Control, aba: int, nome: String, rolar: float = 0.0,
+		quadros: int = 12) -> void:
 	jogo.tabs.current_tab = aba
 	jogo.atualizar()
-	for i in 12:
+	for i in quadros:
 		await process_frame
 	var rolagem := jogo.tabs.get_current_tab_control() as ScrollContainer
 	if rolagem != null:
