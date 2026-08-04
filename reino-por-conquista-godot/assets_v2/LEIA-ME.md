@@ -9,30 +9,35 @@ Gerados por `generate_assets_v2.py` (raiz do repositório), organizados por tipo
 | `objects/`   | `POST /map-objects`               | árvores, casas, baús, poços       |
 | `characters/`| `POST /create-character-v3`       | personagem com 8 rotações         |
 
+## Custo (tabela oficial de preços do PixelLab)
+
+Os preços são **por imagem, em centavos de dólar** — o catálogo inteiro de 18
+assets custa cerca de **US$ 0,81**:
+
+| endpoint                    | tamanho        | US$/asset |
+| --------------------------- | -------------- | --------- |
+| `create-image-pixflux`      | 64×64 alfa     | 0,0084    |
+| `map-objects`               | por objeto     | 0,0099    |
+| `create-tileset`            | tiles 32×32    | 0,0099    |
+| `create-character-v3`       | 64×64, 8 rot.  | 0,041     |
+| `generate-ui-v2` (Pro)      | até 256×256    | 0,095     |
+
+A conta consome primeiro a cota mensal de *generations* do plano e só depois os
+créditos em dólar. Rode `--saldo` antes de um lote grande e `--listar` para ver
+o orçamento estimado.
+
 ## Estado atual
 
-Só `ui/painel_madeira.png` está gerado — a cota do trial (40 gerações) acabou
-no meio do lote. O catálogo completo tem 18 assets.
+Só `ui/painel_madeira.png` está gerado — a cota de 40 gerações do trial acabou
+no meio do lote de UI. Os outros 17 assets do catálogo aguardam saldo.
 
-## Custo medido na prática (a API não publica tabela)
-
-| endpoint                | gerações por asset |
-| ----------------------- | ------------------ |
-| `create-image-pixflux`  | ~1                 |
-| `generate-ui-v2` (Pro)  | ~10                |
-
-Ou seja: os endpoints **Pro custam cerca de 10× um sprite comum**. Planeje a
-recarga por aí — o catálogo inteiro em Pro passa de 100 gerações.
-
-## Como continuar quando houver crédito
+## Como continuar
 
 ```bash
-python3 generate_assets_v2.py --saldo     # confere a cota primeiro
-python3 generate_assets_v2.py --listar    # catálogo e custo estimado
-python3 generate_assets_v2.py --grupo objects   # o mais barato por impacto
-python3 generate_assets_v2.py --grupo ui        # o mais caro, maior impacto visual
+python3 generate_assets_v2.py --saldo      # confere o saldo
+python3 generate_assets_v2.py --listar     # catálogo com custo em US$
+python3 generate_assets_v2.py --tudo       # o catálogo inteiro (~US$ 0,81)
 godot --headless --path reino-por-conquista-godot --import
 ```
 
-O script para sozinho ao receber HTTP 402 (cota esgotada), para não desperdiçar
-chamadas, e sempre imprime a cota restante ao terminar.
+O script para sozinho no HTTP 402 (sem saldo) para não desperdiçar chamadas.

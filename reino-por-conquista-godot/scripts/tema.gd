@@ -23,6 +23,19 @@ static func criar() -> Theme:
 	painel.set_content_margin_all(12)
 	t.set_stylebox("panel", "PanelContainer", painel)
 
+	# OVERHAUL v2: se a moldura Pro do PixelLab existir, ela substitui o painel
+	# chapado em TODA a interface de uma vez (StyleBoxTexture com 9-slice, então
+	# os cantos não deformam). Sem o PNG, segue valendo o StyleBoxFlat acima.
+	var UIv2 = load("res://scripts/ui_v2.gd")
+	var moldura = UIv2.stylebox("painel_madeira")
+	if moldura != null:
+		t.set_stylebox("panel", "PanelContainer", moldura)
+		t.set_stylebox("panel", "Panel", moldura)
+	# botões de madeira Pro, nos quatro estados
+	var bts: Dictionary = UIv2.estilos_botao()
+	for estado in bts.keys():
+		t.set_stylebox(estado, "Button", bts[estado])
+
 	var botao := StyleBoxFlat.new()
 	botao.bg_color = Color("5d4428")
 	botao.border_color = OURO

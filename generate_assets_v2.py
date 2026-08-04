@@ -108,8 +108,16 @@ CATALOGO = {
              "sword at the hip, determined face, " + ESTILO_MUNDO),
 }
 
-# quanto cada tipo costuma consumir da cota (estimativa para o planejamento)
-CUSTO = {"ui": 1, "tileset": 2, "objeto": 1, "objeto1d": 1, "heroi": 5}
+# preço estimado em USD por asset, da tabela oficial de preços do PixelLab.
+# (A cota "generations" do trial é consumida primeiro; os créditos em dólar
+#  entram como fallback. É o valor em dólar que importa para orçar o lote.)
+CUSTO = {
+    "ui": 0.095,        # generate-ui-v2, até 256×256
+    "tileset": 0.0099,  # create-tileset, tiles 32×32
+    "objeto": 0.0099,   # map-objects, por objeto
+    "objeto1d": 0.095,  # create-1-direction-object, até 168×168
+    "heroi": 0.041,     # create-character-v3, 64×64 (8 rotações)
+}
 
 
 def cabecalho() -> dict:
@@ -302,9 +310,13 @@ def main() -> int:
         s = saldo()
         sub = s.get("subscription") or {}
         print(json.dumps(s, indent=1))
-        if sub.get("type") == "generations":
-            print(f"\n➡️  {sub.get('generations')} de {sub.get('total')} gerações restantes "
-                  f"({sub.get('status')})")
+        cr = s.get("credits") or {}
+        print(f"\n➡️  créditos: US$ {cr.get('usd', 0):.2f}"
+              f" · cota do plano: {sub.get('generations', 0)} de {sub.get('total', 0)}")
+        usd = float(cr.get("usd") or 0)
+        if usd > 0:
+            print(f"   dá para ~{int(usd / 0.095)} assets de UI Pro"
+                  f" ou ~{int(usd / 0.0099)} objetos/tiles")
         return 0
 
     if args.apenas:
@@ -322,16 +334,16 @@ def main() -> int:
         return 2
 
     if args.listar:
-        print(f"{'ID':<26} {'GRUPO':<12} {'TIPO':<9} CUSTO~  DESCRIÇÃO")
-        print("-" * 104)
-        total = 0
+        print(f"{'ID':<26} {'GRUPO':<12} {'TIPO':<9} {'US$':>8}  DESCRIÇÃO")
+        print("-" * 106)
+        total = 0.0
         for i in ids:
             s = CATALOGO[i]
             c = CUSTO[s["tipo"]]
             total += c
             d = s.get("desc") or s.get("lower", "")
-            print(f"{i:<26} {s['grupo']:<12} {s['tipo']:<9} {c:>5}   {d[:44]}…")
-        print(f"\n{len(ids)} assets · custo estimado ≈ {total} gerações")
+            print(f"{i:<26} {s['grupo']:<12} {s['tipo']:<9} {c:>8.4f}  {d[:42]}…")
+        print(f"\n{len(ids)} assets · custo estimado ≈ US$ {total:.2f}")
         try:
             sub = saldo().get("subscription") or {}
             print(f"cota disponível agora: {sub.get('generations')} de {sub.get('total')}")
@@ -369,8 +381,10 @@ def main() -> int:
 
     print(f"\n📊 {feitos} gerados, {pulados} pulados, {len(falhas)} falhas")
     try:
-        sub = saldo().get("subscription") or {}
-        print(f"   cota restante: {sub.get('generations')} de {sub.get('total')}")
+        st = saldo()
+        cr = st.get("credits") or {}
+        sub = st.get("subscription") or {}
+        print(f"   saldo: US$ {cr.get('usd', 0):.4f} · cota {sub.get('generations', 0)}/{sub.get('total', 0)}")
     except Exception:
         pass
     return 1 if falhas else 0
