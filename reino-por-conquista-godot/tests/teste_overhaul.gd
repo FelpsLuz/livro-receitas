@@ -75,6 +75,51 @@ func _initialize() -> void:
 	ok("personagem usa NEAREST e escala inteira",
 		no.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST and no.scale == Vector2(2, 2))
 	no.free()
+	# ---------- ANIMAÇÕES DE VÁRIOS QUADROS ----------
+	# os quadros do animate-character só valem se virarem animação de verdade:
+	# uma imagem por direção seria o mesmo que a pose parada.
+	var manif: Dictionary = PersonagensV2.manifesto()
+	print("  ℹ️  personagens com animação no manifesto: %d" % manif.size())
+	if manif.size() > 0:
+		var pers: String = manif.keys()[0]
+		ok("manifesto de animações lido", not PersonagensV2.animacoes_de(pers).is_empty(), pers)
+		ok("caminhada registrada com mais de um quadro",
+			PersonagensV2.tem_caminhada(pers, "south"))
+		var sfa: SpriteFrames = PersonagensV2.quadros(pers)
+		ok("SpriteFrames ganhou a animação de caminhada",
+			sfa.has_animation("south_walk"),
+			", ".join(sfa.get_animation_names()))
+		if sfa.has_animation("south_walk"):
+			var n_q: int = sfa.get_frame_count("south_walk")
+			ok("caminhada tem vários quadros com textura",
+				n_q > 1 and sfa.get_frame_texture("south_walk", n_q - 1) != null,
+				"%d quadros" % n_q)
+			ok("caminhada roda mais rápido que a pose parada",
+				sfa.get_animation_speed("south_walk") > sfa.get_animation_speed("south"))
+			ok("caminhada em laço", sfa.get_animation_loop("south_walk"))
+		# as 8 direções precisam estar todas lá, senão o herói "trava" virado
+		var faltando_dir: Array = []
+		for d in PersonagensV2.DIRECOES:
+			if not sfa.has_animation(d + "_walk"):
+				faltando_dir.append(d)
+		ok("caminhada nas 8 direções", faltando_dir.is_empty(), ", ".join(faltando_dir))
+		# mover() precisa trocar para a caminhada e voltar para a pose parada
+		var andarilho: AnimatedSprite2D = PersonagensV2.criar(pers, 2)
+		ok("mover() liga a caminhada",
+			PersonagensV2.mover(andarilho, "east", true) and andarilho.animation == "east_walk",
+			andarilho.animation)
+		ok("mover(false) volta para a pose parada",
+			PersonagensV2.mover(andarilho, "east", false) and andarilho.animation == "east",
+			andarilho.animation)
+		# direção sem caminhada não pode quebrar: cai na pose parada
+		PersonagensV2.mover(andarilho, "south", true, "inexistente")
+		ok("animação inexistente cai na pose parada sem quebrar",
+			andarilho.animation == "south", andarilho.animation)
+		andarilho.free()
+	else:
+		ok("sem manifesto, quadros() continua devolvendo pose parada",
+			PersonagensV2.quadros("rei_touros").get_animation_names().size() > 0)
+
 	# nenhum personagem pode ficar sem textura
 	var sem_textura: Array = []
 	for id in ids:

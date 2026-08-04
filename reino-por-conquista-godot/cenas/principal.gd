@@ -7,6 +7,7 @@
 extends Control
 
 const Dados = preload("res://scripts/dados.gd")
+const UIv2 = preload("res://scripts/ui_v2.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Combate = preload("res://scripts/combate.gd")
@@ -247,7 +248,18 @@ func _retrato(c: Container, id: String, tamanho: int = 52) -> void:
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	c.add_child(tr)
+	# OVERHAUL v2: a moldura ornamentada do PixelLab entra POR CIMA do retrato
+	var moldura := UIv2.criar_painel("moldura_retrato")
+	if moldura == null:
+		c.add_child(tr)
+		return
+	var caixa := Control.new()
+	caixa.custom_minimum_size = Vector2(tamanho, tamanho)
+	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	moldura.set_anchors_preset(Control.PRESET_FULL_RECT)
+	caixa.add_child(tr)
+	caixa.add_child(moldura)
+	c.add_child(caixa)
 
 func _aviso(msg: String) -> void:
 	if msg == "":

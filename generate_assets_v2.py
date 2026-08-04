@@ -102,6 +102,33 @@ CATALOGO = {
     "fogueira_acampamento": dict(grupo="objects", tipo="objeto", size=(96, 96),
         desc="campfire with stacked logs inside a ring of stones, warm embers, " + ESTILO_MUNDO),
 
+    # ---------- ETAPA 2: VILA E COSTA ----------
+    "ferraria": dict(grupo="objects", tipo="objeto", size=(160, 160),
+        desc="medieval blacksmith forge building, stone base and timber upper floor, "
+             "open front with anvil and glowing forge, chimney with smoke stain, " + ESTILO_MUNDO),
+    "moinho_vento": dict(grupo="objects", tipo="objeto", size=(160, 192),
+        desc="medieval windmill, round stone tower with wooden cap and four cloth sails, "
+             "small door at the base, " + ESTILO_MUNDO),
+    "muralha_pedra": dict(grupo="objects", tipo="objeto", size=(160, 128),
+        desc="straight section of medieval stone curtain wall with crenellations and a "
+             "walkway on top, weathered grey blocks, " + ESTILO_MUNDO),
+    "portao_fortificado": dict(grupo="objects", tipo="objeto", size=(160, 160),
+        desc="fortified gatehouse with raised iron portcullis, two square towers and "
+             "an arched wooden gate, " + ESTILO_MUNDO),
+    "barraca_mercado": dict(grupo="objects", tipo="objeto", size=(144, 128),
+        desc="medieval market stall, wooden counter under a striped red and cream awning, "
+             "crates of goods and hanging scales, " + ESTILO_MUNDO),
+    "praia_agua": dict(grupo="tilesets", tipo="tileset", tile=(32, 32),
+        lower="shallow clear blue water with gentle ripples and sandy bottom",
+        upper="pale golden beach sand with scattered pebbles and shells",
+        transicao="wet sand with foam line where the water meets the shore"),
+
+    # ---------- ANIMAÇÕES (a partir de um personagem já criado) ----------
+    "heroi_caminhando": dict(grupo="characters", tipo="animacao",
+        personagem="heroi_jogador", acao="walking, steady march, arms swinging",
+        quadros=8, direcoes=["south", "south-east", "east", "north-east",
+                              "north", "north-west", "west", "south-west"]),
+
     # ---------- PERSONAGEM COM 8 ROTAÇÕES ----------
     "heroi_jogador": dict(grupo="characters", tipo="heroi", size=(64, 64),
         desc="medieval mercenary captain, leather and mail armor, dark green cloak, "
@@ -117,6 +144,7 @@ CUSTO = {
     "objeto": 0.0099,   # map-objects, por objeto
     "objeto1d": 0.095,  # create-1-direction-object, até 168×168
     "heroi": 0.041,     # create-character-v3, 64×64 (8 rotações)
+    "animacao": 0.116,  # animate-character v3: ~0,0145 por direção × 8
 }
 
 
@@ -157,12 +185,20 @@ def baixar_url(url: str):
     """Alguns endpoints (map-objects, characters) não devolvem base64: entregam
     um download_url. A imagem só chega por aqui — e a URL exige o mesmo Bearer."""
     import requests
-    r = requests.get(url, headers={"Authorization": cabecalho()["Authorization"]},
-                     timeout=180, allow_redirects=True)
-    if not r.ok:                      # CDN pública recusa o Bearer: tenta sem
-        r = requests.get(url, timeout=180, allow_redirects=True)
-    if not r.ok:
-        raise RuntimeError(f"download falhou: {erro(r)}")
+    # o CDN às vezes derruba a conexão no meio de um lote grande: tenta de novo
+    ultimo = None
+    for tentativa in range(4):
+        for cabecalhos in ({"Authorization": cabecalho()["Authorization"]}, {}):
+            try:
+                r = requests.get(url, headers=cabecalhos, timeout=180, allow_redirects=True)
+                if r.ok:
+                    import PIL.Image
+                    return PIL.Image.open(BytesIO(r.content)).convert("RGBA")
+                ultimo = erro(r)
+            except Exception as e:
+                ultimo = str(e)[:120]
+        time.sleep(2 * (tentativa + 1))
+    raise RuntimeError(f"download falhou após 4 tentativas: {ultimo}")
     import PIL.Image
     return PIL.Image.open(BytesIO(r.content)).convert("RGBA")
 
@@ -348,7 +384,99 @@ def gerar_heroi(spec: dict, seed: int):
     raise RuntimeError(f"personagem sem imagens: {json.dumps(resultado)[:200]}")
 
 
-GERADORES = {"ui": gerar_ui, "tileset": gerar_tileset, "objeto": gerar_objeto, "heroi": gerar_heroi}
+def _meta_personagens(pasta: Path) -> dict:
+    """character_id de cada personagem já criado (para animar depois)."""
+    arq = pasta / "personagens.json"
+    if arq.exists():
+        try:
+            return json.loads(arq.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def gerar_animacao(spec: dict, seed: int, pasta: Path):
+    """POST /animate-character — anima um personagem QUE JÁ EXISTE na conta.
+
+    Diferente dos outros: devolve background_job_ids (um por direção). Ao fim,
+    GET /characters/{id} traz as animações com as URLs de cada quadro.
+    """
+    import requests
+    meta = _meta_personagens(pasta)
+    base_pers = spec["personagem"]
+    if base_pers not in meta:
+        raise RuntimeError(
+            f"'{base_pers}' ainda não foi criado (falta o character_id em "
+            f"characters/personagens.json). Gere o personagem antes de animá-lo.")
+    cid = meta[base_pers]["character_id"]
+    corpo = {
+        "character_id": cid,
+        "animation_name": spec.get("nome_animacao", "walk"),
+        "action_description": spec["acao"],
+        "mode": "v3",                       # v3 é o barato (~US$ 0,0145/direção)
+        "frame_count": spec.get("quadros", 8),
+        "directions": spec.get("direcoes"),
+        "keep_first_frame": True,
+        "seed": seed,
+    }
+    r = requests.post(f"{BASE}/animate-character", json=corpo, headers=cabecalho(), timeout=180)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    envio = r.json()
+    jobs = envio.get("background_job_ids") or []
+    if not jobs:
+        raise RuntimeError(f"sem jobs de animação: {json.dumps(envio)[:200]}")
+    print(f"      … {len(jobs)} direções em processamento", flush=True)
+    for j in jobs:
+        try:
+            esperar_job(j, limite=900)
+        except Exception as e:
+            print(f"      ⚠️ direção falhou: {str(e)[:90]}", flush=True)
+    # o personagem agora carrega as animações
+    detalhe = buscar(f"/characters/{cid}")
+    # formato real da resposta:
+    #   animations: [ { display_name, directions: [ {direction, frames:[url...]} ] } ]
+    imagens = []
+    for anim in (detalhe.get("animations") or []):
+        nome_anim = anim.get("display_name") or anim.get("name") or "walk"
+        for bloco in (anim.get("directions") or []):
+            direcao = bloco.get("direction") or "south"
+            for i, url in enumerate(bloco.get("frames") or []):
+                if isinstance(url, str) and url.startswith("http"):
+                    imagens.append((f"{nome_anim}_{direcao}_{i:02d}", baixar_url(url)))
+    if not imagens:
+        raise RuntimeError(f"animação sem quadros: {json.dumps(detalhe)[:220]}")
+    return imagens, envio
+
+
+GERADORES = {"ui": gerar_ui, "tileset": gerar_tileset, "objeto": gerar_objeto,
+             "heroi": gerar_heroi, "animacao": gerar_animacao}
+
+
+def indexar_animacoes(pasta: Path) -> dict:
+    """Escreve characters/animacoes.json — o manifesto que a Godot lê para saber
+    quantos quadros cada direção tem, sem precisar adivinhar nomes de arquivo.
+
+    Varre o que está EM DISCO (não o que a API prometeu), então roda de graça e
+    conserta o manifesto se algum download tiver falhado no meio.
+    """
+    manifesto: dict = {}
+    for pid, spec in CATALOGO.items():
+        if spec.get("tipo") != "animacao":
+            continue
+        nome_anim = spec.get("nome_animacao", "walk")
+        prefixo = f"{pid}_{nome_anim}"
+        direcoes = {}
+        for d in spec.get("direcoes") or []:
+            n = len(list(pasta.glob(f"{prefixo}_{d}_*.png")))
+            if n:
+                direcoes[d] = n
+        if direcoes:
+            manifesto.setdefault(spec["personagem"], {})[nome_anim] = {
+                "prefixo": prefixo, "direcoes": direcoes}
+    (pasta / "animacoes.json").write_text(
+        json.dumps(manifesto, indent=1, ensure_ascii=False))
+    return manifesto
 
 
 def montar_atlas(pasta: Path, pid: str, tile: int = 32) -> Path | None:
@@ -387,6 +515,8 @@ def main() -> int:
     ap.add_argument("--listar", action="store_true")
     ap.add_argument("--saldo", action="store_true")
     ap.add_argument("--forcar", action="store_true")
+    ap.add_argument("--indexar", action="store_true",
+                    help="só reescreve characters/animacoes.json (não gasta API)")
     ap.add_argument("--destino", default=str(DESTINO))
     args = ap.parse_args()
 
@@ -401,6 +531,16 @@ def main() -> int:
         if usd > 0:
             print(f"   dá para ~{int(usd / 0.095)} assets de UI Pro"
                   f" ou ~{int(usd / 0.0099)} objetos/tiles")
+        return 0
+
+    if args.indexar:
+        m = indexar_animacoes(Path(args.destino) / "characters")
+        for pers, anims in m.items():
+            for nome, dados in anims.items():
+                print(f"  {pers} · {nome}: {len(dados['direcoes'])} direções, "
+                      f"{sum(dados['direcoes'].values())} quadros")
+        if not m:
+            print("  (nenhuma animação em disco)")
         return 0
 
     if args.apenas:
@@ -449,10 +589,17 @@ def main() -> int:
             continue
         seed = abs(hash(pid)) % 100000
         try:
-            imagens, envio = GERADORES[spec["tipo"]](spec, seed)
-            for idx, (nome, img) in enumerate(imagens):
-                destino_img = alvo if idx == 0 else pasta / f"{pid}_{nome or idx}.png"
-                img.save(destino_img)
+            if spec["tipo"] == "animacao":
+                imagens, envio = gerar_animacao(spec, seed, pasta)
+                # cada quadro vira um arquivo: <id>_<anim>_<direcao>_<n>.png
+                for nome, img in imagens:
+                    img.save(pasta / f"{pid}_{nome}.png")
+                indexar_animacoes(pasta)   # manifesto que a Godot lê
+            else:
+                imagens, envio = GERADORES[spec["tipo"]](spec, seed)
+                for idx, (nome, img) in enumerate(imagens):
+                    destino_img = alvo if idx == 0 else pasta / f"{pid}_{nome or idx}.png"
+                    img.save(destino_img)
             feitos += 1
             extra = ""
             if spec["tipo"] == "tileset":
