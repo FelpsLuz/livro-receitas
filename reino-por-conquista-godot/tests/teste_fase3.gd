@@ -95,8 +95,8 @@ func _init() -> void:
 		and s3b["fila_recrutamento"].size() == 1
 		and int(s3b["fila_recrutamento"][0]["restantes"]) == 3)
 	ok("cronômetro do lote preservado",
-		int(s3b["fila_recrutamento"][0]["restante_seg"])
-		== int(s3["fila_recrutamento"][0]["restante_seg"]))
+		int(s3b["fila_recrutamento"][0]["restante"])
+		== int(s3["fila_recrutamento"][0]["restante"]))
 
 	# cancelar devolve metade
 	var ouro_antes: int = int(s3["jogador"]["ouro"])

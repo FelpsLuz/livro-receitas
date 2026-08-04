@@ -16,6 +16,8 @@ const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
 const Sinais = preload("res://scripts/sinais.gd")
+const Relogio = preload("res://scripts/relogio.gd")
+const Marchas = preload("res://scripts/marchas.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -46,6 +48,8 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"choques": [],             # empurrões de preço com prazo (economia.gd)
 		"flagras": {},             # espiões seus pegos por reino (intriga.gd)
 		"informantes": [],         # ouvidos comprados na taverna
+		"marchas": [],             # exércitos na estrada (marchas.gd)
+		"minuto": 0,               # relógio único do mundo (relogio.gd)
 	}
 	Economia.inicializar_mercados(state)
 	Geopolitica.inicializar(state)
@@ -89,6 +93,9 @@ static func passar_mes(state: Dictionary) -> void:
 		Economia.tick_choques(state)
 		Economia.tick_guerras(state, log)
 		Geopolitica.tick(state, log)
+		# as marchas já despachadas continuam: quem está na estrada não sabe
+		# que o senhor foi preso, e volta para uma casa sem dono
+		Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 		# de propósito: sem tick_terra e sem tick_exercito — sua casa apodrece
 		return
 
@@ -108,8 +115,8 @@ static func passar_mes(state: Dictionary) -> void:
 	Geopolitica.tick(state, log)          # o mundo dos NPCs anda sozinho
 	Cidadaos.tick(state, log)             # a sua sociedade também
 	Taverna.tick(state, log)              # informantes cobram e reportam
-	# um mês de jogo vale SEG_POR_MES de treino no quartel
-	Recrutamento.avancar(state, Recrutamento.SEG_POR_MES, log)
+	# um mês de jogo = 600 minutos: empurra quartel E marchas pelo mesmo relógio
+	Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 	Clas.tick(state, log)
 	Intriga.tick_familia(state, log)
 	state["contratos"] = Contratos.gerar(state)
@@ -305,9 +312,17 @@ static func carregar() -> Variant:
 ## com `.get()` espalhado por dez arquivos) mantém o resto do código simples
 ## e garante que um save antigo carregue sem quebrar.
 static func _migrar(state: Dictionary) -> Dictionary:
-	for campo in ["fila_recrutamento", "pactos", "choques", "informantes"]:
+	for campo in ["fila_recrutamento", "pactos", "choques", "informantes", "marchas"]:
 		if not state.has(campo):
 			state[campo] = []
+	if not state.has("minuto"):
+		state["minuto"] = 0
+	# a fila guardava `restante_seg` quando o quartel tinha relógio próprio;
+	# agora tudo é minuto de jogo, e o nome mentiria sobre a unidade
+	for item in state.get("fila_recrutamento", []):
+		if item.has("restante_seg") and not item.has("restante"):
+			item["restante"] = item["restante_seg"]
+			item.erase("restante_seg")
 	for campo in ["relacoes_npc", "flagras"]:
 		if not state.has(campo):
 			state[campo] = {}

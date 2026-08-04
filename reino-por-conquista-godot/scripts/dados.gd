@@ -86,6 +86,49 @@ const FASES_NOME := {"arq": "Disparo", "cav": "Choque", "inf": "Corpo a corpo"}
 ## Chaves antigas → novas, para saves anteriores à Fase 3.
 const TROPAS_RENOMEADAS := {"cavaleiro": "cav_leve"}
 
+# ---------------------------------------------------------------
+# GRAFO DE ROTAS — o mapa é uma REDE, não um plano cartesiano.
+#
+# Só existem as ligações listadas aqui. Isso cria gargalos de verdade: o
+# Império fica entre os Touros e o sul, então quem quiser bater nos Leões
+# saindo do norte passa por terras imperiais — ou dá a volta pelo Jardim.
+#
+#   distancia : campos a percorrer (o tempo sai daqui × velocidade da tropa)
+#   perigo    : chance POR DIA de estrada de um encontro ruim
+#
+# A chave é "A_B"; a rota vale nos dois sentidos, e `Rotas.entre()` procura
+# "B_A" antes de desistir.
+# ---------------------------------------------------------------
+const ROTAS := {
+	# a vizinhança do jogador — os Touros são o quintal dele
+	"jogador_touros":     {"distancia": 5,  "perigo": 0.06},
+	"jogador_alvorecer":  {"distancia": 9,  "perigo": 0.10},
+	"jogador_sem_rei":    {"distancia": 7,  "perigo": 0.22},
+
+	# o eixo norte-sul passa pelo Império: é o gargalo do mapa
+	"touros_imperio":     {"distancia": 8,  "perigo": 0.08},
+	"touros_rosa":        {"distancia": 11, "perigo": 0.12},
+	"imperio_alvorecer":  {"distancia": 6,  "perigo": 0.05},
+	"imperio_leoes":      {"distancia": 9,  "perigo": 0.09},
+
+	# o sul, mais fechado e mais perigoso
+	"alvorecer_aguias":   {"distancia": 7,  "perigo": 0.07},
+	"leoes_aguias":       {"distancia": 6,  "perigo": 0.10},
+	"leoes_rosa":         {"distancia": 10, "perigo": 0.13},
+
+	# as bordas do mundo, onde a lei não chega
+	"rosa_sem_rei":       {"distancia": 8,  "perigo": 0.20},
+	"aguias_sem_rei":     {"distancia": 12, "perigo": 0.25},
+}
+
+## Rota de fallback quando o par não existe no grafo: caro e arriscado, como
+## deve ser atravessar terra que ninguém mapeou.
+const ROTA_DESCONHECIDA := {"distancia": 20, "perigo": 0.30}
+
+## O "Reino sem Rei": destino que não é um dos seis, e por isso não está
+## em REINOS_BASE. É a porta para fundar o próprio reino.
+const SEM_REI := {"id": "sem_rei", "nome": "Reino sem Rei", "capital": "Trono Vazio"}
+
 # linha vence cunha; cunha vence cerco; cerco vence linha
 const FORMACOES := {
 	"linha": {"nome": "Linha de Escudos", "vence_de": "cunha"},

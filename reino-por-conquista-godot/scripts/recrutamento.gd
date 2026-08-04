@@ -1,5 +1,5 @@
 # ============================================================
-# FILA DE RECRUTAMENTO — treino em SEGUNDOS, com Timer.
+# FILA DE RECRUTAMENTO — treino cronometrado, com Timer.
 #
 # A fila é FIFO e mora INTEIRA no `state`: um Timer é um nó da cena e o save
 # é um Dictionary em JSON. Se o tempo restante vivesse no Timer, quem salvasse
@@ -7,8 +7,9 @@
 # a verdade está sempre no dicionário, e por isso atravessa save/load intacta.
 #
 # Quem avança o tempo:
-#   · o Timer da cena, 1×/segundo   → Recrutamento.avancar(state, 1, log)
-#   · o turno mensal do jogo        → Recrutamento.avancar(state, SEG_POR_MES, log)
+#   · o Timer da cena, 1 minuto de jogo por segundo real
+#   · o turno mensal do jogo, 600 minutos de uma vez
+# Ambos entram por Relogio.avancar(), que também empurra as marchas.
 # Os dois passam pelo MESMO caminho, então o comportamento é idêntico nos dois
 # modos de jogo e os testes exercitam o código de verdade.
 # ============================================================
@@ -17,8 +18,8 @@ extends RefCounted
 const Dados = preload("res://scripts/dados.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 
-## Quanto tempo de treino um mês de jogo vale. É a ponte entre o relógio de
-## segundos (fila) e o relógio de meses (mundo) — calibre AQUI, num lugar só.
+## Compatibilidade: o mundo agora tem um relógio só (relogio.gd) e a unidade
+## é o MINUTO DE JOGO. Mantido para quem ainda referencia a constante antiga.
 const SEG_POR_MES := 600
 
 ## Quartel melhor treina mais rápido: -8% por nível de terra, com piso.
@@ -75,27 +76,27 @@ static func enfileirar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
 
 	state["jogador"]["ouro"] -= custo
 	var f := fila(state)
-	# `restante_seg` é o que falta para a PRÓXIMA unidade sair. Só o lote da
+	# `restante` é o que falta para a PRÓXIMA unidade sair. Só o lote da
 	# frente tem cronômetro andando; os de trás esperam a vez (um quartel só).
-	f.append({"tipo": tipo, "restantes": qtd, "restante_seg": tempo_de(state, tipo)})
-	return {"ok": true, "msg": "%d× %s em treinamento (%ds cada)."
+	f.append({"tipo": tipo, "restantes": qtd, "restante": tempo_de(state, tipo)})
+	return {"ok": true, "msg": "%d× %s em treinamento (%d min cada)."
 		% [qtd, Dados.TROPAS[tipo]["nome"], tempo_de(state, tipo)]}
 
 ## Empurra o cronômetro. É o único ponto que entrega tropa.
 ##
-## O laço tem que ser `while`: avançar um mês de uma vez (600 s) precisa
+## O laço tem que ser `while`: avançar um mês de uma vez (600 min) precisa
 ## entregar o LOTE INTEIRO, não uma unidade. E o excedente de cada entrega
 ## é reaproveitado na próxima — senão a fila anda em passo de tartaruga
 ## sempre que o jogador pula vários turnos.
-static func avancar(state: Dictionary, segundos: int, log: Callable = Callable()) -> int:
+static func avancar(state: Dictionary, minutos: int, log: Callable = Callable()) -> int:
 	var f := fila(state)
 	var entregues := 0
-	var restante := segundos
+	var restante := minutos
 	while restante > 0 and not f.is_empty():
 		var item: Dictionary = f[0]
-		var falta: int = int(item["restante_seg"])
+		var falta: int = int(item["restante"])
 		if restante < falta:
-			item["restante_seg"] = falta - restante
+			item["restante"] = falta - restante
 			restante = 0
 			break
 		# a unidade da frente ficou pronta
@@ -110,9 +111,9 @@ static func avancar(state: Dictionary, segundos: int, log: Callable = Callable()
 			if f.is_empty():
 				Sinais.emitir(&"fila_vazia")
 			else:
-				f[0]["restante_seg"] = tempo_de(state, f[0]["tipo"])
+				f[0]["restante"] = tempo_de(state, f[0]["tipo"])
 		else:
-			item["restante_seg"] = tempo_de(state, tipo)
+			item["restante"] = tempo_de(state, tipo)
 	if entregues > 0 and log.is_valid():
 		log.call("O quartel entregou %d recruta(s)." % entregues)
 	return entregues
@@ -128,17 +129,17 @@ static func cancelar(state: Dictionary, indice: int) -> Dictionary:
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + volta
 	f.remove_at(indice)
 	if indice == 0 and not f.is_empty():
-		f[0]["restante_seg"] = tempo_de(state, f[0]["tipo"])
+		f[0]["restante"] = tempo_de(state, f[0]["tipo"])
 	return {"ok": true, "msg": "Treinamento cancelado. %d de ouro devolvidos." % volta}
 
-## Segundos até a fila inteira acabar — para a barra de progresso da UI.
-static func segundos_restantes(state: Dictionary) -> int:
+## Minutos de jogo até a fila inteira acabar — para a barra de progresso.
+static func minutos_restantes(state: Dictionary) -> int:
 	var t := 0
 	var primeiro := true
 	for item in fila(state):
 		var unitario := tempo_de(state, item["tipo"])
 		if primeiro:
-			t += int(item["restante_seg"]) + unitario * (int(item["restantes"]) - 1)
+			t += int(item["restante"]) + unitario * (int(item["restantes"]) - 1)
 			primeiro = false
 		else:
 			t += unitario * int(item["restantes"])

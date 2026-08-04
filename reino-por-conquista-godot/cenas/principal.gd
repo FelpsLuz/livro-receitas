@@ -27,6 +27,9 @@ const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
+const Marchas = preload("res://scripts/marchas.gd")
+const Relogio = preload("res://scripts/relogio.gd")
+const Rotas = preload("res://scripts/rotas.gd")
 
 const NPCS_TAVERNA := [
 	{"id": "taverneiro", "nome": "Bram, o Taverneiro", "personalidade": "ganancioso"},
@@ -212,12 +215,14 @@ func _montar_quartel() -> void:
 func _tique_quartel() -> void:
 	if state.is_empty() or state.get("fim") != null:
 		return
-	if Recrutamento.fila(state).is_empty():
+	# nada com prazo pendente? o relógio não precisa girar
+	if Recrutamento.fila(state).is_empty() and Marchas.lista(state).is_empty():
 		return
-	if Recrutamento.avancar(state, 1, Jogo.log_para(state)) > 0:
+	var r: Dictionary = Relogio.avancar(state, 1, Jogo.log_para(state))
+	if int(r["recrutas"]) > 0 or not r["marchas"].is_empty():
 		Sfx.tocar(self, "tique")
 		Jogo.salvar(state)
-		atualizar()          # só redesenha quando algo REALMENTE saiu do quartel
+		atualizar()          # só redesenha quando algo REALMENTE aconteceu
 
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")
@@ -511,14 +516,14 @@ func _aba_exercito(c: Container) -> void:
 	var fila: Array = Recrutamento.fila(state)
 	if not fila.is_empty():
 		_titulo_secao(c, "⏳ Quartel — %s até o último recruta"
-			% _mmss(Recrutamento.segundos_restantes(state)))
+			% _mmss(Recrutamento.minutos_restantes(state)))
 		for i in fila.size():
 			var item: Dictionary = fila[i]
 			var hf2 := _card(c)
 			var lf := Label.new()
 			lf.text = "%s ×%d — próximo em %s" % [
 				Dados.TROPAS[item["tipo"]]["nome"], item["restantes"],
-				_mmss(int(item["restante_seg"]))]
+				_mmss(int(item["restante"]))]
 			lf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			hf2.add_child(lf)
 			var idx := i
@@ -528,6 +533,73 @@ func _aba_exercito(c: Container) -> void:
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
+	# ---- exércitos na estrada ----
+	# O jogador precisa VER que mandou gente e quanto falta para o impacto,
+	# senão o exército some do inventário e parece bug.
+	var transito: Array = Marchas.em_transito(state)
+	if not transito.is_empty():
+		_titulo_secao(c, "🏇 Exércitos em marcha")
+		for mt in transito:
+			var hm := _card(c)
+			var lm := Label.new()
+			var rumo: String = "→ %s" % Rotas.nome_do(state, mt["alvo"]) \
+				if mt["fase"] == "ida" else "← voltando de %s" % Rotas.nome_do(state, mt["alvo"])
+			var carga := ""
+			for g in mt["carga"]:
+				carga += " · %s %d" % [g, int(mt["carga"][g])]
+			lm.text = "%d homens %s (%s) — chega em %s%s" % [
+				mt["homens"], rumo, mt["intencao"], mt["texto_faltam"], carga]
+			lm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			lm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hm.add_child(lm)
+			if mt["fase"] == "ida":
+				var mid: String = mt["id"]
+				_botao(hm, "Recuar", func():
+					var r: Dictionary = Marchas.recolher(state, mid)
+					_aviso(r["msg"])
+					Jogo.salvar(state)
+					atualizar())
+
+	# ---- enviar exército ----
+	# A estimativa de marcha aparece ANTES de decidir: é a informação que
+	# transforma "atacar" numa escolha de logística, não num clique.
+	if Combate.total_homens(j["tropas"]) > 0:
+		_titulo_secao(c, "⚔ Enviar exército")
+		_par(c, "Metade das suas tropas parte. Saque volta rápido com carga; cerco quebra o inimigo.")
+		for alvo in Rotas.todos_os_nos():
+			if alvo == "jogador":
+				continue
+			var metade := {}
+			for tipo in j["tropas"]:
+				var q: int = int(int(j["tropas"][tipo]) / 2)
+				if q > 0:
+					metade[tipo] = q
+			if metade.is_empty():
+				break
+			var est: Dictionary = Marchas.estimar(state, alvo, metade)
+			var ha := _card(c)
+			var la := Label.new()
+			la.text = "%s — %s de marcha · risco %s\n%s" % [
+				Rotas.nome_do(state, alvo), Relogio.texto_dias(int(est["minutos"])),
+				est["risco"], est["trajeto"]]
+			la.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			la.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			ha.add_child(la)
+			var destino: String = alvo
+			var envio: Dictionary = metade
+			_botao(ha, "Saque", func():
+				var r: Dictionary = Marchas.despachar(state, destino, envio, "saque")
+				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
+			_botao(ha, "Cerco", func():
+				var r: Dictionary = Marchas.despachar(state, destino, envio, "cerco")
+				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
+
 	_titulo_secao(c, "Formação de batalha")
 	var hf := HBoxContainer.new()
 	c.add_child(hf)
