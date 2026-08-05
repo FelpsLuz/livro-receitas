@@ -1,17 +1,23 @@
 # ============================================================
-# VITRINE DO OVERHAUL — prova visual de que os quatro grupos de assets Pro
-# estão ligados a nós NATIVOS da Godot, todos na mesma tela:
+# VITRINE — prova de que os quatro grupos de nós NATIVOS da Godot estão
+# ligados e montam na mesma tela:
 #   TileMapLayer (terreno)  ·  Sprite2D/AnimatedSprite2D (objetos e personagens)
-#   NinePatchRect (UI)      ·  Theme com StyleBoxTexture (painéis e botões)
+#   NinePatchRect (UI)      ·  Theme com StyleBox (painéis e botões)
 #   godot --path reino-por-conquista-godot res://cenas/vitrine_v2.tscn
+#
+# VISUAL STRIP: era a vitrine da ARTE; virou a vitrine da ESTRUTURA. Cada
+# peça agora é um caixote, e o que ela prova é o que continua importando —
+# que a grade Wang pinta, que o 9-slice estica sem degenerar, que o herói
+# tem as 8 direções em movimento e que o Theme chega nos botões.
 # ============================================================
 extends Control
 
+const Arte = preload("res://scripts/arte.gd")
+const VilaCena = preload("res://scripts/vila_cena.gd")
 const UIv2 = preload("res://scripts/ui_v2.gd")
 const MapaV2 = preload("res://scripts/mapa_v2.gd")
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const Tema = preload("res://scripts/tema.gd")
-const Vfx = preload("res://scripts/vfx.gd")
 const Icones = preload("res://scripts/icones.gd")
 
 func _ready() -> void:
@@ -39,22 +45,15 @@ func _ready() -> void:
 	# os dois transformava a vitrine numa colagem ilegível
 	var col := 0
 	for nome in objetos:
-		var caminho: String = "res://assets_v2/objects/" + nome + ".png"
-		if not ResourceLoader.exists(caminho):
+		if not VilaCena.TAMANHO_OBJ.has(nome):
 			continue
+		var d: Vector2i = VilaCena.TAMANHO_OBJ[nome]
 		var s := Sprite2D.new()
-		s.texture = load(caminho)
+		s.texture = Arte.caixa(d.x, d.y)
 		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		s.position = Vector2(64 + (col % 7) * 66, 110 + int(col / 7) * 95)
 		s.scale = Vector2(0.55, 0.55)
 		s.centered = true
-		# a vitrine também prova os VFX: fumaça na forja, fogo na fogueira
-		if nome == "ferraria":
-			var fu := Vfx.fumaca(Vector2(35, -70), true)
-			if fu != null:
-				s.add_child(fu)
-		elif nome == "fogueira_acampamento":
-			s.add_child(Vfx.fogo(Vector2(0, 6), 0.8))
 		mundo.add_child(s)
 		col += 1
 

@@ -1,19 +1,27 @@
 # ============================================================
-# ÍCONES — os itens gerados pelo PixelLab (assets_v2/icons/) para a UI Pro.
+# ÍCONES — os símbolos da UI (mercado, inventário, HUD).
 #
-# Dois usos:
-#   textura("trigo")            → Texture2D do ícone (ou null)
-#   slot("trigo", 48)           → quadro_inventario 9-slice com o ícone dentro
-#   de_mercadoria("cavalos")    → ícone da MERCADORIA de dados.gd
+# VISUAL STRIP: os PNG foram removidos do projeto. A lista TODOS continua
+# valendo como CONTRATO — é ela que diz quais estados a UI precisa saber
+# distinguir — mas toda textura agora é um caixote cinza do tamanho pedido.
 #
-# O mercado, o inventário de trocas e a vitrine passam por aqui. Sem o PNG,
-# devolve null e a UI continua só com texto — nunca quebra.
+#   textura("trigo")            → caixote 32×32
+#   slot("trigo", 48)           → moldura + caixote dentro
+#   de_mercadoria("cavalos")    → caixote da MERCADORIA de dados.gd
+#
+# `tem()` responde SEMPRE true: o caixote nunca falta. Quem chamava para
+# decidir entre ícone e texto continua escolhendo o ícone, e o layout fica
+# igual ao que era com arte — que é o ponto de um placeholder.
 # ============================================================
 extends RefCounted
 
 const UIv2 = preload("res://scripts/ui_v2.gd")
+const Arte = preload("res://scripts/arte.gd")
 
-const PASTA := "res://assets_v2/icons/"
+## Lado do caixote: 64px, que é o tamanho em que os ícones foram gerados.
+## Manter a dimensão da arte antiga é o que preserva o layout — `imagem()`
+## reescala para o `tamanho` pedido pelo chamador, como sempre fez.
+const LADO := 64
 
 ## Tudo o que o gerador sabe fazer (espelha o CATALOGO de generate_assets_v2.py).
 const TODOS := ["moedas", "trigo", "madeira", "espada", "escudo", "arco",
@@ -31,13 +39,10 @@ static func _id(nome: String) -> String:
 	return nome if nome.begins_with("icone_") else "icone_" + nome
 
 static func tem(nome: String) -> bool:
-	return ResourceLoader.exists(PASTA + _id(nome) + ".png")
+	return _id(nome) != ""
 
-static func textura(nome: String) -> Texture2D:
-	if not tem(nome):
-		return null
-	var t = load(PASTA + _id(nome) + ".png")
-	return t if t is Texture2D else null
+static func textura(_nome: String) -> Texture2D:
+	return Arte.caixa(LADO)
 
 ## Ícone da mercadoria de dados.gd — os ids coincidem de propósito.
 static func de_mercadoria(g_id: String) -> Texture2D:
@@ -49,6 +54,7 @@ static func imagem(nome: String, tamanho: int = 32) -> TextureRect:
 	if tex == null:
 		return null
 	var tr := TextureRect.new()
+	tr.name = "Icone_" + _id(nome)
 	tr.texture = tex
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	tr.custom_minimum_size = Vector2(tamanho, tamanho)
@@ -83,13 +89,6 @@ static func slot(nome: String, tamanho: int = 48) -> Control:
 		base.add_child(icone)
 	return base
 
-## Relatório para testes e resumo de build.
+## Relatório para testes. No strip nada falta — todo ícone tem caixote.
 static func inventario() -> Dictionary:
-	var tem_: Array = []
-	var falta: Array = []
-	for n in TODOS:
-		if tem(n):
-			tem_.append(n)
-		else:
-			falta.append(n)
-	return {"tem": tem_, "falta": falta}
+	return {"tem": TODOS.duplicate(), "falta": []}

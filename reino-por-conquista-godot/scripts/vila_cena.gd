@@ -4,7 +4,6 @@
 #
 #   TileMapLayer (terreno Wang)  ·  Sprite2D dos objetos do PixelLab
 #   AnimatedSprite2D do herói caminhando  ·  Y-Sort ordenando tudo pela base
-#   Sombras, fumaça, fogo e moldura de floresta (scripts/vfx.gd)
 #
 # Mantém a MESMA API da CidadeCena antiga (.estado e semear_npcs()), então a
 # principal.gd troca uma pela outra sem saber a diferença. Sem os assets v2,
@@ -15,8 +14,34 @@ extends SubViewportContainer
 
 const MapaV2 = preload("res://scripts/mapa_v2.gd")
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
-const LuzDoSol = preload("res://scripts/luz_do_sol.gd")
-const Vfx = preload("res://scripts/vfx.gd")
+const Arte = preload("res://scripts/arte.gd")
+
+## VISUAL STRIP: as dimensões que cada objeto da vila tinha na arte gerada.
+## Não é decoração — `_ancorar()` põe a origem nos PÉS usando a ALTURA da
+## textura, e `ESCALA_OBJ` multiplica em cima disso. Um caixote de tamanho
+## errado moveria a construção de lugar e furaria o Y-Sort. A tabela é o que
+## mantém a planta da vila idêntica à de antes.
+const TAMANHO_OBJ := {
+	"arvore_carvalho": Vector2i(128, 160),
+	"arvore_pinheiro": Vector2i(112, 160),
+	"barraca_mercado": Vector2i(144, 128),
+	"barril_carga": Vector2i(80, 80),
+	"bau_tesouro": Vector2i(96, 96),
+	"carroca": Vector2i(128, 96),
+	"casa_camponesa": Vector2i(160, 160),
+	"ferraria": Vector2i(160, 160),
+	"fogueira_acampamento": Vector2i(96, 96),
+	"moinho_vento": Vector2i(160, 192),
+	"muralha_pedra": Vector2i(160, 128),
+	"poco_pedra": Vector2i(96, 112),
+	"ponte_madeira": Vector2i(112, 160),
+	"portao_fortificado": Vector2i(160, 160),
+	"sacos_carga": Vector2i(80, 64),
+	"tenda_grande": Vector2i(128, 112),
+	"tenda_simples": Vector2i(96, 96),
+	"tocha_estaca": Vector2i(48, 96),
+	"torre_castelo": Vector2i(160, 192),
+}
 
 ## O mundo é montado no tamanho nativo da arte (casas de 160px, herói de 124px)
 ## e reduzido por um fator INTEIRO de 1:2. Meio pixel de escala é o que faz
@@ -62,7 +87,6 @@ var rua: TileMapLayer
 var agua: TileMapLayer
 var floresta: TileMapLayer
 var heroi: AnimatedSprite2D
-var luz: DirectionalLight2D
 var camera: Camera2D
 
 var _objetos: Array = []
@@ -75,7 +99,6 @@ var _rng := RandomNumberGenerator.new()
 var estado: Dictionary = {}:
 	set(v):
 		estado = v
-		_atualizar_luz()
 		_montar_vila()
 
 ## A vila só existe se o terreno e o herói animado existirem: sem isso,
@@ -107,9 +130,6 @@ func _init() -> void:
 	mundo.scale = Vector2(ESCALA_MUNDO, ESCALA_MUNDO)
 	viewport.add_child(mundo)
 
-	luz = LuzDoSol.new()
-	luz.forca = 0.45          # o rio some no cinza se o sol quente vem inteiro
-	viewport.add_child(luz)
 
 	# Câmera: com stretch ligado, o SubViewport assume o TAMANHO DO CONTAINER —
 	# na aba isso dá ~480px, e o mundo tem 960. Sem câmera o jogador veria só o
@@ -242,11 +262,6 @@ func _criar_heroi() -> void:
 		return
 	heroi = PersonagensV2.criar("heroi_jogador", ESCALA_HEROI)
 	_ancorar(heroi)
-	heroi.add_child(Vfx.sombra(124.0 * 0.42))
-	var sh := Vfx.sombra_projetada(heroi.sprite_frames.get_frame_texture(
-		heroi.animation, 0), 0.28) if heroi.sprite_frames != null else null
-	if sh != null:
-		heroi.add_child(sh)
 	heroi.position = Vector2(MUNDO.x * 0.5, 780)
 	mundo.add_child(heroi)
 	# ronda pela rua: portão → praça do mercado → pontas da rua transversal
@@ -416,12 +431,12 @@ func _montar_vila() -> void:
 ## Um objeto da vila: sprite ancorado nos pés, na escala certa, com sombra —
 ## e com o efeito que lhe cabe (fumaça na chaminé, fogo na fogueira e tocha).
 func _objeto(nome: String, pos: Vector2) -> Sprite2D:
-	var caminho: String = "res://assets_v2/objects/%s.png" % nome
-	if not ResourceLoader.exists(caminho):
+	if not TAMANHO_OBJ.has(nome):
 		return null
+	var d: Vector2i = TAMANHO_OBJ[nome]
 	var s := Sprite2D.new()
 	s.name = "Obj_" + nome
-	s.texture = load(caminho)
+	s.texture = Arte.caixa(d.x, d.y)
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	s.centered = true
 	_ancorar(s)
@@ -434,30 +449,6 @@ func _objeto(nome: String, pos: Vector2) -> Sprite2D:
 		s.scale.x = e * 1.5
 		s.scale.y = (pos.y - 830.0) / s.texture.get_height()
 	s.position = pos
-	# a ponte deita sobre a água: sem sombra, e atrás de quem passa por ela
-	if nome != "ponte_madeira":
-		# duas camadas: a elipse ANCORA o objeto no chão (contato), e a
-		# silhueta projetada diz o QUE está ali. Sozinha, a elipse dá a
-		# mesma mancha oval para uma torre e para um barril.
-		s.add_child(Vfx.sombra(s.texture.get_width() * 0.55))
-		# a escala do pai já é herdada pelo filho — mexer em proj.scale.x aqui
-		# aplicaria o mesmo fator duas vezes
-		var proj := Vfx.sombra_projetada(s.texture)
-		if proj != null:
-			s.add_child(proj)
-	match nome:
-		"casa_camponesa":
-			var f := Vfx.fumaca(Vector2(34, -150))
-			if f != null:
-				s.add_child(f)
-		"ferraria":
-			var f2 := Vfx.fumaca(Vector2(35, -150), true)
-			if f2 != null:
-				s.add_child(f2)
-		"fogueira_acampamento":
-			s.add_child(Vfx.fogo(Vector2(0, -34), 1.0))
-		"tocha_estaca":
-			s.add_child(Vfx.fogo(Vector2(0, -80), 0.45))
 	mundo.add_child(s)
 	return s
 
@@ -477,11 +468,6 @@ func _semear() -> void:
 	for i in quantos:
 		var p: AnimatedSprite2D = PersonagensV2.criar(elenco[i % elenco.size()], ESCALA_ALDEAO)
 		_ancorar(p)
-		p.add_child(Vfx.sombra(40.0))
-		var sp := Vfx.sombra_projetada(p.sprite_frames.get_frame_texture(
-			p.animation, 0), 0.26) if p.sprite_frames != null else null
-		if sp != null:
-			p.add_child(sp)
 		var origem := Vector2(360.0 + _rng.randf() * 1200.0, 560.0 + _rng.randf() * 240.0)
 		p.position = origem
 		mundo.add_child(p)
@@ -493,6 +479,3 @@ func semear_npcs() -> void:
 	_nivel_montado = -99      # força a remontagem no próximo estado
 	_montar_vila()
 
-func _atualizar_luz() -> void:
-	if luz != null and not estado.is_empty():
-		luz.definir_pelo_mes(int(estado.get("mes", 6)))

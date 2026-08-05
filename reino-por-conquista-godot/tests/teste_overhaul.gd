@@ -1,6 +1,7 @@
 # ============================================================
 # TESTE DE INTEGRIDADE DO OVERHAUL v2
-# Confere que os assets Pro do PixelLab estão ligados aos nós nativos da Godot:
+# Confere que os nós nativos da Godot estão ligados e montam (VISUAL STRIP:
+# a arte virou caixote, a ESTRUTURA continua sendo o que se testa aqui):
 # NinePatchRect na UI, SpriteFrames/AnimatedSprite2D nos personagens e
 # TileSet/TileMapLayer no terreno — e que nada fica sem textura quando um
 # asset ainda não existe.
@@ -166,18 +167,6 @@ func _initialize() -> void:
 			MapaV2.montar("inexistente") == null)
 
 	# ---------- IMPORTAÇÃO ----------
-	# todo PNG em assets_v2 precisa do .import, senão o Godot não o carrega no build
-	var sem_import: Array = []
-	for pasta in ["ui", "characters", "tilesets", "objects", "vfx", "icons"]:
-		var caminho: String = "res://assets_v2/" + pasta
-		var d := DirAccess.open(caminho)
-		if d == null:
-			continue
-		for arq in d.get_files():
-			if arq.ends_with(".png") and not FileAccess.file_exists(caminho + "/" + arq + ".import"):
-				sem_import.append(pasta + "/" + arq)
-	ok("todo PNG de assets_v2 tem .import", sem_import.is_empty(), ", ".join(sem_import))
-
 	# ---------- VITRINE: a cena de demonstração monta inteira? ----------
 	var cena_v := load("res://cenas/vitrine_v2.tscn")
 	ok("cena da vitrine carrega", cena_v != null)

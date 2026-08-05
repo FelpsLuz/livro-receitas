@@ -103,23 +103,27 @@ godot --headless --path . --script res://tests/teste_nucleo.gd
 - A versão web original (`../reino-por-conquista`) continua sendo a referência jogável
   enquanto a fase 2 avança.
 
-## Sprites de personagem via PixelLab
+## Visual strip — o projeto roda sem arte
 
-O elenco (6 reis, 3 NPCs, 4 chefes bárbaros e 5 tropas/inimigos) pode ser gerado
-por IA com o script `generate_assets.py` na raiz do repositório, que lê a lore do
-jogo para montar os prompts e grava PNG com fundo transparente em
-`res://assets/sprites/`.
+Toda a arte foi removida do projeto. Nenhum PNG é carregado em lugar nenhum;
+todo `Texture2D` nasce em `scripts/arte.gd` como um **caixote cinza** do
+tamanho que aquela entidade ocupava. A mecânica é 100% a de antes.
+
+O que ficou de propósito:
+
+| fica | por quê |
+|---|---|
+| `assets/fontes/` | tipografia não é arte de cena. Um jogo de economia em que não se lê "custo 80" é um jogo quebrado, e as duas fontes foram escolhidas por medida (`ferramentas/FONTES.md`) |
+| `assets_v2/characters/animacoes.json` | metadados de animação — quantos quadros tem cada caminhada, em que direções. É o que mantém `mover()` e as 8 direções funcionando |
+| o tema de pergaminho (`scripts/tema.gd`) | é `StyleBoxFlat` desenhado em código, zero arquivo. É o contraste que torna a interface legível |
+
+As dimensões da arte antiga viraram constantes, porque são elas que seguram
+o layout: `VilaCena.TAMANHO_OBJ` (a altura de cada objeto ancora o Y-Sort),
+`UIv2.MARGENS` (9-slice), `Icones.LADO`, `Retratos.LADO_RETRATO`. A próxima
+leva de arte tem que respeitar esses números, ou a cena se mexe.
 
 ```bash
-pip install pixellab
-export PIXELLAB_SECRET="sua-chave"
-python3 generate_assets.py --listar     # elenco e prompts
-python3 generate_assets.py --simular    # pipeline sem gastar crédito
-python3 generate_assets.py --tudo       # gera de verdade
-godot --headless --path reino-por-conquista-godot --import
+# a guarda: falha se um PNG voltar ou se um script carregar imagem
+godot --path reino-por-conquista-godot --script res://tests/teste_strip.gd
 ```
 
-A arte entra sozinha: `Retratos.textura(id, humor)` usa o PNG quando existe e cai
-no retrato procedural quando não existe. `SpritesPersonagens.criar_sprite(id)`
-devolve um `Sprite2D` pronto para pixel art, e `cenas/galeria_sprites.tscn`
-mostra o elenco inteiro. Testes: `--script res://tests/teste_sprites.gd`.

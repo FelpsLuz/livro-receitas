@@ -1,15 +1,23 @@
 # ============================================================
-# MAPA v2 — TileSet da Godot 4 a partir do atlas do PixelLab, para TileMapLayer.
+# MAPA v2 — TileSet da Godot 4 para TileMapLayer.
 #
-# O create-tileset devolve um atlas contínuo (Wang/Pro) em
-# assets_v2/tilesets/<nome>.png. Aqui ele vira um TileSet de verdade:
-# TileSetAtlasSource fatiado no tamanho do tile, com colisão e navegação
-# opcionais por tile. Sem o PNG, devolve null e a cena antiga (desenhada em
-# _draw) continua valendo.
+# VISUAL STRIP: o atlas de arte saiu; a GRADE ficou. Este arquivo é quase
+# todo mecânica e por isso mudou pouco — o TileSet continua com camada de
+# física e camada de navegação, com polígono de colisão nos tiles sólidos e
+# malha de navegação nos caminháveis. Só a textura virou caixote.
+#
+# O layout Wang de 4×4 também fica: é ele que decide QUAL tile cada célula
+# recebe, e portanto onde estão as bordas do rio, da lavoura e da rua. A
+# transição some visualmente (todo tile é o mesmo caixote), mas a estrutura
+# que a arte nova vai preencher continua de pé e continua testada.
 # ============================================================
 extends RefCounted
 
-const PASTA := "res://assets_v2/tilesets/"
+const Arte = preload("res://scripts/arte.gd")
+
+## A grade dos atlas: 4×4 tiles. Antes vinha da divisão do PNG pelo tamanho
+## do tile; agora é constante, porque é o layout Wang que a define.
+const GRADE := 4
 
 ## ---- LAYOUT WANG DOS ATLAS DO PIXELLAB ----
 ## Os 16 tiles são as 16 combinações dos 4 CANTOS entre dois materiais: o
@@ -28,17 +36,14 @@ const TILE_VAZIO := Vector2i(0, 3)     # 100% do material de baixo (terra/areia)
 ## Quantas variantes espelhadas existem dos dois tiles puros (a base + 3).
 const VARIANTES := 4
 
-static func tem(nome: String) -> bool:
-	return ResourceLoader.exists(PASTA + nome + ".png")
+## Todo terreno tem caixote — o strip não deixa nenhum atlas faltar.
+static func tem(_nome: String) -> bool:
+	return true
 
 ## Monta o TileSet fatiando o atlas em tiles de `tile` pixels.
 ## `solidos`: coordenadas (Vector2i) do atlas que recebem colisão.
-static func montar(nome: String, tile: int = 32, solidos: Array = []) -> TileSet:
-	if not tem(nome):
-		return null
-	var tex = load(PASTA + nome + ".png")
-	if not (tex is Texture2D):
-		return null
+static func montar(_nome: String, tile: int = 32, solidos: Array = []) -> TileSet:
+	var tex: Texture2D = Arte.atlas(GRADE, GRADE, tile)
 
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(tile, tile)
@@ -54,8 +59,8 @@ static func montar(nome: String, tile: int = 32, solidos: Array = []) -> TileSet
 	# (Configurar antes falha silenciosamente com "p_layer_id out of bounds".)
 	ts.add_source(fonte, 0)
 
-	var colunas := int(tex.get_width() / tile)
-	var linhas := int(tex.get_height() / tile)
+	var colunas := GRADE
+	var linhas := GRADE
 	for y in linhas:
 		for x in colunas:
 			var coord := Vector2i(x, y)
@@ -149,15 +154,10 @@ static func pintar_wang(camada: TileMapLayer, area: Rect2i, dentro: Callable,
 				alt = _variante(x, y)
 			camada.set_cell(celula, 0, coord, alt)
 
-## Só os ATLAS montados (grade 4×4 de tiles Wang) — os tiles avulsos que a API
-## devolve ficam de fora, senão o TileSet sairia com um único tile.
+## Os atlas que a vila usa. Era uma varredura da pasta de arte; virou lista
+## explícita, porque sem arquivo não há o que varrer — e porque a lista É o
+## contrato do que a próxima leva de terreno precisa entregar.
+const ATLAS := ["campo_terra_atlas", "praia_agua_atlas", "grama_pedra_atlas"]
+
 static func disponiveis() -> Array:
-	var achados := []
-	var d := DirAccess.open(PASTA)
-	if d == null:
-		return achados
-	for arq in d.get_files():
-		if arq.ends_with("_atlas.png"):
-			achados.append(arq.get_basename())
-	achados.sort()
-	return achados
+	return ATLAS.duplicate()

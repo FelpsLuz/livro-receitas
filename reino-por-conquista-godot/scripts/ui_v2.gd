@@ -1,15 +1,18 @@
 # ============================================================
-# UI v2 — liga os assets Pro do PixelLab (res://assets_v2/ui/) aos nós da Godot.
+# UI v2 — as molduras e botões da interface.
 #
-# A regra do overhaul: painel de textura vira NinePatchRect, que estica as
-# BORDAS sem deformar os cantos — é o que permite uma moldura de pixel art
-# servir a uma janela de qualquer tamanho sem borrar nem esticar os rebites.
-# Quando um PNG ainda não existe, o tema procedural antigo continua valendo,
-# então a interface nunca fica sem nada.
+# VISUAL STRIP: os PNG foram removidos. As molduras continuam sendo
+# NinePatchRect, com as MESMAS margens 9-slice de antes, mas sobre um
+# caixote cinza. Manter o 9-slice não é capricho: é ele que define quanto
+# a moldura come do retângulo, e portanto o layout de toda janela. Trocar
+# por um Panel liso moveria o conteúdo de lugar.
+#
+# MARGENS continua com os valores medidos na arte antiga porque são eles
+# que a arte NOVA vai ter que respeitar para o layout não mudar de novo.
 # ============================================================
 extends RefCounted
 
-const PASTA := "res://assets_v2/ui/"
+const Arte = preload("res://scripts/arte.gd")
 
 ## Margens 9-slice de cada peça, medidas na imagem gerada (não chutadas):
 ## a moldura de madeira tem ~32px de borda numa arte de 256×256.
@@ -26,13 +29,14 @@ const MARGENS := {
 }
 
 static func tem(nome: String) -> bool:
-	return ResourceLoader.exists(PASTA + nome + ".png")
+	return MARGENS.has(nome)
 
+## O caixote precisa ser MAIOR que a soma das margens 9-slice, senão os
+## cantos se atropelam e o NinePatchRect degenera numa placa só. Três vezes
+## a margem dá folga para o miolo esticar.
 static func textura(nome: String) -> Texture2D:
-	if not tem(nome):
-		return null
-	var t = load(PASTA + nome + ".png")
-	return t if t is Texture2D else null
+	var m: int = MARGENS.get(nome, 24)
+	return Arte.caixa(maxi(64, m * 3))
 
 ## Cria um NinePatchRect pronto: textura, margens e filtro de pixel art.
 ## Devolve null se o asset ainda não foi gerado (o chamador cai no tema antigo).
@@ -92,26 +96,18 @@ static func estilos_botao() -> Dictionary:
 	if normal == null:
 		return {}
 	var estilos := {"normal": normal}
-	var apertado := stylebox("botao_madeira_apertado")
-	estilos["pressed"] = apertado if apertado != null else normal
-	# hover e foco: a mesma arte, um tom mais clara / com realce
+	estilos["pressed"] = stylebox("botao_madeira_apertado")
+	# Os quatro estados precisam continuar DISTINGUÍVEIS: um botão que não
+	# muda ao passar o mouse ou ao desabilitar é defeito de usabilidade, não
+	# de arte. Sobre o caixote cinza a diferença vira só brilho.
 	var hover := stylebox("botao_madeira")
-	if hover != null:
-		hover.modulate_color = Color(1.12, 1.10, 1.02)
-		estilos["hover"] = hover
+	hover.modulate_color = Color(1.25, 1.25, 1.25)
+	estilos["hover"] = hover
 	var desativado := stylebox("botao_madeira")
-	if desativado != null:
-		desativado.modulate_color = Color(0.62, 0.60, 0.58)
-		estilos["disabled"] = desativado
+	desativado.modulate_color = Color(0.55, 0.55, 0.55)
+	estilos["disabled"] = desativado
 	return estilos
 
-## Relatório do que já existe — usado pelos testes e pelo resumo de build.
+## Relatório para os testes. No strip nada falta — toda peça tem caixote.
 static func inventario() -> Dictionary:
-	var tem_ := []
-	var falta := []
-	for nome in MARGENS.keys():
-		if tem(nome):
-			tem_.append(nome)
-		else:
-			falta.append(nome)
-	return {"tem": tem_, "falta": falta}
+	return {"tem": MARGENS.keys(), "falta": []}

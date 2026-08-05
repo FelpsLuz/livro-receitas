@@ -10,7 +10,6 @@ extends SceneTree
 const VilaCena = preload("res://scripts/vila_cena.gd")
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const MapaV2 = preload("res://scripts/mapa_v2.gd")
-const Vfx = preload("res://scripts/vfx.gd")
 const Icones = preload("res://scripts/icones.gd")
 
 var passou := 0
@@ -27,7 +26,7 @@ func ok(nome: String, cond: bool, extra: String = "") -> void:
 func _initialize() -> void:
 	print("=== VILA EM NÓS NATIVOS ===")
 
-	ok("assets da vila presentes", VilaCena.disponivel())
+	ok("vila montável (caixotes sempre disponíveis)", VilaCena.disponivel())
 
 	# ---------- direção a partir do vetor de movimento ----------
 	# o Y da tela cresce para BAIXO: descer é "south", não "north"
@@ -102,32 +101,20 @@ func _initialize() -> void:
 		"portao_fortificado" in vila._planta(3).map(func(p): return p[0])
 		and not ("portao_fortificado" in ids1))
 
-	# ---------- INTEGRAÇÃO: sombras, escala e efeitos ----------
-	# uma colagem de PNGs vira cena quando cada coisa está ancorada por uma
-	# sombra, na proporção certa, e o que queima solta fumaça e luz
-	var sem_sombra: Array = []
-	for f in vila.mundo.get_children():
-		if str(f.name).begins_with("Obj_ponte"):
-			continue          # a ponte deita sobre a água: sem sombra mesmo
-		var achou := false
-		for filho in f.get_children():
-			if filho.name == "Sombra":
-				achou = true
-		if not achou:
-			sem_sombra.append(str(f.name))
-	ok("todo objeto e personagem tem sombra", sem_sombra.is_empty(),
-		", ".join(sem_sombra))
+	# ---------- INTEGRAÇÃO: escala e planta ----------
+	# VISUAL STRIP: as asserções de sombra, fumaça e fogo saíram junto com o
+	# vfx.gd. O que restou aqui é o que continua sendo mecânica de cena —
+	# a ESCALA de cada objeto e a sua posição no mundo, que é o que decide
+	# quem cobre quem no Y-Sort.
 	ok("herói na escala da vila (casas parecem casas)",
 		vila.heroi.scale.is_equal_approx(Vector2(VilaCena.ESCALA_HEROI, VilaCena.ESCALA_HEROI)))
 	var barril = vila.mundo.get_node_or_null("Obj_barril_carga")
 	ok("objetos pequenos em escala própria (barril < casa)",
 		barril != null and barril.scale.x < 0.6, str(barril.scale.x if barril else -1.0))
 	var casa = vila.mundo.get_node_or_null("Obj_casa_camponesa")
-	ok("chaminé da casa solta fumaça",
-		casa != null and casa.get_node_or_null("Fumaca") != null)
+	ok("casa camponesa montada no mundo", casa != null)
 	var tocha = vila.mundo.get_node_or_null("Obj_tocha_estaca")
-	ok("tocha do portão com fogo e luz",
-		tocha != null and tocha.get_node_or_null("Fogo") != null)
+	ok("tocha do portão montada no mundo", tocha != null)
 	ok("moldura de floresta pintada",
 		vila.floresta != null and vila.floresta.get_used_cells().size() > 0,
 		"%d células" % (vila.floresta.get_used_cells().size() if vila.floresta else -1))
@@ -220,12 +207,11 @@ func _initialize() -> void:
 		"%d objetos" % vila._objetos.size())
 	ok("acampamento não tem rua calçada", vila.rua.get_used_cells().is_empty(),
 		"%d células" % vila.rua.get_used_cells().size())
-	# acampamento HABITADO: tendas, fogueira acesa, e a ponte que é geografia
+	# acampamento HABITADO: tendas, fogueira, e a ponte que é geografia
 	ok("acampamento tem tendas", vila.mundo.get_node_or_null("Obj_tenda_grande") != null
 		and vila.mundo.get_node_or_null("Obj_tenda_simples") != null)
-	var fogueira = vila.mundo.get_node_or_null("Obj_fogueira_acampamento")
-	ok("fogueira acesa (brasas + luz)",
-		fogueira != null and fogueira.get_node_or_null("Fogo") != null)
+	ok("acampamento tem fogueira",
+		vila.mundo.get_node_or_null("Obj_fogueira_acampamento") != null)
 	ok("ponte permanece no acampamento",
 		vila.mundo.get_node_or_null("Obj_ponte_madeira") != null)
 	# sem terra não há lavoura: o chão é só grama, sem tile de terra arada
@@ -244,7 +230,7 @@ func _initialize() -> void:
 
 	# ---------- ÍCONES DE INVENTÁRIO ----------
 	var inv_i: Dictionary = Icones.inventario()
-	ok("os %d ícones do catálogo gerados" % Icones.TODOS.size(),
+	ok("os %d ícones do catálogo resolvem" % Icones.TODOS.size(),
 		inv_i["falta"].is_empty(), ", ".join(inv_i["falta"]))
 	var slot := Icones.slot("trigo", 48)
 	var com_icone := false

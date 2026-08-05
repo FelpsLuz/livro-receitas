@@ -40,10 +40,8 @@ var estado: Dictionary = {}:
 		_aplicar()
 
 
+## Sempre disponível: no strip o cenário é um caixote, e caixote não falta.
 static func disponivel() -> bool:
-	for n in CenarioV3Cena.NOMES:
-		if not ResourceLoader.exists(CenarioV3Cena.BASE + "verao/" + n + ".png"):
-			return false
 	return true
 
 
