@@ -1,27 +1,30 @@
 # ============================================================
-# PANORAMA — a vila vista de FRENTE, em camadas empilhadas.
+# PANORAMA — a vila vista de FRENTE, em camadas, com EVOLUÇÃO.
 #
-# Substitui a vila em TileMapLayer vista de cima. Não é troca de gosto: uma
-# vista de cima não consegue mostrar céu, serra ao fundo e muralha ao mesmo
-# tempo, e é isso que faz a tela parecer um mundo em vez de um tabuleiro.
+# A referência do usuário é uma cena em elevação: céu, serra, floresta,
+# muralha, castelo, vila viva e um rio com ponte alinhada ao portão. Esta
+# cena a reproduz como PILHA de camadas — e a pilha é o que torna a evolução
+# barata: subir de nível troca PEÇAS, não regenera a ilustração.
 #
-# A pilha, de trás para a frente:
-#   0 céu        1 sol        2 serra distante   3 serra próxima
-#   4 floresta   5 muralha    6 castelo          7 campo
-#   8 construções da vila     9 aldeões          10 rio + ponte
+#   nível 0  acampamento   tendas, fogueira, árvores
+#   nível 1  vila          paliçada de madeira, casas de sapê, horta, poço
+#   nível 2  vila grande   moinho de MADEIRA, feira (tendas listradas),
+#                          campo de treino, barraca, bichos
+#   nível 3  cidade        a paliçada vira MURALHA DE PEDRA, ferraria,
+#                          estábulo com cavalo
+#   nível 4  cidade murada o campo de treino vira ACADEMIA de pedra, o
+#                          moinho vira o de PEDRA, surge o TORREÃO e o
+#                          sobrado de telhado vermelho
+#   nível 5  castelo       o torreão vira o CASTELO da referência
 #
-# O que NÃO é gerado por IA
-# -------------------------
-# A perspectiva atmosférica — quanto mais longe, menos saturado e mais claro —
-# é aplicada aqui, com `modulate` por camada. Pedir isso ao modelo daria um
-# resultado diferente a cada geração; um multiplicador de cor dá o mesmo
-# sempre e é calibrável sem gastar crédito.
+# A luz é a da referência: quente, dourada, viva. Por isso estas camadas NÃO
+# passam pelo requantizador de 48 cores da UI — o teto de croma de lá lavava
+# a cena. A perspectiva atmosférica (longe = mais claro e menos saturado) é
+# aplicada AQUI, por `modulate`, calibrável sem gastar crédito.
 #
-# Escala
-# ------
-# A arte vive numa tela de 400x144 e é desenhada a 2x, exatos 800x288. Fator
-# inteiro: meio pixel de escala é o que faz pixel art tremer. Todo número de
-# posição neste arquivo está em PIXELS DE ARTE, não de tela.
+# Escala: arte de 400×180 desenhada a 2× exatos (800×360). Todo número de
+# posição está em PIXELS DE ARTE. Peças com `p="pan"` são desenhadas 1:1;
+# as de `p="obj"` vêm de assets_v2/objects e trazem a própria escala.
 # ============================================================
 extends SubViewportContainer
 
@@ -30,53 +33,68 @@ const OBJETOS := "res://assets_v2/objects/"
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const Vfx = preload("res://scripts/vfx.gd")
 
-const ARTE := Vector2i(400, 144)
+const ARTE := Vector2i(400, 180)
 const ESCALA := 2
 
-## Onde a base de cada faixa se apoia, em Y de arte. Estes números vêm da
-## composição da referência: o horizonte fica no terço superior, a muralha
-## corta a floresta, e o rio ocupa a faixa da frente.
-const Y_SERRA_LONGE := 46
-const Y_SERRA_PERTO := 58
-const Y_FLORESTA := 78
-const Y_MURALHA := 88
-const Y_CASTELO := 92
-const Y_CAMPO := 100
-const Y_RIO := 144
-## Altura da faixa de rio DESENHADA (a arte é mais alta de propósito).
-const ALTURA_RIO := 30
+## Linhas de apoio (base de cada faixa), derivadas da referência: o horizonte
+## no terço de cima, a muralha em ~62% da altura, o rio nos últimos 26px.
+const BASE_SERRA_LONGE := 104
+const BASE_SERRA_PERTO := 112
+const BASE_FLORESTA := 122
+const BASE_MURO := 112
+const Y_RIO := 154          # topo da faixa de água
+const ALTURA_RIO := 26
 
-## Perspectiva atmosférica: multiplicador de cor por distância. O céu é a cor
-## para a qual tudo longe converge, então a serra distante recebe quase a cor
-## do céu e o primeiro plano não recebe nada.
-const AR := Color("8fb4cf")
-const NEBLINA := {
-	"serra_longe": 0.30, "serra_perto": 0.16, "floresta": 0.07,
-	"muralha": 0.04, "castelo": 0.0, "campo": 0.0,
-}
+## Perspectiva atmosférica: fração de mistura com a cor do ar, por camada.
+const AR := Color("9cc0da")
+const NEBLINA := {"serra_longe": 0.24, "serra_perto": 0.10, "floresta": 0.04}
 
-## As construções da vila, em pixels de ARTE: x, base y, escala e a partir de
-## que nível da terra cada uma aparece. A vila cresce sem gerar arte nova.
-const CONSTRUCOES := [
-	{"n": "moinho_vento", "x": 46, "y": 118, "e": 0.30, "nivel": 2},
-	{"n": "casa_camponesa", "x": 96, "y": 120, "e": 0.26, "nivel": 1},
-	{"n": "tenda_simples", "x": 138, "y": 121, "e": 0.24, "nivel": 0},
-	{"n": "barraca_mercado", "x": 172, "y": 121, "e": 0.24, "nivel": 2},
-	{"n": "casa_camponesa", "x": 246, "y": 119, "e": 0.24, "nivel": 1},
-	{"n": "ferraria", "x": 286, "y": 118, "e": 0.28, "nivel": 3},
-	{"n": "barraca_mercado", "x": 226, "y": 122, "e": 0.22, "nivel": 2},
-	{"n": "casa_camponesa", "x": 330, "y": 120, "e": 0.26, "nivel": 1},
-	{"n": "poco_pedra", "x": 200, "y": 122, "e": 0.22, "nivel": 1},
-	{"n": "carroca", "x": 66, "y": 122, "e": 0.22, "nivel": 2},
-	{"n": "arvore_carvalho", "x": 20, "y": 118, "e": 0.28, "nivel": 0},
-	{"n": "arvore_pinheiro", "x": 372, "y": 116, "e": 0.30, "nivel": 0},
-	{"n": "fogueira_acampamento", "x": 154, "y": 123, "e": 0.20, "nivel": 0},
+## A vila, peça a peça: sprite, x (centro), y (base), escala, nível em que
+## ENTRA e nível em que SAI (a peça que evolui dá lugar à sucessora).
+##   p = "pan" (1:1, gerada para o panorama) ou "obj" (assets_v2/objects)
+const PECAS := [
+	# --- natureza, sempre ---
+	{"p": "obj", "n": "arvore_carvalho", "x": 16, "y": 136, "e": 0.26, "de": 0},
+	{"p": "obj", "n": "arvore_pinheiro", "x": 388, "y": 134, "e": 0.28, "de": 0},
+	{"p": "obj", "n": "arvore_pinheiro", "x": 44, "y": 128, "e": 0.22, "de": 0},
+
+	# --- nível 0: o acampamento do mercenário ---
+	{"p": "obj", "n": "tenda_simples", "x": 150, "y": 142, "e": 0.26, "de": 0, "ate": 1},
+	{"p": "obj", "n": "fogueira_acampamento", "x": 180, "y": 146, "e": 0.18, "de": 0, "ate": 2},
+	{"p": "obj", "n": "tenda_grande", "x": 250, "y": 144, "e": 0.24, "de": 0, "ate": 0},
+
+	# --- nível 1: a vila nasce ---
+	{"p": "obj", "n": "casa_camponesa", "x": 92, "y": 140, "e": 0.26, "de": 1},
+	{"p": "obj", "n": "casa_camponesa", "x": 280, "y": 142, "e": 0.24, "de": 1},
+	{"p": "obj", "n": "poco_pedra", "x": 228, "y": 140, "e": 0.20, "de": 1},
+	{"p": "pan", "n": "pan_horta", "x": 118, "y": 152, "e": 1.0, "de": 1},
+	{"p": "pan", "n": "pan_galinha", "x": 138, "y": 150, "e": 1.0, "de": 1},
+
+	# --- nível 2: vila grande — feira, moinho de madeira, treino ---
+	{"p": "pan", "n": "pan_moinho_madeira", "x": 54, "y": 128, "e": 1.0, "de": 2, "ate": 3},
+	{"p": "pan", "n": "pan_tenda_circo", "x": 162, "y": 150, "e": 1.0, "de": 2},
+	{"p": "pan", "n": "pan_tenda_verde", "x": 248, "y": 152, "e": 1.0, "de": 2},
+	{"p": "obj", "n": "barraca_mercado", "x": 192, "y": 142, "e": 0.22, "de": 2},
+	{"p": "pan", "n": "pan_academia_treino", "x": 332, "y": 146, "e": 1.0, "de": 2, "ate": 3},
+	{"p": "pan", "n": "pan_horta", "x": 306, "y": 154, "e": 1.0, "de": 2},
+	{"p": "pan", "n": "pan_porco", "x": 262, "y": 148, "e": 1.0, "de": 2},
+	{"p": "obj", "n": "carroca", "x": 70, "y": 148, "e": 0.20, "de": 2},
+
+	# --- nível 3: cidade — pedra, ferro e cavalos ---
+	{"p": "obj", "n": "ferraria", "x": 300, "y": 136, "e": 0.24, "de": 3},
+	{"p": "pan", "n": "pan_estabulo", "x": 354, "y": 140, "e": 1.0, "de": 3},
+	{"p": "pan", "n": "pan_cavalo", "x": 342, "y": 152, "e": 1.0, "de": 3},
+
+	# --- nível 4: cidade murada — academia, moinho de pedra, sobrado ---
+	{"p": "pan", "n": "pan_academia_pedra", "x": 332, "y": 144, "e": 1.0, "de": 4},
+	{"p": "obj", "n": "moinho_vento", "x": 54, "y": 130, "e": 0.28, "de": 4},
+	{"p": "pan", "n": "pan_casa_vermelha", "x": 120, "y": 148, "e": 1.0, "de": 4},
 ]
 
 var viewport: SubViewport
 var mundo: Node2D
-var camadas: Dictionary = {}
 var _nivel_montado := -99
+var _mes_montado := -99
 var _rng := RandomNumberGenerator.new()
 
 var estado: Dictionary = {}:
@@ -84,10 +102,10 @@ var estado: Dictionary = {}:
 		estado = v
 		_montar()
 
-## O panorama só existe com as camadas no disco; sem elas principal.gd
-## continua com a vila de cima, e o jogo nunca fica sem cenário.
+## Sem as camadas no disco, principal.gd continua com a vila antiga — o jogo
+## nunca fica sem cenário.
 static func disponivel() -> bool:
-	for n in ["pan_ceu_dia", "pan_campo_verao", "pan_castelo", "pan_rio"]:
+	for n in ["pan_ceu_dia", "pan_campo_verao", "pan_rio", "pan_castelo"]:
 		if not ResourceLoader.exists(PASTA + n + ".png"):
 			return false
 	return true
@@ -116,8 +134,9 @@ func _init() -> void:
 	mundo.scale = Vector2(ESCALA, ESCALA)
 	viewport.add_child(mundo)
 
-## Uma camada de fundo: sprite ancorado pelo TOPO-ESQUERDA, na cor do ar.
-func _faixa(nome: String, y: int, neblina: float = 0.0) -> Sprite2D:
+## Sprite ancorado pelo topo-esquerda, com recorte opcional e cor do ar.
+func _sprite(nome: String, pos: Vector2, neblina: float = 0.0,
+		recorte: Rect2 = Rect2()) -> Sprite2D:
 	var t := _tex(nome)
 	if t == null:
 		return null
@@ -125,153 +144,138 @@ func _faixa(nome: String, y: int, neblina: float = 0.0) -> Sprite2D:
 	s.name = nome
 	s.texture = t
 	s.centered = false
-	s.position = Vector2(0, y)
+	if recorte.size.x > 0:
+		s.region_enabled = true
+		s.region_rect = recorte
+	s.position = pos
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	s.modulate = _com_ar(neblina)
+	if neblina > 0.0:
+		s.modulate = Color(
+			lerpf(1.0, AR.r + 0.22, neblina),
+			lerpf(1.0, AR.g + 0.22, neblina),
+			lerpf(1.0, AR.b + 0.22, neblina))
 	mundo.add_child(s)
-	camadas[nome] = s
 	return s
-
-## A cor da perspectiva atmosférica: mistura com o ar e perde contraste.
-static func _com_ar(f: float) -> Color:
-	if f <= 0.0:
-		return Color.WHITE
-	# `modulate` MULTIPLICA, então não dá para clarear com ele sozinho. O que
-	# dá é puxar cada canal na direção da cor do ar sem passar de 1.0 — o
-	# efeito é o mesmo que o olho lê como "mais longe": menos contraste e
-	# matiz puxado para o céu.
-	return Color(
-		lerpf(1.0, AR.r + 0.25, f),
-		lerpf(1.0, AR.g + 0.25, f),
-		lerpf(1.0, AR.b + 0.25, f))
 
 func _montar() -> void:
 	var nivel: int = 0
 	if estado.get("terra") != null:
 		nivel = int(estado["terra"].get("nivel", 0))
 	var mes: int = int(estado.get("mes", 6))
-	if nivel == _nivel_montado and camadas.has("mes") and camadas["mes"] == mes:
+	if nivel == _nivel_montado and mes == _mes_montado:
 		return
 	_nivel_montado = nivel
+	_mes_montado = mes
 	for f in mundo.get_children():
 		f.queue_free()
-	camadas.clear()
-	camadas["mes"] = mes
 	_rng.seed = 20260805
 
 	var estacao := _estacao(mes)
 
-	# 0. céu ocupa tudo por trás
-	_faixa(_ceu_de(estacao), 0)
-
-	# 1. sol no canto superior direito, como na referência
+	# ---- fundo ----
+	_sprite(_variante("pan_ceu", estacao, "dia"), Vector2.ZERO)
 	var sol := _tex("pan_sol")
-	if sol != null:
-		var s := Sprite2D.new()
-		s.texture = sol
-		s.centered = false
-		s.position = Vector2(ARTE.x - 74, 12)
-		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		mundo.add_child(s)
+	if sol != null and estacao != "inverno":
+		_sprite("pan_sol", Vector2(ARTE.x - 70, 10))
+	_sprite("pan_montanha_longe",
+		Vector2(0, BASE_SERRA_LONGE - 60), NEBLINA["serra_longe"])
+	_sprite("pan_montanha_perto",
+		Vector2(0, BASE_SERRA_PERTO - 60), NEBLINA["serra_perto"])
+	var flor := _variante("pan_floresta", estacao, "verao")
+	_sprite(flor, Vector2(0, BASE_FLORESTA - 44), NEBLINA["floresta"])
 
-	# 2-4. serras e floresta, cada uma com mais ar que a seguinte
-	_faixa("pan_montanha_longe", Y_SERRA_LONGE, NEBLINA["serra_longe"])
-	_faixa("pan_montanha_perto", Y_SERRA_PERTO, NEBLINA["serra_perto"])
-	_faixa("pan_floresta_" + estacao, Y_FLORESTA, NEBLINA["floresta"])
-
-	# 5-6. muralha e castelo só existem quando a terra cresce: é o Progression
-	#      Gate aparecendo na tela, não só na ficha
+	# ---- a defesa evolui: paliçada → muralha ----
 	if nivel >= 3:
-		_faixa("pan_muralha", Y_MURALHA, NEBLINA["muralha"])
-	if nivel >= 4:
+		_sprite("pan_muralha", Vector2(0, BASE_MURO - 44 + 12))
+	elif nivel >= 1:
+		_sprite("pan_palicada", Vector2(0, BASE_MURO - 32 + 8))
+
+	# ---- a sede evolui: nada → torreão → castelo ----
+	if nivel >= 5:
 		var cas := _tex("pan_castelo")
 		if cas != null:
-			var s := Sprite2D.new()
-			s.texture = cas
-			s.centered = false
-			s.position = Vector2((ARTE.x - cas.get_width()) / 2.0,
-				Y_CASTELO - cas.get_height() + 26)
-			s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			s.modulate = _com_ar(NEBLINA["castelo"])
-			mundo.add_child(s)
+			_sprite("pan_castelo", Vector2(
+				(ARTE.x - cas.get_width()) / 2.0, BASE_MURO + 2 - cas.get_height()))
+	elif nivel == 4:
+		var tor := _tex("pan_torreao")
+		if tor != null:
+			_sprite("pan_torreao", Vector2(
+				(ARTE.x - tor.get_width()) / 2.0, BASE_MURO + 2 - tor.get_height()))
 
-	# 7. campo
-	_faixa("pan_campo_" + _campo_de(estacao), Y_CAMPO)
+	# ---- campo ----
+	# o topo da arte do campo tem copas de árvore: o recorte pula essa parte
+	var campo := _variante("pan_campo", estacao, "verao")
+	_sprite(campo, Vector2(0, BASE_MURO - 4), 0.0, Rect2(0, 14, 400, 50))
 
-	# 8. construções, do fundo para a frente (quem tem base mais baixa na
-	#    tela está mais perto, então desenha depois)
-	var lista: Array = CONSTRUCOES.filter(func(c): return nivel >= int(c["nivel"]))
+	# ---- caminho do portão à ponte ----
+	# recorte do miolo da arte (o topo dela veio com cenário); as bordas de
+	# grama do recorte se fundem no campo
+	_sprite("pan_caminho", Vector2(ARTE.x / 2.0 - 22, BASE_MURO + 2),
+		0.0, Rect2(0, 30, 44, 22))
+
+	# ---- a vila, peça a peça, na ordem de profundidade ----
+	var lista: Array = PECAS.filter(func(c):
+		return nivel >= int(c["de"]) and nivel <= int(c.get("ate", 99)))
 	lista.sort_custom(func(a, b): return int(a["y"]) < int(b["y"]))
 	for c in lista:
-		_construcao(c)
+		_peca(c)
 
-	# 9. aldeões: a vila só parece habitada com gente do tamanho certo
-	_aldeoes(mini(3 + nivel * 2, 11))
+	# ---- aldeões ----
+	_aldeoes(mini(2 + nivel * 2, 10))
 
-	# 10. rio e ponte, na frente de tudo
-	# O rio é gerado alto (64px) para o modelo ter espaço de desenhar água de
-	# verdade, mas na cena ele é só a FAIXA DA FRENTE. Sem o recorte ele cobre
-	# metade do quadro e afoga a vila.
-	var rio := _tex("pan_rio")
-	if rio != null:
-		var s := Sprite2D.new()
-		s.texture = rio
-		s.centered = false
-		s.region_enabled = true
-		s.region_rect = Rect2(0, rio.get_height() - ALTURA_RIO,
-			rio.get_width(), ALTURA_RIO)
-		s.position = Vector2(0, ARTE.y - ALTURA_RIO)
-		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		mundo.add_child(s)
+	# ---- rio na frente, ponte alinhada ao portão ----
+	_sprite("pan_rio", Vector2(0, Y_RIO), 0.0,
+		Rect2(0, 4, 400, ALTURA_RIO + 8))
 	var ponte := _tex("pan_ponte")
 	if ponte != null:
-		var s := Sprite2D.new()
-		s.texture = ponte
-		s.centered = false
-		# alinhada ao portão do castelo, como na referência
-		s.position = Vector2((ARTE.x - ponte.get_width()) / 2.0,
-			ARTE.y - ALTURA_RIO - ponte.get_height() + 30)
-		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		mundo.add_child(s)
+		_sprite("pan_ponte", Vector2(
+			(ARTE.x - ponte.get_width()) / 2.0, ARTE.y - ponte.get_height() + 4))
 
-func _construcao(c: Dictionary) -> void:
-	var caminho := OBJETOS + str(c["n"]) + ".png"
-	if not ResourceLoader.exists(caminho):
-		return
-	var t = load(caminho)
-	if not (t is Texture2D):
+func _peca(c: Dictionary) -> void:
+	var t: Texture2D = null
+	var e := float(c["e"])
+	if str(c["p"]) == "pan":
+		t = _tex(str(c["n"]))
+	else:
+		var caminho := OBJETOS + str(c["n"]) + ".png"
+		if ResourceLoader.exists(caminho):
+			var carr = load(caminho)
+			if carr is Texture2D:
+				t = carr
+	if t == null:
 		return
 	var s := Sprite2D.new()
 	s.texture = t
 	s.centered = false
-	s.scale = Vector2(float(c["e"]), float(c["e"]))
-	# ancorado pelos PÉS: a base do sprite encosta na linha do chão
-	s.position = Vector2(float(c["x"]) - t.get_width() * float(c["e"]) * 0.5,
-		float(c["y"]) - t.get_height() * float(c["e"]))
+	s.scale = Vector2(e, e)
+	s.position = Vector2(float(c["x"]) - t.get_width() * e * 0.5,
+		float(c["y"]) - t.get_height() * e)
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	mundo.add_child(s)
-	# sombra projetada, na mesma direção do resto do jogo
-	var sombra := Vfx.sombra_projetada(t, 0.26)
+	# sombra projetada na mesma direção do resto do jogo
+	var sombra := Vfx.sombra_projetada(t, 0.20)
 	if sombra != null:
 		sombra.offset = Vector2(0, 0)
 		sombra.position = Vector2(t.get_width() / 2.0, t.get_height())
 		s.add_child(sombra)
 
 func _aldeoes(quantos: int) -> void:
-	# o mesmo elenco que a vila antiga usava: os retratos de tropa e de NPC
-	# servem de aldeão em escala pequena, e não custam geração nova
 	var elenco := ["tropa_campones", "tropa_lanceiro", "taverneiro",
 		"tropa_espadachim", "heroi_jogador", "tropa_arqueiro"]
 	for i in quantos:
-		var id: String = elenco[i % elenco.size()]
-		var no: AnimatedSprite2D = PersonagensV2.criar(id, 0.16)
+		var no: AnimatedSprite2D = PersonagensV2.criar(elenco[i % elenco.size()], 0.14)
 		if no == null:
 			continue
-		var x := 30.0 + _rng.randf() * (ARTE.x - 60.0)
-		var y := 116.0 + _rng.randf() * 8.0
-		no.position = Vector2(x, y)
+		no.position = Vector2(30.0 + _rng.randf() * (ARTE.x - 60.0),
+			136.0 + _rng.randf() * 16.0)
 		no.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mundo.add_child(no)
+
+## "pan_campo" + "inverno" → o PNG da estação, com o verão de reserva.
+func _variante(base: String, estacao: String, padrao: String) -> String:
+	if _tex(base + "_" + estacao) != null:
+		return base + "_" + estacao
+	return base + "_" + padrao
 
 static func _estacao(mes: int) -> String:
 	var m: int = ((mes - 1) % 12 + 12) % 12 + 1
@@ -279,18 +283,8 @@ static func _estacao(mes: int) -> String:
 		return "inverno"
 	if m in [9, 10, 11]:
 		return "outono"
-	return "verao"
-
-func _ceu_de(estacao: String) -> String:
-	if estacao == "inverno" and _tex("pan_ceu_inverno") != null:
-		return "pan_ceu_inverno"
-	return "pan_ceu_dia"
-
-func _campo_de(estacao: String) -> String:
-	# floresta e campo têm variante por estação; se a variante não foi gerada,
-	# cai no verão em vez de sumir da tela
-	if _tex("pan_campo_" + estacao) != null:
-		return estacao
+	if m in [3, 4, 5]:
+		return "verao"      # primavera usa a arte de verão até ter a própria
 	return "verao"
 
 ## Mesma API da vila antiga, para principal.gd trocar uma pela outra sem saber.

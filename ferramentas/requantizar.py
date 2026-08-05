@@ -81,7 +81,10 @@ PASTAS = [
     "assets_v2/objects",
     "assets_v2/characters",
     "assets_v2/vfx",
-    "assets_v2/panorama",
+    # panorama NÃO entra: a cena ilustrada segue a referência visual do
+    # usuário — luz quente e verde vivo — e o teto de croma da paleta de UI
+    # a lavava. A coesão dela vem de nascer inteira do mesmo catálogo de
+    # prompts, não do encaixe nas 48 cores.
 ]
 ESPELHO = PROJETO / ".original"
 
