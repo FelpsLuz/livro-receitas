@@ -127,3 +127,24 @@ leva de arte tem que respeitar esses números, ou a cena se mexe.
 godot --path reino-por-conquista-godot --script res://tests/teste_strip.gd
 ```
 
+## Pipeline Hi-Bit
+
+Como a arte volta a entrar: `docs/PIPELINE_HIBIT.md`.
+
+| peça | onde |
+|---|---|
+| ciclo de luz por `CanvasModulate` | `scripts/environment_manager.gd` (autoload) |
+| câmera top-down com limites e enquadramento inteiro | `scripts/camera_mundo.gd` |
+| geração de textura em runtime (PixelLab) | `scripts/ai_visual_bridge.gd` |
+| vento · contorno · paleta dinâmica | `shaders/` |
+| mecânica que só emite sinal | `scripts/agente_movel.gd` |
+| visual que só escuta | `scripts/visual_controller.gd` |
+
+```bash
+godot --path reino-por-conquista-godot --script res://tests/teste_hibit.gd
+```
+
+⚠️ A chave do PixelLab **nunca** entra no código nem no build. Ela vem de
+`PIXELLAB_SECRET` ou de `user://pixellab.key`, e a ponte se declara
+indisponível em build exportada. Ver a seção "A chave não pode ir no jogo".
+

@@ -15,6 +15,10 @@ extends SubViewportContainer
 const MapaV2 = preload("res://scripts/mapa_v2.gd")
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const Arte = preload("res://scripts/arte.gd")
+const AgenteMovel = preload("res://scripts/agente_movel.gd")
+const VisualController = preload("res://scripts/visual_controller.gd")
+const CameraMundo = preload("res://scripts/camera_mundo.gd")
+const Ambiente = preload("res://scripts/environment_manager.gd")
 
 ## VISUAL STRIP: as dimensões que cada objeto da vila tinha na arte gerada.
 ## Não é decoração — `_ancorar()` põe a origem nos PÉS usando a ALTURA da
@@ -86,13 +90,12 @@ var terreno: TileMapLayer
 var rua: TileMapLayer
 var agua: TileMapLayer
 var floresta: TileMapLayer
-var heroi: AnimatedSprite2D
-var camera: Camera2D
+var heroi: AgenteMovel
+var camera: CameraMundo
+var heroi_visual: VisualController
 
 var _objetos: Array = []
-var _aldeoes: Array = []      # [{no, origem, alvo, espera}]
-var _rota: Array = []
-var _alvo := 0
+var _aldeoes: Array = []      # [{no: AgenteMovel, origem, controlador}]
 var _nivel_montado := -99
 var _rng := RandomNumberGenerator.new()
 
@@ -100,6 +103,19 @@ var estado: Dictionary = {}:
 	set(v):
 		estado = v
 		_montar_vila()
+		_atualizar_ambiente()
+
+
+## A atmosfera acompanha o MÊS do jogo. `transitar_para_mes` em vez de
+## `definir_mes` porque passar o mês não deve dar um corte seco de cor.
+## Guardado por `is_inside_tree`: principal.gd atribui `estado` antes de
+## pendurar a cena, e o tween precisa do nó na árvore.
+func _atualizar_ambiente() -> void:
+	if not is_inside_tree() or estado.is_empty():
+		return
+	var amb := Ambiente.gerente()
+	if amb != null:
+		amb.transitar_para_mes(int(estado.get("mes", 6)))
 
 ## A vila só existe se o terreno e o herói animado existirem: sem isso,
 ## principal.gd fica com a cena procedural de antes.
@@ -135,21 +151,31 @@ func _init() -> void:
 	# na aba isso dá ~480px, e o mundo tem 960. Sem câmera o jogador veria só o
 	# canto superior esquerdo. Ela segue o herói e os limites impedem que a
 	# borda do mapa apareça.
-	camera = Camera2D.new()
-	camera.limit_left = 0
-	camera.limit_top = 0
-	camera.limit_right = int(MUNDO.x * ESCALA_MUNDO)
-	camera.limit_bottom = int(MUNDO.y * ESCALA_MUNDO)
-	camera.position_smoothing_enabled = true
-	camera.position_smoothing_speed = 3.0
+	camera = CameraMundo.criar(MUNDO * ESCALA_MUNDO)
 	viewport.add_child(camera)
 
 	_criar_heroi()
 
-## make_current só vale com o nó já na árvore — em _init a câmera ainda não está.
+## make_current só vale com o nó já na árvore — em _init a câmera ainda não
+## está. O registro do ambiente também é aqui, pelo mesmo motivo.
 func _ready() -> void:
 	if camera != null:
 		camera.make_current()
+		if heroi != null:
+			camera.seguir(heroi, ESCALA_MUNDO)
+	# atmosfera Hi-Bit: o CanvasModulate entra NESTE viewport, não na raiz —
+	# a interface de pergaminho fica de fora (ver environment_manager.gd)
+	var amb := Ambiente.gerente()
+	if amb != null:
+		amb.registrar(mundo)
+		if not estado.is_empty():
+			amb.definir_mes(int(estado.get("mes", 6)))
+
+
+func _exit_tree() -> void:
+	var amb := Ambiente.gerente()
+	if amb != null:
+		amb.esquecer(mundo)
 
 # ------------------------------------------------------------
 # TERRENO — quatro camadas Wang, todas antes do `mundo`, então desenham
@@ -257,19 +283,27 @@ static func _na_floresta(canto: Vector2i) -> bool:
 # ------------------------------------------------------------
 # HERÓI
 # ------------------------------------------------------------
+## O herói é um AGENTE (mecânica) com um VisualController pendurado. Nada
+## aqui toca em sprite: a ronda mexe em posição, o agente emite, o
+## controlador desenha. Trocar a arte não encosta nesta função.
 func _criar_heroi() -> void:
 	if not PersonagensV2.tem_caminhada("heroi_jogador"):
 		return
-	heroi = PersonagensV2.criar("heroi_jogador", ESCALA_HEROI)
-	_ancorar(heroi)
+	heroi = AgenteMovel.new()
+	heroi.name = "Heroi"
+	heroi.velocidade_max = 80.0
 	heroi.position = Vector2(MUNDO.x * 0.5, 780)
 	mundo.add_child(heroi)
+
+	heroi_visual = VisualController.novo(heroi)
+	heroi_visual.usar_personagem("heroi_jogador", ESCALA_HEROI)
+	heroi_visual.observar(heroi)
+
 	# ronda pela rua: portão → praça do mercado → pontas da rua transversal
-	_rota = [
+	heroi.definir_rota([
 		Vector2(960, 540), Vector2(960, 770), Vector2(740, 730),
 		Vector2(960, 780), Vector2(1200, 740), Vector2(980, 800),
-	]
-	_alvo = 0
+	])
 
 ## Põe a origem do nó nos PÉS do sprite. Sem isso o Y-Sort compararia o centro
 ## da imagem, e um sprite alto (o moinho) pareceria estar sempre atrás.
@@ -287,63 +321,32 @@ func _ancorar(no: CanvasItem) -> void:
 				no.offset = Vector2(0, -altura / 2.0)
 
 ## Converte um vetor de movimento no nome de direção do create-character-v3.
-## Em coordenadas de tela o Y cresce para BAIXO, então +y é "south".
+## A conta mora no AgenteMovel — é ele quem decide direção agora. Aqui fica
+## só o encaminhamento, para não haver duas cópias da mesma tabela de 8 vias
+## podendo divergir.
 static func direcao_de(v: Vector2) -> String:
-	if v.length() < 0.001:
-		return "south"
-	var passo := int(round(v.angle() / (PI / 4.0)))
-	match ((passo % 8) + 8) % 8:
-		0: return "east"
-		1: return "south-east"
-		2: return "south"
-		3: return "south-west"
-		4: return "west"
-		5: return "north-west"
-		6: return "north"
-		_: return "north-east"
-
-func _process(delta: float) -> void:
-	# os aldeões passeiam MESMO sem herói (a caminhada dele pode não existir)
-	_passear_aldeoes(delta)
-	if heroi == null:
-		return
-	# a câmera vive no espaço do viewport, o herói no espaço do mundo (÷2)
-	if camera != null:
-		camera.position = heroi.position * ESCALA_MUNDO
-	if _rota.is_empty():
-		return
-	# ronda pela vila: sem controle do jogador, o herói percorre a rota em laço
-	var destino: Vector2 = _rota[_alvo]
-	var passo: Vector2 = destino - heroi.position
-	if passo.length() < 6.0:
-		_alvo = (_alvo + 1) % _rota.size()
-		return
-	var dir := passo.normalized()
-	heroi.position += dir * 80.0 * delta
-	PersonagensV2.mover(heroi, direcao_de(dir), true)
+	return AgenteMovel.direcao_de(v)
 
 ## Aldeões vagueiam devagar perto de onde nasceram: andam, param, voltam.
-## É movimento de fundo — sem quadros de caminhada, o deslize lento com o
-## flip na direção certa já vende a vila habitada.
-func _passear_aldeoes(delta: float) -> void:
-	for a in _aldeoes:
-		var no: AnimatedSprite2D = a["no"]
-		if not is_instance_valid(no):
-			continue
-		if a["espera"] > 0.0:
-			a["espera"] -= delta
-			continue
-		var passo: Vector2 = a["alvo"] - no.position
-		if passo.length() < 4.0:
-			a["espera"] = _rng.randf_range(1.5, 4.5)
-			a["alvo"] = a["origem"] + Vector2(
-				_rng.randf_range(-110.0, 110.0), _rng.randf_range(-60.0, 60.0))
-			a["alvo"].y = clampf(a["alvo"].y, 400.0, float(LINHA_AREIA * TILE - 40))
-			a["alvo"].x = clampf(a["alvo"].x, 140.0, MUNDO.x - 140.0)
-			continue
-		var dir := passo.normalized()
-		no.position += dir * 26.0 * delta
-		no.flip_h = dir.x < 0.0
+##
+## Isto era um laço por quadro varrendo a lista inteira. Agora é o próprio
+## agente que avisa quando chegou, e a cena só responde ao sinal — nenhum
+## `_process` roda enquanto oito aldeões caminham. Foi a mudança que tornou
+## `_process` desnecessário nesta cena, e ele saiu.
+##
+## Nota da rota de UM ponto: chegando ao único destino, o agente daria a
+## volta e "chegaria" de novo no quadro seguinte. `esperar()` antes de
+## `definir_rota()` é o que corta isso — o agente fica parado a pausa
+## inteira e só então sai para o destino novo.
+func _vagar(_indice: int, agente: AgenteMovel, origem: Vector2) -> void:
+	if not is_instance_valid(agente):
+		return
+	var alvo := origem + Vector2(
+		_rng.randf_range(-110.0, 110.0), _rng.randf_range(-60.0, 60.0))
+	alvo.y = clampf(alvo.y, 400.0, float(LINHA_AREIA * TILE - 40))
+	alvo.x = clampf(alvo.x, 140.0, MUNDO.x - 140.0)
+	agente.esperar(_rng.randf_range(1.5, 4.5))
+	agente.definir_rota([alvo])
 
 # ------------------------------------------------------------
 # VILA — objetos por nível de terra, como no cenário antigo
@@ -442,6 +445,14 @@ func _objeto(nome: String, pos: Vector2) -> Sprite2D:
 	_ancorar(s)
 	var e: float = ESCALA_OBJ.get(nome, 1.0)
 	s.scale = Vector2(e, e)
+	# o que queima ganha luz de ponto — iluminação 2D moderna, textura de
+	# gradiente gerada, sem um arquivo de arte
+	if nome == "fogueira_acampamento" or nome == "tocha_estaca":
+		var vc := VisualController.novo(s)
+		vc.acender(Color(1.0, 0.72, 0.42),
+			110.0 if nome == "fogueira_acampamento" else 62.0,
+			0.85 if nome == "fogueira_acampamento" else 0.55)
+		vc.position = Vector2(0, -float(d.y) * 0.5)
 	if nome == "ponte_madeira":
 		# a arte veio estreita; alargar só o X estica as TÁBUAS, que são
 		# horizontais — vira uma ponte de verdade, não uma escada. O Y estica
@@ -466,13 +477,20 @@ func _semear() -> void:
 		"tropa_arqueiro", "capitao"]
 	_rng.seed = 7 + nivel
 	for i in quantos:
-		var p: AnimatedSprite2D = PersonagensV2.criar(elenco[i % elenco.size()], ESCALA_ALDEAO)
-		_ancorar(p)
+		var a := AgenteMovel.new()
+		a.name = "Aldeao_%d" % i
+		a.velocidade_max = 26.0
+		a.raio_chegada = 4.0
 		var origem := Vector2(360.0 + _rng.randf() * 1200.0, 560.0 + _rng.randf() * 240.0)
-		p.position = origem
-		mundo.add_child(p)
-		_aldeoes.append({"no": p, "origem": origem, "alvo": origem,
-			"espera": _rng.randf_range(0.0, 2.0)})
+		a.position = origem
+		mundo.add_child(a)
+		var vc := VisualController.novo(a)
+		vc.usar_personagem(elenco[i % elenco.size()], ESCALA_ALDEAO)
+		vc.observar(a)
+		# o passeio se conduz por SINAL: chegou → escolhe o próximo destino
+		a.chegou.connect(_vagar.bind(a, origem))
+		_vagar(0, a, origem)
+		_aldeoes.append({"no": a, "origem": origem, "controlador": vc})
 
 ## Mesma assinatura da CidadeCena: principal.gd chama isto ao comprar/evoluir.
 func semear_npcs() -> void:

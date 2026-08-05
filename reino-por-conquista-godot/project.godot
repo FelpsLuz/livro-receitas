@@ -13,6 +13,12 @@ config/features=PackedStringArray("4.3")
 
 [autoload]
 
+; Atmosfera Hi-Bit: ciclo de luz por CanvasModulate. Como o barramento, o
+; código NUNCA cita este nome como identificador — scripts/ambiente.gd
+; resolve o nó em runtime, senão os testes (--script, sem autoload) não
+; compilariam.
+EnvironmentManager="*res://scripts/environment_manager.gd"
+
 ; Barramento de sinais. O núcleo NÃO cita este nome como identificador —
 ; scripts/sinais.gd resolve o nó em runtime, senão os testes (que rodam com
 ; --script, onde autoload não é registrado) não compilariam.
@@ -24,6 +30,12 @@ window/size/viewport_width=960
 window/size/viewport_height=540
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
+; ESCALA INTEIRA. Era o que faltava para "pixel perfect" de verdade: com
+; scale_mode fracionário, uma janela de 1500x844 escala 960x540 por 1,5625 e
+; um pixel de arte vira ora 1, ora 2 pixels de tela — a grade fica irregular
+; e a pixel art "ferve" ao redimensionar. Em "integer" a Godot escala por 1x,
+; 2x, 3x e deixa borda; a borda é o preço, e é o preço certo num Hi-Bit.
+window/stretch/scale_mode="integer"
 window/handheld/orientation=1
 
 [rendering]
@@ -32,6 +44,7 @@ window/handheld/orientation=1
 ; contato gera tremulação de subpixel.
 2d/snap/snap_2d_transforms_to_pixel=true
 2d/snap/snap_2d_vertices_to_pixel=true
+; 0 = Nearest. Filtro linear numa arte de 32x32 borra a grade inteira.
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

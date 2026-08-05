@@ -25,6 +25,7 @@
 extends SubViewportContainer
 
 const CenarioV3Cena = preload("res://scripts/cenario_v3_cena.gd")
+const Ambiente = preload("res://scripts/environment_manager.gd")
 
 const NATIVO := Vector2i(480, 270)
 const ESCALA := 2
@@ -66,6 +67,21 @@ func _init() -> void:
 
 func _ready() -> void:
 	_aplicar()
+	# Atmosfera Hi-Bit NESTE viewport. É esta a cena que o jogo mostra na aba
+	# "Sua Terra" (ver principal.gd `_nova_cena`), então é aqui que o ciclo
+	# de luz aparece para o jogador. Na raiz, o mesmo CanvasModulate deixaria
+	# a interface de pergaminho azul à noite e ilegível.
+	var amb := Ambiente.gerente()
+	if amb != null:
+		amb.registrar(cena)
+		if not estado.is_empty():
+			amb.definir_mes(int(estado.get("mes", 6)))
+
+
+func _exit_tree() -> void:
+	var amb := Ambiente.gerente()
+	if amb != null and cena != null:
+		amb.esquecer(cena)
 
 
 func _aplicar() -> void:

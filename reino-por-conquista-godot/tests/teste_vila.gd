@@ -106,8 +106,12 @@ func _initialize() -> void:
 	# vfx.gd. O que restou aqui é o que continua sendo mecânica de cena —
 	# a ESCALA de cada objeto e a sua posição no mundo, que é o que decide
 	# quem cobre quem no Y-Sort.
+	# a escala vive no VISUAL, não no agente: o agente é mecânica pura e não
+	# tem tamanho (ver scripts/agente_movel.gd)
 	ok("herói na escala da vila (casas parecem casas)",
-		vila.heroi.scale.is_equal_approx(Vector2(VilaCena.ESCALA_HEROI, VilaCena.ESCALA_HEROI)))
+		vila.heroi_visual != null and vila.heroi_visual.visual != null
+		and vila.heroi_visual.visual.scale.is_equal_approx(
+			Vector2(VilaCena.ESCALA_HEROI, VilaCena.ESCALA_HEROI)))
 	var barril = vila.mundo.get_node_or_null("Obj_barril_carga")
 	ok("objetos pequenos em escala própria (barril < casa)",
 		barril != null and barril.scale.x < 0.6, str(barril.scale.x if barril else -1.0))
@@ -128,20 +132,32 @@ func _initialize() -> void:
 			"topo em y=%.0f" % topo)
 
 	# ---------- o herói caminha e vira ----------
-	ok("herói animado na cena", vila.heroi is AnimatedSprite2D)
+	# O herói é um AGENTE (mecânica) com um VisualController pendurado. A
+	# separação é o ponto: o agente anda sem saber que existe sprite, e a
+	# animação segue por SINAL. Se isto voltar a ser um AnimatedSprite2D
+	# movido à mão, o acoplamento voltou.
+	ok("herói é agente de mecânica, não sprite", vila.heroi is AgenteMovel)
+	ok("herói tem controlador visual ligado",
+		vila.heroi_visual != null and vila.heroi_visual.estado()["por_sinal"])
 	if vila.heroi != null:
 		var antes: Vector2 = vila.heroi.position
 		for i in 20:
-			vila._process(0.05)
+			vila.heroi._physics_process(0.05)
 		ok("herói se moveu ao longo da rota", vila.heroi.position != antes,
 			"%.0f px" % antes.distance_to(vila.heroi.position))
-		ok("herói está tocando uma animação de caminhada",
-			vila.heroi.animation.ends_with("_walk"), vila.heroi.animation)
-		# a rota é um laço fechado: passar do último alvo volta ao primeiro
-		vila._alvo = vila._rota.size() - 1
-		vila.heroi.position = vila._rota[vila._alvo]
-		vila._process(0.05)
-		ok("rota é um laço fechado", vila._alvo == 0, "alvo=%d" % vila._alvo)
+		var an: AnimatedSprite2D = vila.heroi_visual.visual as AnimatedSprite2D
+		ok("o visual entrou em caminhada sem a mecânica mandar",
+			an != null and an.animation.ends_with("_walk"),
+			an.animation if an else "sem visual")
+		# a rota é um laço fechado: chegar ao último ponto volta ao primeiro
+		var voltas: Array = []
+		vila.heroi.chegou.connect(func(i: int): voltas.append(i))
+		var rota: Array = vila.heroi._rota
+		vila.heroi._alvo = rota.size() - 1
+		vila.heroi.position = rota[rota.size() - 1]
+		vila.heroi._physics_process(0.05)
+		ok("rota é um laço fechado", vila.heroi._alvo == 0,
+			"alvo=%d · chegou emitiu %d vez(es)" % [vila.heroi._alvo, voltas.size()])
 
 	# ---------- WANG: as transições saem da máscara certa ----------
 	# pinta um único canto "cheio" em (1,1) e confere as 4 células vizinhas
