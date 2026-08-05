@@ -25,9 +25,10 @@ SAIDA = CEN / "base" / "derivados"
 CEU_FIM = 47                 # bandas: montanhas começam em 47 — acima é só céu
 MARGEM_TOPO, MARGEM_FIM = 180, 200   # topos dos juncos invadem o fim do rio
 
-# janelas de 48px medidas na placa (densidade de junco por bloco):
-TOUCEIRAS = [(0, False), (130, False), (150, True), (340, False), (352, True)]
-CLAREIRA_X = 80              # bloco mais esparso do motivo
+# janelas de 48px medidas na placa (densidade de junco por bloco).
+# A placa foi ESPELHADA (v3.2 §B) — janelas espelhadas junto: x' = 352 − x.
+TOUCEIRAS = [(352, False), (222, False), (202, True), (12, False), (0, True)]
+CLAREIRA_X = 272             # bloco mais esparso do motivo (era 80)
 
 
 def _rotular(mask: np.ndarray) -> tuple[np.ndarray, int]:
@@ -111,8 +112,54 @@ def margem(placa: np.ndarray) -> None:
     print("  🌾 margem: 5 touceiras RGBA + 1 clareira RGB")
 
 
+def fundo(placa: np.ndarray) -> None:
+    """Extrai o maciço central como camada RGBA — o CARREGADOR do véu de
+    recessão atmosférica (v3.2 §B tentativa 1). A camada é desenhada POR
+    CIMA da fatia intacta com o shader de recessão: máscara imperfeita
+    não abre buraco, só deixa de recessar um pixel ou outro.
+
+    A DIREÇÃO da luz já foi corrigida pelo espelho global da placa (a
+    auditoria mediu luz pela esquerda em 4 bandas — flip por banda
+    racharia as árvores que cruzam fatias). O véu aqui cuida do outro
+    problema medido: os cremes do maciço entre os valores mais claros do
+    quadro, puxando a montanha para FRENTE.
+
+    As serras laterais ficam assadas no fundo de propósito: já nascem em
+    bruma, sem tan, sem direcionalidade medível — véu nelas é redundante.
+    """
+    faixa = placa[0:78]
+    r, g, b = (faixa[..., k].astype(int) for k in range(3))
+    lum = (0.2126 * r + 0.7152 * g + 0.0722 * b)
+    nuvem = (r > 170) & (g > 180) & (b - r < 45) & (r - b < 30)
+
+    # crista: primeiro pixel "não-céu" descendo do topo, nas linhas 0..55
+    # onde o céu ainda é claro (L>195). O tan é inequívoco; os CUMES teal
+    # (família do céu com bruma) entram pelo teto de luminância.
+    escuro = (lum < 195) & ~nuvem
+    crista = np.full(400, 999)
+    for x in range(88, 272):
+        col = np.nonzero(escuro[:55, x])[0]
+        if len(col):
+            crista[x] = col.min()
+    xs_ok = np.nonzero(crista < 999)[0]
+    for x in range(xs_ok.min(), xs_ok.max() + 1):
+        if crista[x] == 999:
+            viz = crista[max(0, x - 6):x + 7]
+            crista[x] = viz[viz < 999].min() if (viz < 999).any() else 999
+    arvore = (g >= r) & (g > b) & (g - b > 12) & (lum < 160)
+    maciço = np.zeros_like(escuro)
+    for x in range(400):
+        if crista[x] < 999:
+            maciço[max(0, crista[x] - 1):78, x] = True
+    maciço &= ~arvore & ~nuvem
+    rgba = np.dstack([faixa, (maciço * 255).astype(np.uint8)])
+    Image.fromarray(rgba, "RGBA").save(SAIDA / "montanha_central.png")
+    print(f"  ⛰️  maciço {int(maciço.sum())}px (carregador do véu de recessão)")
+
+
 if __name__ == "__main__":
     placa = np.array(Image.open(CEN / "base" / "placa_base.png").convert("RGB"))
     nuvens(placa)
     margem(placa)
+    fundo(placa)
     print(f"✅ derivados em {SAIDA}")

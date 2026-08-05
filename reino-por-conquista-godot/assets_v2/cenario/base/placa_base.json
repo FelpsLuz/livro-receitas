@@ -17,7 +17,7 @@
  "usd": 0.006716858572430081,
  "gerada_em": "2026-08-05",
  "conformada": {
-  "metodo": "fatia \u00fanica de prado + retalho de rio espelhado (passo 2)",
+  "metodo": "fatia única de prado + retalho de rio espelhado (passo 2)",
   "bruta": "placa_modelo.png",
   "bandas": {
    "ceu": [
@@ -54,5 +54,6 @@
   "init_image": "placa conformada (cirurgia de bandas)",
   "init_image_strength": 380,
   "nota": "600 preservou as listras; 380 adotada"
- }
+ },
+ "espelhada": "2026-08-05: espelho horizontal (v3.2 §B) — auditoria mediu luz pela ESQUERDA em montanhas (pares 1.30), floresta (dobra -7.8), troncos (-26.2) e pedra (-4.8), contradizendo o SUFIXO_LUZ congelado. Transform deterministico, zero API; placa_modelo.png preserva o original."
 }

@@ -26,23 +26,27 @@ const VEU_FLORESTA_TOPO := 58      # topo das copas (banda ceu/serra)
 const CAMPO_MULT_TOPO := 0.97
 const CAMPO_MULT_PE := 0.84
 const CAMPO_SATURACAO := 0.92
+# Quebra de estrato (v3.2 §C): blocos de 2px, sem TIME. Muleta até o
+# terreno povoar — se os estratos sumirem com o §E, reduzir a amplitude.
+const CAMPO_RUIDO := 0.045
 const MOD_RIO := Color(0.92, 0.92, 0.92)
 const VEU_RIO := Color(115.0 / 255.0, 175.0 / 255.0, 171.0 / 255.0, 0.35)
 const MOD_MARGEM := Color(0.88, 0.88, 0.88)   # v3.1 §E: −12% na banda
 
-# ---- água (§G.1): as 4 cores CLARAS da água, medidas da placa. O corpo
-# escuro (27,107,151 / 20,68,99) fica de fora — ciclar tudo pulsa.
+# ---- água (§G.1 + aferição v3.2 §D): ciclam as cores que formam FITAS
+# (fluxo), não as dispersas (pipoca). Corpo escuro e traços curtos do
+# azul-escuro ficam estáticos.
 const AGUA_CICLO := [
-	Color8(60, 150, 186), Color8(106, 195, 202),
-	Color8(157, 237, 236), Color8(175, 233, 241),
+	Color8(106, 195, 202), Color8(157, 237, 236), Color8(175, 233, 241),
 ]
 const AGUA_VELOCIDADE := 1.6
 
 # ---- juncos (§E/§G.2): touceiras 48px derivadas da própria margem,
 # distribuídas irregularmente; clareiras cobrem os trechos mais densos.
-const TOUCEIRAS_X := [6, 58, 204, 260, 331]
+# Posições recalculadas para a placa ESPELHADA (v3.2 §B).
+const TOUCEIRAS_X := [60, 132, 246, 300, 350]
 const TOUCEIRAS_JITTER_Y := [0, -1, 1, 0, -1]
-const CLAREIRAS_X := [148, 352]
+const CLAREIRAS_X := [10, 205]
 const MARGEM_TOPO := 180           # topos dos juncos invadem o fim do rio
 
 # ---- nuvens (§G.3): deriva em duas velocidades = paralaxe de céu ----
@@ -142,6 +146,21 @@ func _montar() -> void:
 	_nuvem_lenta = _camada_nuvem("nuvens_lenta")
 	_nuvem_rapida = _camada_nuvem("nuvens_rapida")
 
+	# ---- recessão atmosférica do maciço (v3.2 §B): a camada extraída da
+	# placa entra POR CIMA da fatia intacta, com contraste comprimido,
+	# dessaturada e com bruma — a montanha volta para o fundo. As serras
+	# laterais já nascem em bruma e ficam como estão. Desenhada DEPOIS das
+	# nuvens: nuvem em frente ao cume passa por trás do véu, lê natural.
+	var mont := Sprite2D.new()
+	mont.name = "MontanhaRecessao"
+	mont.texture = load(DERIVADOS + "montanha_central.png")
+	mont.centered = false
+	mont.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var mat_rec := ShaderMaterial.new()
+	mat_rec.shader = load("res://shaders/recessao_atmosferica.gdshader")
+	mont.material = mat_rec
+	add_child(mont)
+
 	# ---- véu da floresta (§F.1): multiply em gradiente vertical ----
 	add_child(_veu_floresta())
 
@@ -169,6 +188,7 @@ func _material_valor(faixa: Vector2i) -> ShaderMaterial:
 	mat.set_shader_parameter("mult_topo", CAMPO_MULT_TOPO)
 	mat.set_shader_parameter("mult_pe", CAMPO_MULT_PE)
 	mat.set_shader_parameter("saturacao", CAMPO_SATURACAO)
+	mat.set_shader_parameter("ruido_amplitude", CAMPO_RUIDO)
 	return mat
 
 

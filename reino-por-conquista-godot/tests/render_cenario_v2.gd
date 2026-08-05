@@ -10,8 +10,8 @@
 # ============================================================
 extends SceneTree
 
-const FRAMES_VIDA := 8
-const INTERVALO := 0.4
+const FRAMES_VIDA := 10
+const INTERVALO := 0.2
 
 func _initialize() -> void:
 	var vp := SubViewport.new()
