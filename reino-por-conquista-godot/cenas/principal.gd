@@ -98,8 +98,12 @@ func _montar_titulo() -> void:
 	v.add_child(vitrine)
 	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
 	var titulo := Label.new()
-	titulo.text = "⚔ REINO POR CONQUISTA"
-	titulo.add_theme_font_size_override("font_size", 30)
+	titulo.text = "REINO POR CONQUISTA"
+	# blackletter em pixel, no tamanho da grade nativa dela (21 × 2)
+	var f_titulo := Tema.fonte_titulo()
+	if f_titulo != null:
+		titulo.add_theme_font_override("font", f_titulo)
+	titulo.add_theme_font_size_override("font_size", Tema.TITULO_JOGO)
 	titulo.add_theme_color_override("font_color", Tema.SANGUE)
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(titulo)
@@ -207,6 +211,19 @@ func _exit_tree() -> void:
 	if cidade_view != null and cidade_view.get_parent() == null:
 		cidade_view.free()
 		cidade_view = null
+
+## O contingente de um clã em português.
+##
+## A aba de Clãs imprimia `str(cla["contingente"])` — ou seja, o Dictionary
+## cru: o jogador lia `{ "cav_leve": 8 }` na tela, com chave interna e tudo.
+## É o único defeito desta auditoria que um jogador leigo chamaria de bug.
+func _texto_contingente(d: Dictionary) -> String:
+	var partes: Array[String] = []
+	for tipo in d:
+		var n: int = int(d[tipo])
+		var nome: String = str(Dados.TROPAS.get(tipo, {}).get("nome", tipo)).to_lower()
+		partes.append("%d %s" % [n, nome])
+	return ", ".join(partes)
 
 ## mm:ss para a fila do quartel.
 func _mmss(seg: int) -> String:
@@ -319,7 +336,10 @@ func atualizar() -> void:
 func _titulo_secao(c: Container, texto: String) -> void:
 	var l := Label.new()
 	l.text = texto
-	l.add_theme_font_size_override("font_size", 20)
+	var f := Tema.fonte_forte()
+	if f != null:
+		l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
 	l.add_theme_color_override("font_color", Tema.SANGUE)
 	c.add_child(l)
 
@@ -355,23 +375,39 @@ func _card(c: Container) -> HBoxContainer:
 	painel.add_child(h)
 	return h
 
+## Retrato de um personagem fixo (rei, chefe de clã, freguês da taverna).
+##
+## Aqui morava o pior defeito visual do jogo, e ele se disfarçava de outra
+## coisa. `moldura_retrato` é um NinePatchRect com margem de 32px nos quatro
+## lados — tamanho mínimo 64×64. Esta caixa pedia 52. Com o alvo menor que a
+## soma das margens o 9-slice DEGENERA: some o miolo, e sobram só os quatro
+## cantos de 32×32 encostados uns nos outros, cobrindo o retrato inteiro.
+##
+## O efeito: os seis reis, os quatro clãs e os três fregueses apareciam como
+## o MESMO quadradinho ornamentado. Medido: 91% dos pixels idênticos entre
+## dois reis diferentes. Não era "todo mundo usa o mesmo brasão" — eram treze
+## retratos distintos, já gerados e já pagos, escondidos atrás de um bug de
+## dimensionamento.
+##
+## A moldura só volta onde há espaço para ela: no retrato grande da conversa.
 func _retrato(c: Container, id: String, tamanho: int = 52) -> void:
 	var tr := TextureRect.new()
 	tr.texture = Retratos.textura(id, Retratos.humor_de(state, id))
 	tr.custom_minimum_size = Vector2(tamanho, tamanho)
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	# OVERHAUL v2: a moldura ornamentada do PixelLab entra POR CIMA do retrato
-	var moldura := UIv2.criar_painel("moldura_retrato")
-	if moldura == null:
+	tr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if tamanho < UIv2.MARGENS.get("moldura_retrato", 32) * 2:
 		c.add_child(tr)
 		return
 	var caixa := Control.new()
 	caixa.custom_minimum_size = Vector2(tamanho, tamanho)
-	# num card mais alto que o retrato, o HBox esticaria esta caixa na vertical
-	# e a moldura ornamentada sairia alongada junto
 	caixa.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var moldura := UIv2.criar_painel("moldura_retrato")
+	if moldura == null:
+		c.add_child(tr)
+		return
 	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
 	moldura.set_anchors_preset(Control.PRESET_FULL_RECT)
 	caixa.add_child(tr)
@@ -990,7 +1026,7 @@ func _aba_clas(c: Container) -> void:
 		var rel: int = state["tags"].get(cla["id"], {"relacao": 0})["relacao"]
 		_par(v, "%s — %s (%s %d)\n⚔ %s · pede ~%d + %d/mês · exige ⭐ %d" % [
 			cla["nome"], cla["lider"], Dialogo.nome_relacao(rel), rel,
-			str(cla["contingente"]), cla["preco_base"], cla["soldo"], cla["renome_min"]])
+			_texto_contingente(cla["contingente"]), cla["preco_base"], cla["soldo"], cla["renome_min"]])
 		var contrato := Clas.ativo(state, cla["id"])
 		var pendente := false
 		for m in state["mensageiros"]:

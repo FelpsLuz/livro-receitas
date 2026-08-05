@@ -45,6 +45,39 @@ static func sombra(largura: float) -> Sprite2D:
 	s.show_behind_parent = true       # desenha antes do pai, mas herda o Y-Sort dele
 	return s
 
+## Sombra PROJETADA: a silhueta do próprio objeto, deitada no chão.
+##
+## A elipse de `sombra()` acima ancora o objeto, mas não diz nada sobre o que
+## ele É — uma torre e um barril lançam a mesma mancha oval. Aqui a sombra é a
+## textura do objeto espelhada sobre a linha dos pés, achatada e inclinada:
+## a torre lança uma torre, a árvore lança uma copa.
+##
+##   scale.y NEGATIVO   espelha a silhueta para baixo da linha dos pés
+##   scale.y  −0.45     achata: sol alto, sombra curta
+##   skew  +38°         o sol vem da ESQUERDA (é assim que a maioria da arte
+##                      do pacote está iluminada), então a sombra cai à direita
+##
+## O alfa dos PNGs é binário — dois valores, 0 e 255 — então a borda da sombra
+## sai dura, que é exatamente o certo em pixel art. E `show_behind_parent`
+## resolve a ordenação de graça: a sombra desenha dentro do slot de Y-Sort do
+## próprio objeto, então a muralha continua cobrindo a sombra das torres.
+static func sombra_projetada(tex: Texture2D, forca: float = 0.32) -> Sprite2D:
+	if tex == null:
+		return null
+	var s := Sprite2D.new()
+	s.name = "SombraProjetada"
+	s.texture = tex
+	s.centered = true
+	# mesma âncora do pai (origem nos pés): sobe meia altura para o espelho
+	# acontecer exatamente sobre a linha do chão
+	s.offset = Vector2(0, -tex.get_height() / 2.0)
+	s.scale = Vector2(1.0, -0.45)
+	s.skew = deg_to_rad(38.0)
+	s.modulate = Color(0, 0, 0, forca)
+	s.show_behind_parent = true
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	return s
+
 ## Fumaça de chaminé. `offset` é a boca da chaminé em relação à ORIGEM do pai
 ## (nos pés) — ex.: casa de 160px com chaminé em (114,10) → Vector2(34, -150).
 static func fumaca(offset: Vector2, forte: bool = false) -> CPUParticles2D:

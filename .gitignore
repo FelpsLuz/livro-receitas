@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# espelho dos PNGs antes da requantização (ferramentas/requantizar.py --restaurar)
+reino-por-conquista-godot/.original/

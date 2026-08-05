@@ -1,0 +1,84 @@
+// ============================================================
+// PALETA GLOBAL — "Reino por Conquista"
+// 48 cores para o jogo INTEIRO. Não 48 por asset: 48 no total.
+//
+// Derivada dos matizes que os melhores ativos do projeto já usavam
+// (o retrato de nobre e a casa de enxaimel concentram tudo em 20°–60°,
+// com sombras frias em 200°–240°).
+//
+// A regra de saturação não é um teto único. Saturação alta só grita quando
+// vem com VALOR alto: um marrom escuro a S62%/V27% é discreto, e o verde de
+// grama que existia — S84% × V76%, croma 0,64 — era o que estourava a tela.
+// A regra aqui é croma (S×V) ≤ 0,34, com exceção declarada para três cores:
+// o ouro de acento (0,44), a pele clara (0,35) e a luz da madeira (0,36).
+// São 3 de 48, e nenhuma delas cobre chão. O verde de grama caiu para 0,17.
+//
+// Cada rampa desloca o matiz junto com o valor: a sombra esfria, a luz
+// esquenta. É isso que dá volume sem precisar de mais cores.
+// ============================================================
+
+// ---- neutros (8) : do preto quente ao pergaminho -------------
+0d0a08
+1c1611
+2b1d12
+4a3a28
+6d5b44
+9c8a6c
+c9b894
+e8d8b0
+
+// ---- verdes (6) : campo e mata, dessaturados -----------------
+1a2418
+2b3a20
+41552c
+5a7338
+7a9448
+9ab35e
+
+// ---- marrons e madeira (6) -----------------------------------
+2a1a12
+45291a
+5d3f26
+7a5838
+9c714a
+b08a55
+
+// ---- pedra (5) : cinza-azulado, o frio da alvenaria ----------
+22262e
+373d47
+525b66
+737c88
+9aa2ad
+
+// ---- pele (5) -------------------------------------------------
+4a2f26
+7a4f3a
+a8734f
+c99873
+e8c39a
+
+// ---- metais (4) : ferro, aço, aço claro, bronze --------------
+4d4a45
+8b8a83
+a4a49c
+8a6c42
+
+// ---- acentos dramáticos (4) : ouro, sangue, real, veneno -----
+ccaa5c
+9a4750
+445e8a
+5f7a3a
+
+// ---- folga (10) : pergaminho, água (com um azul CLARO — sem ele o rio
+//                   virava areia no encaixe), areia, terra arada,
+//                   e a sombra roxa que ancora tudo no chão ----
+f5ecd4
+6b8fa8
+3f6379
+2a4453
+9fbfd0
+b8a077
+8c6242
+6e4a30
+573b2a
+1a1420

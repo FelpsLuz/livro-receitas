@@ -243,6 +243,10 @@ func _criar_heroi() -> void:
 	heroi = PersonagensV2.criar("heroi_jogador", ESCALA_HEROI)
 	_ancorar(heroi)
 	heroi.add_child(Vfx.sombra(124.0 * 0.42))
+	var sh := Vfx.sombra_projetada(heroi.sprite_frames.get_frame_texture(
+		heroi.animation, 0), 0.28) if heroi.sprite_frames != null else null
+	if sh != null:
+		heroi.add_child(sh)
 	heroi.position = Vector2(MUNDO.x * 0.5, 780)
 	mundo.add_child(heroi)
 	# ronda pela rua: portão → praça do mercado → pontas da rua transversal
@@ -432,7 +436,15 @@ func _objeto(nome: String, pos: Vector2) -> Sprite2D:
 	s.position = pos
 	# a ponte deita sobre a água: sem sombra, e atrás de quem passa por ela
 	if nome != "ponte_madeira":
+		# duas camadas: a elipse ANCORA o objeto no chão (contato), e a
+		# silhueta projetada diz o QUE está ali. Sozinha, a elipse dá a
+		# mesma mancha oval para uma torre e para um barril.
 		s.add_child(Vfx.sombra(s.texture.get_width() * 0.55))
+		# a escala do pai já é herdada pelo filho — mexer em proj.scale.x aqui
+		# aplicaria o mesmo fator duas vezes
+		var proj := Vfx.sombra_projetada(s.texture)
+		if proj != null:
+			s.add_child(proj)
 	match nome:
 		"casa_camponesa":
 			var f := Vfx.fumaca(Vector2(34, -150))
@@ -466,6 +478,10 @@ func _semear() -> void:
 		var p: AnimatedSprite2D = PersonagensV2.criar(elenco[i % elenco.size()], ESCALA_ALDEAO)
 		_ancorar(p)
 		p.add_child(Vfx.sombra(40.0))
+		var sp := Vfx.sombra_projetada(p.sprite_frames.get_frame_texture(
+			p.animation, 0), 0.26) if p.sprite_frames != null else null
+		if sp != null:
+			p.add_child(sp)
 		var origem := Vector2(360.0 + _rng.randf() * 1200.0, 560.0 + _rng.randf() * 240.0)
 		p.position = origem
 		mundo.add_child(p)
