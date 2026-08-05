@@ -20,12 +20,22 @@ const VisualController = preload("res://scripts/visual_controller.gd")
 const CameraMundo = preload("res://scripts/camera_mundo.gd")
 const Ambiente = preload("res://scripts/environment_manager.gd")
 
-## VISUAL STRIP: as dimensões que cada objeto da vila tinha na arte gerada.
-## Não é decoração — `_ancorar()` põe a origem nos PÉS usando a ALTURA da
-## textura, e `ESCALA_OBJ` multiplica em cima disso. Um caixote de tamanho
-## errado moveria a construção de lugar e furaria o Y-Sort. A tabela é o que
-## mantém a planta da vila idêntica à de antes.
+## GRADE HI-BIT: os props que existem em arte, com o tamanho REAL do PNG.
+##
+## A tabela deixou de ser uma lista de caixotes e virou o inventário do que
+## há em `assets/sprites/`. `_ancorar()` continua usando a ALTURA para pôr a
+## origem nos pés — é ela que o Y-Sort compara —, então o número tem que ser
+## o do arquivo, não uma estimativa.
 const TAMANHO_OBJ := {
+	"arvore_carvalho": Vector2i(64, 80),
+	"pedra": Vector2i(48, 40),
+	"arbusto": Vector2i(32, 32),
+	"tronco": Vector2i(48, 32),
+}
+
+## O que ainda não tem arte, com a dimensão que tinha no strip. Fica para o
+## `_planta` continuar compilando e para a próxima leva saber o alvo.
+const TAMANHO_PENDENTE := {
 	"arvore_carvalho": Vector2i(128, 160),
 	"arvore_pinheiro": Vector2i(112, 160),
 	"barraca_mercado": Vector2i(144, 128),
@@ -50,7 +60,16 @@ const TAMANHO_OBJ := {
 ## O mundo é montado no tamanho nativo da arte (casas de 160px, herói de 124px)
 ## e reduzido por um fator INTEIRO de 1:2. Meio pixel de escala é o que faz
 ## pixel art tremer; 0.5 exato não treme.
-const ESCALA_MUNDO := 0.5
+## GRADE REAL 32×32: a arte nasce em 32px e é desenhada em 32px. Antes o
+## mundo era montado em 1920×1080 e reduzido por 0.5, o que fazia um tile de
+## 32 aparecer com 16 — meia resolução da arte. Com Hi-Bit isso é jogar
+## fora metade do que se pagou para gerar.
+##
+## A janela visível encolheu junto (480×270 de arte, ×2 no container). É o
+## enquadramento de Stardew: 15×8 tiles na tela, e a câmera passeia pelo
+## resto do mundo — que continua com 60×34 tiles.
+const ESCALA_MUNDO := 1.0
+const JANELA := Vector2i(480, 270)
 const TILE := 32
 ## Área do mundo em pixels de arte (o dobro da viewport, pela escala 1:2).
 const MUNDO := Vector2(1920, 1080)
@@ -71,8 +90,12 @@ const RUA_DIR := 37
 
 ## Escala do personagem NA VILA: o cânone do gênero é o herói com ~metade da
 ## altura da porta de uma casa. Com as casas a 1.0 (160px), 0.55 dá isso.
-const ESCALA_HEROI := 0.55
-const ESCALA_ALDEAO := 0.85
+## Arte real em tamanho NATIVO. Escala fracionária reamostra o sprite e
+## quebra a grade de pixel — a lição que já custou uma rodada no cenário.
+const ESCALA_HEROI := 1.0
+const ESCALA_ALDEAO := 1.0
+## O id do personagem com arte. Ver assets/sprites/aldeao_<direcao>.png.
+const HEROI := "aldeao"
 
 ## Proporção de cada objeto em relação à arte, medida CONTRA o herói:
 ## um barril na altura do peito, um baú até o joelho, a tenda acima da cabeça.
@@ -120,15 +143,15 @@ func _atualizar_ambiente() -> void:
 ## A vila só existe se o terreno e o herói animado existirem: sem isso,
 ## principal.gd fica com a cena procedural de antes.
 static func disponivel() -> bool:
-	return MapaV2.tem("campo_terra_atlas") and PersonagensV2.tem_caminhada("heroi_jogador")
+	return MapaV2.tem("campo_terra_atlas") and PersonagensV2.tem_caminhada(HEROI)
 
 func _init() -> void:
 	stretch = true
-	custom_minimum_size = Vector2(480, 270)
+	custom_minimum_size = Vector2(JANELA * 2)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	viewport = SubViewport.new()
-	viewport.size = Vector2i(MUNDO.x * ESCALA_MUNDO, MUNDO.y * ESCALA_MUNDO)
+	viewport.size = JANELA
 	viewport.transparent_bg = false
 	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	add_child(viewport)
@@ -216,6 +239,10 @@ func _montar_terreno() -> void:
 
 func _camada(nome: String) -> TileMapLayer:
 	var c := MapaV2.criar_camada(nome, TILE)
+	if c != null:
+		# Y-Sort na camada de chão: sem isto, um tile alto (a margem do rio)
+		# desenharia sempre por cima de quem pisa nele.
+		c.y_sort_enabled = true
 	if c == null:
 		return null
 	c.scale = Vector2(ESCALA_MUNDO, ESCALA_MUNDO)
@@ -287,7 +314,7 @@ static func _na_floresta(canto: Vector2i) -> bool:
 ## aqui toca em sprite: a ronda mexe em posição, o agente emite, o
 ## controlador desenha. Trocar a arte não encosta nesta função.
 func _criar_heroi() -> void:
-	if not PersonagensV2.tem_caminhada("heroi_jogador"):
+	if not PersonagensV2.tem_caminhada(HEROI):
 		return
 	heroi = AgenteMovel.new()
 	heroi.name = "Heroi"
@@ -296,7 +323,7 @@ func _criar_heroi() -> void:
 	mundo.add_child(heroi)
 
 	heroi_visual = VisualController.novo(heroi)
-	heroi_visual.usar_personagem("heroi_jogador", ESCALA_HEROI)
+	heroi_visual.usar_personagem(HEROI, ESCALA_HEROI)
 	heroi_visual.observar(heroi)
 
 	# ronda pela rua: portão → praça do mercado → pontas da rua transversal
@@ -359,28 +386,32 @@ func _nivel() -> int:
 ## O que existe em cada nível: [id do objeto, x, y] no espaço da arte.
 ## Y é o ponto onde a construção toca o chão — é o que o Y-Sort compara.
 func _planta(nivel: int) -> Array:
-	# bosque de primeiro plano: árvores soltas ADIANTE da moldura de floresta,
-	# para a transição mata→clareira não ser uma linha de tiles
+	"""A planta da vila, em pixels de MUNDO (1920×1080).
+
+	Os quatro props com arte — árvore, pedra, arbusto e tronco — montam a
+	paisagem. O que ainda espera desenho (casa, muralha, moinho) continua na
+	lista e entra como CAIXOTE por TAMANHO_PENDENTE: é esse caixote na tela
+	que diz o que a próxima leva precisa gerar, em vez de a peça sumir e
+	ninguém notar a falta.
+	"""
 	var pecas: Array = [
-		["arvore_carvalho", 210, 420], ["arvore_pinheiro", 1730, 420],
-		["arvore_carvalho", 1560, 340], ["arvore_pinheiro", 350, 320],
-		["arvore_carvalho", 1830, 640], ["arvore_pinheiro", 140, 620],
-		["arvore_carvalho", 480, 790], ["arvore_pinheiro", 1500, 800],
+		["arvore_carvalho", 210, 420], ["arvore_carvalho", 1730, 430],
+		["arvore_carvalho", 1560, 340], ["arvore_carvalho", 350, 320],
+		["arvore_carvalho", 1830, 640], ["arvore_carvalho", 140, 620],
+		["arvore_carvalho", 480, 790], ["arvore_carvalho", 1500, 800],
+		["arbusto", 300, 520], ["arbusto", 1650, 540], ["arbusto", 620, 860],
+		["arbusto", 1380, 880], ["arbusto", 900, 380],
+		["pedra", 700, 500], ["pedra", 1240, 470], ["pedra", 420, 700],
+		["tronco", 1120, 560], ["tronco", 560, 480],
 	]
-	# a ponte é geografia, como o rio: existe em todo nível.
-	# O topo dela precisa ENCOSTAR onde a rua/grama termina (linha da areia,
-	# y=832) — é o eixo portão→praça→ponte que costura a composição.
 	pecas.append(["ponte_madeira", RUA_COLUNA * TILE, 1120])
 	if nivel <= 0:
-		# nível 0 é a terra recém-comprada (ou rebaixada por saque): ainda é
-		# um acampamento — sem o <=, o jogador pagava 300 de ouro e recebia
-		# uma clareira deserta
 		pecas.append_array([
 			["fogueira_acampamento", 940, 690],
 			["tenda_grande", 800, 600], ["tenda_simples", 1080, 610],
-			["tenda_simples", 860, 800], ["tenda_simples", 1120, 780],
-			["carroca", 1240, 680], ["sacos_carga", 1020, 730],
-			["barril_carga", 890, 730], ["tocha_estaca", 940, 590],
+			["tenda_simples", 860, 800], ["carroca", 1240, 680],
+			["sacos_carga", 1020, 730], ["barril_carga", 890, 730],
+			["tocha_estaca", 940, 590],
 		])
 		return pecas
 	if nivel >= 1:
@@ -394,16 +425,12 @@ func _planta(nivel: int) -> Array:
 			["carroca", 1390, 700],
 		])
 	if nivel >= 3:
-		# a muralha abraça o portão pela largura VISÍVEL da arte (não do
-		# canvas): o portão tem 141px e cada segmento ~134px de pedra — passo
-		# de 160 abria janelas de grama e a fortificação parecia em ruínas
 		pecas.append_array([
 			["muralha_pedra", 686, 400], ["muralha_pedra", 824, 400],
 			["portao_fortificado", 960, 410],
 			["muralha_pedra", 1096, 400], ["muralha_pedra", 1234, 400],
 			["barraca_mercado", 760, 740], ["barraca_mercado", 1160, 750],
 			["tocha_estaca", 880, 430], ["tocha_estaca", 1040, 430],
-			["barril_carga", 820, 770],
 		])
 	if nivel >= 4:
 		pecas.append_array([["casa_camponesa", 1680, 730], ["bau_tesouro", 1010, 660]])
@@ -434,14 +461,31 @@ func _montar_vila() -> void:
 ## Um objeto da vila: sprite ancorado nos pés, na escala certa, com sombra —
 ## e com o efeito que lhe cabe (fumaça na chaminé, fogo na fogueira e tocha).
 func _objeto(nome: String, pos: Vector2) -> Sprite2D:
-	if not TAMANHO_OBJ.has(nome):
+	# Arte real quando existe; caixote quando não. É o caixote que mostra,
+	# na tela, o que a próxima leva de geração ainda precisa entregar.
+	var d: Vector2i
+	var tex: Texture2D = null
+	if TAMANHO_OBJ.has(nome):
+		d = TAMANHO_OBJ[nome]
+		var caminho := "res://assets/sprites/prop_%s.png" % nome
+		if ResourceLoader.exists(caminho):
+			var t = load(caminho)
+			tex = t if t is Texture2D else null
+	elif TAMANHO_PENDENTE.has(nome):
+		d = TAMANHO_PENDENTE[nome]
+	else:
 		return null
-	var d: Vector2i = TAMANHO_OBJ[nome]
 	var s := Sprite2D.new()
 	s.name = "Obj_" + nome
-	s.texture = Arte.caixa(d.x, d.y)
+	s.texture = tex if tex != null else Arte.caixa(d.x, d.y)
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	s.centered = true
+	# ---- vento na folhagem ----
+	# Só o que tem copa, e com material COMPARTILHADO: um ShaderMaterial por
+	# árvore seria um uniform buffer por árvore, e a fase de cada uma já sai
+	# da posição no mundo, dentro do shader.
+	if tex != null and (nome == "arvore_carvalho" or nome == "arbusto"):
+		s.material = _material_vento()
 	_ancorar(s)
 	var e: float = ESCALA_OBJ.get(nome, 1.0)
 	s.scale = Vector2(e, e)
@@ -463,6 +507,21 @@ func _objeto(nome: String, pos: Vector2) -> Sprite2D:
 	mundo.add_child(s)
 	return s
 
+static var _vento: ShaderMaterial = null
+
+## O material de vento, um só para a cena inteira (ver `_objeto`).
+static func _material_vento() -> ShaderMaterial:
+	if _vento == null:
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/vento_folhagem.gdshader")
+		m.set_shader_parameter("amplitude", 1.5)
+		m.set_shader_parameter("frequencia", 1.0)
+		m.set_shader_parameter("rajada", 0.4)
+		m.set_shader_parameter("peso_topo", 2.4)
+		_vento = m
+	return _vento
+
+
 ## Aldeões passeando pela vila — o mesmo papel dos NPCs desenhados de antes,
 ## agora como nós de verdade, entrando no mesmo Y-Sort do herói.
 func _semear() -> void:
@@ -473,8 +532,9 @@ func _semear() -> void:
 	_aldeoes.clear()
 	var nivel := _nivel()
 	var quantos: int = 8 if nivel >= 3 else (5 if nivel >= 1 else 3)
-	var elenco := ["tropa_campones", "tropa_lanceiro", "taverneiro",
-		"tropa_arqueiro", "capitao"]
+	# um id só, por enquanto: a leva de arte trouxe um aldeão com 4 rotações.
+	# Os outros papéis entram aqui quando tiverem as suas.
+	var elenco := [HEROI]
 	_rng.seed = 7 + nivel
 	for i in quantos:
 		var a := AgenteMovel.new()

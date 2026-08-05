@@ -15,9 +15,18 @@ extends RefCounted
 
 const Arte = preload("res://scripts/arte.gd")
 
-## A grade dos atlas: 4×4 tiles. Antes vinha da divisão do PNG pelo tamanho
-## do tile; agora é constante, porque é o layout Wang que a define.
+const PASTA := "res://assets/sprites/"
+
+## A grade dos atlas: 4×4 tiles — 16 combinações dos 4 cantos.
 const GRADE := 4
+
+## Nome do conjunto de terreno no TileSet. O "Terrains" da Godot é a mesma
+## ideia do Wang: cada tile declara o que há em cada canto, e o
+## `set_cells_terrain_connect` escolhe o tile certo sozinho. Aqui os dois
+## convivem: `pintar_wang` continua funcionando (é determinístico e testado)
+## e o terrain set fica montado para desenhar pelo editor.
+const TERRENO_BAIXO := 0
+const TERRENO_ALTO := 1
 
 ## ---- LAYOUT WANG DOS ATLAS DO PIXELLAB ----
 ## Os 16 tiles são as 16 combinações dos 4 CANTOS entre dois materiais: o
@@ -36,14 +45,20 @@ const TILE_VAZIO := Vector2i(0, 3)     # 100% do material de baixo (terra/areia)
 ## Quantas variantes espelhadas existem dos dois tiles puros (a base + 3).
 const VARIANTES := 4
 
-## Todo terreno tem caixote — o strip não deixa nenhum atlas faltar.
-static func tem(_nome: String) -> bool:
-	return true
+static func tem(nome: String) -> bool:
+	return ResourceLoader.exists(PASTA + nome + ".png")
 
 ## Monta o TileSet fatiando o atlas em tiles de `tile` pixels.
 ## `solidos`: coordenadas (Vector2i) do atlas que recebem colisão.
-static func montar(_nome: String, tile: int = 32, solidos: Array = []) -> TileSet:
-	var tex: Texture2D = Arte.atlas(GRADE, GRADE, tile)
+static func montar(nome: String, tile: int = 32, solidos: Array = []) -> TileSet:
+	# arte real quando existe; caixote quando não — é o que mantém os testes
+	# de mecânica rodando mesmo sem asset, como antes do strip acabar
+	var tex: Texture2D
+	if tem(nome):
+		var t = load(PASTA + nome + ".png")
+		tex = t if t is Texture2D else Arte.atlas(GRADE, GRADE, tile)
+	else:
+		tex = Arte.atlas(GRADE, GRADE, tile)
 
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(tile, tile)
@@ -83,6 +98,44 @@ static func montar(_nome: String, tile: int = 32, solidos: Array = []) -> TileSe
 				np.vertices = contorno
 				np.add_polygon(PackedInt32Array([0, 1, 2, 3]))
 				dados.set_navigation_polygon(0, np)
+
+	# ---- TERRAINS (auto-tiling nativo da Godot) ----
+	# O mesmo dado do Wang, na estrutura que o editor entende. Cada tile
+	# declara o terreno de cada CANTO, e o TileMapLayer resolve a transição
+	# sozinho com set_cells_terrain_connect.
+	#
+	# O modo é CORNER, não CORNER_AND_SIDES: o atlas do PixelLab é Wang de 4
+	# cantos, e declarar lados que a arte não tem faria a Godot procurar
+	# tiles inexistentes e deixar buraco no mapa.
+	ts.add_terrain_set()
+	ts.set_terrain_set_mode(0, TileSet.TERRAIN_MODE_MATCH_CORNERS)
+	ts.add_terrain(0)
+	ts.set_terrain_name(0, TERRENO_BAIXO, "baixo")
+	ts.set_terrain_color(0, TERRENO_BAIXO, Color(0.55, 0.42, 0.28))
+	ts.add_terrain(0)
+	ts.set_terrain_name(0, TERRENO_ALTO, "alto")
+	ts.set_terrain_color(0, TERRENO_ALTO, Color(0.35, 0.70, 0.30))
+	for mascara in WANG:
+		var coord: Vector2i = WANG[mascara]
+		var dados: TileData = fonte.get_tile_data(coord, 0)
+		if dados == null:
+			continue
+		dados.terrain_set = 0
+		# o "terreno do tile" é o do canto majoritário; sem isto a Godot
+		# recusa o tile ao resolver a conexão
+		var altos := 0
+		for bit in [1, 2, 4, 8]:
+			if mascara & bit:
+				altos += 1
+		dados.terrain = TERRENO_ALTO if altos >= 2 else TERRENO_BAIXO
+		dados.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
+			TERRENO_ALTO if (mascara & 1) else TERRENO_BAIXO)
+		dados.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
+			TERRENO_ALTO if (mascara & 2) else TERRENO_BAIXO)
+		dados.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
+			TERRENO_ALTO if (mascara & 4) else TERRENO_BAIXO)
+		dados.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER,
+			TERRENO_ALTO if (mascara & 8) else TERRENO_BAIXO)
 
 	# Variantes espelhadas dos DOIS tiles puros. Um campo inteiro pintado com o
 	# mesmo tile vira papel de parede: as mesmas flores repetidas em grade. Três
@@ -160,4 +213,8 @@ static func pintar_wang(camada: TileMapLayer, area: Rect2i, dentro: Callable,
 const ATLAS := ["campo_terra_atlas", "praia_agua_atlas", "grama_pedra_atlas"]
 
 static func disponiveis() -> Array:
-	return ATLAS.duplicate()
+	var achados: Array = []
+	for n in ATLAS:
+		if tem(n):
+			achados.append(n)
+	return achados if not achados.is_empty() else ATLAS.duplicate()

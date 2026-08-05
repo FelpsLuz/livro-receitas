@@ -44,25 +44,70 @@ static func animacoes_de(id: String) -> Dictionary:
 	var d = m.get(id)
 	return d if d is Dictionary else {}
 
-## Quadros de um personagem: uma animação por direção quando ele tiver
-## rotações, mais uma animação de movimento por direção quando o manifesto
-## registrar quadros, senão uma única animação "idle".
+## As 4 rotações que a arte real tem, e como as 8 direções do movimento
+## caem nelas. `AgenteMovel.direcao_de` devolve 8 nomes porque o vetor tem 8
+## octantes; a arte tem 4. Mapear aqui — e não lá — é o que mantém a
+## mecânica ignorando quantos desenhos existem.
 ##
-## VISUAL STRIP: os PNG saíram, a ESTRUTURA ficou. O manifesto continua
-## ditando quantos quadros tem cada caminhada e em que direções — é o que
-## mantém `mover()` trocando de animação, a caminhada em laço e o passo mais
-## rápido que a pose parada. O que mudou é que todo quadro é o mesmo caixote.
+## As diagonais caem na direção HORIZONTAL, não na vertical: de frente ou de
+## costas, o personagem lê como parado; de lado, lê como andando. Num
+## top-down é a leitura lateral que vende o movimento.
+const ROTACOES := ["south", "east", "north", "west"]
+const MAPA_8_PARA_4 := {
+	"south": "south", "south-east": "east", "east": "east",
+	"north-east": "east", "north": "north", "north-west": "west",
+	"west": "west", "south-west": "west",
+}
+
+const PASTA := "res://assets/sprites/"
+
+
+static func _tex(id: String, direcao: String) -> Texture2D:
+	var caminho := PASTA + id + "_" + direcao + ".png"
+	if not ResourceLoader.exists(caminho):
+		return null
+	var t = load(caminho)
+	return t if t is Texture2D else null
+
+
+## O personagem tem arte de verdade nas 4 rotações?
+static func tem_arte(id: String) -> bool:
+	for d in ROTACOES:
+		if _tex(id, d) == null:
+			return false
+	return true
+
+
+## Quadros de um personagem.
 ##
-## Sem a arte, a pergunta "este personagem tem rotações?" não tem mais um PNG
-## para responder. O manifesto responde: quem tem animação registrada tem as
-## 8 direções. Hoje isso é exato — o único personagem com rotações geradas
-## era também o único no manifesto — e daqui em diante o manifesto é a fonte
-## única, o que é mais honesto do que inferir estrutura de nome de arquivo.
+## Com ARTE REAL: uma animação por rotação, mais um alias por direção
+## diagonal apontando para a mesma textura — assim `virar("south-east")`
+## continua funcionando sem a mecânica saber que só há 4 desenhos. A
+## caminhada (`<dir>_walk`) existe com o mesmo quadro: a estrutura fica de
+## pé para quando os quadros de andar chegarem, e `mover()` não muda.
+##
+## Sem arte: caixote, como no strip. É isso que mantém os testes de mecânica
+## rodando para um id que ainda não tem desenho.
 static func quadros(id: String, fps: float = 6.0) -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
-	var anims := animacoes_de(id)
 
+	if tem_arte(id):
+		for oito in MAPA_8_PARA_4:
+			var quatro: String = MAPA_8_PARA_4[oito]
+			var t := _tex(id, quatro)
+			sf.add_animation(oito)
+			sf.set_animation_speed(oito, fps)
+			sf.set_animation_loop(oito, true)
+			sf.add_frame(oito, t)
+			var andando: String = oito + "_walk"
+			sf.add_animation(andando)
+			sf.set_animation_speed(andando, fps * 2.0)
+			sf.set_animation_loop(andando, true)
+			sf.add_frame(andando, t)
+		return sf
+
+	var anims := animacoes_de(id)
 	if anims.is_empty():
 		sf.add_animation("idle")
 		sf.set_animation_speed("idle", fps)
@@ -70,26 +115,21 @@ static func quadros(id: String, fps: float = 6.0) -> SpriteFrames:
 		sf.add_frame("idle", Arte.caixa(LADO))
 		return sf
 
-	# pose parada nas 8 direções
 	for dir in DIRECOES:
 		sf.add_animation(dir)
 		sf.set_animation_speed(dir, fps)
 		sf.set_animation_loop(dir, true)
 		sf.add_frame(dir, Arte.caixa(LADO))
-
-	# ---- animações de várias imagens (caminhada e afins) ----
-	# a caminhada roda mais rápido que o "parado": 12 fps para 8 quadros dá o
-	# passo certo sem ficar patinando.
 	for nome_anim in anims:
 		var dados: Dictionary = anims[nome_anim]
 		var por_direcao = dados.get("direcoes")
 		if not (por_direcao is Dictionary):
 			continue
-		for dir in por_direcao:
-			var total: int = int(por_direcao[dir])
+		for dir2 in por_direcao:
+			var total: int = int(por_direcao[dir2])
 			if total <= 0:
 				continue
-			var chave: String = str(dir) + "_" + str(nome_anim)
+			var chave: String = str(dir2) + "_" + str(nome_anim)
 			sf.add_animation(chave)
 			sf.set_animation_speed(chave, fps * 2.0)
 			sf.set_animation_loop(chave, true)
@@ -146,13 +186,16 @@ static func mover(no: AnimatedSprite2D, direcao: String, andando: bool = true,
 		return true
 	return virar(no, direcao)
 
-## Tem as 8 poses paradas? Ver a nota em `quadros()`: o manifesto responde.
+## Tem as poses paradas? Arte real responde primeiro; o manifesto é a
+## reserva para quem ainda está em caixote.
 static func tem_rotacoes(id: String) -> bool:
-	return not animacoes_de(id).is_empty()
+	return tem_arte(id) or not animacoes_de(id).is_empty()
 
 ## O personagem tem caminhada de verdade (mais de um quadro) nessa direção?
 static func tem_caminhada(id: String, direcao: String = "south",
 		nome_anim: String = "walk") -> bool:
+	if tem_arte(id):
+		return true          # a estrutura existe, ainda com um quadro só
 	var anims := animacoes_de(id)
 	if not anims.has(nome_anim):
 		return false

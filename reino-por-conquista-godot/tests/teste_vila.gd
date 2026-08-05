@@ -67,8 +67,15 @@ func _initialize() -> void:
 
 	# ---------- Y-SORT: o ponto central desta etapa ----------
 	ok("mundo com Y-Sort ligado", vila.mundo != null and vila.mundo.y_sort_enabled)
-	ok("escala do mundo é razão inteira 1:2", vila.mundo.scale == Vector2(0.5, 0.5),
+	# GRADE HI-BIT: 1:1. A arte nasce em 32px e é desenhada em 32px. Antes
+	# era 1:2, o que mostrava um tile de 32 com 16 — meia resolução do que
+	# se pagou para gerar. Fracionário nunca; inteiro sempre.
+	ok("escala do mundo é razão inteira",
+		vila.mundo.scale == Vector2(VilaCena.ESCALA_MUNDO, VilaCena.ESCALA_MUNDO)
+		and is_equal_approx(VilaCena.ESCALA_MUNDO, roundf(VilaCena.ESCALA_MUNDO)),
 		str(vila.mundo.scale))
+	ok("camada de terreno com Y-Sort",
+		vila.terreno != null and vila.terreno.y_sort_enabled)
 	# cada sprite precisa ter a origem nos pés, senão o Y-Sort compara o centro
 	var mal_ancorados: Array = []
 	for f in vila.mundo.get_children():
@@ -112,9 +119,16 @@ func _initialize() -> void:
 		vila.heroi_visual != null and vila.heroi_visual.visual != null
 		and vila.heroi_visual.visual.scale.is_equal_approx(
 			Vector2(VilaCena.ESCALA_HEROI, VilaCena.ESCALA_HEROI)))
-	var barril = vila.mundo.get_node_or_null("Obj_barril_carga")
-	ok("objetos pequenos em escala própria (barril < casa)",
-		barril != null and barril.scale.x < 0.6, str(barril.scale.x if barril else -1.0))
+	# a árvore tem arte real e vem em tamanho NATIVO; o que ainda não tem
+	# desenho continua entrando como caixote, e é isso que se confere aqui
+	var arvore = vila.mundo.get_node_or_null("Obj_arvore_carvalho")
+	ok("árvore com arte real em escala nativa",
+		arvore != null and arvore.texture != null
+		and arvore.texture.get_size() == Vector2(64, 80)
+		and arvore.scale.is_equal_approx(Vector2.ONE),
+		str(arvore.texture.get_size() if arvore else "ausente"))
+	ok("árvore com shader de vento",
+		arvore != null and arvore.material is ShaderMaterial)
 	var casa = vila.mundo.get_node_or_null("Obj_casa_camponesa")
 	ok("casa camponesa montada no mundo", casa != null)
 	var tocha = vila.mundo.get_node_or_null("Obj_tocha_estaca")
