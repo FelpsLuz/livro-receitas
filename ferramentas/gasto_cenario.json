@@ -1,0 +1,60 @@
+{
+ "total_usd": 0.07711517010132471,
+ "chamadas": [
+  {
+   "rotulo": "placa_base 400x200",
+   "estimado": 0.013,
+   "real": 0.007148904297086927
+  },
+  {
+   "rotulo": "placa_base 400x200",
+   "estimado": 0.013,
+   "real": 0.007627444002363417
+  },
+  {
+   "rotulo": "placa_base 400x200",
+   "estimado": 0.013,
+   "real": 0.006716858572430081
+  },
+  {
+   "rotulo": "placa_base init_image",
+   "estimado": 0.008,
+   "real": 0.007165342913733589
+  },
+  {
+   "rotulo": "placa_base init 380",
+   "estimado": 0.008,
+   "real": 0.007985081672668457
+  },
+  {
+   "rotulo": "piloto casa_sape 128x128",
+   "estimado": 0.008,
+   "real": 0.008536470108562046
+  },
+  {
+   "rotulo": "piloto casa_sape 128x128",
+   "estimado": 0.008,
+   "real": 0.0
+  },
+  {
+   "rotulo": "piloto casa_sape 128x128",
+   "estimado": 0.008,
+   "real": 0.007924151864316728
+  },
+  {
+   "rotulo": "sprite casa_sape 48x44",
+   "estimado": 0.008,
+   "real": 0.006913540628221301
+  },
+  {
+   "rotulo": "harmonizar casa_sape",
+   "estimado": 0.008,
+   "real": 0.007793175717194875
+  },
+  {
+   "rotulo": "anel casa_sape",
+   "estimado": 0.008,
+   "real": 0.009304200324747297
+  }
+ ]
+}

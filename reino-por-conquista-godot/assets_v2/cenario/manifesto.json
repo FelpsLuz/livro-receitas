@@ -1,0 +1,17 @@
+{
+ "casa_sape": {
+  "camada": "camadas/casa_sape.png",
+  "sombra": "sombras/casa_sape.png",
+  "janela": [
+   48,
+   69,
+   128,
+   128
+  ],
+  "fora_pct": 0.0,
+  "tol": 12,
+  "px_objeto": 2314,
+  "px_sombra": 492,
+  "tecnica": "C2: sprite colado FORA da m\u00e1scara + anel harmonizador"
+ }
+}

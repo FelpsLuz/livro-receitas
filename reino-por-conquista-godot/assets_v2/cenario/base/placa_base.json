@@ -1,0 +1,58 @@
+{
+ "endpoint": "/create-image-pixflux-background",
+ "corpo": {
+  "description": "wide medieval landscape in strict front elevation, composed in horizontal bands: warm blue summer sky with puffy clouds in the top quarter, a RANGE of several distant rocky peaks with hazy atmospheric blue tone across the upper middle, a dense unbroken band of dark green conifer forest below the peaks, then a wide FLAT EMPTY lush green meadow filling almost HALF of the image height from edge to edge, and a calm deep blue river as a NARROW straight horizontal strip along the very bottom edge, the river no taller than one tenth of the image, with a thin grassy near bank in front of it, COMPLETELY EMPTY of buildings, no people, no roads, no paths, no fences, no animals, NO tree in the foreground, NO tall grass in the corners, no bushes in the corners, no winding river, distant elements desaturated toward the sky color, lush storybook medieval pixel art, warm golden afternoon sunlight, rich warm greens, clean pixel clusters, hard shading with a 3-4 tone ramp, defined silhouettes, charming and inviting, light source from upper right, shadows cast to lower left",
+  "negative_description": "watercolor, sketch, blurry, anti-aliased, smooth gradient, glow, soft airbrush shading, photorealistic, text, watermark, ui frame, neon, dithering noise, grim, dark, desaturated",
+  "image_size": {
+   "width": 400,
+   "height": 200
+  },
+  "text_guidance_scale": 7.5,
+  "view": "side",
+  "outline": "selective outline",
+  "shading": "basic shading",
+  "detail": "medium detail",
+  "seed": 20260805
+ },
+ "usd": 0.006716858572430081,
+ "gerada_em": "2026-08-05",
+ "conformada": {
+  "metodo": "fatia \u00fanica de prado + retalho de rio espelhado (passo 2)",
+  "bruta": "placa_modelo.png",
+  "bandas": {
+   "ceu": [
+    0,
+    58
+   ],
+   "montanhas": [
+    47,
+    82
+   ],
+   "floresta": [
+    78,
+    107
+   ],
+   "muralha": [
+    98,
+    116
+   ],
+   "campo": [
+    111,
+    169
+   ],
+   "rio": [
+    167,
+    189
+   ],
+   "margem": [
+    187,
+    200
+   ]
+  }
+ },
+ "repintura": {
+  "init_image": "placa conformada (cirurgia de bandas)",
+  "init_image_strength": 380,
+  "nota": "600 preservou as listras; 380 adotada"
+ }
+}
