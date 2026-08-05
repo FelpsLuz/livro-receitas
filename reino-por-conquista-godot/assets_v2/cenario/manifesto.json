@@ -1,6 +1,0 @@
-{
- "casa_sape": {
-  "sprite": "sprites/casa_sape.png",
-  "nota": "camada+sombra C2 removidas do runtime (v3 §A); historico no git e em ferramentas/experimental/"
- }
-}

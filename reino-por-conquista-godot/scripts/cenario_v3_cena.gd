@@ -136,6 +136,12 @@ func _cor(rgb: Array) -> Color:
 	return Color8(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
 
+## Uma evolução em curso RECUSA outra (ver `evoluir`). Quem chama precisa
+## saber disso para não registrar como feito um pedido que foi descartado.
+func em_transicao() -> bool:
+	return _em_transicao
+
+
 # ---- evolução: crossfade + poeira na obra + flash curto ----
 func evoluir(para: int = -1) -> void:
 	if _em_transicao:

@@ -12,9 +12,9 @@ porque a quantização fixa cores de pixels que ainda vão ser mesclados:
   4. quantização de todos os estágios COM A MESMA paleta da estação
   5. ampliação nearest ×2 (fator inteiro) só para exibição
 
-O passo 3 usa o mesmo método de rampa em OKLab de paleta_mestra.py: o
-mockup traz milhares de cores por causa do anti-aliasing, e k-means nelas
-devolveria paleta lamacenta.
+O passo 3 agrupa a cor em rampas de OKLab (oklab.py): o mockup traz
+milhares de cores por causa do anti-aliasing, e k-means nelas devolveria
+paleta lamacenta.
 
     python3 ferramentas/cenario_v3/processar_estagios.py <dir> --estacao verao
 """
@@ -28,8 +28,8 @@ import numpy as np
 from PIL import Image
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(RAIZ / "ferramentas" / "cenario_v2"))
-from paleta_mestra import oklab_para_srgb, srgb_para_oklab  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from oklab import oklab_para_srgb, srgb_para_oklab  # noqa: E402
 
 SAIDA = RAIZ / "reino-por-conquista-godot" / "assets_v3" / "estagios"
 NATIVO = (480, 270)

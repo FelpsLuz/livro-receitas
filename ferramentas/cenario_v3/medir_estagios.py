@@ -6,9 +6,7 @@ Duas saídas, com propósitos distintos:
   coordenadas.json  REGISTRO do que está onde na E6 (480×270). NÃO é
                     posicionamento: a cena achatada não coloca nada, ela
                     já vem pintada. Serve para ancorar overlay (bandeira,
-                    fumaça, tocha), sombra de clique e depuração — e para
-                    comparar com o layout_n5 antigo, que era posicionamento
-                    de verdade e agora vira histórico.
+                    fumaça, tocha), sombra de clique e depuração.
 
   transicoes.json   BBOX do que MUDA de um estágio para o próximo. É o que
                     a recompensa de evolução usa: o crossfade cobre a tela,
@@ -179,7 +177,7 @@ def main() -> None:
     (BASE / "coordenadas.json").write_text(json.dumps({
         "_nota": ("REGISTRO de coordenadas da E6 achatada (480x270). Não é "
                   "posicionamento: a cena vem pintada. Serve para ancorar "
-                  "overlay, depurar e comparar com o layout_n5 histórico."),
+                  "overlay e depurar."),
         "bandas": bd,
         "agua_cores": agua,
         "junco_cores": junco,

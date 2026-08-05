@@ -22,7 +22,7 @@ const Llm = preload("res://scripts/llm.gd")
 const CidadeView = preload("res://scripts/cidade_view.gd")
 const CidadeCena = preload("res://scripts/cidade_cena.gd")
 const VilaCena = preload("res://scripts/vila_cena.gd")
-const PanoramaCena = preload("res://scripts/panorama_cena.gd")
+const CenarioV3View = preload("res://scripts/cenario_v3_view.gd")
 const Icones = preload("res://scripts/icones.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
@@ -264,12 +264,13 @@ func _mmss(seg: int) -> String:
 ## o tempo restante — quem guarda é a fila, dentro do state. O Timer só
 ## empurra o relógio 1 segundo por vez, exatamente como o turno mensal faz
 ## com 600 de uma vez. Salvar no meio do treino não perde nada.
-## A cena da terra, na ordem de preferência: panorama em elevação → vila de
-## cima em TileMap → cenário procedural. As três têm a mesma API (.estado e
-## semear_npcs), então quem chama não precisa saber qual entrou.
+## A cena da terra, na ordem de preferência: cenário v3 em imagem única por
+## estágio → vila de cima em TileMap → cenário procedural. As três têm a
+## mesma API (.estado e semear_npcs), então quem chama não precisa saber
+## qual entrou.
 func _nova_cena() -> SubViewportContainer:
-	if PanoramaCena.disponivel():
-		return PanoramaCena.new()
+	if CenarioV3View.disponivel():
+		return CenarioV3View.new()
 	if VilaCena.disponivel():
 		return VilaCena.new()
 	return CidadeCena.new()
