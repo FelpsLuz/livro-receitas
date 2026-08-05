@@ -33,17 +33,19 @@ const OBJETOS := "res://assets_v2/objects/"
 const PersonagensV2 = preload("res://scripts/personagens_v2.gd")
 const Vfx = preload("res://scripts/vfx.gd")
 
-const ARTE := Vector2i(400, 180)
+const ARTE := Vector2i(400, 200)
 const ESCALA := 2
 
 ## Linhas de apoio (base de cada faixa), derivadas da referência: o horizonte
 ## no terço de cima, a muralha em ~62% da altura, o rio nos últimos 26px.
-const BASE_SERRA_LONGE := 104
-const BASE_SERRA_PERTO := 112
-const BASE_FLORESTA := 122
-const BASE_MURO := 112
-const Y_RIO := 154          # topo da faixa de água
-const ALTURA_RIO := 26
+# Frações medidas na referência (855x485): céu 25%, serra até 52%,
+# floresta até 63%, muralha 58-68%, vila 68-92%, rio nos 15% finais.
+const BASE_SERRA_LONGE := 100
+const BASE_SERRA_PERTO := 108
+const BASE_FLORESTA := 126
+const BASE_MURO := 136
+const Y_RIO := 176          # topo da faixa de água
+const ALTURA_RIO := 24
 
 ## Perspectiva atmosférica: fração de mistura com a cor do ar, por camada.
 const AR := Color("9cc0da")
@@ -54,41 +56,41 @@ const NEBLINA := {"serra_longe": 0.24, "serra_perto": 0.10, "floresta": 0.04}
 ##   p = "pan" (1:1, gerada para o panorama) ou "obj" (assets_v2/objects)
 const PECAS := [
 	# --- natureza, sempre ---
-	{"p": "obj", "n": "arvore_carvalho", "x": 16, "y": 136, "e": 0.26, "de": 0},
-	{"p": "obj", "n": "arvore_pinheiro", "x": 388, "y": 134, "e": 0.28, "de": 0},
-	{"p": "obj", "n": "arvore_pinheiro", "x": 44, "y": 128, "e": 0.22, "de": 0},
+	{"p": "obj", "n": "arvore_carvalho", "x": 16, "y": 158, "e": 0.24, "de": 0},
+	{"p": "obj", "n": "arvore_pinheiro", "x": 392, "y": 152, "e": 0.24, "de": 0},
+	{"p": "obj", "n": "arvore_pinheiro", "x": 36, "y": 148, "e": 0.20, "de": 0},
 
 	# --- nível 0: o acampamento do mercenário ---
-	{"p": "obj", "n": "tenda_simples", "x": 150, "y": 142, "e": 0.26, "de": 0, "ate": 1},
-	{"p": "obj", "n": "fogueira_acampamento", "x": 180, "y": 146, "e": 0.18, "de": 0, "ate": 2},
-	{"p": "obj", "n": "tenda_grande", "x": 250, "y": 144, "e": 0.24, "de": 0, "ate": 0},
+	{"p": "obj", "n": "tenda_simples", "x": 150, "y": 160, "e": 0.24, "de": 0, "ate": 1},
+	{"p": "obj", "n": "fogueira_acampamento", "x": 196, "y": 168, "e": 0.16, "de": 0, "ate": 2},
+	{"p": "obj", "n": "tenda_grande", "x": 256, "y": 158, "e": 0.22, "de": 0, "ate": 0},
 
-	# --- nível 1: a vila nasce ---
-	{"p": "obj", "n": "casa_camponesa", "x": 92, "y": 140, "e": 0.26, "de": 1},
-	{"p": "obj", "n": "casa_camponesa", "x": 280, "y": 142, "e": 0.24, "de": 1},
-	{"p": "obj", "n": "poco_pedra", "x": 228, "y": 140, "e": 0.20, "de": 1},
-	{"p": "pan", "n": "pan_horta", "x": 118, "y": 152, "e": 1.0, "de": 1},
-	{"p": "pan", "n": "pan_galinha", "x": 138, "y": 150, "e": 1.0, "de": 1},
+	# --- nível 1: a vila nasce (fileira de trás encosta na muralha) ---
+	{"p": "obj", "n": "casa_camponesa", "x": 112, "y": 152, "e": 0.26, "de": 1},
+	{"p": "obj", "n": "casa_camponesa", "x": 262, "y": 152, "e": 0.24, "de": 1},
+	{"p": "obj", "n": "poco_pedra", "x": 232, "y": 166, "e": 0.16, "de": 1},
+	{"p": "pan", "n": "pan_horta", "x": 84, "y": 168, "e": 1.0, "de": 1},
+	{"p": "pan", "n": "pan_galinha", "x": 96, "y": 172, "e": 1.0, "de": 1},
 
 	# --- nível 2: vila grande — feira, moinho de madeira, treino ---
-	{"p": "pan", "n": "pan_moinho_madeira", "x": 54, "y": 128, "e": 1.0, "de": 2, "ate": 3},
-	{"p": "pan", "n": "pan_tenda_circo", "x": 162, "y": 150, "e": 1.0, "de": 2},
-	{"p": "pan", "n": "pan_tenda_verde", "x": 248, "y": 152, "e": 1.0, "de": 2},
-	{"p": "obj", "n": "barraca_mercado", "x": 192, "y": 142, "e": 0.22, "de": 2},
-	{"p": "pan", "n": "pan_academia_treino", "x": 332, "y": 146, "e": 1.0, "de": 2, "ate": 3},
-	{"p": "pan", "n": "pan_horta", "x": 306, "y": 154, "e": 1.0, "de": 2},
-	{"p": "pan", "n": "pan_porco", "x": 262, "y": 148, "e": 1.0, "de": 2},
-	{"p": "obj", "n": "carroca", "x": 70, "y": 148, "e": 0.20, "de": 2},
+	{"p": "pan", "n": "pan_moinho_madeira", "x": 56, "y": 144, "e": 1.0, "de": 2, "ate": 3},
+	{"p": "pan", "n": "pan_tenda_circo", "x": 162, "y": 172, "e": 1.0, "de": 2},
+	{"p": "pan", "n": "pan_tenda_verde", "x": 250, "y": 174, "e": 1.0, "de": 2},
+	{"p": "obj", "n": "barraca_mercado", "x": 174, "y": 154, "e": 0.20, "de": 2},
+	{"p": "pan", "n": "pan_academia_treino", "x": 342, "y": 154, "e": 1.0, "de": 2, "ate": 3},
+	{"p": "pan", "n": "pan_horta", "x": 342, "y": 176, "e": 1.0, "de": 2},
+	{"p": "pan", "n": "pan_porco", "x": 320, "y": 168, "e": 1.0, "de": 2},
+	{"p": "obj", "n": "carroca", "x": 132, "y": 170, "e": 0.16, "de": 2},
 
 	# --- nível 3: cidade — pedra, ferro e cavalos ---
-	{"p": "obj", "n": "ferraria", "x": 300, "y": 136, "e": 0.24, "de": 3},
-	{"p": "pan", "n": "pan_estabulo", "x": 354, "y": 140, "e": 1.0, "de": 3},
-	{"p": "pan", "n": "pan_cavalo", "x": 342, "y": 152, "e": 1.0, "de": 3},
+	{"p": "obj", "n": "ferraria", "x": 306, "y": 150, "e": 0.24, "de": 3},
+	{"p": "pan", "n": "pan_estabulo", "x": 372, "y": 156, "e": 1.0, "de": 3},
+	{"p": "pan", "n": "pan_cavalo", "x": 372, "y": 172, "e": 1.0, "de": 3},
 
 	# --- nível 4: cidade murada — academia, moinho de pedra, sobrado ---
-	{"p": "pan", "n": "pan_academia_pedra", "x": 332, "y": 144, "e": 1.0, "de": 4},
-	{"p": "obj", "n": "moinho_vento", "x": 54, "y": 130, "e": 0.28, "de": 4},
-	{"p": "pan", "n": "pan_casa_vermelha", "x": 120, "y": 148, "e": 1.0, "de": 4},
+	{"p": "pan", "n": "pan_academia_pedra", "x": 342, "y": 154, "e": 1.0, "de": 4},
+	{"p": "obj", "n": "moinho_vento", "x": 56, "y": 146, "e": 0.26, "de": 4},
+	{"p": "pan", "n": "pan_casa_vermelha", "x": 292, "y": 178, "e": 1.0, "de": 4},
 ]
 
 var viewport: SubViewport
@@ -185,33 +187,40 @@ func _montar() -> void:
 	_sprite(flor, Vector2(0, BASE_FLORESTA - 44), NEBLINA["floresta"])
 
 	# ---- a defesa evolui: paliçada → muralha ----
+	# a muralha da referência ocupa ~10% da altura: o recorte usa só a ameia
+	# e o corpo de cima da arte, cortando as fiadas escuras da base
 	if nivel >= 3:
-		_sprite("pan_muralha", Vector2(0, BASE_MURO - 44 + 12))
+		_sprite("pan_muralha", Vector2(0, BASE_MURO - 26), 0.0,
+			Rect2(0, 0, 400, 26))
 	elif nivel >= 1:
-		_sprite("pan_palicada", Vector2(0, BASE_MURO - 32 + 8))
+		_sprite("pan_palicada", Vector2(0, BASE_MURO - 26), 0.0,
+			Rect2(0, 0, 400, 26))
 
 	# ---- a sede evolui: nada → torreão → castelo ----
 	if nivel >= 5:
 		var cas := _tex("pan_castelo")
 		if cas != null:
 			_sprite("pan_castelo", Vector2(
-				(ARTE.x - cas.get_width()) / 2.0, BASE_MURO + 2 - cas.get_height()))
+				(ARTE.x - cas.get_width()) / 2.0, BASE_MURO + 4 - cas.get_height()))
 	elif nivel == 4:
 		var tor := _tex("pan_torreao")
 		if tor != null:
 			_sprite("pan_torreao", Vector2(
-				(ARTE.x - tor.get_width()) / 2.0, BASE_MURO + 2 - tor.get_height()))
+				(ARTE.x - tor.get_width()) / 2.0, BASE_MURO + 4 - tor.get_height()))
 
 	# ---- campo ----
 	# o topo da arte do campo tem copas de árvore: o recorte pula essa parte
 	var campo := _variante("pan_campo", estacao, "verao")
-	_sprite(campo, Vector2(0, BASE_MURO - 4), 0.0, Rect2(0, 14, 400, 50))
+	_sprite(campo, Vector2(0, BASE_MURO - 4), 0.0, Rect2(0, 14, 400, 48))
 
 	# ---- caminho do portão à ponte ----
 	# recorte do miolo da arte (o topo dela veio com cenário); as bordas de
 	# grama do recorte se fundem no campo
-	_sprite("pan_caminho", Vector2(ARTE.x / 2.0 - 22, BASE_MURO + 2),
-		0.0, Rect2(0, 30, 44, 22))
+	var caminho := _sprite("pan_caminho",
+		Vector2(ARTE.x / 2.0 - 12, BASE_MURO + 2), 0.0, Rect2(10, 28, 24, 26))
+	if caminho != null:
+		# a arte veio pálida demais; um tinte de terra a assenta no campo
+		caminho.modulate = Color(0.82, 0.68, 0.52)
 
 	# ---- a vila, peça a peça, na ordem de profundidade ----
 	var lista: Array = PECAS.filter(func(c):
@@ -225,11 +234,11 @@ func _montar() -> void:
 
 	# ---- rio na frente, ponte alinhada ao portão ----
 	_sprite("pan_rio", Vector2(0, Y_RIO), 0.0,
-		Rect2(0, 4, 400, ALTURA_RIO + 8))
+		Rect2(0, 4, 400, 44))
 	var ponte := _tex("pan_ponte")
 	if ponte != null:
 		_sprite("pan_ponte", Vector2(
-			(ARTE.x - ponte.get_width()) / 2.0, ARTE.y - ponte.get_height() + 4))
+			(ARTE.x - ponte.get_width()) / 2.0, ARTE.y - ponte.get_height() + 6))
 
 func _peca(c: Dictionary) -> void:
 	var t: Texture2D = null
@@ -263,11 +272,11 @@ func _aldeoes(quantos: int) -> void:
 	var elenco := ["tropa_campones", "tropa_lanceiro", "taverneiro",
 		"tropa_espadachim", "heroi_jogador", "tropa_arqueiro"]
 	for i in quantos:
-		var no: AnimatedSprite2D = PersonagensV2.criar(elenco[i % elenco.size()], 0.14)
+		var no: AnimatedSprite2D = PersonagensV2.criar(elenco[i % elenco.size()], 0.10)
 		if no == null:
 			continue
 		no.position = Vector2(30.0 + _rng.randf() * (ARTE.x - 60.0),
-			136.0 + _rng.randf() * 16.0)
+			152.0 + _rng.randf() * 20.0)
 		no.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mundo.add_child(no)
 

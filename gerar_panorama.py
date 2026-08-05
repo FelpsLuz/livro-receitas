@@ -94,7 +94,7 @@ CAMADAS = {
              "pale flat ripple highlights, narrow grassy banks with small "
              "grey rocks along the top and bottom edges, completely OPAQUE, "
              "NOT cyan, NOT turquoise, NOT tropical, no bridge, no boats"),
-    "pan_ponte": dict(w=56, h=48, tipo="peca", ordem=9, grupo="base",
+    "pan_ponte": dict(w=32, h=44, tipo="peca", ordem=9, grupo="base",
         desc="game asset sprite of a wooden plank bridge, front view, receding "
              "walkway between side rail posts, warm weathered timber, "
              "floating ALONE on an empty transparent background like a "
