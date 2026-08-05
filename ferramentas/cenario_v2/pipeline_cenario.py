@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""PIPELINE DE CENÁRIO v2 — inpaint-then-diff em janela de contexto.
+"""PIPELINE DE CENÁRIO v2 — objetos isolados; coesão na Godot (addendum v3).
 
-A técnica (spec §2 + addendum §B): os objetos NÃO nascem em chamadas isoladas
-— nascem DENTRO da cena. Recorta-se uma janela da placa base ao redor da
-posição final, o /inpaint desenha o objeto ali com o entorno real à vista, e
-a camada sai por DIFERENÇA contra a placa. Luz, paleta, escala e sombra de
-contato vêm corretas por construção, porque o modelo viu a grama em que o
-objeto pisa.
+O piloto C2 (inpaint-then-diff com máscara em anel) foi aprovado como
+experimento e REJEITADO para o lote — o anel de blend é visível e quebra a
+matriz 6 níveis × 3 estações × 4 céus (v3 §A). O código vive documentado em
+ferramentas/experimental/c2_anel.py, junto com o achado que vale guardar: o
+/v2/inpaint básico NÃO INSERE objeto semântico — só harmoniza contexto.
 
-Limite duro do /v2/inpaint: área ≤ 40.000px (200×200). O canvas tem 80.000 —
-por isso a janela, nunca o canvas cheio (addendum §A/§B, o 422 documentado).
+O pipeline de produção (v3 §B): 1 chamada por objeto, create-image-pixflux
+com no_background, tamanho 1:1, ESTILO_CENA congelado + SUFIXO_LUZ +
+SUFIXO_PERSPECTIVA. Sombra de contato é nó da Godot (v3 §C); paleta e
+estação são shader de tela (v3 §D); integração com o chão é camada de
+terreno autorada uma vez (v3 §B.2).
+
+Limite duro do /v2/inpaint, se algum uso futuro precisar dele: área ≤
+40.000px (o canvas tem 80.000 — o 422 está documentado no v2.1 §A).
 
     python3 pipeline_cenario.py --placa
-    python3 pipeline_cenario.py --piloto          # 1 objeto, para e reporta
+    python3 pipeline_cenario.py --objeto casa_sape
 """
 
 from __future__ import annotations
@@ -201,7 +206,8 @@ def gerar_placa(forcar: bool = False) -> Path:
 
 
 # ------------------------------------------------------------------
-# addendum §B — janela, máscara, inpaint, diff, sombra
+# janela de contexto ≤ 40.000px — infra mantida pelo veredito v3 §A
+# (usos futuros de inpaint passam por aqui; o lote de objetos não usa)
 # ------------------------------------------------------------------
 def _janela_para(cx: int, cy: int, bw: int, bh: int,
                  tam: tuple[int, int]) -> tuple[int, int, int, int]:
@@ -216,259 +222,65 @@ def _janela_para(cx: int, cy: int, bw: int, bh: int,
     return x, y, w, h
 
 
-def _componentes_pequenos(mask: np.ndarray, minimo: int = 4) -> np.ndarray:
-    """Remove componentes conexos com área < minimo (mata ruído de dither)."""
-    try:
-        from scipy import ndimage
-        rot, n = ndimage.label(mask)
-        tam = np.bincount(rot.ravel())
-        ruim = np.isin(rot, np.nonzero(tam < minimo)[0])
-        return mask & ~ruim
-    except ImportError:
-        # BFS 4-conexo em numpy puro: janelas são pequenas, custo irrelevante
-        vis = np.zeros_like(mask, bool)
-        out = mask.copy()
-        H, W = mask.shape
-        for yy in range(H):
-            for xx in range(W):
-                if mask[yy, xx] and not vis[yy, xx]:
-                    pilha = [(yy, xx)]
-                    comp = []
-                    vis[yy, xx] = True
-                    while pilha:
-                        a, b = pilha.pop()
-                        comp.append((a, b))
-                        for da, db in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                            na, nb = a + da, b + db
-                            if 0 <= na < H and 0 <= nb < W and \
-                                    mask[na, nb] and not vis[na, nb]:
-                                vis[na, nb] = True
-                                pilha.append((na, nb))
-                    if len(comp) < minimo:
-                        for a, b in comp:
-                            out[a, b] = False
-        return out
-
-
-def _fechamento(mask: np.ndarray) -> np.ndarray:
-    """binary_closing raio 1 (dilata e erode com cruz 3×3): fecha buracos."""
-    def _dilata(m):
-        r = m.copy()
-        r[1:, :] |= m[:-1, :]; r[:-1, :] |= m[1:, :]
-        r[:, 1:] |= m[:, :-1]; r[:, :-1] |= m[:, 1:]
-        return r
-    def _erode(m):
-        r = m.copy()
-        r[1:, :] &= m[:-1, :]; r[:-1, :] &= m[1:, :]
-        r[:, 1:] &= m[:, :-1]; r[:, :-1] &= m[:, 1:]
-        return r
-    return _erode(_dilata(mask))
-
-
-def _luminancia(rgb: np.ndarray) -> np.ndarray:
-    lin = (rgb / 255.0) ** 2.2
-    return 0.2126 * lin[..., 0] + 0.7152 * lin[..., 1] + 0.0722 * lin[..., 2]
-
-
-def _matiz(rgb: np.ndarray) -> np.ndarray:
-    r, g, b = rgb[..., 0] / 255.0, rgb[..., 1] / 255.0, rgb[..., 2] / 255.0
-    mx = np.maximum(np.maximum(r, g), b)
-    mn = np.minimum(np.minimum(r, g), b)
-    d = mx - mn
-    h = np.zeros_like(mx)
-    seg = d > 1e-6
-    h = np.where(seg & (mx == r), ((g - b) / np.where(d == 0, 1, d)) % 6, h)
-    h = np.where(seg & (mx == g), (b - r) / np.where(d == 0, 1, d) + 2, h)
-    h = np.where(seg & (mx == b), (r - g) / np.where(d == 0, 1, d) + 4, h)
-    return h / 6.0
-
-
-def extrair(base_j: np.ndarray, gerada_j: np.ndarray,
-            masc_inpaint: np.ndarray, debug_dir: Path | None = None,
-            rotulo: str = "") -> dict:
-    """Diff, canário, separação de sombra — addendum §B.3/§B.4, literal."""
-    d = np.abs(gerada_j.astype(int) - base_j.astype(int)).sum(axis=2)   # 0..765
-
-    # ---- canário: o modelo mexeu FORA da máscara? ----
-    fora = ~masc_inpaint
-    fora_alterado = float(((d > TOL_DIFF) & fora).sum() / max(1, fora.sum()))
-    tol = TOL_DIFF
-    if fora_alterado > CANARIO_LIMITE:
-        # o endpoint requantizou o global: recalibrar TOL DENTRO da região
-        # pelo piso de ruído medido fora dela (addendum §B.3)
-        ruido = np.percentile(d[fora], 99)
-        tol = max(TOL_DIFF, int(ruido) + 2)
-        print(f"  \033[91m🔴 canário {rotulo}: {fora_alterado:.1%} fora da "
-              f"máscara (> {CANARIO_LIMITE:.0%}) — TOL recalibrado para {tol}"
-              f"\033[0m")
-    else:
-        print(f"  🟢 canário {rotulo}: {fora_alterado:.2%} fora da máscara")
-
-    mask = (d > tol) & masc_inpaint
-    mask = _componentes_pequenos(mask, 4)
-    mask = _fechamento(mask)
-
-    # ---- sombra separada (spec §2.4): mesma cor, só escurecida ----
-    Lb = _luminancia(base_j)
-    Lg = _luminancia(gerada_j)
-    razao = Lg / np.maximum(Lb, 1e-6)
-    dh = np.abs(_matiz(gerada_j) - _matiz(base_j))
-    dh = np.minimum(dh, 1.0 - dh)                    # matiz é circular
-    sombra = mask & (razao >= 0.55) & (razao <= 0.92) & (dh < 0.06)
-    objeto = mask & ~sombra
-
-    if debug_dir is not None:
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        Image.fromarray((d.clip(0, 255)).astype(np.uint8)).save(
-            debug_dir / f"{rotulo}_diff.png")
-        Image.fromarray((mask * 255).astype(np.uint8)).save(
-            debug_dir / f"{rotulo}_mask.png")
-    return {"objeto": objeto, "sombra": sombra, "fora_pct": fora_alterado,
-            "tol": tol}
-
-
 # ------------------------------------------------------------------
-# catálogo de objetos: posição FINAL nas bandas + prompts
-# (o piloto usa só casa_sape; o lote completo espera o aval do passo 5)
+# addendum v3 §B — objeto ISOLADO com alpha; coesão é da Godot
 # ------------------------------------------------------------------
 CAMPO_A, CAMPO_B = BANDAS["campo"]
+
+# posição FINAL nas bandas (para a composição na Godot) + prompt.
+# O lote completo (19 objetos + variantes) entra aqui após o aval do §I.6.
 OBJETOS = {
     "casa_sape": dict(
-        cx=112, base=CAMPO_A + 44, bw=48, bh=44, janela=JANELA_PADRAO,
-        seed_sprite=77, seed_anel=1003,
-        prompt_sprite="a charming small medieval peasant cottage, thatched "
-                      "straw roof, timber frame walls, wooden door and one "
-                      "window, game sprite floating ALONE on a transparent "
-                      "background, nothing else",
-        prompt_anel="a small medieval peasant cottage standing in a green "
-                    "meadow, trampled grass and a soft contact shadow at "
-                    "its base cast to the lower left"),
+        cx=112, base=CAMPO_A + 44, w=48, h=44, seed=77,
+        prompt="a charming small medieval peasant cottage, thatched straw "
+               "roof, timber frame walls, wooden door and one window, game "
+               "sprite floating ALONE on a transparent background, "
+               "nothing else"),
 }
 
-FOLGA_ANEL = 10             # o anel harmonizador em volta do bbox do sprite
 
+def gerar_objeto_isolado(objeto: str, paleta_b64: dict | None = None) -> Path:
+    """1 chamada por objeto (v3 §B): pixflux, no_background, tamanho 1:1.
 
-def gerar_objeto(objeto: str) -> None:
-    """Técnica C2 — a EMENDA à spec §2, validada no piloto (addendum §B.5).
+    Sem janela, sem placa, sem diff, sem extração: o objeto sai com alpha
+    limpo, modular e agnóstico de estação. Sombra de contato é nó da Godot
+    (v3 §C); estação é shader de tela (v3 §D). `paleta_b64` recebe a paleta
+    mestre como color_image quando ela existir (§D.4).
 
-    O /v2/inpaint básico NÃO INSERE objeto semântico na máscara — comprovado
-    em 3 tentativas registradas no gasto: guidance 7.5 → só grama; guidance
-    10.0 (máximo da API; 15 → 422) → borrão; sprite colado DENTRO da máscara
-    → apagado, porque pixels mascarados são regenerados do zero. O endpoint
-    só harmoniza/completa contexto.
-
-    O fluxo que funciona (2 chamadas, ~US$ 0.016/objeto — o dobro do
-    estimado na spec):
-      1. sprite isolado no /create-image-pixflux (no_background, luz §D);
-      2. sprite COLADO na janela da placa; máscara em ANEL = bbox+10 por
-         fora MENOS a silhueta erodida 1px — o modelo vê a casa como
-         CONTEXTO intocável e repinta só o entorno: grama pisada + sombra
-         de contato na direção da luz;
-      3. diff contra a placa LIMPA com a máscara CHEIA (bbox+10): captura o
-         sprite colado + o que o anel desenhou; canário mede fora dela.
+    Aceite de perspectiva (v3 §B.1): topo de telhado visível como
+    superfície = 3/4 = rejeitar e regerar com outra seed.
     """
     spec = OBJETOS[objeto]
-    placa = Image.open(SAIDA / "base" / "placa_base.png").convert("RGB")
-    base = np.array(placa)
-    deb = Path("/tmp/piloto_cenario")
-    deb.mkdir(parents=True, exist_ok=True)
-
-    # ---- 1. sprite isolado (cacheado: regenerar mudaria o diff já aceito) ----
-    sprite_arq = SAIDA / "sprites" / f"{objeto}.png"
-    if sprite_arq.exists():
-        sprite = Image.open(sprite_arq).convert("RGBA")
-        print(f"  ⏭️  sprite cacheado ({sprite_arq.name})")
-    else:
-        corpo = corpo_base(spec["prompt_sprite"], spec["bw"], spec["bh"],
-                           seed=spec["seed_sprite"])
-        corpo["no_background"] = True
-        dados = _chamar("/create-image-pixflux", corpo,
-                        f"sprite {objeto} {spec['bw']}x{spec['bh']}", 0.008)
-        sprite = Image.open(io.BytesIO(base64.b64decode(
-            dados["image"]["base64"]))).convert("RGBA")
-        sprite_arq.parent.mkdir(parents=True, exist_ok=True)
-        sprite.save(sprite_arq)
-    bw, bh = sprite.width, sprite.height
-
-    # ---- 2. janela + colagem + máscara em anel ----
-    cy = spec["base"] - bh // 2
-    jx, jy, jw, jh = _janela_para(spec["cx"], cy, bw, bh, spec["janela"])
-    print(f"  janela: offset=({jx},{jy}) tam={jw}x{jh} "
-          f"área={jw * jh} ≤ {JANELA_MAX_AREA}")
-    base_j = base[jy:jy + jh, jx:jx + jw]
-    ox, oy = spec["cx"] - jx - bw // 2, spec["base"] - jy - bh
-    colada = Image.fromarray(base_j.copy()).convert("RGBA")
-    colada.alpha_composite(sprite, (ox, oy))
-    colada_rgb = colada.convert("RGB")
-
-    F = FOLGA_ANEL
-    cheia = np.zeros((jh, jw), bool)                    # bbox+F: p/ diff
-    cheia[max(0, oy - F):oy + bh + F, max(0, ox - F):ox + bw + F] = True
-    sil = np.zeros((jh, jw), bool)
-    sa = np.array(sprite)[..., 3] > 10
-    sil[oy:oy + bh, ox:ox + bw] = sa
-    er = sil.copy()                                     # erode 1px: o modelo
-    er[1:, :] &= sil[:-1, :]; er[:-1, :] &= sil[1:, :]  # pode retocar a borda
-    er[:, 1:] &= sil[:, :-1]; er[:, :-1] &= sil[:, 1:]
-    anel = cheia & ~er
-    masc_img = Image.fromarray((anel * 255).astype(np.uint8)).convert("RGB")
-
-    # ---- 3. harmonização do anel ----
-    corpo = corpo_base(spec["prompt_anel"], jw, jh, seed=spec["seed_anel"])
-    corpo["inpainting_image"] = _img_para_b64(colada_rgb)
-    corpo["mask_image"] = _img_para_b64(masc_img)
-    dados = _chamar("/inpaint", corpo, f"anel {objeto}", 0.008)
-    gerada_j = np.array(_b64_para_img(dados["image"]["base64"]))
-
-    # ---- 4. diff contra a PLACA com a máscara CHEIA ----
-    res = extrair(base_j, gerada_j, cheia, deb, f"{objeto}_anel")
-
-    rgba = np.dstack([gerada_j, (res["objeto"] * 255).astype(np.uint8)])
-    camada = SAIDA / "camadas" / f"{objeto}.png"
-    camada.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(rgba, "RGBA").save(camada)
-    sombra_a = (res["sombra"] * 255).astype(np.uint8)
-    sombra_rgba = np.dstack([np.zeros_like(gerada_j), sombra_a])
-    sombra_arq = SAIDA / "sombras" / f"{objeto}.png"
-    sombra_arq.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(sombra_rgba, "RGBA").save(sombra_arq)
-
-    manif_arq = SAIDA / "manifesto.json"
-    manif = json.loads(manif_arq.read_text()) if manif_arq.exists() else {}
-    manif[objeto] = {
-        "camada": f"camadas/{objeto}.png", "sombra": f"sombras/{objeto}.png",
-        "janela": [jx, jy, jw, jh], "fora_pct": round(res["fora_pct"], 4),
-        "tol": res["tol"], "px_objeto": int(res["objeto"].sum()),
-        "px_sombra": int(res["sombra"].sum()),
-        "tecnica": "C2: sprite colado FORA da máscara + anel harmonizador",
-    }
-    manif_arq.write_text(json.dumps(manif, indent=1))
-
-    # material do relatório (addendum §B.5)
-    Image.fromarray(base_j).save(deb / f"{objeto}_janela.png")
-    colada_rgb.save(deb / f"{objeto}_colada.png")
-    Image.fromarray(gerada_j).save(deb / f"{objeto}_anel_retorno.png")
-    masc_img.save(deb / f"{objeto}_anel_mascara.png")
-    print(f"  💾 camada {camada.name}: {int(res['objeto'].sum())}px de objeto, "
-          f"{int(res['sombra'].sum())}px de sombra")
-
-
-def piloto(objeto: str = "casa_sape") -> None:
-    gerar_objeto(objeto)
-    print(f"  📋 manifesto atualizado — PARANDO no piloto (addendum §B.5)")
+    alvo = SAIDA / "sprites" / f"{objeto}.png"
+    if alvo.exists():
+        print(f"  ⏭️  sprite já existe ({alvo.name}) — apague para regerar")
+        return alvo
+    corpo = corpo_objeto(spec["prompt"], spec["w"], spec["h"],
+                         seed=spec["seed"])
+    if paleta_b64 is not None:
+        corpo["color_image"] = paleta_b64
+    dados = _chamar("/create-image-pixflux", corpo,
+                    f"sprite {objeto} {spec['w']}x{spec['h']}", 0.008)
+    img = Image.open(io.BytesIO(base64.b64decode(
+        dados["image"]["base64"])))
+    alvo.parent.mkdir(parents=True, exist_ok=True)
+    img.save(alvo)
+    print(f"  💾 {alvo.name} ({img.width}x{img.height})")
+    return alvo
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--placa", action="store_true")
-    ap.add_argument("--piloto", action="store_true")
     ap.add_argument("--forcar-placa", action="store_true")
+    ap.add_argument("--objeto", help="gera 1 objeto isolado do catálogo "
+                    "(v3 §B) — o lote completo espera o aval do §I.6")
     args = ap.parse_args()
     assert not validar(), "bandas inválidas"
     if args.placa or args.forcar_placa:
         gerar_placa(args.forcar_placa)
-    if args.piloto:
-        piloto()
+    if args.objeto:
+        gerar_objeto_isolado(args.objeto)
 
 
 if __name__ == "__main__":

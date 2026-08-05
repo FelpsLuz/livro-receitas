@@ -22,12 +22,16 @@ Eventos="*res://scripts/eventos.gd"
 
 window/size/viewport_width=960
 window/size/viewport_height=540
-window/stretch/mode="canvas_items"
+window/stretch/mode="viewport"
 window/stretch/aspect="keep"
 window/handheld/orientation=1
 
 [rendering]
 
+; §G do addendum v3: sem os snaps, skew/scale fracionário nas sombras de
+; contato gera tremulação de subpixel.
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

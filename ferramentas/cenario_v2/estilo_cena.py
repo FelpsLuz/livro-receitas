@@ -52,6 +52,16 @@ def prompt_completo(descricao: str) -> str:
     return ", ".join([descricao, SUFIXO_ESTILO, SUFIXO_LUZ])
 
 
+# Correção do 3/4 (addendum v3 §B.1): `view: side` não segurou sozinho — o
+# sprite do piloto saiu em leve 3/4. Concatenado em TODO prompt de OBJETO.
+# Aceite: topo de telhado visível como superfície = rejeitar e regerar.
+SUFIXO_PERSPECTIVA = (
+    "strict flat side elevation, orthographic front view, no perspective, "
+    "no three-quarter angle, no visible roof top surface, no visible "
+    "ground plane, facade parallel to picture plane"
+)
+
+
 def corpo_base(descricao: str, w: int, h: int, seed: int | None = None) -> dict:
     """O corpo de requisição canônico. Nenhuma chamada monta o próprio.
 
@@ -68,3 +78,14 @@ def corpo_base(descricao: str, w: int, h: int, seed: int | None = None) -> dict:
         "detail": ESTILO_CENA["detail"],
         "seed": ESTILO_CENA["seed"] if seed is None else seed,
     }
+
+
+def corpo_objeto(descricao: str, w: int, h: int,
+                 seed: int | None = None) -> dict:
+    """Corpo canônico de OBJETO isolado (addendum v3 §B): corpo_base +
+    SUFIXO_PERSPECTIVA no prompt + fundo transparente. Tamanho 1:1 do
+    canvas — nunca reescalar (v3 §J)."""
+    corpo = corpo_base(", ".join([descricao, SUFIXO_PERSPECTIVA]), w, h,
+                       seed=seed)
+    corpo["no_background"] = True
+    return corpo

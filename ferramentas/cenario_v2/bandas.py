@@ -65,9 +65,53 @@ def validar() -> list[str]:
     return erros
 
 
+# Partição SEM overlap para fatiar a placa base em nós (linhas de corte):
+# os overlaps das BANDAS são intenção de composição; para dividir UM PNG em
+# Sprite2D moduláveis, cada linha só pode pertencer a uma fatia.
+FATIAS = {
+    "fundo":    (0,                    BANDAS["floresta"][0]),   # céu+serra
+    "floresta": (BANDAS["floresta"][0], BANDAS["campo"][0]),
+    "campo":    (BANDAS["campo"][0],    BANDAS["rio"][0]),
+    "rio":      (BANDAS["rio"][0],      BANDAS["margem"][0]),
+    "margem":   (BANDAS["margem"][0],   CANVAS_H),
+}
+
+
+def gerar_gd(caminho: str) -> None:
+    """Emite scripts/bandas.gd — nenhum Y hardcodado fora deste módulo."""
+    linhas = [
+        "# GERADO por ferramentas/cenario_v2/bandas.py — NÃO EDITAR À MÃO.",
+        "# Fonte única do orçamento vertical (spec §1). Para mudar um Y,",
+        "# mude bandas.py e rode: python3 ferramentas/cenario_v2/bandas.py --gd",
+        "class_name Bandas",
+        "",
+        f"const CANVAS_W := {CANVAS_W}",
+        f"const CANVAS_H := {CANVAS_H}",
+        f"const CASTELO_BASE := {CASTELO_BASE}",
+        f"const CASTELO_TOPO := {CASTELO_TOPO}",
+        f"const CAMPO_MINIMO := {CAMPO_MINIMO}",
+        "",
+        "const BANDAS := {",
+    ]
+    for banda, (a, b) in BANDAS.items():
+        linhas.append(f'\t"{banda}": Vector2i({a}, {b}),')
+    linhas += ["}", "", "const FATIAS := {"]
+    for fatia, (a, b) in FATIAS.items():
+        linhas.append(f'\t"{fatia}": Vector2i({a}, {b}),')
+    linhas += ["}", ""]
+    with open(caminho, "w", encoding="utf-8") as f:
+        f.write("\n".join(linhas))
+    print(f"✅ {caminho} gerado")
+
+
 if __name__ == "__main__":
+    import sys
     problemas = validar()
     for banda, (a, b) in BANDAS.items():
         print(f"  {banda:10} {a:3}..{b:3}  (h={b - a})")
     print(f"  castelo    base {CASTELO_BASE}, topo {CASTELO_TOPO} (quebra banda)")
     print("✅ invariantes ok" if not problemas else f"❌ {problemas}")
+    if "--gd" in sys.argv:
+        from pathlib import Path
+        raiz = Path(__file__).resolve().parent.parent.parent
+        gerar_gd(str(raiz / "reino-por-conquista-godot" / "scripts" / "bandas.gd"))
