@@ -1,5 +1,5 @@
 {
- "total_usd": 0.08491613252295388,
+ "total_usd": 0.1069474011990759,
  "chamadas": [
   {
    "rotulo": "placa_base 400x200",
@@ -60,6 +60,21 @@
    "rotulo": "tira floresta 160x64",
    "estimado": 0.008,
    "real": 0.007800962421629164
+  },
+  {
+   "rotulo": "tira trilhas 400x64",
+   "estimado": 0.008,
+   "real": 0.00796768789821201
+  },
+  {
+   "rotulo": "tira cultivo 400x64",
+   "estimado": 0.008,
+   "real": 0.007019719203313192
+  },
+  {
+   "rotulo": "tira sub_bosque 400x24",
+   "estimado": 0.008,
+   "real": 0.007043861574596829
   }
  ]
 }

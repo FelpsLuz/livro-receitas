@@ -1,0 +1,10 @@
+{
+ "mestra": 64,
+ "estacoes": [
+  "entardecer",
+  "inverno",
+  "outono",
+  "tempestade",
+  "verao"
+ ]
+}

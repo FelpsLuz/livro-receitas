@@ -28,7 +28,7 @@ const CAMPO_MULT_PE := 0.84
 const CAMPO_SATURACAO := 0.92
 # Quebra de estrato (v3.2 §C): blocos de 2px, sem TIME. Muleta até o
 # terreno povoar — se os estratos sumirem com o §E, reduzir a amplitude.
-const CAMPO_RUIDO := 0.045
+const CAMPO_RUIDO := 0.018   # reduzido: com o snap, 0.045 virava sal-e-pimenta
 const MOD_RIO := Color(0.92, 0.92, 0.92)
 const VEU_RIO := Color(115.0 / 255.0, 175.0 / 255.0, 171.0 / 255.0, 0.35)
 const MOD_MARGEM := Color(0.88, 0.88, 0.88)   # v3.1 §E: −12% na banda
@@ -175,6 +175,9 @@ func _montar() -> void:
 	veu.size = Vector2(Bandas.CANVAS_W, rio.y - rio.x)
 	veu.color = VEU_RIO
 	add_child(veu)
+
+	# ---- terreno (spec v4 §C.3): trilha, cultivo, sub-bosque ----
+	_montar_terreno()
 
 	# ---- juncos (§E): clareiras + touceiras irregulares com balanço ----
 	_montar_margem()
@@ -356,6 +359,108 @@ func _montar_floresta() -> void:
 		spa.z_index = 3
 		spa.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		add_child(spa)
+
+
+# ---- terreno (spec v4 §C.3) ----------------------------------------
+# A tira de trilha veio como FAIXA UNIFORME de terra batida, não como
+# estrada desenhada. Melhor assim: ela entra como TEXTURA e a forma vem de
+# LayoutN5 — a estrada passa a ligar ponte→praça→portão por construção, com
+# a largura que o critério exige, em vez de depender do que o modelo pintou.
+const TIRAS := "res://assets_v2/cenario/tiras/"
+const TRILHA_LARGURA := 12       # tronco: o critério pede ≥10
+const RAMAL_LARGURA := 5         # ramais: 4–6
+const MANCHA_ALTURA := 4         # terra sob o pé de cada construção
+
+
+func _montar_terreno() -> void:
+	var terra: Texture2D = load(TIRAS + "terreno_trilhas.png")
+
+	# manchas sob CADA peça do layout: nenhuma construção assenta em grama
+	# virgem (v4 §C.3). Entram antes da estrada, que passa por cima.
+	for p in LayoutN5.PECAS:
+		if String(p["n"]).begins_with("arvore"):
+			continue
+		var largura: int = int(round(float(p["w"]) * 0.55))
+		_mancha(terra, int(p["cx"]), int(p["base"]), largura, MANCHA_ALTURA, 5)
+
+	# praça: mancha aberta no encontro dos caminhos
+	var pr: Dictionary = LayoutN5.PRACA
+	_mancha(terra, int(pr["cx"]), int(pr["base"]), int(pr["w"]),
+			int(pr["h"]), 6)
+
+	for pontos in LayoutN5.RAMAIS:
+		_estrada(terra, pontos, RAMAL_LARGURA, 6)
+	_estrada(terra, LayoutN5.TRILHA, TRILHA_LARGURA, 7)
+
+	# cultivo: canteiros cercados onde o layout põe horta
+	var cultivo: Texture2D = load(TIRAS + "terreno_cultivo.png")
+	var i := 0
+	for p in LayoutN5.PECAS:
+		if not String(p["n"]).begins_with("pan_horta"):
+			continue
+		var at := AtlasTexture.new()
+		at.atlas = cultivo
+		at.region = Rect2(40 + i * 96, 26, 54, 26)
+		var sp := Sprite2D.new()
+		sp.texture = at
+		sp.centered = false
+		sp.offset = Vector2(-27, -24)
+		sp.position = Vector2(int(p["cx"]), int(p["base"]) + 2)
+		sp.z_index = int(p["base"])
+		sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		add_child(sp)
+		i += 1
+
+	# sub-bosque POR ÚLTIMO, contra a floresta já em 3 tiers: é ele que
+	# quebra a linha reta da junção floresta/campo, com jitter de Y.
+	var sub: Texture2D = load(TIRAS + "terreno_sub_bosque.png")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = FLORESTA_SEMENTE + 7
+	var x := -8
+	while x < Bandas.CANVAS_W + 8:
+		var larg: int = rng.randi_range(34, 56)
+		var at2 := AtlasTexture.new()
+		at2.atlas = sub
+		at2.region = Rect2(rng.randi_range(0, 340), 0, larg, 24)
+		var sp2 := Sprite2D.new()
+		sp2.texture = at2
+		sp2.centered = false
+		sp2.position = Vector2(x, Bandas.FATIAS["campo"].x - 18
+				+ rng.randi_range(-3, 3))
+		sp2.z_index = 5
+		sp2.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		add_child(sp2)
+		x += larg - rng.randi_range(2, 8)
+
+
+func _mancha(tex: Texture2D, cx: int, base: int, w: int, h: int,
+		z: int) -> void:
+	var at := AtlasTexture.new()
+	at.atlas = tex
+	at.region = Rect2((cx * 7) % maxi(1, 400 - w), 24, w, h)
+	var sp := Sprite2D.new()
+	sp.texture = at
+	sp.centered = false
+	sp.offset = Vector2(-float(w) / 2.0, -float(h))
+	sp.position = Vector2(cx, base)
+	sp.z_index = z
+	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(sp)
+
+
+func _estrada(tex: Texture2D, pontos: Array, largura: int, z: int) -> void:
+	var l := Line2D.new()
+	for p in pontos:
+		l.add_point(Vector2(p.x, p.y))
+	l.width = largura
+	l.texture = tex
+	l.texture_mode = Line2D.LINE_TEXTURE_TILE
+	l.joint_mode = Line2D.LINE_JOINT_ROUND
+	l.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	l.end_cap_mode = Line2D.LINE_CAP_ROUND
+	l.z_index = z
+	l.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(l)
 
 
 func _montar_margem() -> void:

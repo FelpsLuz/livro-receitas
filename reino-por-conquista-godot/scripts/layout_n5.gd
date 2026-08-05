@@ -33,7 +33,7 @@ const MURALHA_ALTURA := 12
 # Ponte no centro do rio; a trilha sobe até a praça e vira para o portão —
 # é o vetor de valor claro que conduz o olho até o castelo (v3 §F.1).
 const PONTE := {"cx": 200, "base": 190, "w": 34, "h": 14}
-const PRACA := {"cx": 198, "base": 158, "w": 46, "h": 16}
+const PRACA := {"cx": 198, "base": 158, "w": 46, "h": 20}   # ≥40×20 (v4 §C.3)
 const TRILHA := [
 	Vector2i(200, 180), Vector2i(199, 168), Vector2i(198, 158),
 	Vector2i(214, 150), Vector2i(240, 138), Vector2i(262, 126),
