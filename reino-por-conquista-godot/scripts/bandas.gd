@@ -6,7 +6,7 @@ class_name Bandas
 const CANVAS_W := 400
 const CANVAS_H := 200
 const CASTELO_BASE := 116
-const CASTELO_TOPO := 44
+const CASTELO_TOPO := 36
 const CAMPO_MINIMO := 53
 
 const BANDAS := {

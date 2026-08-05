@@ -9,6 +9,7 @@
 extends SceneTree
 
 const SKYLINE := "res://assets_v2/cenario/base/derivados/skyline.json"
+const MACICO := "res://assets_v2/cenario/base/derivados/macico.json"
 
 var falhas := 0
 
@@ -86,6 +87,28 @@ func _verificar() -> void:
 			"castelo em x=%d não pousa sobre pico" % int(c["cx"]),
 			_folga_em(sky, int(c["cx"]), int(c["w"]), topo_castelo))
 
+	# folga contra o CUME DO MACIÇO — o critério do v3.4 §B.1 (alvo 16px,
+	# mínimo 15 pela §F). Vem de macico.json, emitido pelo mesmo detector
+	# que moveu o maciço: check e transformação não podem divergir.
+	var mac := _macico()
+	var folga_cume: int = int(mac["cume_y"]) - topo_castelo
+	_ok(folga_cume >= 15, "folga castelo × cume do maciço ≥ 15px",
+			"cume y=%d, castelo y=%d → %dpx (alvo 16 ±1)"
+			% [int(mac["cume_y"]), topo_castelo, folga_cume])
+	# a razão é contra a CASA PADRÃO. O sobrado (casa_camponesa_2, 42px)
+	# existe para o dente de serra da §D.1 e não é a régua da §B.3.
+	var casa_h := 0
+	var sobrado_h := 0
+	for p0 in LayoutN5.PECAS:
+		if String(p0["n"]) == "casa_camponesa":
+			casa_h = int(p0["h"])
+		elif String(p0["n"]) == "casa_camponesa_2":
+			sobrado_h = int(p0["h"])
+	var razao: float = float(c["h"]) / maxf(1.0, float(casa_h))
+	_ok(razao >= 2.0, "castelo ÷ casa padrão (altura)",
+			"%.1f× contra casa de %dpx (%.1f× contra o sobrado de %dpx) · referência 4,4× · teto do formato 2:1 ~2,3×"
+			% [razao, casa_h, float(c["h"]) / maxf(1.0, float(sobrado_h)), sobrado_h])
+
 	# hierarquia global: na referência o castelo é a silhueta MAIS ALTA do
 	# quadro (topo y=41 contra pico y=60, 19px acima). Aqui o maciço tem
 	# topo y=32 — some as duas medidas e o sujeito perde para o fundo.
@@ -161,6 +184,61 @@ func _verificar() -> void:
 	_ok(ruas.size() >= 2, "ruas entre agrupamentos (≥2 de ≥10px)",
 			"%d ruas: %s" % [ruas.size(), str(ruas)])
 
+	# ---- 2c. §D.1 do v3.4: perfil em dente de serra ----
+	var alta := 0
+	var media := 0
+	var baixa := 0
+	for p in pecas:
+		var h: int = int(p["h"])
+		if h >= 40:
+			alta += 1
+		elif h >= 26:
+			media += 1
+		else:
+			baixa += 1
+	var nota := " (a tabela da spec pressupõe ~18 construções; o elenco tem"
+	nota += " 10 + 7 adereços + 3 árvores)"
+	_ok(alta >= 3 and alta <= 4, "peças altas (≥40px): 3–4",
+			("alta %d · média %d · baixa %d" % [alta, media, baixa]) + nota)
+	var vizinhas_altas: Array = []
+	for a in pecas:
+		if int(a["h"]) < 40:
+			continue
+		for b in pecas:
+			if b == a or int(b["h"]) < 40 or int(b["cx"]) <= int(a["cx"]):
+				continue
+			var sobre: float = minf(float(a["cx"]) + float(a["w"]) / 2.0,
+					float(b["cx"]) + float(b["w"]) / 2.0) \
+					- maxf(float(a["cx"]) - float(a["w"]) / 2.0,
+					float(b["cx"]) - float(b["w"]) / 2.0)
+			if sobre > 0.0:
+				vizinhas_altas.append("%s+%s" % [a["n"], b["n"]])
+	_ok(vizinhas_altas.is_empty(), "nenhuma alta adjacente a outra alta",
+			"0 pares" if vizinhas_altas.is_empty() else str(vizinhas_altas))
+
+	# ---- 2d. §D.3: aldeões em profundidade, não em fileira ----
+	var ys: Array = []
+	for a in LayoutN5.ALDEOES:
+		ys.append(a.y)
+	ys.sort()
+	var espalho: int = ys[ys.size() - 1] - ys[0]
+	var fundo := 0
+	var frente := 0
+	for a in LayoutN5.ALDEOES:
+		if a.y <= 135:
+			fundo += 1
+		elif a.y >= 162:
+			frente += 1
+	_ok(espalho >= 30 and fundo >= 3 and frente >= 3,
+			"aldeões em profundidade",
+			"espalhamento de Y %dpx, %d ao fundo, %d à frente" % [espalho, fundo, frente])
+	var alturas_aldeao := {}
+	for a in LayoutN5.ALDEOES:
+		alturas_aldeao[a.z] = true
+	_ok(alturas_aldeao.size() >= 2, "escala menor nos aldeões do fundo",
+			"%d alturas distintas: %s" % [alturas_aldeao.size(),
+			str(alturas_aldeao.keys())])
+
 	# ---- 3. escalonamento de Y ----
 	var bases: Array = []
 	for p in pecas:
@@ -232,6 +310,11 @@ func _folga_em(sky: Array, cx: int, w: int, topo: int) -> String:
 	var f: int = _folga(sky, cx, w, topo)
 	return "topo y=%d, crista atrás y=%d → %s de %dpx" % [
 			topo, topo + f, "folga" if f > 0 else "ENTERRADO", absi(f)]
+
+
+func _macico() -> Dictionary:
+	var f := FileAccess.open(MACICO, FileAccess.READ)
+	return JSON.parse_string(f.get_as_text())
 
 
 func _skyline() -> Array:

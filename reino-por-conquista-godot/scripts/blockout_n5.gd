@@ -18,6 +18,7 @@ const CINZA_CASTELO := Color(0.80, 0.80, 0.78)   # o mais claro: é o sujeito
 const CINZA_NATUREZA := Color(0.42, 0.48, 0.40)
 const COR_ALDEAO := Color(0.95, 0.55, 0.25)
 const COR_TRILHA := Color(0.78, 0.68, 0.50)
+const FUNDO_Z := -100
 
 var nivel := 5
 var castelo_cx := LayoutN5.CASTELO["cx"]
@@ -37,12 +38,16 @@ func montar() -> void:
 		var branco := ColorRect.new()
 		branco.size = Vector2(Bandas.CANVAS_W, Bandas.CANVAS_H)
 		branco.color = Color.WHITE
+		branco.z_index = FUNDO_Z
 		add_child(branco)
 	elif mostrar_fundo:
 		var placa := Sprite2D.new()
 		placa.texture = load(PLACA)
 		placa.centered = false
 		placa.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# o fundo precisa ficar atrás do castelo e da muralha, que usam z
+		# negativo para escapar da ordenação por Y da vila
+		placa.z_index = FUNDO_Z
 		add_child(placa)
 	else:
 		# modo PLANTA: fundo neutro com as bandas marcadas, para conferir
@@ -50,6 +55,7 @@ func montar() -> void:
 		var fundo := ColorRect.new()
 		fundo.size = Vector2(Bandas.CANVAS_W, Bandas.CANVAS_H)
 		fundo.color = Color(0.13, 0.14, 0.16)
+		fundo.z_index = FUNDO_Z
 		add_child(fundo)
 		var claro := true
 		for nome in Bandas.FATIAS:
@@ -59,6 +65,7 @@ func montar() -> void:
 			faixa.size = Vector2(Bandas.CANVAS_W, f.y - f.x)
 			faixa.color = Color(0.20, 0.22, 0.24) if claro \
 					else Color(0.16, 0.18, 0.20)
+			faixa.z_index = FUNDO_Z + 1
 			add_child(faixa)
 			claro = not claro
 
@@ -67,39 +74,41 @@ func montar() -> void:
 		_traco(pt, 3)
 	_traco(LayoutN5.TRILHA, 5)
 	_bloco(LayoutN5.PRACA["cx"], LayoutN5.PRACA["base"],
-			LayoutN5.PRACA["w"], LayoutN5.PRACA["h"], COR_TRILHA, 0)
+			LayoutN5.PRACA["w"], LayoutN5.PRACA["h"], COR_TRILHA, -2)
 	_bloco(LayoutN5.PONTE["cx"], LayoutN5.PONTE["base"],
-			LayoutN5.PONTE["w"], LayoutN5.PONTE["h"], COR_TRILHA, 0)
+			LayoutN5.PONTE["w"], LayoutN5.PONTE["h"], COR_TRILHA, -2)
 
 	# ---- castelo e muralha (nível 4+/5), atrás da vila ----
+	# castelo e muralha ficam ATRÁS de toda a vila: z negativo, fora da
+	# ordenação por Y (o pé deles é mais alto que o de qualquer casa)
 	if nivel >= 5:
 		var c: Dictionary = LayoutN5.CASTELO
-		_bloco(castelo_cx, c["base"], c["w"], c["h"], CINZA_CASTELO, 1)
+		_bloco(castelo_cx, c["base"], c["w"], c["h"], CINZA_CASTELO, -10)
 	if nivel >= 4:
 		var topo: int = Bandas.BANDAS["muralha"].x
 		_bloco(Bandas.CANVAS_W / 2, topo + LayoutN5.MURALHA_ALTURA,
-				Bandas.CANVAS_W, LayoutN5.MURALHA_ALTURA, CINZA_MURALHA, 2)
+				Bandas.CANVAS_W, LayoutN5.MURALHA_ALTURA, CINZA_MURALHA, -5)
 		for tx in LayoutN5.TORRES:
 			_bloco(tx, topo + LayoutN5.MURALHA_ALTURA + 2, 16,
-					LayoutN5.TORRE_ALTURA, CINZA_MURALHA, 3)
+					LayoutN5.TORRE_ALTURA, CINZA_MURALHA, -4)
 		var p: Dictionary = LayoutN5.PORTAO
 		_bloco(castelo_cx, p["base"], p["w"], p["h"],
-				CINZA_CASTELO.darkened(0.35), 3)
+				CINZA_CASTELO.darkened(0.35), -3)
 
-	# ---- peças da vila, DESENHADAS POR Y CRESCENTE (spec §5) ----
+	# ---- vila e aldeões: z_index É a linha do pé (spec §5, ordenação por
+	# Y). Com z fixo os aldeões do fundo flutuavam na frente das casas.
 	var pecas: Array = LayoutN5.pecas_do_nivel(nivel)
-	pecas.sort_custom(func(a, b): return int(a["base"]) < int(b["base"]))
-	for i in pecas.size():
-		var pc: Dictionary = pecas[i]
+	for pc in pecas:
 		var natureza: bool = String(pc["n"]).begins_with("arvore")
 		_bloco(pc["cx"], pc["base"], pc["w"], pc["h"],
-				CINZA_NATUREZA if natureza else CINZA_CONSTRUCAO, 4 + i)
+				CINZA_NATUREZA if natureza else CINZA_CONSTRUCAO,
+				int(pc["base"]))
 
-	# ---- aldeões: a régua de escala (6×10) ----
+	# ---- aldeões: a RÉGUA DE ESCALA, menores ao fundo (§D.3) ----
 	var quantos: int = LayoutN5.ALDEOES_POR_NIVEL[clampi(nivel, 0, 5)]
 	for i in mini(quantos, LayoutN5.ALDEOES.size()):
-		var a: Vector2i = LayoutN5.ALDEOES[i]
-		_bloco(a.x, a.y, 6, 10, COR_ALDEAO, 60 + i)
+		var a: Vector3i = LayoutN5.ALDEOES[i]
+		_bloco(a.x, a.y, 6, a.z, COR_ALDEAO, a.y)
 
 
 func _bloco(cx: int, base: int, w: int, h: int, cor: Color, z: int) -> void:
@@ -117,5 +126,5 @@ func _traco(pontos: Array, largura: int) -> void:
 		l.add_point(Vector2(p.x, p.y))
 	l.width = largura
 	l.default_color = Color.BLACK if silhueta else COR_TRILHA
-	l.z_index = 0
+	l.z_index = -2
 	add_child(l)

@@ -83,7 +83,9 @@ def montanhas(placa: np.ndarray) -> tuple[str, str]:
     contar pares (x, x+3) — claro à esquerda do escuro = espigões com a
     face direita na sombra = sol pela ESQUERDA.
     """
-    faixa = placa[25:75, 95:265]
+    # Janela do maciço central. Acompanha o deslocamento do v3.4 §B: o
+    # maciço desceu 20px (transformar_placa.py mediu x=137..227, cume y=52).
+    faixa = placa[45:78, 130:235]
     r, g, b = (faixa[..., k].astype(int) for k in range(3))
     lum = L(faixa)
     tan = (r - b > 30)

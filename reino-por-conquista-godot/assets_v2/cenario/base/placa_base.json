@@ -55,5 +55,12 @@
   "init_image_strength": 380,
   "nota": "600 preservou as listras; 380 adotada"
  },
- "espelhada": "2026-08-05: espelho horizontal (v3.2 §B) — auditoria mediu luz pela ESQUERDA em montanhas (pares 1.30), floresta (dobra -7.8), troncos (-26.2) e pedra (-4.8), contradizendo o SUFIXO_LUZ congelado. Transform deterministico, zero API; placa_modelo.png preserva o original."
+ "espelhada": "2026-08-05: espelho horizontal (v3.2 §B) — auditoria mediu luz pela ESQUERDA em montanhas (pares 1.30), floresta (dobra -7.8), troncos (-26.2) e pedra (-4.8), contradizendo o SUFIXO_LUZ congelado. Transform deterministico, zero API; placa_modelo.png preserva o original.",
+ "maciço_descido": "2026-08-05: maciço central descido 20px (v3.4 §B.2). O cume ficava 12px ACIMA do topo do castelo — hierarquia invertida contra a referência, onde o castelo fica 19px acima do pico. Máscara por PALETA EXATA de céu (inundação engolia o teal do cume); extensão do maciço detectada pela crista, não fixada; buraco preenchido com a mediana de céu de cada linha. placa_modelo.png preserva a saída crua do modelo.",
+ "macico_extensao": {
+  "x0": 137,
+  "x1": 227,
+  "cume_y": 52,
+  "cume_x": 185
+ }
 }

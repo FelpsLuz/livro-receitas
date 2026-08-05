@@ -42,7 +42,11 @@ BANDAS = {
 # O castelo é a ÚNICA exceção autorizada a quebrar banda (spec §1): base na
 # linha da muralha, topo furando serra e céu — é o que dá profundidade.
 CASTELO_BASE = _y(104)      # 116
-CASTELO_TOPO = _y(40)       # 44
+# v3.4 §B: topo de 44 → 36. Duas razões medidas, uma decisão. (1) folga
+# contra o cume: alvo 16px, e o maciço desceu para y=52. (2) escala: com
+# topo em 44 o castelo tinha 1,7× a altura de uma casa — a referência tem
+# 4,4×. Isso não é castelo, é casa grande, e posição nenhuma conserta.
+CASTELO_TOPO = _y(32)       # 36
 
 # Mínimo inviolável da banda de campo (spec: 48 em 180 → 53 em 200).
 CAMPO_MINIMO = round(48 * _F)

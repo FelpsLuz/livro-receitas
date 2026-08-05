@@ -19,6 +19,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from transformar_placa import extensao_registrada, mascara_macico  # noqa: E402
+
 RAIZ = Path(__file__).resolve().parent.parent.parent
 CEN = RAIZ / "reino-por-conquista-godot" / "assets_v2" / "cenario"
 SAIDA = CEN / "base" / "derivados"
@@ -128,34 +132,20 @@ def fundo(placa: np.ndarray) -> None:
     As serras laterais ficam assadas no fundo de propósito: já nascem em
     bruma, sem tan, sem direcionalidade medível — véu nelas é redundante.
     """
-    faixa = placa[0:78]
-    r, g, b = (faixa[..., k].astype(int) for k in range(3))
-    lum = (0.2126 * r + 0.7152 * g + 0.0722 * b)
-    nuvem = (r > 170) & (g > 180) & (b - r < 45) & (r - b < 30)
-
-    # crista: primeiro pixel "não-céu" descendo do topo, nas linhas 0..55
-    # onde o céu ainda é claro (L>195). O tan é inequívoco; os CUMES teal
-    # (família do céu com bruma) entram pelo teto de luminância.
-    escuro = (lum < 195) & ~nuvem
-    crista = np.full(400, 999)
-    for x in range(88, 272):
-        col = np.nonzero(escuro[:55, x])[0]
-        if len(col):
-            crista[x] = col.min()
-    xs_ok = np.nonzero(crista < 999)[0]
-    for x in range(xs_ok.min(), xs_ok.max() + 1):
-        if crista[x] == 999:
-            viz = crista[max(0, x - 6):x + 7]
-            crista[x] = viz[viz < 999].min() if (viz < 999).any() else 999
-    arvore = (g >= r) & (g > b) & (g - b > 12) & (lum < 160)
-    maciço = np.zeros_like(escuro)
-    for x in range(400):
-        if crista[x] < 999:
-            maciço[max(0, crista[x] - 1):78, x] = True
-    maciço &= ~arvore & ~nuvem
+    faixa = placa[0:104]        # mesma janela da transformação (v3.4)
+    # A detecção do maciço é a MESMA de transformar_placa.py, importada e
+    # não reimplementada: a versão local (crista pelo tan, linhas 0..55)
+    # devolveu 77px depois que o maciço desceu 20px, e o véu de recessão
+    # sumiu em silêncio. Detector único, um lugar para consertar.
+    maciço, _nuv, _ceu, extensao = mascara_macico(
+        faixa, quieto=True, extensao=extensao_registrada())
     rgba = np.dstack([faixa, (maciço * 255).astype(np.uint8)])
     Image.fromarray(rgba, "RGBA").save(SAIDA / "montanha_central.png")
-    print(f"  ⛰️  maciço {int(maciço.sum())}px (carregador do véu de recessão)")
+    x0, x1, cume_y, cume_x = extensao
+    (SAIDA / "macico.json").write_text(json.dumps({
+        "x0": x0, "x1": x1, "cume_y": cume_y, "cume_x": cume_x}))
+    print(f"  ⛰️  maciço {int(maciço.sum())}px, x={x0}..{x1}, "
+          f"cume y={cume_y} em x={cume_x} (véu de recessão + critério §B.4)")
 
 
 def skyline(placa: np.ndarray) -> None:
