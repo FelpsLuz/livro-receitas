@@ -81,6 +81,7 @@ PASTAS = [
     "assets_v2/objects",
     "assets_v2/characters",
     "assets_v2/vfx",
+    "assets_v2/panorama",
 ]
 ESPELHO = PROJETO / ".original"
 
@@ -502,6 +503,10 @@ def limpar_orfaos(arr: np.ndarray) -> tuple[np.ndarray, int]:
                 continue      # acento de sombra ou de brilho: preservar
             saida[y, x, :3] = Counter(viz).most_common(1)[0][0]
             trocas += 1
+    limite = int(0.05 * max(1, (arr[..., 3] > 10).sum()))
+    if trocas > limite:
+        # não é confete: é textura. Mexer aqui achataria o asset inteiro.
+        return arr, 0
     return saida, trocas
 
 
@@ -621,10 +626,18 @@ def conferir_faixa(limite_pct: float = 15.0, verbose: bool = True) -> bool:
 
 
 def espelhar(png: Path) -> None:
+    """Guarda o original UMA vez — mas se o PNG for MAIS NOVO que o espelho,
+    o espelho está desatualizado (alguém regerou o asset) e é substituído.
+
+    Sem esta checagem, regerar um ativo e requantizar de novo aplicava o
+    encaixe sobre arte JÁ encaixada, usando como referência de ordem uma
+    imagem que não existe mais. Resultado medido: um campo de 2 cores virou
+    1 cor, e o rio virou transparente.
+    """
     """Guarda o original UMA vez. Rodar de novo não degrada em cascata."""
     rel = png.relative_to(PROJETO)
     destino = ESPELHO / rel
-    if destino.exists():
+    if destino.exists() and destino.stat().st_mtime >= png.stat().st_mtime:
         return
     destino.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(png, destino)

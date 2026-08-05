@@ -22,6 +22,7 @@ const Llm = preload("res://scripts/llm.gd")
 const CidadeView = preload("res://scripts/cidade_view.gd")
 const CidadeCena = preload("res://scripts/cidade_cena.gd")
 const VilaCena = preload("res://scripts/vila_cena.gd")
+const PanoramaCena = preload("res://scripts/panorama_cena.gd")
 const Icones = preload("res://scripts/icones.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
@@ -103,7 +104,7 @@ func _montar_titulo() -> void:
 	v.add_theme_constant_override("separation", 10)
 	caixa.add_child(v)
 	# a tela de título mostra um reino no auge — a mesma vila do jogo, nível 5
-	var vitrine: SubViewportContainer = VilaCena.new() if VilaCena.disponivel() else CidadeCena.new()
+	var vitrine: SubViewportContainer = _nova_cena()
 	vitrine.custom_minimum_size = Vector2(480, 270)
 	v.add_child(vitrine)
 	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
@@ -229,7 +230,7 @@ func _montar_jogo() -> void:
 
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
 	# procedural de sempre. As duas cenas têm a mesma API (.estado, semear_npcs).
-	cidade_view = VilaCena.new() if VilaCena.disponivel() else CidadeCena.new()
+	cidade_view = _nova_cena()
 	_montar_quartel()
 
 ## A cidade_view sai da árvore quando outra aba está ativa (atualizar() a
@@ -263,6 +264,16 @@ func _mmss(seg: int) -> String:
 ## o tempo restante — quem guarda é a fila, dentro do state. O Timer só
 ## empurra o relógio 1 segundo por vez, exatamente como o turno mensal faz
 ## com 600 de uma vez. Salvar no meio do treino não perde nada.
+## A cena da terra, na ordem de preferência: panorama em elevação → vila de
+## cima em TileMap → cenário procedural. As três têm a mesma API (.estado e
+## semear_npcs), então quem chama não precisa saber qual entrou.
+func _nova_cena() -> SubViewportContainer:
+	if PanoramaCena.disponivel():
+		return PanoramaCena.new()
+	if VilaCena.disponivel():
+		return VilaCena.new()
+	return CidadeCena.new()
+
 func _montar_quartel() -> void:
 	quartel = Timer.new()
 	quartel.wait_time = 1.0
