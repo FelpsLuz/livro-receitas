@@ -1,5 +1,5 @@
 {
- "total_usd": 0.10274460159407722,
+ "total_usd": 0.13997337012820776,
  "chamadas": [
   {
    "rotulo": "prop_arvore_carvalho",
@@ -87,6 +87,66 @@
   },
   {
    "rotulo": "praia_agua_atlas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "campo_terra_atlas_pro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "grama_pedra_atlas_pro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "praia_agua_atlas_pro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "walk_4dir",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "arvore_a",
+   "usd": 0.00628204255633884
+  },
+  {
+   "rotulo": "arvore_b",
+   "usd": 0.006348326630062528
+  },
+  {
+   "rotulo": "pedra_a",
+   "usd": 0.006259706947538588
+  },
+  {
+   "rotulo": "pedra_b",
+   "usd": 0.006012980540593465
+  },
+  {
+   "rotulo": "campo_terra_atlas_org",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "grama_pedra_atlas_org",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "praia_agua_atlas_org",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "campo_terra_flush",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "prop_arbusto",
+   "usd": 0.0061724414295620394
+  },
+  {
+   "rotulo": "prop_tronco",
+   "usd": 0.006153270430035062
+  },
+  {
+   "rotulo": "campo_terra_sutil",
    "usd": 0.0
   }
  ]

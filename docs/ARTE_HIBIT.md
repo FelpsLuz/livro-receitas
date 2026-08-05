@@ -136,11 +136,58 @@ do ponto que toca o chão que o sort compara.
 
 ---
 
+## Segunda leva — o que mudou e por quê
+
+**Tiles orgânicos.** O defeito da primeira leva tinha nome:
+`transition_size` ficou no **default 0.0** — nenhuma área de mistura entre
+os materiais. Os blocos saíram matemáticos porque foi isso que eu pedi.
+Com `0.5` + `detail="highly detailed"` + `shading="medium shading"` +
+`outline="lineless"`, o desvio dentro do tile puro foi de **3,26 para
+17,34** na grama×pedra.
+
+`mode="pro"` (que exporia `raggedness` e `spread_x`) foi testado e
+abandonado: é experimental, e os três jobs voltaram `tileset_id` mas nunca
+persistiram — 404 no `GET` e ausentes da listagem da conta.
+
+Duas rodadas de grama foram necessárias. A primeira pediu "fallen brown
+leaves" e o modelo desenhou **manchas marrons do tamanho de uma pedra**,
+repetindo a cada 32px — 1,93% do quadro renderizado. A segunda troca isso
+por "sparse tiny flower dots, no leaves, no stones" e dá margaridas limpas.
+
+**Ciclo de caminhada.** `/animate-character` sobre o `character_id` que já
+existia: **7 quadros × 4 direções**, alfa binário nos 32 arquivos, com a
+identidade do personagem preservada. Não foi `/animate-with-text-v3` de
+propósito — aquele parte de um quadro solto e perderia o vínculo com as
+poses paradas.
+
+Não veio sprite sheet: vieram quadros individuais
+(`animations/walk/<dir>/frame_NNN.png`), então não há fatiamento a fazer.
+`PersonagensV2._quadros_andando` carrega a sequência e monta o
+`SpriteFrames`; as diagonais compartilham a lista da rotação em que caem,
+sem duplicar textura.
+
+`tem_ciclo_real()` foi separado de `tem_caminhada()` de propósito: aquele
+responde "a animação existe?" e é o que a cena consulta; este responde "ela
+ANIMA?" e é o que o teste cobra. Confundir os dois foi o que deixou o
+personagem deslizando com um quadro só sem nada acusar.
+
+**Chroma key adaptativo.** O fundo mudou de magenta para verde, e um limiar
+fixo parou de servir: com magenta a arte mais próxima estava a ~95 da
+chave; com verde, a da pedra chega a **48** e a da árvore a **67** — o
+limiar de 78 comeria os dois. Agora ele é calibrado pelo ruído do próprio
+anel de borda. E a passada de família de matiz só roda quando a chave está
+na banda magenta/violeta: com fundo verde ela comeria copa, arbusto e musgo.
+
+---
+
 ## O que falta
 
-- **Quadros de caminhada.** A estrutura `<dir>_walk` existe e roda mais
-  rápido que a pose parada, mas com um quadro só. `/animate-with-text-v3`
-  preenche isso sem tocar em `VisualController`.
 - **Os props pendentes**: casa, ferraria, moinho, muralha, portão, torre,
   tenda, carroça, poço, ponte, barril, saco, baú, fogueira, tocha.
+- **Variação de tile.** O detalhe mora DENTRO do tile, então a margarida
+  repete a cada 32px. `MapaV2._variante` quebra o padrão com 4 espelhamentos
+  dos tiles puros, mas o certo é gerar variantes de verdade do tile cheio.
 - **As outras três estações** dos tilesets.
+- **A transição lê como TERRAÇO**, não como chão nivelado: `transition_size`
+  desenha um beiral com sombra. Testei `0.25` e o beiral continua, com menos
+  detalhe na grama. É uma escolha de direção de arte, não um defeito.

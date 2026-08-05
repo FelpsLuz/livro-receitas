@@ -70,6 +70,21 @@ static func _tex(id: String, direcao: String) -> Texture2D:
 	return t if t is Texture2D else null
 
 
+## Os quadros do ciclo de caminhada de uma direção, em ordem.
+## `assets/sprites/<id>_walk_<direcao>_NNN.png`, gerados por
+## /animate-character sobre o MESMO personagem das poses paradas.
+static func _quadros_andando(id: String, direcao: String) -> Array[Texture2D]:
+	var faixa: Array[Texture2D] = []
+	for i in 16:
+		var caminho := "%s%s_walk_%s_%03d.png" % [PASTA, id, direcao, i]
+		if not ResourceLoader.exists(caminho):
+			break
+		var t = load(caminho)
+		if t is Texture2D:
+			faixa.append(t)
+	return faixa
+
+
 ## O personagem tem arte de verdade nas 4 rotações?
 static func tem_arte(id: String) -> bool:
 	for d in ROTACOES:
@@ -93,6 +108,13 @@ static func quadros(id: String, fps: float = 6.0) -> SpriteFrames:
 	sf.remove_animation("default")
 
 	if tem_arte(id):
+		# os quadros de caminhada são carregados UMA vez por rotação e
+		# compartilhados pelas direções que caem nela — south-east e east
+		# apontam para a mesma lista, sem duplicar textura na memória
+		var andar := {}
+		for quatro in ROTACOES:
+			andar[quatro] = _quadros_andando(id, quatro)
+
 		for oito in MAPA_8_PARA_4:
 			var quatro: String = MAPA_8_PARA_4[oito]
 			var t := _tex(id, quatro)
@@ -100,11 +122,22 @@ static func quadros(id: String, fps: float = 6.0) -> SpriteFrames:
 			sf.set_animation_speed(oito, fps)
 			sf.set_animation_loop(oito, true)
 			sf.add_frame(oito, t)
+
 			var andando: String = oito + "_walk"
 			sf.add_animation(andando)
-			sf.set_animation_speed(andando, fps * 2.0)
 			sf.set_animation_loop(andando, true)
-			sf.add_frame(andando, t)
+			var faixa: Array = andar[quatro]
+			if faixa.is_empty():
+				# sem ciclo gerado ainda: a pose parada segura o contrato,
+				# e `tem_ciclo_real()` denuncia que é um quadro só
+				sf.set_animation_speed(andando, fps * 2.0)
+				sf.add_frame(andando, t)
+			else:
+				# 7 quadros a 10 fps dão o passo de ~0,7s, que é o de um
+				# caminhar tranquilo. Rápido demais o personagem patina.
+				sf.set_animation_speed(andando, fps * 1.7)
+				for q in faixa:
+					sf.add_frame(andando, q)
 		return sf
 
 	var anims := animacoes_de(id)
@@ -192,10 +225,19 @@ static func tem_rotacoes(id: String) -> bool:
 	return tem_arte(id) or not animacoes_de(id).is_empty()
 
 ## O personagem tem caminhada de verdade (mais de um quadro) nessa direção?
+## O ciclo de caminhada tem QUADROS DE VERDADE (mais de um)?
+## Separado de `tem_caminhada` de propósito: aquele responde "a animação
+## existe?" e é o que a cena consulta; este responde "ela anima?" e é o que
+## o teste cobra. Confundir os dois foi o que deixou o personagem deslizando
+## com um quadro só sem nada acusar.
+static func tem_ciclo_real(id: String, direcao: String = "south") -> bool:
+	return _quadros_andando(id, direcao).size() > 1
+
+
 static func tem_caminhada(id: String, direcao: String = "south",
 		nome_anim: String = "walk") -> bool:
 	if tem_arte(id):
-		return true          # a estrutura existe, ainda com um quadro só
+		return true
 	var anims := animacoes_de(id)
 	if not anims.has(nome_anim):
 		return false

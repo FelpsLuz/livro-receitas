@@ -55,7 +55,17 @@ DEST = RAIZ / "reino-por-conquista-godot" / "assets" / "sprites"
 # Distâncias em RGB (euclidiana, 0..441). Medidas contra as quatro imagens:
 # o fundo varia ~12 de ruído interno, e a cor mais próxima de sprite real
 # (a madeira rosada do tronco) fica a ~95 da chave.
-LIM_INUNDACAO = 78     # frouxo: só precisa não vazar para dentro do sprite
+# LIMIAR ADAPTATIVO. Um número fixo não serve quando o fundo muda de cor.
+# Com fundo MAGENTA a arte mais próxima estava a ~95 da chave e 78 era
+# folgado. Com fundo VERDE — que é vizinho da folhagem — a arte real da
+# pedra chega a 48 e a da árvore a 67: 78 comeria os dois sprites.
+#
+# A calibragem sai do próprio ANEL DE BORDA, que é fundo puro por definição:
+# mede-se quanto o fundo varia dentro dele e abre-se uma margem sobre isso.
+# Assim o limiar acompanha o ruído da imagem em vez de ser chutado.
+LIM_INUNDACAO_TETO = 78
+LIM_INUNDACAO_PISO = 16
+MARGEM_RUIDO = 3.0     # múltiplo do desvio do fundo
 LIM_ILHA = 55          # apertado: fundo ilhado, sem vizinho para confirmar
 LIM_FRANJA = 118       # anti-alias: mais frouxo, mas só na borda do alfa
 # Família de matiz: janela ASSIMÉTRICA em volta da chave.
@@ -84,6 +94,19 @@ def ok(cond: bool, nome: str, obs: str = "") -> bool:
     else:
         _vermelhos += 1
     return cond
+
+
+def _limiar_do_fundo(a: np.ndarray, chave: np.ndarray) -> float:
+    """Quanto o fundo varia no anel de borda, com margem. Ver a nota acima."""
+    anel = np.concatenate([
+        a[:2].reshape(-1, 3), a[-2:].reshape(-1, 3),
+        a[:, :2].reshape(-1, 3), a[:, -2:].reshape(-1, 3)])
+    d = np.sqrt(((anel.astype(float) - chave) ** 2).sum(axis=-1))
+    # percentil 98 e não o máximo: uma quina do sprite encostando na borda
+    # levaria o máximo para o valor da ARTE e abriria o limiar demais
+    ruido = float(np.percentile(d, 98))
+    return float(np.clip(max(ruido * MARGEM_RUIDO, LIM_INUNDACAO_PISO),
+                         LIM_INUNDACAO_PISO, LIM_INUNDACAO_TETO))
 
 
 def _chave_da_borda(a: np.ndarray) -> np.ndarray:
@@ -209,18 +232,19 @@ def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
     H, W, _ = rgb.shape
     chave = _chave_da_borda(rgb)
     d = _dist(rgb, chave)
+    lim_inundacao = _limiar_do_fundo(rgb, chave)
 
     # ---- 1. inundação a partir da borda ----
     fundo = np.zeros((H, W), bool)
     pilha = []
     for x in range(W):
         for y in (0, H - 1):
-            if d[y, x] < LIM_INUNDACAO and not fundo[y, x]:
+            if d[y, x] < lim_inundacao and not fundo[y, x]:
                 fundo[y, x] = True
                 pilha.append((y, x))
     for y in range(H):
         for x in (0, W - 1):
-            if d[y, x] < LIM_INUNDACAO and not fundo[y, x]:
+            if d[y, x] < lim_inundacao and not fundo[y, x]:
                 fundo[y, x] = True
                 pilha.append((y, x))
     while pilha:
@@ -228,13 +252,13 @@ def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
         for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             ny, nx = y + dy, x + dx
             if 0 <= ny < H and 0 <= nx < W and not fundo[ny, nx] \
-                    and d[ny, nx] < LIM_INUNDACAO:
+                    and d[ny, nx] < lim_inundacao:
                 fundo[ny, nx] = True
                 pilha.append((ny, nx))
     n_inundacao = int(fundo.sum())
 
     # ---- 2. fundo ilhado (vão entre galhos) ----
-    ilhas = (d < LIM_ILHA) & ~fundo
+    ilhas = (d < min(LIM_ILHA, lim_inundacao * 0.7)) & ~fundo
     fundo |= ilhas
     n_ilhas = int(ilhas.sum())
 
@@ -246,7 +270,7 @@ def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
         vizinho_vazio[:-1] |= fundo[1:]
         vizinho_vazio[:, 1:] |= fundo[:, :-1]
         vizinho_vazio[:, :-1] |= fundo[:, 1:]
-        franja = vizinho_vazio & ~fundo & (d < LIM_FRANJA)
+        franja = vizinho_vazio & ~fundo & (d < min(LIM_FRANJA, lim_inundacao * 1.5))
         if not franja.any():
             break
         n_franja += int(franja.sum())
@@ -260,9 +284,16 @@ def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
     # passada global comia 107px de um sprite que só tem ~150 — sobrava 5%
     # de silhueta. A sombra magenta da árvore, que é o alvo real, ENCOSTA no
     # fundo; o sombreado de uma roupa não encosta.
+    # A família de matiz existe para pegar a SOMBRA que o modelo desenha no
+    # tom do fundo. Com fundo magenta isso é seguro — nada na arte é
+    # magenta. Com fundo VERDE seria suicídio: copa, arbusto e musgo são
+    # verdes. A passada só roda quando a chave está na banda magenta/violeta.
     rel = (h - float(h_chave[0, 0]) + 180.0) % 360.0 - 180.0
+    chave_magenta = 275.0 <= float(h_chave[0, 0]) <= 355.0
     elegivel = (rel > -MATIZ_VIOLETA) & (rel < MATIZ_VERMELHO) \
         & (croma > LIM_CROMA) & ~fundo
+    if not chave_magenta:
+        elegivel = np.zeros_like(elegivel)
     n_familia = 0
     pilha = []
     ys, xs = np.nonzero(elegivel)
@@ -300,9 +331,9 @@ def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
     n_mancha = _despicar(saida)
     n_mancha += _cortar_ilhas_magenta(saida)
 
-    restante = int((~fundo & (d < LIM_FRANJA)).sum())
+    restante = int((~fundo & (d < min(LIM_FRANJA, lim_inundacao * 1.5))).sum())
     return Image.fromarray(saida, "RGBA"), {
-        "chave": tuple(int(v) for v in chave),
+        "chave": tuple(int(v) for v in chave), "limiar": round(lim_inundacao, 1),
         "inundacao": n_inundacao, "ilhas": n_ilhas, "franja": n_franja,
         "familia": n_familia, "mancha": n_mancha,
         "fundo_total": int(fundo.sum()), "px": H * W,
@@ -412,7 +443,10 @@ def main() -> int:
     # Os personagens vêm de /create-character-with-4-directions com alfa já
     # BINÁRIO e fundo transparente — passar chroma key neles seria procurar
     # um fundo magenta que não existe e, pior, cortar a roupa por matiz.
-    print("\n── personagens (já transparentes, só copiados) ──")
+    print("\n── personagens: poses e CICLO DE CAMINHADA ──")
+    # /animate-character devolve os quadros já transparentes e com alfa
+    # binário. Passar chroma key aqui seria procurar um fundo que não
+    # existe e, pior, cortar a roupa por matiz.
     for p in sorted(CRU.glob("aldeao_*.png")):
         im = Image.open(p).convert("RGBA")
         arr = np.array(im)
@@ -425,6 +459,12 @@ def main() -> int:
         if not a.sem_import:
             _import_pixelart(destino)
         cob = int((np.array(im)[..., 3] == 255).sum()) * 100 // (im.size[0] * im.size[1])
+        # cada quadro isolado não vale um ✅ na lista (seriam 32 linhas);
+        # o que interessa é nenhum sair vazio
+        if "_walk_" in p.stem:
+            if cob < 5:
+                ok(False, p.stem, f"quadro vazio ({cob}%)")
+            continue
         ok(cob >= 5, p.stem, f"{im.size[0]}×{im.size[1]} · {cob}% de silhueta"
                              f" · {parcial}px parciais binarizados")
 
@@ -437,19 +477,30 @@ def main() -> int:
         if not a.sem_import:
             _import_pixelart(destino)
         frac = r["fundo_total"] * 100 // r["px"]
-        print(f"  {p.stem:22} chave {str(r['chave']):16} "
+        print(f"  {p.stem:22} chave {str(r['chave']):16} lim {r['limiar']:5.1f} "
               f"fundo {frac:2d}% (borda {r['inundacao']} + ilha {r['ilhas']} "
               f"+ franja {r['franja']} + matiz {r['familia']}) "
               f"· manchas {r['mancha']}")
 
+    quadros = len(list(DEST.glob("aldeao_walk_*.png")))
+    ok(quadros == 28, "ciclo de caminhada: 7 quadros × 4 direções",
+       f"{quadros} quadros")
+
     print("\n=== VERIFICAÇÃO ===\n")
+    andar = 0
     for p in sorted(DEST.glob("*.png")):
         arr = np.array(Image.open(p).convert("RGBA"))
         alfa = arr[..., 3]
         parcial = int(((alfa > 0) & (alfa < 255)).sum())
+        if "_walk_" in p.stem:
+            andar += parcial
+            continue
         ok(parcial == 0, f"{p.stem}: alfa binário", f"{parcial}px parciais")
+    ok(andar == 0, "os 28 quadros de caminhada: alfa binário",
+       f"{andar}px parciais somados")
 
-    for p in sorted(list(DEST.glob("prop_*.png")) + list(DEST.glob("aldeao_*.png"))):
+    for p in sorted(list(DEST.glob("prop_*.png"))
+            + [q for q in DEST.glob("aldeao_*.png") if "_walk_" not in q.stem]):
         arr = np.array(Image.open(p).convert("RGBA"))
         opaco = arr[..., 3] == 255
         if not opaco.any():

@@ -136,6 +136,35 @@ func _initialize() -> void:
 		"a diagonal cai na LATERAL, não na frontal",
 		"de lado o personagem lê como andando; de frente, como parado")
 
+	# ---- CICLO DE CAMINHADA REAL ----
+	# `tem_caminhada` responde "a animação existe?"; `tem_ciclo_real`
+	# responde "ela ANIMA?". Confundir os dois foi o que deixou o personagem
+	# deslizando com um quadro só sem nada acusar.
+	var sem_ciclo: Array = []
+	for d in PersonagensV2.ROTACOES:
+		if not PersonagensV2.tem_ciclo_real("aldeao", d):
+			sem_ciclo.append(d)
+	ok(sem_ciclo.is_empty(), "as 4 rotações têm ciclo de mais de um quadro",
+		", ".join(sem_ciclo))
+	var curtas: Array = []
+	for d in PersonagensV2.DIRECOES:
+		var n := sf.get_frame_count(d + "_walk")
+		if n < 4:
+			curtas.append("%s:%d" % [d, n])
+	ok(curtas.is_empty(), "toda direção anda com 4+ quadros", ", ".join(curtas))
+	ok(sf.get_animation_speed("south_walk") > sf.get_animation_speed("south")
+		and sf.get_animation_loop("south_walk"),
+		"caminhada em laço e mais rápida que a pose parada",
+		"%.1f fps contra %.1f" % [sf.get_animation_speed("south_walk"),
+			sf.get_animation_speed("south")])
+	# quadros DISTINTOS: 7 cópias da mesma pose passariam em tudo acima
+	var distintas := {}
+	for i in sf.get_frame_count("south_walk"):
+		distintas[sf.get_frame_texture("south_walk", i).get_rid()] = true
+	ok(distintas.size() >= 4, "os quadros do ciclo são DIFERENTES entre si",
+		"%d texturas distintas em %d quadros"
+		% [distintas.size(), sf.get_frame_count("south_walk")])
+
 	for caminho in ["res://shaders/vento_folhagem.gdshader",
 			"res://shaders/contorno.gdshader",
 			"res://shaders/paleta_dinamica.gdshader"]:
