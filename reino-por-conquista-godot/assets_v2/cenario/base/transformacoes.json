@@ -1,0 +1,34 @@
+[
+ {
+  "op": "espelho_global",
+  "_motivo": "v3.2 §B: auditar_luz.py mediu luz pela ESQUERDA em montanhas, floresta, troncos e pedras, contra o SUFIXO_LUZ congelado (superior-direita)."
+ },
+ {
+  "op": "descer_cordilheira",
+  "px": 20,
+  "nucleo": [
+   137,
+   227
+  ],
+  "extensao": [
+   63,
+   325
+  ],
+  "ate_y": 104,
+  "_motivo": "v3.4 §B: o cume ficava 12px ACIMA do topo do castelo, invertendo a hierarquia da referência. Rampa (v3.5 §C): 20px no núcleo, 0 nas bordas, para as serras laterais continuarem visíveis sem costura."
+ },
+ {
+  "op": "descer_cordilheira",
+  "px": 8,
+  "nucleo": [
+   0,
+   57
+  ],
+  "extensao": [
+   0,
+   57
+  ],
+  "ate_y": 104,
+  "_motivo": "v3.5 §C.2: o fragmento desconectado da ponta esquerda tinha pico em y=51 (coluna x=19), acima do cume do maciço (52) e fora da janela 56..74. Deslocamento uniforme de 8px o leva a y=59. Sem costura: há vão de céu em x=58..62 separando este fragmento da cordilheira."
+ }
+]

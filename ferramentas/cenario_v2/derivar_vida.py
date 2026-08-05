@@ -21,7 +21,7 @@ from PIL import Image
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from transformar_placa import extensao_registrada, mascara_macico  # noqa: E402
+from construir_placa import mascara_macico  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
 CEN = RAIZ / "reino-por-conquista-godot" / "assets_v2" / "cenario"
@@ -132,13 +132,12 @@ def fundo(placa: np.ndarray) -> None:
     As serras laterais ficam assadas no fundo de propósito: já nascem em
     bruma, sem tan, sem direcionalidade medível — véu nelas é redundante.
     """
-    faixa = placa[0:104]        # mesma janela da transformação (v3.4)
+    faixa = placa[0:104]        # mesma janela da receita de construção
     # A detecção do maciço é a MESMA de transformar_placa.py, importada e
     # não reimplementada: a versão local (crista pelo tan, linhas 0..55)
     # devolveu 77px depois que o maciço desceu 20px, e o véu de recessão
     # sumiu em silêncio. Detector único, um lugar para consertar.
-    maciço, _nuv, _ceu, extensao = mascara_macico(
-        faixa, quieto=True, extensao=extensao_registrada())
+    maciço, extensao = mascara_macico(faixa)
     rgba = np.dstack([faixa, (maciço * 255).astype(np.uint8)])
     Image.fromarray(rgba, "RGBA").save(SAIDA / "montanha_central.png")
     x0, x1, cume_y, cume_x = extensao
