@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://bxi8dgl5jyy2s"
-path="res://.godot/imported/PixelifySans-Regular.ttf-72c603e6a0e4917d74846947153a2fb5.fontdata"
+uid="uid://cxcyqfo2vuyjj"
+path="res://.godot/imported/PxPlus_IBM_XGA-AI_12x20.ttf-1558e84208a4780eba1ec4178f7bb100.fontdata"
 
 [deps]
 
-source_file="res://assets/fontes/PixelifySans-Regular.ttf"
-dest_files=["res://.godot/imported/PixelifySans-Regular.ttf-72c603e6a0e4917d74846947153a2fb5.fontdata"]
+source_file="res://assets/fontes/PxPlus_IBM_XGA-AI_12x20.ttf"
+dest_files=["res://.godot/imported/PxPlus_IBM_XGA-AI_12x20.ttf-1558e84208a4780eba1ec4178f7bb100.fontdata"]
 
 [params]
 

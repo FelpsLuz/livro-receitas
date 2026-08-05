@@ -20,22 +20,35 @@ const VERDE := Color("3e5f3e")
 # existe quantidade de arte boa que sobreviva a isso — é o primeiro frame que
 # o jogador vê, e nele já dava para saber que era um protótipo web.
 #
-# Duas fontes, e só duas:
-#   · Pixelify Sans  — corpo, HUD e botões (proporcional, densa o bastante
-#                      para um jogo que escreve parágrafos em português)
-#   · Jacquard 12    — o título, e só ele (blackletter em pixel, 21px de grade,
-#                      então só é nítida em 21, 42, 63…)
+# Duas fontes, e a divisão entre elas NÃO é estética — é consequência de
+# medida. `ferramentas/testar_fontes.py` comparou os 45 pares de dígitos de
+# 361 candidatas, pixel a pixel. A tabela inteira está em ferramentas/FONTES.md.
 #
-# Ambas OFL, ambas com á é í ó ú â ê ô ã õ à ç completos — o que a maioria das
-# fontes pixel populares NÃO tem, e que só se descobre tarde demais.
+#   · XGA-AI 12x20  — NÚMEROS e corpo denso. Melhor separação de dígitos
+#                     medida no lote: IoU do pior par 61%, seis pontos abaixo
+#                     da segunda colocada. Grade 20 → nítida em 20 e 40.
+#   · ToshibaTxL1   — TÍTULOS e rótulos. Serifada de verdade (flare 5,0 na
+#                     haste do "I", contra 1,0 de uma sem serifa) e a melhor
+#                     nos pares que arruínam um título: E/C 60%, N/M 53%.
+#                     Grade 16 → nítida em 16, 32, 48.
+#
+# Os dígitos da ToshibaTxL1 são ruins (8/9 a 92% de identidade), e é por isso
+# que NÚMERO NENHUM usa esta fonte. As duas anteriores caíram exatamente aqui:
+# a Pixelify Sans tinha 21 pares de dígitos acima do teto — "custo 20" lendo
+# como "custo 80" não era azar, era o esperado — e a Jacquard 12 punha E/C a
+# 96%, que é "REINO POR CONQUISTA" virando "RCIND PVR CVNQVISTA".
+#
+# Ambas cobrem os 15 acentos do português, incluindo Ç e Õ maiúsculos.
+# Ultimate Oldschool PC Font Pack (VileR), CC BY-SA 4.0.
 # ============================================================
 const PASTA_FONTES := "res://assets/fontes/"
-## Tamanhos em que cada fonte é NÍTIDA. Fonte pixel em tamanho intermediário
-## vira borrão, e aí não se corrigiu nada — só se trocou o tipo de borrão.
-const CORPO := 16
-const CORPO_G := 20
-const TITULO_SECAO := 20
-const TITULO_JOGO := 42        # grade de 21px da Jacquard: 21, 42, 63
+## Tamanhos em que cada fonte é NÍTIDA — múltiplos inteiros da grade nativa.
+## Fonte pixel em tamanho intermediário vira borrão, e aí não se corrigiu
+## nada: só se trocou o tipo de borrão.
+const CORPO := 20              # grade 20 da XGA-AI
+const CORPO_G := 40            # 2× — destaque do HUD
+const TITULO_SECAO := 32       # 2× da grade 16 — título maior que o corpo
+const TITULO_JOGO := 32        # 2×
 
 static func _fonte(arquivo: String) -> FontFile:
 	var caminho := PASTA_FONTES + arquivo
@@ -53,14 +66,16 @@ static func _fonte(arquivo: String) -> FontFile:
 	f.generate_mipmaps = false
 	return f
 
+## Corpo e — principalmente — NÚMEROS.
 static func fonte_corpo() -> FontFile:
-	return _fonte("PixelifySans-Regular.ttf")
+	return _fonte("PxPlus_IBM_XGA-AI_12x20.ttf")
 
+## Títulos, rótulos e botões: a serifada. Nunca para número.
 static func fonte_forte() -> FontFile:
-	return _fonte("PixelifySans-Bold.ttf")
+	return _fonte("PxPlus_ToshibaTxL1_8x16.ttf")
 
 static func fonte_titulo() -> FontFile:
-	return _fonte("Jacquard12-Regular.ttf")
+	return fonte_forte()
 
 static func criar() -> Theme:
 	var t := Theme.new()
@@ -74,7 +89,10 @@ static func criar() -> Theme:
 		var forte := fonte_forte()
 		if forte != null:
 			t.set_font("font", "Button", forte)
-			t.set_font_size("font_size", "Button", CORPO)
+			t.set_font_size("font_size", "Button", 16)
+			# abas também: são rótulos, não números
+			t.set_font("font", "TabContainer", forte)
+			t.set_font_size("font_size", "TabContainer", 16)
 
 	# CANTO RETO EM TUDO. `corner_radius` desenha uma curva anti-aliased: um
 	# arco suavizado no canto de um painel é o mesmo crime que a fonte vetorial,

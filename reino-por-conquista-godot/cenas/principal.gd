@@ -281,7 +281,7 @@ func _narrar_estrada(eventos: Array) -> void:
 		var roubado: Dictionary = ev.get("roubado", {})
 		var perdas := ""
 		for tipo in ev.get("perdidos", {}):
-			perdas += "%s −%d  " % [Dados.TROPAS[tipo]["nome"], int(ev["perdidos"][tipo])]
+			perdas += "%s −%d · " % [Dados.TROPAS[tipo]["nome"], int(ev["perdidos"][tipo])]
 		var corpo := "Sua coluna foi atacada no caminho.\n%s" % (perdas if perdas != "" else "Nenhuma baixa.")
 		if not roubado.is_empty():
 			corpo += "\nParte da carga ficou com eles."
@@ -308,10 +308,11 @@ func _celula_hud(icone: String, valor: String, cor: Color, dica: String) -> void
 		caixa.add_child(ic)
 	var l := Label.new()
 	l.text = valor
-	var f := Tema.fonte_forte()
+	# número SEMPRE na fonte limpa: a serifada tem 8/9 a 92% de identidade
+	var f := Tema.fonte_corpo()
 	if f != null:
 		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", Tema.CORPO_G)
+	l.add_theme_font_size_override("font_size", Tema.CORPO)
 	l.add_theme_color_override("font_color", cor)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caixa.add_child(l)
@@ -359,7 +360,9 @@ func atualizar() -> void:
 		j["nome"], Contratos.titulo(state), selo, j["idade"],
 		MESES[state["mes"] - 1], Estacoes.nome(state), state["ano"]]
 	# a UI muda de temperatura junto com o mundo: azul-gelo no inverno
-	status_label.add_theme_color_override("font_color", Estacoes.cor(state))
+	# a linha de identidade é creme e fica creme: ela é contexto, não estado.
+	# Quem muda de temperatura com a estação é o ícone do calendário no HUD.
+	status_label.add_theme_color_override("font_color", Color("c9b894"))
 
 	if state["fim"] != null:
 		_modal_fim()
@@ -527,7 +530,7 @@ func _aba_terra(c: Container) -> void:
 	c.add_child(cidade_view)
 	if t == null:
 		_par(c, "Sem terras, sem raízes. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.")
-		_botao(c, "Comprar terra (300 , requer 25 )", func():
+		_botao(c, "Comprar terra (300 , requer 25)", func():
 			var r: Dictionary = Jogo.comprar_terra(state)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
@@ -547,7 +550,7 @@ func _aba_terra(c: Container) -> void:
 			if ic_r != null:
 				hr.add_child(ic_r)
 			var l_r := Label.new()
-			l_r.text = "%s    " % str(par_r[1])
+			l_r.text = "%s · " % str(par_r[1])
 			l_r.add_theme_color_override("font_color", Tema.TINTA)
 			hr.add_child(l_r)
 		var l_fel := Label.new()
@@ -562,10 +565,10 @@ func _aba_terra(c: Container) -> void:
 		# números lado a lado é o que transforma recrutar numa decisão.
 		var ativa: int = Economia.populacao_ativa(state)
 		var armas: int = Economia.pop_em_armas(state)
-		_par(c, "Trabalhando: %d Em armas: %d Imposto: %d /mês" %
+		_par(c, "Trabalhando: %d · Em armas: %d · Imposto: %d por mês" %
 			[ativa, armas, Economia.imposto_mensal(state)])
 		if armas > 0:
-			_par(c, "   (cada homem em armas é um pagador de imposto a menos)")
+			_par(c, " · (cada homem em armas é um pagador de imposto a menos)")
 		var nivel_cap: int = clampi(int(t["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
 		_par(c, "%s sustenta até %d de tropa · imposto %.2f por habitante" % [
 			Dados.NIVEIS_TERRA[nivel_cap]["nome"], Recrutamento.pop_maxima(state),
@@ -583,7 +586,7 @@ func _aba_terra(c: Container) -> void:
 			_par(c, "O povo murmura. Felicidade baixa termina em foices e tochas.")
 		if int(t["nivel"]) < 5:
 			var prox: Dictionary = Dados.NIVEIS_TERRA[int(t["nivel"]) + 1]
-			_botao(c, "Evoluir para %s (%d + %d )" % [prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
+			_botao(c, "Evoluir para %s (%d + %d)" % [prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
 				var r: Dictionary = Jogo.melhorar_terra(state)
 				if r["ok"]:
 					Sfx.tocar(self, "vitoria")
@@ -679,7 +682,7 @@ func _aba_mapa(c: Container) -> void:
 			var ic_esp := Icones.imagem("espiao", 30)
 			if ic_esp != null:
 				lb.add_child(ic_esp)
-			_botao(lb, "Espionar (80 )", func():
+			_botao(lb, "Espionar (80 ouro)", func():
 				var r: Dictionary = Intriga.espionar(state, alvo_id)
 				if int(r.get("prender", 0)) > 0:
 					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
@@ -757,7 +760,7 @@ func _aba_taverna(c: Container) -> void:
 	var h_rumor := _card(c)
 	_arte(h_rumor, Retratos.textura("taverneiro"), 48)
 	var l_rumor := Label.new()
-	l_rumor.text = "Rumor de mercado (%d ) — um choque de preço antes de ele acontecer.\nNem todo boato é verdade." % Taverna.PRECO_RUMOR
+	l_rumor.text = "Rumor de mercado (%d) — um choque de preço antes de ele acontecer.\nNem todo boato é verdade." % Taverna.PRECO_RUMOR
 	l_rumor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l_rumor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h_rumor.add_child(l_rumor)
@@ -771,7 +774,7 @@ func _aba_taverna(c: Container) -> void:
 	var h_rota := _card(c)
 	_arte(h_rota, Retratos.sprite_gerado("cartografo"), 48)
 	var l_rota := Label.new()
-	l_rota.text = "Rota comercial (%d ) — onde comprar barato e onde vender caro, hoje." % Taverna.PRECO_ROTA
+	l_rota.text = "Rota comercial (%d) — onde comprar barato e onde vender caro, hoje." % Taverna.PRECO_ROTA
 	l_rota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l_rota.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h_rota.add_child(l_rota)
@@ -841,10 +844,10 @@ func _aba_corte(c: Container) -> void:
 			elif lealdade < 60:
 				leitura = "cumpre o que deve, nada além"
 			var abastado := "· casa próspera" if int(n.get("riqueza", 0)) >= 280 else ""
-			_par(vn, "   %s%s" % [leitura, abastado])
+			_par(vn, " · %s%s" % [leitura, abastado])
 			if bool(n.get("capturado", false)):
 				var nome_preso: String = str(n["nome"])
-				_botao(vn, "Pagar resgate (300 )", func():
+				_botao(vn, "Pagar resgate (300)", func():
 					var r: Dictionary = Comandantes.resgatar(state, nome_preso)
 					Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 					_aviso(r["msg"])
@@ -862,15 +865,20 @@ func _card_npc(c: Container, npc: Dictionary) -> void:
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(v)
 	var rel: int = state["tags"].get(npc["id"], {"relacao": 0})["relacao"]
-	_par(v, "%s  (%s %d)" % [npc["nome"], Dialogo.nome_relacao(rel), rel])
+	_par(v, "%s · (%s %d)" % [npc["nome"], Dialogo.nome_relacao(rel), rel])
 	_botao(v, "Conversar", func(): abrir_conversa(npc))
 
 func _aba_exercito(c: Container) -> void:
 	var j: Dictionary = state["jogador"]
 	_titulo_secao(c, "Quartel")
 	var p := Combate.poder(j["tropas"], j["equip"])
-	_par(c, "Ataque %d · Defesa %d · %d homens · Manutenção %s /mês · Equipamento %d/3" %
-		[roundi(p["atq"]), roundi(p["def"]), p["homens"], str(j.get("ultima_manut", "—")), j["equip"]])
+	# "Manutenção —" sem número acontece no primeiro mês, antes de a economia
+	# rodar uma vez. Melhor dizer isso do que mostrar um travessão solto.
+	var manut = j.get("ultima_manut", null)
+	_par(c, "Ataque %d · Defesa %d · %d homens · Equipamento %d/3 · %s" % [
+		roundi(p["atq"]), roundi(p["def"]), p["homens"], j["equip"],
+		("último soldo pago: %d ouro" % int(manut)) if manut != null
+			else "nenhum soldo pago ainda"])
 	_par(c, "População comprometida: %d de %d" %
 		[Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state)])
 	# ---- manutenção com ícones de economia ----
@@ -903,7 +911,7 @@ func _aba_exercito(c: Container) -> void:
 		# sem tocar nesta linha.
 		_arte(h, Retratos.textura_tropa(tipo), 52)
 		var l := Label.new()
-		l.text = "%s — você tem %d (custo %d, manut. %d/mês, treino %ds)" % [
+		l.text = "%s — %d · custo %d · manut. %d · treino %ds" % [
 			Dados.TROPAS[tipo]["nome"], j["tropas"].get(tipo, 0),
 			Dados.TROPAS[tipo]["custo"], Dados.TROPAS[tipo]["manut"],
 			Recrutamento.tempo_de(state, tipo)]
@@ -972,7 +980,7 @@ func _aba_exercito(c: Container) -> void:
 					int(pg.get("moral", 0)), int(pg.get("gasto", {}).get("ouro", 0)),
 					int(pg.get("gasto", {}).get("comida", 0)),
 					int(pg.get("gasto", {}).get("madeira", 0)),
-					"  %d intervenções" % int(pg.get("reforcos", 0))
+					" · %d intervenções" % int(pg.get("reforcos", 0))
 						if int(pg.get("reforcos", 0)) > 0 else ""]
 			else:
 				lm.text = "%d homens %s (%s) — chega em %s%s" % [
@@ -1063,12 +1071,12 @@ func _aba_exercito(c: Container) -> void:
 			Jogo.salvar(state)
 			atualizar())
 	_par(c, "Linha > Cunha > Envolvimento > Linha.")
-	_botao(c, "Melhorar equipamento (%d )" % (200 * (int(j["equip"]) + 1)), func():
+	_botao(c, "Melhorar equipamento (%d)" % (200 * (int(j["equip"]) + 1)), func():
 		var r: Dictionary = Jogo.melhorar_equip(state)
 		_aviso(r["msg"])
 		Jogo.salvar(state)
 		atualizar())
-	_botao(c, "Contratar 2 guardas de elite (120 )", func():
+	_botao(c, "Contratar 2 guardas de elite (120)", func():
 		var r: Dictionary = Jogo.contratar_guardas(state, 2)
 		_aviso(r["msg"])
 		Jogo.salvar(state)
@@ -1105,7 +1113,7 @@ func _aba_clas(c: Container) -> void:
 			oferta.step = 50
 			oferta.value = cla["preco_base"]
 			linha.add_child(oferta)
-			_botao(linha, "Enviar mensageiro (10 )", func():
+			_botao(linha, "Enviar mensageiro (10)", func():
 				var r: Dictionary = Clas.enviar_mensageiro(state, cla["id"], int(oferta.value))
 				Sfx.tocar(self, "pagina" if r["ok"] else "alerta")
 				_aviso(r["msg"])
@@ -1145,7 +1153,7 @@ func _aba_intrigas(c: Container) -> void:
 		l.text = reino["nome"] + ("CB" if state["casus_belli"].has(reino["id"]) else "")
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(l)
-		_botao(h, "Espionar (80)", func():
+		_botao(h, "Espionar (80 ouro)", func():
 			_aviso(Intriga.espionar(state, reino["id"])["msg"])
 			Jogo.salvar(state)
 			atualizar())
@@ -1162,7 +1170,7 @@ func _aba_familia(c: Container) -> void:
 	var a: Dictionary = j["atributos"]
 	_par(c, "%s, %d anos — %d %d %d %d%s" % [j["nome"], j["idade"],
 		a["forca"], a["carisma"], a["gestao"], a["intriga"],
-		"  · reputação de crueldade" if int(j.get("crueldade", 0)) >= 3 else ""])
+		" · · reputação de crueldade" if int(j.get("crueldade", 0)) >= 3 else ""])
 	if f["conjuge"] != null:
 		_par(c, "Casado com %s%s" % [f["conjuge"]["nome"],
 			" (união sob pressão)" if f["conjuge"]["forcado"] else ""])
@@ -1175,8 +1183,8 @@ func _aba_familia(c: Container) -> void:
 		var fa: Dictionary = filho["atributos"]
 		_par(c, "%s, %d anos — %d %d %d %d%s%s" % [filho["nome"], filho["idade"],
 			fa["forca"], fa["carisma"], fa["gestao"], fa["intriga"],
-			"  · mimado (vassalos conspirarão!)" if filho.get("mimado", false) else "",
-			"  · herdeiro apto" if int(filho["idade"]) >= 16 else ""])
+			" · · mimado (vassalos conspirarão!)" if filho.get("mimado", false) else "",
+			" · · herdeiro apto" if int(filho["idade"]) >= 16 else ""])
 
 func _aba_cronica(c: Container) -> void:
 	_titulo_secao(c, "Crônica da Casa")
@@ -1374,7 +1382,7 @@ func _modal_evento() -> void:
 			_modal("Uma casa rica demais",
 				"%s enriqueceu na sua vila e agora recebe visitas que não passam pela sua porta. Ou você compra o joelho dobrado %s, ou %s compra o seu."
 					% [nome_amb, ele, eleu], [
-				["Comprar a lealdade (250 )", func():
+				["Comprar a lealdade (250)", func():
 					_aviso(str(Jogo.resolver_evento(state, "comprar").get("msg", "")))
 					Jogo.salvar(state)
 					atualizar()],

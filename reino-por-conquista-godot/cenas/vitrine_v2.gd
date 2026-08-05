@@ -68,7 +68,7 @@ func _ready() -> void:
 		var eti := Label.new()
 		eti.text = id.trim_prefix("rei_").trim_prefix("cla_")
 		if PersonagensV2.tem_caminhada(id):
-			eti.text += " ✦"
+			eti.text += " "
 		eti.position = Vector2(px - 40, 418)
 		eti.add_theme_font_size_override("font_size", 10)
 		add_child(eti)

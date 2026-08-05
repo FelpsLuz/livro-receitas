@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://cudfb4tnb2wxq"
-path="res://.godot/imported/Jacquard12-Regular.ttf-f87e1ebc21662959a1539e03b637247d.fontdata"
+uid="uid://codm12oov2h8w"
+path="res://.godot/imported/PxPlus_ToshibaTxL1_8x16.ttf-51186f9886fc25ab667ff046f77e8533.fontdata"
 
 [deps]
 
-source_file="res://assets/fontes/Jacquard12-Regular.ttf"
-dest_files=["res://.godot/imported/Jacquard12-Regular.ttf-f87e1ebc21662959a1539e03b637247d.fontdata"]
+source_file="res://assets/fontes/PxPlus_ToshibaTxL1_8x16.ttf"
+dest_files=["res://.godot/imported/PxPlus_ToshibaTxL1_8x16.ttf-51186f9886fc25ab667ff046f77e8533.fontdata"]
 
 [params]
 

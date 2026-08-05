@@ -198,16 +198,43 @@ func _initialize() -> void:
 	# Com fonte bitmap no lugar, um emoji do sistema ao lado das letras é o
 	# defeito mais visível que a tela pode ter. Este teste é a trava: se
 	# alguém escrever um emoji num rótulo, ele falha aqui e não na captura.
-	var texto := FileAccess.get_file_as_string("res://cenas/principal.gd")
+	# varre TODA cena registrada, não só a que existia quando o teste foi
+	# escrito: cena nova com emoji tem que falhar aqui também
+	var cenas_gd: Array = []
+	var dir := DirAccess.open("res://cenas")
+	if dir != null:
+		for f in dir.get_files():
+			if f.ends_with(".gd"):
+				cenas_gd.append("res://cenas/" + f)
+	ok("há cenas para varrer", cenas_gd.size() >= 2, str(cenas_gd.size()))
+
 	var achados: Array = []
-	for i in texto.length():
-		var c := texto.unicode_at(i)
-		# acima de U+2000, tirando a pontuação tipográfica e as setas de texto
-		if c > 0x2000 and not [0x2018, 0x2019, 0x201C, 0x201D, 0x2026, 0x2013,
-				0x2014, 0x2190, 0x2192, 0x2212, 0x00B7].has(c):
-			achados.append("U+%04X" % c)
-	ok("nenhum emoji em principal.gd", achados.is_empty(),
-		"achados: " + str(achados.slice(0, 8)))
+	var colados: Array = []
+	for caminho in cenas_gd:
+		var texto := FileAccess.get_file_as_string(caminho)
+		for i in texto.length():
+			var c := texto.unicode_at(i)
+			# acima de U+2000, tirando a pontuação tipográfica e as setas de texto
+			if c > 0x2000 and not [0x2018, 0x2019, 0x201C, 0x201D, 0x2026, 0x2013,
+					0x2014, 0x2190, 0x2192, 0x2212, 0x00B7].has(c):
+				achados.append("%s U+%04X" % [caminho.get_file(), c])
+		# as sobras que a remoção de emoji deixou: parêntese com espaço órfão
+		# e duas palavras coladas onde o glifo fazia de separador
+		for pedaco in ["( ", " )", "(  ", "  "]:
+			if texto.contains('"') and texto.contains(pedaco):
+				for linha in texto.split("\n"):
+					var aspas := linha.find("\"")
+					if aspas < 0 or linha.strip_edges().begins_with("#"):
+						continue
+					var trecho := linha.substr(aspas)
+					if trecho.contains(pedaco) and not trecho.contains("\\t"):
+						colados.append("%s: %s" % [caminho.get_file(),
+							linha.strip_edges().substr(0, 46)])
+						break
+	ok("nenhum emoji em nenhuma cena", achados.is_empty(),
+		"achados: " + str(achados.slice(0, 6)))
+	ok("nenhuma string com \"( )\", \" )\" ou espaço duplo",
+		colados.is_empty(), str(colados.slice(0, 4)))
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
