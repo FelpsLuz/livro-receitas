@@ -52,13 +52,17 @@ def prompt_completo(descricao: str) -> str:
     return ", ".join([descricao, SUFIXO_ESTILO, SUFIXO_LUZ])
 
 
-# Correção do 3/4 (addendum v3 §B.1): `view: side` não segurou sozinho — o
-# sprite do piloto saiu em leve 3/4. Concatenado em TODO prompt de OBJETO.
-# Aceite: topo de telhado visível como superfície = rejeitar e regerar.
+# Perspectiva dos OBJETOS (v3.1 §B — REVOGA a elevação estrita do v3 §B.1:
+# a referência é oblíqua SUAVE, não ortográfica pura). O defeito real do
+# piloto era o PEDESTAL em losango, não o ângulo. Concatenado em todo
+# prompt de objeto. Rejeição binária (v3.1 §B): pixel de chão abaixo da
+# linha do pé, base em losango, ou superfície SUPERIOR de telhado visível.
 SUFIXO_PERSPECTIVA = (
-    "strict flat side elevation, orthographic front view, no perspective, "
-    "no three-quarter angle, no visible roof top surface, no visible "
-    "ground plane, facade parallel to picture plane"
+    "slight oblique view showing the front facade, a narrow sliver of one "
+    "side wall, and the front slope of the roof; building ends exactly at "
+    "its own footprint; NO ground plinth, NO base platform, NO grass or "
+    "dirt patch under the building, NO isometric diamond base, transparent "
+    "alpha below the footprint"
 )
 
 

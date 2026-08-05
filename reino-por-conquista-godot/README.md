@@ -46,6 +46,12 @@ Rodar os testes de cena:
 godot --headless --path . res://tests/teste_cenas.tscn
 ```
 
+> ⚠️ `teste_cenas.tscn` trava em containers de CI/cloud sem áudio/GPU reais
+> (verificado: trava inclusive em commits antigos — não é regressão de
+> código). As demais suítes (`--script res://tests/teste_*.gd` e
+> `teste_barramento.tscn`) rodam headless normalmente; num desktop com
+> editor o `teste_cenas` roda. Não caçar fantasma aqui.
+
 ## Fase 1 concluída ✅
 
 Todo o **núcleo de sistemas** foi portado de JavaScript para GDScript e validado
