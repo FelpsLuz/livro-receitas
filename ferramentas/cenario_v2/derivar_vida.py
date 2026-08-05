@@ -13,6 +13,7 @@ assets_v2/cenario/base/derivados/:
 Rodar de novo é idempotente: mesma placa → mesmos arquivos.
 """
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -157,9 +158,42 @@ def fundo(placa: np.ndarray) -> None:
     print(f"  ⛰️  maciço {int(maciço.sum())}px (carregador do véu de recessão)")
 
 
+def skyline(placa: np.ndarray) -> None:
+    """Emite skyline.json: para cada coluna, o Y do primeiro pixel não-céu.
+
+    É a medida que decide onde o castelo pode pousar (v3.3 §B.2) — fica em
+    arquivo para o blockout na Godot consumir a MESMA medida, em vez de
+    reimplementar detecção de céu em GDScript e divergir.
+    """
+    from collections import deque
+    r, g, b = (placa[..., k].astype(int) for k in range(3))
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    nuvem = (r > 170) & (g > 180) & (b - r < 45) & (r - b < 30)
+    azul = (b - r > 25) & (lum > 150) & ~nuvem
+    H, W = azul.shape
+    ceu = np.zeros_like(azul)
+    vis = np.zeros_like(azul)
+    fila = deque((0, x) for x in range(W) if azul[0, x] or nuvem[0, x])
+    for y, x in fila:
+        vis[y, x] = True
+    while fila:
+        y, x = fila.popleft()
+        ceu[y, x] = True
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < H and 0 <= nx < W and not vis[ny, nx] \
+                    and (azul[ny, nx] or nuvem[ny, nx]):
+                vis[ny, nx] = True
+                fila.append((ny, nx))
+    linha = [int(np.nonzero(~ceu[:, x])[0].min()) for x in range(W)]
+    (SAIDA / "skyline.json").write_text(json.dumps({"skyline": linha}))
+    print(f"  📐 skyline: topo mais alto y={min(linha)} em x={linha.index(min(linha))}")
+
+
 if __name__ == "__main__":
     placa = np.array(Image.open(CEN / "base" / "placa_base.png").convert("RGB"))
     nuvens(placa)
     margem(placa)
     fundo(placa)
+    skyline(placa)
     print(f"✅ derivados em {SAIDA}")

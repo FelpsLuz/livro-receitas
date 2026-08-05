@@ -28,7 +28,12 @@ BANDAS = {
     "ceu":       (_y(0),   _y(52)),    # (0, 58)
     "montanhas": (_y(42),  _y(74)),    # (47, 82)
     "floresta":  (_y(70),  _y(96)),    # (78, 107) — terreno permanente
-    "muralha":   (_y(88),  _y(104)),   # (98, 116) — topo NUNCA acima de 98
+    # O blockout do N5 (v3.3 §B) mediu: com o topo em 98 a muralha vira uma
+    # barra de 400px que engole os telhados e a silhueta lê como fileira.
+    # Baixando o topo para 104, os telhados quebram a linha por cima e o
+    # castelo ganha 12px de massa visível. O piso da spec (nunca acima de
+    # 98 = _y(88)) continua respeitado.
+    "muralha":   (_y(94),  _y(104)),   # (104, 116)
     "campo":     (_y(100), _y(152)),   # (111, 169) — banda dominante
     "rio":       (_y(150), _y(170)),   # (167, 189)
     "margem":    (_y(168), _y(180)),   # (187, 200)

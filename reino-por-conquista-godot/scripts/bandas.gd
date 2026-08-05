@@ -13,7 +13,7 @@ const BANDAS := {
 	"ceu": Vector2i(0, 58),
 	"montanhas": Vector2i(47, 82),
 	"floresta": Vector2i(78, 107),
-	"muralha": Vector2i(98, 116),
+	"muralha": Vector2i(104, 116),
 	"campo": Vector2i(111, 169),
 	"rio": Vector2i(167, 189),
 	"margem": Vector2i(187, 200),
