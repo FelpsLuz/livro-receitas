@@ -194,6 +194,21 @@ func _initialize() -> void:
 	ok("Icones.imagem devolve TextureRect pronto",
 		Icones.imagem("espiao", 30) is TextureRect)
 
+	# ---------- 10. ZERO emoji na interface ----------
+	# Com fonte bitmap no lugar, um emoji do sistema ao lado das letras é o
+	# defeito mais visível que a tela pode ter. Este teste é a trava: se
+	# alguém escrever um emoji num rótulo, ele falha aqui e não na captura.
+	var texto := FileAccess.get_file_as_string("res://cenas/principal.gd")
+	var achados: Array = []
+	for i in texto.length():
+		var c := texto.unicode_at(i)
+		# acima de U+2000, tirando a pontuação tipográfica e as setas de texto
+		if c > 0x2000 and not [0x2018, 0x2019, 0x201C, 0x201D, 0x2026, 0x2013,
+				0x2014, 0x2190, 0x2192, 0x2212, 0x00B7].has(c):
+			achados.append("U+%04X" % c)
+	ok("nenhum emoji em principal.gd", achados.is_empty(),
+		"achados: " + str(achados.slice(0, 8)))
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)

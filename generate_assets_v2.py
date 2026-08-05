@@ -212,6 +212,65 @@ CATALOGO = {
     "icone_ampulheta": dict(grupo="icons", tipo="icone", size=(64, 64),
         desc="game ui icon, wooden framed hourglass with running golden sand, "
              + ESTILO_MUNDO),
+    # ---------- folha que substitui os EMOJI ----------
+    # Com a fonte bitmap no lugar, os 177 emoji viraram o defeito mais
+    # barulhento da tela: glifos vetoriais coloridos do sistema ao lado de
+    # letras em grade de pixel. Estes são os que carregam INFORMAÇÃO — os
+    # decorativos (o 🍺 antes do nome da taverna) simplesmente saem do texto.
+    "icone_renome": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, laurel wreath open at the top with a small star "
+             "between the tips, renown emblem, " + ESTILO_MUNDO),
+    "icone_calendario": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, small wooden almanac board with notched tally "
+             "marks and a bone peg, medieval calendar, " + ESTILO_MUNDO),
+    "icone_felicidade": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, flat yellow circle with two black dot eyes and one "
+             "upward curved black smile line, nothing else, simple smiley "
+             "token, no hair, no face shading, no portrait, " + ESTILO_MUNDO),
+    "icone_tropa": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, single iron kettle helmet seen from the front with "
+             "a nasal bar, soldier headcount emblem, " + ESTILO_MUNDO),
+    "icone_alianca": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, two armored gauntlets clasped in a firm handshake "
+             "seen from the side, oath of alliance, " + ESTILO_MUNDO),
+    "icone_carta": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, folded letter closed with a round red wax seal and "
+             "a ribbon, sealed message, " + ESTILO_MUNDO),
+    "icone_correntes": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, three heavy iron chain links with an open shackle "
+             "at one end, captivity emblem, " + ESTILO_MUNDO),
+    "icone_caveira": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, plain bone skull seen from the front, empty eye "
+             "sockets, defeat emblem, no crossbones, " + ESTILO_MUNDO),
+    "icone_louros": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, golden victor crown of laurel leaves forming a "
+             "closed ring, triumph emblem, " + ESTILO_MUNDO),
+    "icone_forca": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, clenched bare fist seen from the front, strength "
+             "attribute emblem, " + ESTILO_MUNDO),
+    "icone_carisma": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, empty speech scroll banner unfurled horizontally with "
+             "a small bird perched on it, herald and persuasion emblem, "
+             "no face, no person, " + ESTILO_MUNDO),
+    "icone_gestao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, TWO-PAN BALANCE SCALE: one vertical stand, one "
+             "horizontal beam, and two small round pans hanging by chains at "
+             "each end of the beam, level, seen from the front, "
+             "no food, no bowls on the ground, " + ESTILO_MUNDO),
+    "icone_intriga": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, slim curved dagger pointing down with a drop at "
+             "the tip, intrigue attribute emblem, " + ESTILO_MUNDO),
+    "icone_lorde": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, heraldic fleur-de-lis in gold, sworn vassal "
+             "emblem, symmetrical, " + ESTILO_MUNDO),
+    "icone_som": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, small brass war horn pointing right with two "
+             "curved sound arcs, audio on, " + ESTILO_MUNDO),
+    "icone_mudo": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, brass war horn pointing right, IDENTICAL to a sound-on "
+             "horn icon, with ONE thick red diagonal slash drawn across the "
+             "whole icon from top-left to bottom-right, muted, " + ESTILO_MUNDO),
+
     "icone_cerco": dict(grupo="icons", tipo="icone", size=(64, 64),
         desc="game ui icon, single wooden catapult on wheels seen from the side, "
              "throwing arm loaded with a grey stone, taut rope, isolated siege "

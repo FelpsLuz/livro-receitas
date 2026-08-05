@@ -52,6 +52,7 @@ var conversa_texto := ""
 var tela_titulo: Control
 var tela_jogo: Control
 var status_label: Label
+var hud: HBoxContainer
 var tabs: TabContainer
 var cidade_view: Control
 var quartel: Timer
@@ -117,12 +118,12 @@ func _montar_titulo() -> void:
 	input_nome.max_length = 24
 	v.add_child(input_nome)
 	var b_novo := Button.new()
-	b_novo.text = "🗡 Nova Saga"
+	b_novo.text = "Nova Saga"
 	b_novo.pressed.connect(func(): iniciar_jogo(input_nome.text.strip_edges()))
 	v.add_child(b_novo)
 	if Jogo.tem_save():
 		var b_cont := Button.new()
-		b_cont.text = "📜 Continuar Saga"
+		b_cont.text = "Continuar Saga"
 		b_cont.pressed.connect(continuar_jogo)
 		v.add_child(b_cont)
 
@@ -162,8 +163,17 @@ func _montar_jogo() -> void:
 	v.add_theme_constant_override("separation", 6)
 	tela_jogo.add_child(v)
 
+	# ---- HUD com hierarquia ----
+	# A barra antiga era uma frase só: nome, título, idade, ouro, renome,
+	# homens, moral, guardas e data, tudo no mesmo tamanho e peso, separado por
+	# ponto médio. Num jogo de gestão, ouro e homens têm que ser lidos em 200ms;
+	# o resto é contexto. Agora são duas linhas: os NÚMEROS grandes com ícone
+	# em cima, a identidade pequena embaixo.
+	hud = HBoxContainer.new()
+	hud.add_theme_constant_override("separation", 4)
+	v.add_child(hud)
 	status_label = Label.new()
-	status_label.add_theme_color_override("font_color", Tema.OURO)
+	status_label.add_theme_color_override("font_color", Color("c9b894"))
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(status_label)
 
@@ -187,15 +197,18 @@ func _montar_jogo() -> void:
 	var rodape := HBoxContainer.new()
 	v.add_child(rodape)
 	var b_mes := Button.new()
-	b_mes.text = "⏳ Passar o mês"
+	b_mes.text = "Passar o mês"
 	b_mes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b_mes.pressed.connect(_passar_mes)
 	rodape.add_child(b_mes)
 	var b_mudo := Button.new()
-	b_mudo.text = "🔊"
+	b_mudo.icon = Icones.textura("som")
+	b_mudo.expand_icon = true
+	b_mudo.custom_minimum_size = Vector2(46, 0)
+	b_mudo.tooltip_text = "Som"
 	b_mudo.pressed.connect(func():
 		Sfx.mudo = not Sfx.mudo
-		b_mudo.text = "🔇" if Sfx.mudo else "🔊")
+		b_mudo.icon = Icones.textura("mudo" if Sfx.mudo else "som"))
 	rodape.add_child(b_mudo)
 
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
@@ -273,7 +286,7 @@ func _narrar_estrada(eventos: Array) -> void:
 		if not roubado.is_empty():
 			corpo += "\nParte da carga ficou com eles."
 		Sfx.tocar(self, "alerta")
-		_modal("🏹 Emboscada na rota", corpo, [["Seguir marcha", func():
+		_modal("Emboscada na rota", corpo, [["Seguir marcha", func():
 			atualizar()]], Retratos.ilustracao("emboscada"))
 		return          # uma emboscada por vez: a próxima espera o clique
 
@@ -282,6 +295,53 @@ func _passar_mes() -> void:
 	Jogo.passar_mes(state)
 	Jogo.salvar(state)
 	atualizar()
+
+## Uma célula do HUD: ícone + número grande. O número é o que o olho procura,
+## então ele é o elemento maior da tela inteira depois do título.
+func _celula_hud(icone: String, valor: String, cor: Color, dica: String) -> void:
+	var caixa := HBoxContainer.new()
+	caixa.add_theme_constant_override("separation", 3)
+	caixa.tooltip_text = dica
+	var ic := Icones.imagem(icone, 24)
+	if ic != null:
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		caixa.add_child(ic)
+	var l := Label.new()
+	l.text = valor
+	var f := Tema.fonte_forte()
+	if f != null:
+		l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", Tema.CORPO_G)
+	l.add_theme_color_override("font_color", cor)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caixa.add_child(l)
+	var espaco := Control.new()
+	espaco.custom_minimum_size = Vector2(14, 0)
+	caixa.add_child(espaco)
+	hud.add_child(caixa)
+
+func _montar_hud(j: Dictionary) -> void:
+	for filho in hud.get_children():
+		filho.queue_free()
+	var moral: int = Economia.moral(state)
+	_celula_hud("moedas", str(int(j["ouro"])), Tema.OURO, "Ouro no cofre")
+	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])),
+		Tema.PERGAMINHO, "Homens em armas")
+	# a moral só ganha destaque quando vira problema: acima de 60 é ruído
+	_celula_hud("moral", "%d" % moral,
+		Tema.SANGUE if moral <= 35 else Color("9c8a6c"),
+		"Moral do exército — abaixo de 35 os homens desertam")
+	_celula_hud("renome", str(int(j["renome"])), Color("9c8a6c"), "Renome")
+	if int(j["guardas"]) > 0:
+		_celula_hud("escudo", str(int(j["guardas"])), Color("9c8a6c"),
+			"Guardas de elite na sua casa")
+	var t = state.get("terra")
+	if t != null:
+		_celula_hud("trigo", str(int(t["alimento"])),
+			Tema.SANGUE if int(t["alimento"]) <= 0 else Color("9c8a6c"), "Celeiro")
+	# a estação pinta o ícone do calendário: a UI muda de temperatura com o mundo
+	_celula_hud("calendario", Estacoes.nome(state), Estacoes.cor(state),
+		Estacoes.nota(state))
 
 func _conteudo_aba() -> VBoxContainer:
 	return tabs.get_current_tab_control().get_node("Conteudo")
@@ -293,10 +353,10 @@ func atualizar() -> void:
 	var vs: Dictionary = Vassalagem.resumo(state)
 	var selo: String = ""
 	if bool(vs.get("vassalo", false)):
-		selo = "  ⚑ vassalo de %s" % vs["nome"]
-	status_label.text = "%s · %s%s · %d anos   🪙 %d   ⭐ %d   ⚔ %d homens (moral %d)   🛡 %d   📅 %s de %s, Ano %d" % [
-		j["nome"], Contratos.titulo(state), selo, j["idade"], j["ouro"], j["renome"],
-		Combate.total_homens(j["tropas"]), Economia.moral(state), j["guardas"],
+		selo = " · vassalo de %s" % vs["nome"]
+	_montar_hud(j)
+	status_label.text = "%s · %s%s · %d anos · %s de %s, Ano %d" % [
+		j["nome"], Contratos.titulo(state), selo, j["idade"],
 		MESES[state["mes"] - 1], Estacoes.nome(state), state["ano"]]
 	# a UI muda de temperatura junto com o mundo: azul-gelo no inverno
 	status_label.add_theme_color_override("font_color", Estacoes.cor(state))
@@ -348,7 +408,7 @@ func _par(c: Container, texto: String) -> Label:
 	l.text = texto
 	# quebrar linha numa COLUNA é o certo; numa LINHA é desastre. Num HBox o
 	# label com autowrap encolhe até a largura da maior palavra e desce em
-	# coluna de letras, esticando o card inteiro junto ("📍 Você está aqui"
+	# coluna de letras, esticando o card inteiro junto ("Você está aqui"
 	# virava uma torre de 350px que empurrava os botões do reino para baixo).
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF if c is HBoxContainer \
 		else TextServer.AUTOWRAP_WORD_SMART
@@ -450,7 +510,7 @@ func _aviso(msg: String) -> void:
 	if msg == "":
 		return
 	var linha := Label.new()
-	linha.text = "▸ " + msg
+	linha.text = "- " + msg
 	linha.add_theme_color_override("font_color", Tema.SANGUE)
 	_conteudo_aba().add_child(linha)
 	var timer := get_tree().create_timer(3.5)
@@ -467,7 +527,7 @@ func _aba_terra(c: Container) -> void:
 	c.add_child(cidade_view)
 	if t == null:
 		_par(c, "Sem terras, sem raízes. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.")
-		_botao(c, "🏕 Comprar terra (300 🪙, requer 25 ⭐)", func():
+		_botao(c, "Comprar terra (300 , requer 25 )", func():
 			var r: Dictionary = Jogo.comprar_terra(state)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
@@ -491,39 +551,39 @@ func _aba_terra(c: Container) -> void:
 			l_r.add_theme_color_override("font_color", Tema.TINTA)
 			hr.add_child(l_r)
 		var l_fel := Label.new()
-		l_fel.text = "😊 Felicidade %d" % int(t["felicidade"])
+		l_fel.text = "Felicidade %d" % int(t["felicidade"])
 		l_fel.add_theme_color_override("font_color", Tema.TINTA)
 		hr.add_child(l_fel)
 		# celeiro vazio é o começo do fim: deserção, infelicidade e rebelião
 		if int(t["alimento"]) <= 0:
-			_par(c, "🌾 O celeiro está vazio. Os homens comem o que a vila não tem.")
+			_par(c, "O celeiro está vazio. Os homens comem o que a vila não tem.")
 			_faixa(c, Retratos.ilustracao("fome"), 110)
 		# O DILEMA: quem pega em armas some da base de imposto. Mostrar os dois
 		# números lado a lado é o que transforma recrutar numa decisão.
 		var ativa: int = Economia.populacao_ativa(state)
 		var armas: int = Economia.pop_em_armas(state)
-		_par(c, "⚒ Trabalhando: %d   ⚔ Em armas: %d   💰 Imposto: %d 🪙/mês" %
+		_par(c, "Trabalhando: %d Em armas: %d Imposto: %d /mês" %
 			[ativa, armas, Economia.imposto_mensal(state)])
 		if armas > 0:
 			_par(c, "   (cada homem em armas é um pagador de imposto a menos)")
 		var nivel_cap: int = clampi(int(t["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
-		_par(c, "🏰 %s sustenta até %d de tropa · imposto %.2f 🪙 por habitante" % [
+		_par(c, "%s sustenta até %d de tropa · imposto %.2f por habitante" % [
 			Dados.NIVEIS_TERRA[nivel_cap]["nome"], Recrutamento.pop_maxima(state),
 			float(Dados.NIVEIS_TERRA[nivel_cap]["imposto"])])
 		# a estação, e o aviso de que o inverno vem aí
 		var aviso_est: String = "%s — %s" % [Estacoes.nome(state), Estacoes.nota(state)]
 		if Estacoes.proxima(state) == "inverno" and Estacoes.meses_ate_virar(state) <= 2:
-			aviso_est += "  ❄ O inverno chega em %d mês(es)." % Estacoes.meses_ate_virar(state)
+			aviso_est += " O inverno chega em %d mês(es)." % Estacoes.meses_ate_virar(state)
 		_par(c, aviso_est)
 		# no inverno a vila aparece coberta de neve: a estação que zera a colheita
 		# tem que ser vista, não lida numa linha de texto entre outras cinco
 		if Estacoes.e_inverno(state):
 			_faixa(c, Retratos.ilustracao("inverno"), 110)
 		if int(t["felicidade"]) <= 30:
-			_par(c, "⚠ O povo murmura. Felicidade baixa termina em foices e tochas.")
+			_par(c, "O povo murmura. Felicidade baixa termina em foices e tochas.")
 		if int(t["nivel"]) < 5:
 			var prox: Dictionary = Dados.NIVEIS_TERRA[int(t["nivel"]) + 1]
-			_botao(c, "🏗 Evoluir para %s (%d 🪙 + %d 🪵)" % [prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
+			_botao(c, "Evoluir para %s (%d + %d )" % [prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
 				var r: Dictionary = Jogo.melhorar_terra(state)
 				if r["ok"]:
 					Sfx.tocar(self, "vitoria")
@@ -531,7 +591,7 @@ func _aba_terra(c: Container) -> void:
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
-		_botao(c, "📦 Exportar 30 de alimento (ouro rápido, povo reclama)", func():
+		_botao(c, "Exportar 30 de alimento (ouro rápido, povo reclama)", func():
 			var r: Dictionary = Jogo.exportar_comida(state, 30)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
@@ -548,15 +608,15 @@ func _aba_mapa(c: Container) -> void:
 		var hv := _card(c)
 		_arte(hv, Retratos.ilustracao("juramento"), 72)
 		var lv := Label.new()
-		lv.text = "⚑ Vassalo de %s há %d meses — tributo estimado: %d 🪙 no próximo mês." % [
+		lv.text = "Vassalo de %s há %d meses — tributo estimado: %d no próximo mês." % [
 			vs_mapa["nome"], int(vs_mapa["meses"]), int(vs_mapa["tributo_estimado"])]
 		lv.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hv.add_child(lv)
 	for g in state["guerras"]:
-		_par(c, "⚔ %s × %s — %d meses de guerra. Campos em chamas." % [g["a"], g["b"], g["meses"]])
+		_par(c, "%s × %s — %d meses de guerra. Campos em chamas." % [g["a"], g["b"], g["meses"]])
 	if state["guerras"].is_empty():
-		_par(c, "🕊 Os reinos estão em paz. Por enquanto.")
+		_par(c, "Os reinos estão em paz. Por enquanto.")
 	for reino in state["reinos"]:
 		var h := _card(c)
 		_retrato(h, reino["rei"]["id"])
@@ -566,20 +626,20 @@ func _aba_mapa(c: Container) -> void:
 		var rel: int = state["tags"].get("rei_" + reino["id"], {"relacao": 0})["relacao"]
 		var extras := ""
 		if state["casus_belli"].has(reino["id"]):
-			extras += "  📜 Casus Belli"
+			extras += " Casus Belli"
 		if state["jogador"]["rei_de"] == reino["id"]:
-			extras += "  👑 SEU TRONO"
+			extras += " SEU TRONO"
 		# NEBLINA: a força do inimigo NÃO aparece de graça. Sem um espião
 		# recente, o jogador vê "???" — e marchar às cegas é decisão dele.
 		var vis: Dictionary = Intel.sobre(state, reino["id"])
-		var forca_txt: String = "⚔ %s" % vis["texto"]
+		var forca_txt: String = "%s" % vis["texto"]
 		if bool(vis.get("conhecido", false)):
 			var det: Array = Intel.detalhar(state, reino["id"])
 			var partes: Array = []
 			for l in det.slice(0, 3):
 				partes.append("%d %s" % [int(l["n"]), str(l["nome"]).to_lower()])
 			if not partes.is_empty():
-				forca_txt += " (" + ", ".join(partes) + ")"
+				forca_txt += "("+ ", ".join(partes) + ")"
 		var info := Label.new()
 		info.text = "%s — %s\n%s · %s (%d)%s\n%s" % [reino["nome"], reino["capital"],
 			reino["rei"]["nome"], Dialogo.nome_relacao(rel), rel, extras, forca_txt]
@@ -588,23 +648,23 @@ func _aba_mapa(c: Container) -> void:
 		var lb := HBoxContainer.new()
 		v.add_child(lb)
 		if state["local"] != reino["id"]:
-			_botao(lb, "🐴 Viajar", func():
+			_botao(lb, "Viajar", func():
 				state["local"] = reino["id"]
 				Jogo.salvar(state)
 				atualizar())
 		else:
-			_par(lb, "📍 Você está aqui")
+			_par(lb, "Você está aqui")
 		var alvo_id: String = reino["id"]
 		# JURAR LEALDADE: a saída para quem começa pobre diante de reinos ricos
 		if not Vassalagem.e_vassalo(state) and Vassalagem.pode_jurar(state, alvo_id)["ok"]:
-			_botao(lb, "🤝 Jurar lealdade", func():
+			_botao(lb, "Jurar lealdade", func():
 				var r: Dictionary = Vassalagem.jurar(state, alvo_id, Jogo.log_para(state))
 				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
 		elif Vassalagem.suserano(state) == alvo_id:
-			_botao(lb, "⚑ Declarar independência", func():
+			_botao(lb, "Declarar independência", func():
 				var r: Dictionary = Vassalagem.declarar_independencia(state, Jogo.log_para(state))
 				Sfx.tocar(self, "alerta")
 				_aviso(r["msg"])
@@ -619,7 +679,7 @@ func _aba_mapa(c: Container) -> void:
 			var ic_esp := Icones.imagem("espiao", 30)
 			if ic_esp != null:
 				lb.add_child(ic_esp)
-			_botao(lb, "🕵 Espionar (80 🪙)", func():
+			_botao(lb, "Espionar (80 )", func():
 				var r: Dictionary = Intriga.espionar(state, alvo_id)
 				if int(r.get("prender", 0)) > 0:
 					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
@@ -629,20 +689,20 @@ func _aba_mapa(c: Container) -> void:
 				atualizar())
 		if state["jogador"]["rei_de"] == "":
 			var tem_cb: bool = state["casus_belli"].has(reino["id"])
-			_botao(lb, "⚔ Conquistar" if tem_cb else "⚔ Atacar SEM casus belli", func():
+			_botao(lb, "Conquistar" if tem_cb else "Atacar SEM casus belli", func():
 				var rel_batalha: Dictionary = Intriga.declarar_guerra(state, reino["id"], Jogo.log_para(state))
 				Jogo.salvar(state)
 				_modal_batalha(rel_batalha))
 
 func _aba_mercado(c: Container) -> void:
 	var reino := _reino_local()
-	_titulo_secao(c, "📖 Livro-Razão — Mercado de %s" % reino["nome"])
+	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"])
 	var em_guerra := false
 	for g in state["guerras"]:
 		if g["a"] == state["local"] or g["b"] == state["local"]:
 			em_guerra = true
 	if em_guerra:
-		_par(c, "⚔ Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.")
+		_par(c, "Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.")
 	for g_id in Dados.MERCADORIAS:
 		var h := _card(c)
 		var preco := Economia.preco_de(state, state["local"], g_id)
@@ -652,7 +712,7 @@ func _aba_mercado(c: Container) -> void:
 		if ic != null:
 			h.add_child(ic)
 		var l := Label.new()
-		l.text = "%s — %d 🪙 · carga: %d" % [Dados.MERCADORIAS[g_id]["nome"], preco, carga]
+		l.text = "%s — %d · carga: %d" % [Dados.MERCADORIAS[g_id]["nome"], preco, carga]
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(l)
 		_botao(h, "Comprar 5", func():
@@ -668,19 +728,19 @@ func _aba_mercado(c: Container) -> void:
 			Jogo.salvar(state)
 			atualizar())
 		b_vender.disabled = carga < 5
-	_par(c, "💡 Compre onde há fartura, venda onde há guerra e fome.")
+	_par(c, "Compre onde há fartura, venda onde há guerra e fome.")
 
 func _aba_taverna(c: Container) -> void:
-	_titulo_secao(c, "🍺 Taverna do Javali Manco — Mural de Contratos")
+	_titulo_secao(c, "Taverna do Javali Manco — Mural de Contratos")
 	for ct in state["contratos"]:
 		var h := _card(c)
 		var v := VBoxContainer.new()
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(v)
-		_par(v, "%s — para %s%s\n%s\n💰 %d 🪙 · ⭐ +%d · dificuldade %s" % [
+		_par(v, "%s — para %s%s\n%s\n%d · +%d · dificuldade %s" % [
 			ct["nome"], ct["contratante"],
-			(" (alvo: %s)" % ct["alvo"]) if ct["alvo"] != "" else "",
-			ct["desc"], ct["pagamento"], ct["renome"], "⚔".repeat(int(ct["forca"]))])
+			("(alvo: %s)" % ct["alvo"]) if ct["alvo"] != "" else "",
+			ct["desc"], ct["pagamento"], ct["renome"], "".repeat(int(ct["forca"]))])
 		_botao(v, "Aceitar e executar", func():
 			if Combate.total_homens(state["jogador"]["tropas"]) == 0:
 				_aviso("Você não tem tropas! Recrute no quartel.")
@@ -693,11 +753,11 @@ func _aba_taverna(c: Container) -> void:
 	# taverna.gd já resolvia rumor, rota e informante; faltava a porta de
 	# entrada. Cada serviço tem o rosto de quem o vende — é o que separa
 	# "clicar num botão" de "pagar um homem por uma informação".
-	_titulo_secao(c, "🗣 Serviços do balcão")
+	_titulo_secao(c, "Serviços do balcão")
 	var h_rumor := _card(c)
 	_arte(h_rumor, Retratos.textura("taverneiro"), 48)
 	var l_rumor := Label.new()
-	l_rumor.text = "Rumor de mercado (%d 🪙) — um choque de preço antes de ele acontecer.\nNem todo boato é verdade." % Taverna.PRECO_RUMOR
+	l_rumor.text = "Rumor de mercado (%d ) — um choque de preço antes de ele acontecer.\nNem todo boato é verdade." % Taverna.PRECO_RUMOR
 	l_rumor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l_rumor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h_rumor.add_child(l_rumor)
@@ -711,7 +771,7 @@ func _aba_taverna(c: Container) -> void:
 	var h_rota := _card(c)
 	_arte(h_rota, Retratos.sprite_gerado("cartografo"), 48)
 	var l_rota := Label.new()
-	l_rota.text = "Rota comercial (%d 🪙) — onde comprar barato e onde vender caro, hoje." % Taverna.PRECO_ROTA
+	l_rota.text = "Rota comercial (%d ) — onde comprar barato e onde vender caro, hoje." % Taverna.PRECO_ROTA
 	l_rota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l_rota.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h_rota.add_child(l_rota)
@@ -726,14 +786,14 @@ func _aba_taverna(c: Container) -> void:
 	_arte(h_inf, Retratos.sprite_gerado("informante"), 48)
 	var ouvidos: Array = state.get("informantes", [])
 	var l_inf := Label.new()
-	l_inf.text = "Informante em %s (%d 🪙 + 25/mês) — notícia da corte todo mês.%s" % [
+	l_inf.text = "Informante em %s (%d + 25/mês) — notícia da corte todo mês.%s" % [
 		_reino_local()["nome"], Taverna.PRECO_INFORMANTE,
 		("\nOuvidos ativos: %d" % ouvidos.size()) if not ouvidos.is_empty() else ""]
 	l_inf.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l_inf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h_inf.add_child(l_inf)
 	if ouvidos.has(state["local"]):
-		_par(h_inf, "👂 já contratado")
+		_par(h_inf, "já contratado")
 	else:
 		_botao(h_inf, "Contratar", func():
 			var r: Dictionary = Taverna.contratar_informante(state, str(state["local"]))
@@ -748,9 +808,9 @@ func _aba_taverna(c: Container) -> void:
 
 func _aba_corte(c: Container) -> void:
 	var reino := _reino_local()
-	_titulo_secao(c, "👑 Corte de %s" % reino["capital"])
+	_titulo_secao(c, "Corte de %s" % reino["capital"])
 	_card_npc(c, reino["rei"])
-	_par(c, "💡 Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
+	_par(c, "Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
 
 	# ---- a SUA corte: gente que nasceu durante a partida ----
 	# Nenhum destes tem PNG próprio — cada retrato sai da base genérica de
@@ -758,7 +818,7 @@ func _aba_corte(c: Container) -> void:
 	# que serve: a lista muda a cada saga e nunca fica com buraco.
 	var res_cid: Dictionary = Cidadaos.resumo(state)
 	if int(res_cid["total"]) > 0:
-		_titulo_secao(c, "🏛 Sua Corte — %d notáveis, %d jurados" % [
+		_titulo_secao(c, "Sua Corte — %d notáveis, %d jurados" % [
 			int(res_cid["total"]), int(res_cid["lordes"])])
 		for n in Cidadaos.lista(state):
 			var hn := _card(c)
@@ -768,9 +828,9 @@ func _aba_corte(c: Container) -> void:
 			hn.add_child(vn)
 			var selo_n := ""
 			if bool(n.get("lorde", false)):
-				selo_n = "  ⚜ seu lorde"
+				selo_n = " seu lorde"
 			if bool(n.get("capturado", false)):
-				selo_n += "  ⛓ a ferros em terra inimiga"
+				selo_n += " a ferros em terra inimiga"
 			_par(vn, "%s, %s%s" % [n["nome"], str(n["oficio"]), selo_n])
 			# riqueza e lealdade são status OCULTOS: o jogador lê a impressão,
 			# não o número, exatamente como leria um vassalo de verdade
@@ -780,11 +840,11 @@ func _aba_corte(c: Container) -> void:
 				leitura = "evita o seu olhar nas assembleias"
 			elif lealdade < 60:
 				leitura = "cumpre o que deve, nada além"
-			var abastado := " · casa próspera" if int(n.get("riqueza", 0)) >= 280 else ""
+			var abastado := "· casa próspera" if int(n.get("riqueza", 0)) >= 280 else ""
 			_par(vn, "   %s%s" % [leitura, abastado])
 			if bool(n.get("capturado", false)):
 				var nome_preso: String = str(n["nome"])
-				_botao(vn, "💰 Pagar resgate (300 🪙)", func():
+				_botao(vn, "Pagar resgate (300 )", func():
 					var r: Dictionary = Comandantes.resgatar(state, nome_preso)
 					Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 					_aviso(r["msg"])
@@ -793,7 +853,7 @@ func _aba_corte(c: Container) -> void:
 
 	var h := HBoxContainer.new()
 	c.add_child(h)
-	_botao(h, "🧠 IA Local (llama.cpp): " + ("configurada" if Llm.url() != "" else "desligada"), _modal_llm)
+	_botao(h, "IA Local (llama.cpp): " + ("configurada" if Llm.url() != "" else "desligada"), _modal_llm)
 
 func _card_npc(c: Container, npc: Dictionary) -> void:
 	var h := _card(c)
@@ -803,15 +863,15 @@ func _card_npc(c: Container, npc: Dictionary) -> void:
 	h.add_child(v)
 	var rel: int = state["tags"].get(npc["id"], {"relacao": 0})["relacao"]
 	_par(v, "%s  (%s %d)" % [npc["nome"], Dialogo.nome_relacao(rel), rel])
-	_botao(v, "💬 Conversar", func(): abrir_conversa(npc))
+	_botao(v, "Conversar", func(): abrir_conversa(npc))
 
 func _aba_exercito(c: Container) -> void:
 	var j: Dictionary = state["jogador"]
-	_titulo_secao(c, "⚔ Quartel")
+	_titulo_secao(c, "Quartel")
 	var p := Combate.poder(j["tropas"], j["equip"])
-	_par(c, "Ataque %d · Defesa %d · %d homens · Manutenção %s 🪙/mês · Equipamento %d/3" %
+	_par(c, "Ataque %d · Defesa %d · %d homens · Manutenção %s /mês · Equipamento %d/3" %
 		[roundi(p["atq"]), roundi(p["def"]), p["homens"], str(j.get("ultima_manut", "—")), j["equip"]])
-	_par(c, "👥 População comprometida: %d de %d" %
+	_par(c, "População comprometida: %d de %d" %
 		[Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state)])
 	# ---- manutenção com ícones de economia ----
 	# O upkeep é a mecânica que mais mata exército, e um número no meio de texto
@@ -835,7 +895,7 @@ func _aba_exercito(c: Container) -> void:
 	l_moral.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hu.add_child(l_moral)
 	if Economia.moral(state) <= 35:
-		_par(c, "⚠ Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.")
+		_par(c, "Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.")
 	for tipo in Dados.TROPAS:
 		var h := _card(c)
 		# a arte da unidade vem por cálculo: "tropa_" + a chave de Dados.TROPAS.
@@ -861,7 +921,7 @@ func _aba_exercito(c: Container) -> void:
 	# tropa agora leva tempo. A fila É o feedback.
 	var fila: Array = Recrutamento.fila(state)
 	if not fila.is_empty():
-		_titulo_secao(c, "⏳ Quartel — %s até o último recruta"
+		_titulo_secao(c, "Quartel — %s até o último recruta"
 			% _mmss(Recrutamento.minutos_restantes(state)))
 		for i in fila.size():
 			var item: Dictionary = fila[i]
@@ -887,7 +947,7 @@ func _aba_exercito(c: Container) -> void:
 	# senão o exército some do inventário e parece bug.
 	var transito: Array = Marchas.em_transito(state)
 	if not transito.is_empty():
-		_titulo_secao(c, "🏇 Exércitos em marcha")
+		_titulo_secao(c, "Exércitos em marcha")
 		for mt in transito:
 			var hm := _card(c)
 			# acampamento de cerco na linha do exército sitiando: o cerco dura
@@ -898,21 +958,21 @@ func _aba_exercito(c: Container) -> void:
 			var rumo: String = ""
 			match mt["fase"]:
 				"ida": rumo = "→ %s" % Rotas.nome_do(state, mt["alvo"])
-				"cerco": rumo = "⚑ sitiando %s" % Rotas.nome_do(state, mt["alvo"])
+				"cerco": rumo = "sitiando %s" % Rotas.nome_do(state, mt["alvo"])
 				_: rumo = "← voltando de %s" % Rotas.nome_do(state, mt["alvo"])
 			var carga := ""
 			for g in mt["carga"]:
-				carga += " · %s %d" % [g, int(mt["carga"][g])]
+				carga += "· %s %d" % [g, int(mt["carga"][g])]
 			if mt["fase"] == "cerco":
 				# o cerco tem que ser VISÍVEL fase a fase: é meio jogo acontecendo
 				# fora da tela, e sem isso o jogador só vê recursos sumindo
 				var pg: Dictionary = mt.get("cerco", {})
-				lm.text = "%d homens %s — fase %d de %d · moral %d/100 · gasto %d🪙 %d🌾 %d🪵%s" % [
+				lm.text = "%d homens %s — fase %d de %d · moral %d/100 · gasto %d%d%d%s" % [
 					mt["homens"], rumo, int(pg.get("fase", 0)), int(pg.get("de", 6)),
 					int(pg.get("moral", 0)), int(pg.get("gasto", {}).get("ouro", 0)),
 					int(pg.get("gasto", {}).get("comida", 0)),
 					int(pg.get("gasto", {}).get("madeira", 0)),
-					"  ⚔ %d intervenções" % int(pg.get("reforcos", 0))
+					"  %d intervenções" % int(pg.get("reforcos", 0))
 						if int(pg.get("reforcos", 0)) > 0 else ""]
 			else:
 				lm.text = "%d homens %s (%s) — chega em %s%s" % [
@@ -932,7 +992,7 @@ func _aba_exercito(c: Container) -> void:
 	# A estimativa de marcha aparece ANTES de decidir: é a informação que
 	# transforma "atacar" numa escolha de logística, não num clique.
 	if Combate.total_homens(j["tropas"]) > 0:
-		_titulo_secao(c, "⚔ Enviar exército")
+		_titulo_secao(c, "Enviar exército")
 		_par(c, "Metade das suas tropas parte. Saque volta rápido com carga; cerco quebra o inimigo.")
 		# COMANDANTE: quem lidera muda o que a marcha faz — e é capturado se
 		# o exército for obliterado, então escolher é apostar duas coisas
@@ -944,7 +1004,7 @@ func _aba_exercito(c: Container) -> void:
 		_arte(hc, Retratos.textura_comandante(state, atual_cmd), 52)
 		var lc := Label.new()
 		var perfil: Dictionary = Comandantes.PERFIS.get(atual_cmd.get("perfil", "senhor"), {})
-		lc.text = "🎖 Comandante: %s — %s" % [
+		lc.text = "Comandante: %s — %s" % [
 			str(atual_cmd.get("nome", "—")), str(perfil.get("desc", ""))]
 		lc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -998,24 +1058,24 @@ func _aba_exercito(c: Container) -> void:
 	var hf := HBoxContainer.new()
 	c.add_child(hf)
 	for f_id in Dados.FORMACOES:
-		var b := _botao(hf, Dados.FORMACOES[f_id]["nome"] + (" ✓" if j["formacao"] == f_id else ""), func():
+		var b := _botao(hf, Dados.FORMACOES[f_id]["nome"] + ("*" if j["formacao"] == f_id else ""), func():
 			j["formacao"] = f_id
 			Jogo.salvar(state)
 			atualizar())
-	_par(c, "💡 Linha ≻ Cunha ≻ Envolvimento ≻ Linha.")
-	_botao(c, "🛠 Melhorar equipamento (%d 🪙)" % (200 * (int(j["equip"]) + 1)), func():
+	_par(c, "Linha > Cunha > Envolvimento > Linha.")
+	_botao(c, "Melhorar equipamento (%d )" % (200 * (int(j["equip"]) + 1)), func():
 		var r: Dictionary = Jogo.melhorar_equip(state)
 		_aviso(r["msg"])
 		Jogo.salvar(state)
 		atualizar())
-	_botao(c, "🛡 Contratar 2 guardas de elite (120 🪙)", func():
+	_botao(c, "Contratar 2 guardas de elite (120 )", func():
 		var r: Dictionary = Jogo.contratar_guardas(state, 2)
 		_aviso(r["msg"])
 		Jogo.salvar(state)
 		atualizar())
 
 func _aba_clas(c: Container) -> void:
-	_titulo_secao(c, "🐺 Clãs Mercenários")
+	_titulo_secao(c, "Clãs Mercenários")
 	_par(c, "Envie um mensageiro com sua oferta; a resposta chega na virada do mês. Oferta generosa convence.")
 	for cla in Clas.CLAS:
 		var h := _card(c)
@@ -1024,7 +1084,7 @@ func _aba_clas(c: Container) -> void:
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(v)
 		var rel: int = state["tags"].get(cla["id"], {"relacao": 0})["relacao"]
-		_par(v, "%s — %s (%s %d)\n⚔ %s · pede ~%d + %d/mês · exige ⭐ %d" % [
+		_par(v, "%s — %s (%s %d)\n%s · pede ~%d + %d/mês · exige %d" % [
 			cla["nome"], cla["lider"], Dialogo.nome_relacao(rel), rel,
 			_texto_contingente(cla["contingente"]), cla["preco_base"], cla["soldo"], cla["renome_min"]])
 		var contrato := Clas.ativo(state, cla["id"])
@@ -1033,9 +1093,9 @@ func _aba_clas(c: Container) -> void:
 			if m["cla"] == cla["id"]:
 				pendente = true
 		if not contrato.is_empty():
-			_par(v, "🤝 Sob contrato: restam %d meses." % contrato["meses"])
+			_par(v, "Sob contrato: restam %d meses." % contrato["meses"])
 		elif pendente:
-			_par(v, "🐴 Mensageiro na estrada...")
+			_par(v, "Mensageiro na estrada...")
 		else:
 			var linha := HBoxContainer.new()
 			v.add_child(linha)
@@ -1045,25 +1105,25 @@ func _aba_clas(c: Container) -> void:
 			oferta.step = 50
 			oferta.value = cla["preco_base"]
 			linha.add_child(oferta)
-			_botao(linha, "✉ Enviar mensageiro (10 🪙)", func():
+			_botao(linha, "Enviar mensageiro (10 )", func():
 				var r: Dictionary = Clas.enviar_mensageiro(state, cla["id"], int(oferta.value))
 				Sfx.tocar(self, "pagina" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
-	_titulo_secao(c, "✉ Cartas recebidas")
+	_titulo_secao(c, "Cartas recebidas")
 	if state["cartas"].is_empty():
 		_par(c, "Nenhuma carta sobre a mesa.")
 	for carta in state["cartas"].slice(0, 6):
 		_par(c, "— %s" % str(carta))
 
 func _aba_intrigas(c: Container) -> void:
-	_titulo_secao(c, "🕯 Mesa de Intrigas")
+	_titulo_secao(c, "Mesa de Intrigas")
 	if state["chantagem_pendente"] != null:
-		_par(c, "✉ Chantagem em curso — escolha sua exigência:")
+		_par(c, "Chantagem em curso — escolha sua exigência:")
 		var hb := HBoxContainer.new()
 		c.add_child(hb)
-		for par in [["ouro", "💰 Ouro"], ["casamento", "💍 Casamento forçado"], ["casusbelli", "📜 Casus Belli"]]:
+		for par in [["ouro", "Ouro"], ["casamento", "Casamento forçado"], ["casusbelli", "Casus Belli"]]:
 			_botao(hb, par[1], func():
 				Intriga.resolver_chantagem(state, par[0])
 				Jogo.salvar(state)
@@ -1072,7 +1132,7 @@ func _aba_intrigas(c: Container) -> void:
 	if state["segredos"].is_empty():
 		_par(c, "Nenhum. Mande espiões às cortes.")
 	for seg in state["segredos"]:
-		_par(c, "✉ %s%s" % [seg["reino"], " (usado)" if seg["usado"] else " — chantageie o rei em conversa"])
+		_par(c, "%s%s" % [seg["reino"], " (usado)" if seg["usado"] else " — chantageie o rei em conversa"])
 	_titulo_secao(c, "Operações")
 	for reino in state["reinos"]:
 		if state["jogador"]["rei_de"] == reino["id"]:
@@ -1082,15 +1142,15 @@ func _aba_intrigas(c: Container) -> void:
 		if ic_op != null:
 			h.add_child(ic_op)
 		var l := Label.new()
-		l.text = reino["nome"] + ("  📜 CB" if state["casus_belli"].has(reino["id"]) else "")
+		l.text = reino["nome"] + ("CB" if state["casus_belli"].has(reino["id"]) else "")
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(l)
-		_botao(h, "🕵 Espionar (80)", func():
+		_botao(h, "Espionar (80)", func():
 			_aviso(Intriga.espionar(state, reino["id"])["msg"])
 			Jogo.salvar(state)
 			atualizar())
 		if not state["casus_belli"].has(reino["id"]):
-			_botao(h, "📜 Forjar doc. (150)", func():
+			_botao(h, "Forjar doc. (150)", func():
 				_aviso(Intriga.forjar_documento(state, reino["id"])["msg"])
 				Jogo.salvar(state)
 				atualizar())
@@ -1098,13 +1158,13 @@ func _aba_intrigas(c: Container) -> void:
 func _aba_familia(c: Container) -> void:
 	var f: Dictionary = state["familia"]
 	var j: Dictionary = state["jogador"]
-	_titulo_secao(c, "🏰 Sua Casa")
+	_titulo_secao(c, "Sua Casa")
 	var a: Dictionary = j["atributos"]
-	_par(c, "%s, %d anos — 💪%d 🗣%d 📊%d 🗡%d%s" % [j["nome"], j["idade"],
+	_par(c, "%s, %d anos — %d %d %d %d%s" % [j["nome"], j["idade"],
 		a["forca"], a["carisma"], a["gestao"], a["intriga"],
 		"  · reputação de crueldade" if int(j.get("crueldade", 0)) >= 3 else ""])
 	if f["conjuge"] != null:
-		_par(c, "💍 Casado com %s%s" % [f["conjuge"]["nome"],
+		_par(c, "Casado com %s%s" % [f["conjuge"]["nome"],
 			" (união sob pressão)" if f["conjuge"]["forcado"] else ""])
 	else:
 		_par(c, "Solteiro. Casamento real exige 40+ de renome e boa relação — peça a mão em conversa na corte.")
@@ -1113,13 +1173,13 @@ func _aba_familia(c: Container) -> void:
 		_par(c, "Nenhum filho. Sem herdeiro, sua morte é o fim da linhagem — e do jogo.")
 	for filho in f["filhos"]:
 		var fa: Dictionary = filho["atributos"]
-		_par(c, "%s, %d anos — 💪%d 🗣%d 📊%d 🗡%d%s%s" % [filho["nome"], filho["idade"],
+		_par(c, "%s, %d anos — %d %d %d %d%s%s" % [filho["nome"], filho["idade"],
 			fa["forca"], fa["carisma"], fa["gestao"], fa["intriga"],
 			"  · mimado (vassalos conspirarão!)" if filho.get("mimado", false) else "",
 			"  · herdeiro apto" if int(filho["idade"]) >= 16 else ""])
 
 func _aba_cronica(c: Container) -> void:
-	_titulo_secao(c, "📜 Crônica da Casa")
+	_titulo_secao(c, "Crônica da Casa")
 	for entrada in state["cronica"]:
 		_par(c, "%s/A%d — %s" % [MESES[entrada["mes"] - 1].substr(0, 3), entrada["ano"], entrada["msg"]])
 
@@ -1294,9 +1354,9 @@ func _modal_evento() -> void:
 	Sfx.tocar(self, "alerta")
 	match ev["tipo"]:
 		"rebeliao":
-			_modal("🔥 REBELIÃO!", "O povo marcha sobre sua residência com foices, tochas e uma lista de queixas escrita com fome.", [
-				["⚔ Reprimir pela força", func(): _modal_batalha(Jogo.resolver_evento(state, "reprimir"))],
-				["🕊 Abrir os celeiros e ceder", func():
+			_modal("REBELIÃO!", "O povo marcha sobre sua residência com foices, tochas e uma lista de queixas escrita com fome.", [
+				["Reprimir pela força", func(): _modal_batalha(Jogo.resolver_evento(state, "reprimir"))],
+				["Abrir os celeiros e ceder", func():
 					Jogo.resolver_evento(state, "conceder")
 					Jogo.salvar(state)
 					atualizar()],
@@ -1311,29 +1371,29 @@ func _modal_evento() -> void:
 					ficha_amb = n
 			var ele: String = "dela" if str(ficha_amb.get("genero", "m")) == "f" else "dele"
 			var eleu: String = "ela" if str(ficha_amb.get("genero", "m")) == "f" else "ele"
-			_modal("💰 Uma casa rica demais",
+			_modal("Uma casa rica demais",
 				"%s enriqueceu na sua vila e agora recebe visitas que não passam pela sua porta. Ou você compra o joelho dobrado %s, ou %s compra o seu."
 					% [nome_amb, ele, eleu], [
-				["🪙 Comprar a lealdade (250 🪙)", func():
+				["Comprar a lealdade (250 )", func():
 					_aviso(str(Jogo.resolver_evento(state, "comprar").get("msg", "")))
 					Jogo.salvar(state)
 					atualizar()],
-				["🚪 Exilar a família", func():
+				["Exilar a família", func():
 					_aviso(str(Jogo.resolver_evento(state, "exilar").get("msg", "")))
 					Jogo.salvar(state)
 					atualizar()],
-				["🤐 Ignorar (por enquanto)", func():
+				["Ignorar (por enquanto)", func():
 					_aviso(str(Jogo.resolver_evento(state, "ignorar").get("msg", "")))
 					Jogo.salvar(state)
 					atualizar()],
 			], null if ficha_amb.is_empty() else Retratos.textura_cidadao(ficha_amb))
 		"traicao_guardas":
-			_modal("🌙 Traição por Ouro", "Sua guarda está sem soldo — e um reino rival ofereceu o dobro para abrirem seus portões esta noite.", [
-				["💰 Pagar em dobro agora", func():
+			_modal("Traição por Ouro", "Sua guarda está sem soldo — e um reino rival ofereceu o dobro para abrirem seus portões esta noite.", [
+				["Pagar em dobro agora", func():
 					Jogo.resolver_evento(state, "pagar")
 					Jogo.salvar(state)
 					atualizar()],
-				["🎲 Confiar na lealdade deles", func():
+				["Confiar na lealdade deles", func():
 					Jogo.resolver_evento(state, "recusar")
 					Jogo.salvar(state)
 					atualizar()],
@@ -1356,7 +1416,7 @@ func _modal_batalha(rel: Dictionary) -> void:
 	if rel["debandada"] != "":
 		corpo += "Debandada: %s!\n" % rel["debandada"]
 	corpo += "Cada soldado conta: você perdeu %d homens." % rel["baixas_jogador"]
-	_modal("🏆 VITÓRIA — %s" % rel["contexto"] if rel["vitoria"] else "☠ DERROTA — %s" % rel["contexto"],
+	_modal("VITÓRIA — %s" % rel["contexto"] if rel["vitoria"] else "DERROTA — %s" % rel["contexto"],
 		corpo, [["Continuar", func():
 			Jogo.salvar(state)
 			atualizar()]], _arte_de_batalha(str(rel.get("contexto", ""))))
@@ -1377,7 +1437,7 @@ func _arte_de_batalha(contexto: String) -> Texture2D:
 
 func _modal_fim() -> void:
 	var vitoria: bool = state["fim"]["tipo"] == "vitoria"
-	_modal("👑 REINO POR CONQUISTA" if vitoria else "💀 FIM DA SAGA",
+	_modal("REINO POR CONQUISTA" if vitoria else "FIM DA SAGA",
 		"Você segurou o trono por um ano. Os bardos cantarão sua saga!" if vitoria
 		else "Sua linhagem chega ao fim. As crônicas mal lembrarão seu nome.",
 		[["Nova saga", func():
@@ -1388,7 +1448,7 @@ func _modal_fim() -> void:
 func _modal_llm() -> void:
 	var v := _painel_modal()
 	var l := Label.new()
-	l.text = "🧠 IA Local — os personagens pensam no SEU processador.\n1. Baixe um modelo GGUF pequeno (ex.: Qwen2.5-1.5B Q4).\n2. Rode: llama-server -m modelo.gguf --port 8080\n3. Informe a URL abaixo (vazio = desligado):"
+	l.text = "IA Local — os personagens pensam no SEU processador.\n1. Baixe um modelo GGUF pequeno (ex.: Qwen2.5-1.5B Q4).\n2. Rode: llama-server -m modelo.gguf --port 8080\n3. Informe a URL abaixo (vazio = desligado):"
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(l)
 	var campo := LineEdit.new()

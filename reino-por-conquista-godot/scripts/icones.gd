@@ -21,7 +21,11 @@ const TODOS := ["moedas", "trigo", "madeira", "espada", "escudo", "arco",
 	"ferro", "sal", "tecidos", "cavalos",
 	# ícones de MECÂNICA, não de mercadoria: são estados que a UI mostrava
 	# só com emoji — neblina de guerra, moral, fila do quartel, cerco
-	"espiao", "neblina", "populacao", "moral", "ampulheta", "cerco"]
+	"espiao", "neblina", "populacao", "moral", "ampulheta", "cerco",
+	# a folha que substituiu os emoji do sistema
+	"renome", "calendario", "felicidade", "tropa", "alianca", "carta",
+	"correntes", "caveira", "louros", "forca", "carisma", "gestao",
+	"intriga", "lorde", "som", "mudo"]
 
 static func _id(nome: String) -> String:
 	return nome if nome.begins_with("icone_") else "icone_" + nome
