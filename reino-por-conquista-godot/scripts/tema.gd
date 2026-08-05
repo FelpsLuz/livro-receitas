@@ -45,8 +45,9 @@ const PASTA_FONTES := "res://assets/fontes/"
 ## Tamanhos em que cada fonte é NÍTIDA — múltiplos inteiros da grade nativa.
 ## Fonte pixel em tamanho intermediário vira borrão, e aí não se corrigiu
 ## nada: só se trocou o tipo de borrão.
-const CORPO := 20              # grade 20 da XGA-AI
-const CORPO_G := 40            # 2× — destaque do HUD
+const CORPO := 16              # grade 16 da ToshibaTxL1 (serifada)
+const NUMERO := 20             # grade 20 da XGA-AI — só para dígito
+const CORPO_G := 32            # 2× — destaque
 const TITULO_SECAO := 32       # 2× da grade 16 — título maior que o corpo
 const TITULO_JOGO := 32        # 2×
 
@@ -66,13 +67,21 @@ static func _fonte(arquivo: String) -> FontFile:
 	f.generate_mipmaps = false
 	return f
 
-## Corpo e — principalmente — NÚMEROS.
-static func fonte_corpo() -> FontFile:
+## A fonte de NÚMERO. Só isso: HUD, cards de recurso, estatística.
+##
+## Ela é uma fonte de terminal, e é ótima no que foi contratada para fazer —
+## dígito inequívoco. Mas parágrafo inteiro nela lê como console de DOS, que é
+## o oposto da referência. Prosa não usa esta fonte.
+static func fonte_numero() -> FontFile:
 	return _fonte("PxPlus_IBM_XGA-AI_12x20.ttf")
 
-## Títulos, rótulos e botões: a serifada. Nunca para número.
-static func fonte_forte() -> FontFile:
+## A fonte de TEXTO: serifada, e é ela que dá o tom da tela.
+static func fonte_corpo() -> FontFile:
 	return _fonte("PxPlus_ToshibaTxL1_8x16.ttf")
+
+## Títulos, rótulos e botões — a mesma família do corpo, em tamanho maior.
+static func fonte_forte() -> FontFile:
+	return fonte_corpo()
 
 static func fonte_titulo() -> FontFile:
 	return fonte_forte()

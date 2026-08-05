@@ -41,6 +41,15 @@ const NPCS_TAVERNA := [
 	{"id": "capitao", "nome": "Capitã Renna", "personalidade": "honrado"},
 	{"id": "espiao", "nome": "O Corvo", "personalidade": "calculista"},
 ]
+## As dez abas: rótulo visível e o sufixo do ícone (icone_aba_<sufixo>).
+## Uma tabela só, para nome e ícone não saírem de sincronia.
+const ABAS := [
+	["Sua Terra", "terra"], ["Mapa", "mapa"], ["Mercado", "mercado"],
+	["Taverna", "taverna"], ["Corte", "corte"], ["Exército", "exercito"],
+	["Clãs", "clas"], ["Intrigas", "intrigas"], ["Família", "familia"],
+	["Crônica", "cronica"],
+]
+
 const MESES := ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
 	"Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
@@ -180,9 +189,9 @@ func _montar_jogo() -> void:
 	tabs = TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(tabs)
-	for nome in ["Sua Terra", "Mapa", "Mercado", "Taverna", "Corte", "Exército", "Clãs", "Intrigas", "Família", "Crônica"]:
+	for i in ABAS.size():
 		var rolagem := ScrollContainer.new()
-		rolagem.name = nome
+		rolagem.name = str(ABAS[i][0])
 		# a aba rola só na vertical. Um card com um rótulo longo demais passa a
 		# quebrar linha em vez de abrir uma barra horizontal que ninguém usa.
 		rolagem.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -192,6 +201,13 @@ func _montar_jogo() -> void:
 		conteudo.add_theme_constant_override("separation", 8)
 		rolagem.add_child(conteudo)
 		tabs.add_child(rolagem)
+		# ícone antes do rótulo, como na referência. `set_tab_icon` desenha o
+		# ícone dentro da própria plaqueta da aba, então o relevo do stylebox
+		# envolve os dois — o que uma HBox de botões por fora não daria.
+		var ic := Icones.textura("aba_" + str(ABAS[i][1]))
+		if ic != null:
+			tabs.set_tab_icon(i, ic)
+			tabs.set_tab_icon_max_width(i, 16)
 	tabs.tab_changed.connect(func(_i): atualizar())
 
 	var rodape := HBoxContainer.new()
@@ -308,11 +324,11 @@ func _celula_hud(icone: String, valor: String, cor: Color, dica: String) -> void
 		caixa.add_child(ic)
 	var l := Label.new()
 	l.text = valor
-	# número SEMPRE na fonte limpa: a serifada tem 8/9 a 92% de identidade
-	var f := Tema.fonte_corpo()
+	# número SEMPRE na fonte de dígito: a serifada tem 8/9 a 92% de identidade
+	var f := Tema.fonte_numero()
 	if f != null:
 		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", Tema.CORPO)
+	l.add_theme_font_size_override("font_size", Tema.NUMERO)
 	l.add_theme_color_override("font_color", cor)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caixa.add_child(l)

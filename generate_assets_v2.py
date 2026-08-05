@@ -194,6 +194,67 @@ CATALOGO = {
     "icone_cavalos": dict(grupo="icons", tipo="icone", size=(64, 64),
         desc="game inventory icon, brown horse head with bridle, side profile, " + ESTILO_MUNDO),
 
+    # ---------- ícones de ABA ----------
+    # A referência põe um ícone antes do rótulo de cada uma das dez abas. Eles
+    # têm um problema próprio: aparecem a 16px, não a 24, e lado a lado com
+    # nove irmãos. Cada um precisa de UMA forma bruta distinta — anel, cunha,
+    # torre, taça, coroa — porque a essa altura a cor some antes da silhueta.
+    "icone_aba_terra": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, single thatched cottage seen from the front with "
+             "one door and one window, homestead, " + ESTILO_MUNDO),
+    "icone_aba_mapa": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, unrolled parchment map with a dotted route line "
+             "and a compass rose in one corner, " + ESTILO_MUNDO),
+    "icone_aba_mercado": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, market stall awning with two striped cloth panels "
+             "over a plank counter, front view, " + ESTILO_MUNDO),
+    "icone_aba_taverna": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, wooden tankard of ale with a thick handle and "
+             "foam over the rim, seen from the side, " + ESTILO_MUNDO),
+    "icone_aba_corte": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, tall stone throne with a high back seen from the "
+             "front, empty, two steps at the base, " + ESTILO_MUNDO),
+    "icone_aba_exercito": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, two crossed spears behind a small round shield, "
+             "symmetrical, " + ESTILO_MUNDO),
+    "icone_aba_clas": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, wolf head howling in profile, muzzle pointing up "
+             "to the left, solid silhouette, mercenary clan, " + ESTILO_MUNDO),
+    "icone_aba_intrigas": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, large ROUND red wax seal cracked in half down the "
+             "middle, a small dagger tip showing behind it, bold circular "
+             "silhouette, broken oath, no candle, " + ESTILO_MUNDO),
+    "icone_aba_familia": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, two adult figures side by side with one small "
+             "child figure between them, front view, lineage, " + ESTILO_MUNDO),
+    "icone_aba_cronica": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, open leather-bound book with two visible pages "
+             "and a quill pen resting on it, " + ESTILO_MUNDO),
+
+    # ---------- ícones de AÇÃO ----------
+    "icone_exportar": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, wooden crate with a thick arrow leaving it to the "
+             "right, shipment out, " + ESTILO_MUNDO),
+    "icone_passar_mes": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, hourglass with sand running and one curved arrow "
+             "sweeping around it clockwise, time advancing, " + ESTILO_MUNDO),
+    "icone_ataque": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, arming sword pointing down-right striking through a "
+             "cracked shield, assault, " + ESTILO_MUNDO),
+    "icone_traicao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, long dagger crossing DIAGONALLY IN FRONT of a small "
+             "coin purse, blade large and dominant, purse small behind it, "
+             "betrayal for gold, " + ESTILO_MUNDO),
+    "icone_contrato": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, unrolled contract scroll with three ruled text lines "
+             "and a red wax seal at the bottom, " + ESTILO_MUNDO),
+    "icone_informante": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, single large ear with three short listening arcs "
+             "beside it, eavesdropper, " + ESTILO_MUNDO),
+    "icone_pedra": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, three stacked cut grey stone blocks with chisel "
+             "marks, masonry material, " + ESTILO_MUNDO),
+
     # ---------- ícones de MECÂNICA (economia, espionagem, guerra) ----------
     # Estes não são mercadoria: são estados que a UI hoje mostra só com emoji —
     # neblina de guerra, moral, fila do quartel, população em armas.
