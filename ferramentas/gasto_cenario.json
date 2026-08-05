@@ -1,5 +1,5 @@
 {
- "total_usd": 0.07711517010132471,
+ "total_usd": 0.08491613252295388,
  "chamadas": [
   {
    "rotulo": "placa_base 400x200",
@@ -55,6 +55,11 @@
    "rotulo": "anel casa_sape",
    "estimado": 0.008,
    "real": 0.009304200324747297
+  },
+  {
+   "rotulo": "tira floresta 160x64",
+   "estimado": 0.008,
+   "real": 0.007800962421629164
   }
  ]
 }

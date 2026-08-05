@@ -161,6 +161,9 @@ func _montar() -> void:
 	mont.material = mat_rec
 	add_child(mont)
 
+	# ---- floresta em 3 tiers (spec v4 §C.1) ----
+	_montar_floresta()
+
 	# ---- véu da floresta (§F.1): multiply em gradiente vertical ----
 	add_child(_veu_floresta())
 
@@ -237,10 +240,122 @@ func _veu_floresta() -> Sprite2D:
 	veu.centered = false
 	veu.position = Vector2(0, VEU_FLORESTA_TOPO)
 	veu.scale = Vector2(Bandas.CANVAS_W / 4.0, 1.0)
+	veu.z_index = 4      # cobre também os 3 tiers de floresta
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
 	veu.material = mat
 	return veu
+
+
+# ---- floresta (spec v4 §C.1) --------------------------------------
+# NÃO usa TileMapLayer, e o motivo é técnico: TileMapLayer alinha as
+# células à grade, então o jitter de Y de ±4px que a spec exige seria
+# impossível dentro dele. Sprite2D posicionado dá o mesmo resultado com o
+# jitter que o critério mede, e o custo é irrelevante (~90 nós estáticos).
+# As variantes vêm de fatiar_floresta.py, que já removeu a faixa de chão.
+const FLORESTA_FOLHA := "res://assets_v2/cenario/tiras/floresta_arvores.png"
+const FLORESTA_META := "res://assets_v2/cenario/tiras/floresta_arvores.json"
+# tier: pé, faixa de ALTURA das variantes, modulate, z, passo em x.
+# Escala é 1.0 em todos: escala fracionária reamostra o sprite e destrói a
+# grade de pixel (0.8 de 50px dá 40, mas os pixels internos viram meio
+# pixel). A profundidade vem de QUAIS variantes cada tier usa, do pé e do
+# modulate — não de scale.
+const TIERS := [
+	{"pe": 100, "h_min": 0, "h_max": 24, "mod": Color(0.72, 0.80, 0.86), "z": 1, "passo": 15},
+	{"pe": 105, "h_min": 21, "h_max": 30, "mod": Color(0.88, 0.92, 0.95), "z": 2, "passo": 19},
+	{"pe": 110, "h_min": 21, "h_max": 34, "mod": Color(1, 1, 1), "z": 3, "passo": 23},
+]
+# As variantes de 43 e 50px não cabem numa banda de 29px: usadas na mata
+# corrida, encobriam o maciço inteiro (copa em y=59 contra cume em y=52).
+# Entram como EMERGENTES contados, e só FORA do vão do maciço (137..227),
+# onde quebram a linha do topo sem tapar a montanha.
+const EMERGENTES := [Vector2i(72, 112), Vector2i(300, 112), Vector2i(344, 111)]
+# Clareiras nas faixas SEM montanha atrás (medidas na placa: x=0..62 e
+# x=358..382). É onde a floresta é o horizonte e uma barra contínua
+# denunciaria a arte. Elas abrem a mata PRÓXIMA e revelam a distante (a
+# floresta pintada na placa): tirar aquela exigiria inpaint do que está
+# atrás dela, que não existe — registrado como limite conhecido.
+# A regra original mandava clareira "onde não há montanha atrás" — premissa
+# de quando as laterais estavam perdidas (v3.5 §E). Com elas restauradas, o
+# vão lê MELHOR sobre a montanha: abre a mata próxima e mostra o maciço.
+# Nas bordas (x<45) a mata pintada na placa é a mais ALTA do quadro, então
+# clareira ali não produz vão nenhum — medido.
+const CLAREIRAS_FLORESTA := [Vector2i(196, 224), Vector2i(286, 312)]
+const FLORESTA_SEMENTE := 20260805
+
+
+func _montar_floresta() -> void:
+	var meta_arq := FileAccess.open(FLORESTA_META, FileAccess.READ)
+	if meta_arq == null:
+		return
+	var meta: Dictionary = JSON.parse_string(meta_arq.get_as_text())
+	var variantes: Array = meta["variantes"]
+	var folha: Texture2D = load(FLORESTA_FOLHA)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = FLORESTA_SEMENTE
+
+	for t in TIERS.size():
+		var tier: Dictionary = TIERS[t]
+		var elegiveis: Array[int] = []
+		for i in variantes.size():
+			var hv: int = int(variantes[i]["h"])
+			if hv >= int(tier["h_min"]) and hv <= int(tier["h_max"]):
+				elegiveis.append(i)
+		var anterior := -1
+		var x: int = -6
+		while x < Bandas.CANVAS_W + 6:
+			var em_clareira := false
+			for cl in CLAREIRAS_FLORESTA:
+				if x >= cl.x and x <= cl.y:
+					em_clareira = true
+			if not em_clareira and not elegiveis.is_empty():
+				# nenhuma silhueta idêntica em células adjacentes
+				var v: int = elegiveis[rng.randi_range(0, elegiveis.size() - 1)]
+				if v == anterior and elegiveis.size() > 1:
+					v = elegiveis[(elegiveis.find(v) + 1) % elegiveis.size()]
+				anterior = v
+				var d: Dictionary = variantes[v]
+				var at := AtlasTexture.new()
+				at.atlas = folha
+				at.region = Rect2(d["x"], d["y"], d["w"], d["h"])
+				var sp := Sprite2D.new()
+				sp.texture = at
+				sp.centered = false
+				sp.offset = Vector2(-float(d["w"]) / 2.0, -float(d["h"]))
+				# jitter de Y: é ele que faz a linha do topo ondular
+				sp.position = Vector2(x, int(tier["pe"]) + rng.randi_range(-4, 4))
+				sp.modulate = tier["mod"]
+				sp.z_index = int(tier["z"])
+				sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+				if t == 0:
+					# tier de fundo com a MESMA recessão do maciço, para o
+					# fundo inteiro concordar (v3.2 §B / v4 §C.1)
+					var mr := ShaderMaterial.new()
+					mr.shader = load("res://shaders/recessao_atmosferica.gdshader")
+					mr.set_shader_parameter("bruma", 0.22)
+					sp.material = mr
+				add_child(sp)
+			x += int(tier["passo"]) + rng.randi_range(-2, 3)
+
+	for e in EMERGENTES:
+		var alto := -1
+		for i in variantes.size():
+			if int(variantes[i]["h"]) >= 38:
+				alto = i if alto < 0 or rng.randf() < 0.5 else alto
+		if alto < 0:
+			continue
+		var da: Dictionary = variantes[alto]
+		var ata := AtlasTexture.new()
+		ata.atlas = folha
+		ata.region = Rect2(da["x"], da["y"], da["w"], da["h"])
+		var spa := Sprite2D.new()
+		spa.texture = ata
+		spa.centered = false
+		spa.offset = Vector2(-float(da["w"]) / 2.0, -float(da["h"]))
+		spa.position = Vector2(e.x, e.y)
+		spa.z_index = 3
+		spa.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		add_child(spa)
 
 
 func _montar_margem() -> void:
