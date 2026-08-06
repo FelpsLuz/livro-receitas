@@ -392,7 +392,11 @@ func _init() -> void:
 		"alimento": 5000, "madeira": 2000, "felicidade": 70, "pressao": 0.0}
 	forte["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 5})
 	forte["terra"]["notaveis"] = []
-	for i in 10:
+	# margem generosa de propósito: o teste é sobre a DIREÇÃO do efeito
+	# (terra + lordes reforçam a guarnição de verdade), não sobre achar o
+	# ponto de equilíbrio exato do combate de 3 fases — 25 lordes contra o
+	# mesmo ataque de 80 homens que já é suficiente pra derrubar a "fraca"
+	for i in 25:
 		forte["terra"]["notaveis"].append({"nome": "Lorde %d" % i, "oficio": "", "lealdade": 80,
 			"riqueza": 10, "ambicao": 1, "lorde": true, "capturado": false})
 	Geopolitica.inicializar(forte)

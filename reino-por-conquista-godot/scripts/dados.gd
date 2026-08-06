@@ -5,28 +5,45 @@
 # ============================================================
 extends RefCounted
 
+## Matriz econômica v2 (PATCH CONSOLIDADO, Parte II · Estágio 1). `cavalos`
+## saiu — nenhum reino o produzia como monopólio, e a Seção 4 precisava de um
+## material novo para os degraus 5-8 da terra (pedra) que não competisse com
+## a madeira que a construção já consome inteira. `pedra` ≈ 1,5× o preço da
+## madeira (instrução do patch); `prata` é de propósito a mais cara das 7 —
+## era o preço que `cavalos` ocupava, agora reservado ao monopólio de
+## Frederico (Seção 13: prata vira desconto/sobretaxa na contratação de clãs,
+## Estágio futuro — aqui ela só precisa EXISTIR como bem negociável).
 const MERCADORIAS := {
 	"trigo":   {"nome": "Trigo",   "preco_base": 10},
 	"madeira": {"nome": "Madeira", "preco_base": 14},
 	"ferro":   {"nome": "Ferro",   "preco_base": 30},
 	"sal":     {"nome": "Sal",     "preco_base": 22},
 	"tecidos": {"nome": "Tecidos", "preco_base": 26},
-	"cavalos": {"nome": "Cavalos", "preco_base": 80},
+	"pedra":   {"nome": "Pedra",   "preco_base": 21},
+	"prata":   {"nome": "Prata",   "preco_base": 90},
 }
 
 # Mundo oficial (Era do Aço, sem magia) — em paridade com a build HTML5.
 #
 # Nomes de casa e de rei alinhados ao PATCH CONSOLIDADO v2 (Parte IV, Estágio
-# 0). Só nome e rei.nome mudam — id, cor, capital, nobres e producao ficam
-# EXATAMENTE como estavam. É rename puro: nenhum outro arquivo lê estes
-# reinos por string de exibição (conferido — só dois comentários e dois
-# fixtures de teste citavam os nomes antigos, nenhum por lógica).
+# 0). Só nome e rei.nome mudam — id, cor, capital, nobres ficam EXATAMENTE
+# como estavam. É rename puro: nenhum outro arquivo lê estes reinos por
+# string de exibição (conferido — só dois comentários e dois fixtures de
+# teste citavam os nomes antigos, nenhum por lógica).
+#
+# `producao` MUDOU (PATCH CONSOLIDADO v2, Parte II · Estágio 1): a v1 do
+# patch dava Pedra como monopólio exclusivo do Império — softlock, porque a
+# Seção 4 usa pedra pra construção e o Império é o reino mais hostil do
+# mapa. A correção: Ursos de Ferro (vizinhos do jogador, só 3 nobres) também
+# produzem Pedra, no lugar de Sal — e Sal vira monopólio único das Víboras.
+# O encaixe continua sendo 5 bens com 2 produtores + 2 bens com 1 produtor
+# (sal, prata) = 12 slots = 6 reinos × 2, como a regra do código já exige.
 const REINOS_BASE := [
 	{"id": "imperio", "nome": "Império Central", "cor": "#1a4a2a", "imperial": true, "nobres": 10,
-	 "producao": ["ferro", "cavalos"], "capital": "Trono Verde",
+	 "producao": ["ferro", "pedra"], "capital": "Trono Verde",
 	 "rei": {"id": "rei_imperio", "nome": "Felippe, o Sangrento", "genero": "m", "personalidade": "cruel"}},
 	{"id": "touros", "nome": "Ursos de Ferro", "cor": "#1c1c22", "nobres": 3,
-	 "producao": ["madeira", "sal"], "capital": "Covil Negro",
+	 "producao": ["madeira", "pedra"], "capital": "Covil Negro",
 	 "rei": {"id": "rei_touros", "nome": "Bjorne, o Orgulhoso", "genero": "m", "personalidade": "orgulhoso"}},
 	{"id": "alvorecer", "nome": "Sol de Bronze", "cor": "#c9a227", "nobres": 6,
 	 "producao": ["trigo", "tecidos"], "capital": "Aurora Alta",
@@ -35,7 +52,7 @@ const REINOS_BASE := [
 	 "producao": ["ferro", "trigo"], "capital": "Chama Rubra",
 	 "rei": {"id": "rei_leoes", "nome": "Ignis, o Escarlate", "genero": "m", "personalidade": "honrado"}},
 	{"id": "aguias", "nome": "Garças de Prata", "cor": "#9aa4ae", "nobres": 4,
-	 "producao": ["tecidos", "cavalos"], "capital": "Ninho de Prata",
+	 "producao": ["tecidos", "prata"], "capital": "Ninho de Prata",
 	 "rei": {"id": "rei_aguias", "nome": "Frederico Silver", "genero": "m", "personalidade": "orgulhoso"}},
 	{"id": "rosa", "nome": "Víboras de Safira", "cor": "#2d4a8a", "nobres": 5,
 	 "producao": ["sal", "madeira"], "capital": "Jardim Azul",

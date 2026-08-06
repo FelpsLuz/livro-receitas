@@ -122,6 +122,57 @@ func _init() -> void:
 	ok("chave do par é canônica (ordem não importa)",
 		Geopolitica.chave("touros", "imperio") == Geopolitica.chave("imperio", "touros"))
 
+	# ---------------- 2b. MATRIZ ECONÔMICA v2 (PATCH CONSOLIDADO, Estágio 1) ----------------
+	ok("7 mercadorias, cavalos removido, pedra e prata dentro",
+		Dados.MERCADORIAS.size() == 7 and not Dados.MERCADORIAS.has("cavalos")
+		and Dados.MERCADORIAS.has("pedra") and Dados.MERCADORIAS.has("prata"))
+	var maior_preco := 0
+	for m in Dados.MERCADORIAS.values():
+		maior_preco = maxi(maior_preco, int(m["preco_base"]))
+	ok("prata é a mercadoria de maior preço-base (monopólio de Frederico)",
+		int(Dados.MERCADORIAS["prata"]["preco_base"]) == maior_preco)
+
+	var producao_por_id := {}
+	var slots_total := 0
+	for reino in Dados.REINOS_BASE:
+		producao_por_id[reino["id"]] = reino["producao"]
+		slots_total += reino["producao"].size()
+	ok("encaixe de 12 slots preservado (6 reinos × 2 bens cada)", slots_total == 12)
+	ok("Império produz Ferro e Pedra, não mais Cavalos",
+		producao_por_id["imperio"] == ["ferro", "pedra"])
+	ok("Ursos de Ferro produzem Madeira e Pedra, não mais Sal (evita softlock: pedra não pode ser monopólio único)",
+		producao_por_id["touros"] == ["madeira", "pedra"])
+	ok("Garças de Prata produzem Tecidos e Prata, não mais Cavalos",
+		producao_por_id["aguias"] == ["tecidos", "prata"])
+	ok("Sol de Bronze, Cervos Escarlates e Víboras de Safira ficam como estavam",
+		producao_por_id["alvorecer"] == ["trigo", "tecidos"]
+		and producao_por_id["leoes"] == ["ferro", "trigo"]
+		and producao_por_id["rosa"] == ["sal", "madeira"])
+
+	var produtores := {}
+	for reino in Dados.REINOS_BASE:
+		for bem in reino["producao"]:
+			produtores[bem] = int(produtores.get(bem, 0)) + 1
+	ok("Sal é monopólio único das Víboras", int(produtores.get("sal", 0)) == 1)
+	ok("Prata é monopólio único das Garças", int(produtores.get("prata", 0)) == 1)
+	ok("Pedra tem DOIS produtores — Império e Ursos, de propósito (o relógio de médio-jogo)",
+		int(produtores.get("pedra", 0)) == 2)
+
+	# o achado do documento: Império e Ursos, MESMO favoráveis um ao outro,
+	# nunca comerciam — dividem pedra, e o pacto de comércio exige disjunção
+	# TOTAL de produção (Geopolitica._tick_pactos: `iguais == 0`). Fixo a
+	# relação em 30 a cada mês (zona "comércio elegível", abaixo do limiar de
+	# aliança) pra não deixar o dado descartar o cenário por acidente.
+	var gp := Jogo.novo_jogo("Pedra")
+	var pactuaram_apesar_da_rinha := false
+	for i in 30:
+		gp["relacoes_npc"][Geopolitica.chave("imperio", "touros")] = 30
+		Geopolitica.tick(gp, Jogo.log_para(gp))
+		if Geopolitica.tem_pacto(gp, "imperio", "touros", "comercio"):
+			pactuaram_apesar_da_rinha = true
+	ok("Império e Ursos nunca assinam comércio — a pedra compartilhada barra o pacto",
+		not pactuaram_apesar_da_rinha)
+
 	# roda 120 meses e vê se o mundo REALMENTE se mexe sozinho
 	var guerras_npc := 0
 	var conquistas := 0

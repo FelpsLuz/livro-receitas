@@ -24,7 +24,7 @@ const INTENCOES := [
 	{"id": "perguntar_guerra", "palavras": ["guerra", "batalha", "conflito", "inimigo", "exercito",
 		"tropas", "campanha"]},
 	{"id": "perguntar_preco", "palavras": ["preco", "mercado", "comprar", "vender", "comercio",
-		"trigo", "ferro", "sal", "madeira", "tecidos", "cavalos", "quanto custa", "mercadoria"]},
+		"trigo", "ferro", "sal", "madeira", "tecidos", "pedra", "prata", "quanto custa", "mercadoria"]},
 	{"id": "pedir_contrato", "palavras": ["contrato", "trabalho", "servico", "missao", "emprego",
 		"mercenario", "escolta", "me contrate", "tarefa"]},
 	{"id": "subornar", "palavras": ["ouro para voce", "te pago", "suborno", "presente", "uma oferta",

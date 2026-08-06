@@ -7,7 +7,7 @@
 #
 #   textura("trigo")            → caixote 32×32
 #   slot("trigo", 48)           → moldura + caixote dentro
-#   de_mercadoria("cavalos")    → caixote da MERCADORIA de dados.gd
+#   de_mercadoria("pedra")      → caixote da MERCADORIA de dados.gd
 #
 # `tem()` responde SEMPRE true: o caixote nunca falta. Quem chamava para
 # decidir entre ícone e texto continua escolhendo o ícone, e o layout fica
@@ -29,7 +29,7 @@ const LADO := 192
 ## Tudo o que o gerador sabe fazer (espelha o CATALOGO de generate_assets_v2.py).
 const TODOS := ["moedas", "trigo", "madeira", "espada", "escudo", "arco",
 	"lanca", "pao", "cerveja", "pergaminho", "gema", "coroa",
-	"ferro", "sal", "tecidos", "cavalos",
+	"ferro", "sal", "tecidos", "pedra", "prata",
 	# ícones de MECÂNICA, não de mercadoria: são estados que a UI mostrava
 	# só com emoji — neblina de guerra, moral, fila do quartel, cerco
 	"espiao", "neblina", "populacao", "moral", "ampulheta", "cerco",
@@ -67,7 +67,7 @@ const COR := {
 	"trigo": Color("dcc067"), "pao": Color("d4a05f"),
 	"cerveja": Color("d09a4a"), "sal": Color("e2ded2"),
 	"madeira": Color("b07a4a"), "tecidos": Color("a382bd"),
-	"cavalos": Color("bd8a5e"), "terra": Color("9c7d55"),
+	"pedra": Color("9b968c"), "prata": Color("aab4bd"), "terra": Color("9c7d55"),
 	# ---- guerra ----
 	"espada": Color("bcc4cc"), "lanca": Color("bcc4cc"),
 	"escudo": Color("9fb0c2"), "arco": Color("b07a4a"),
