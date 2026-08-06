@@ -87,6 +87,15 @@ const VOZES := {
 		"saudacao": ["Bem-vindo a Torreluz! Conte-me: como está o mundo lá fora?"],
 		"neutro": ["Fale-me mais. Adoro histórias de longe."],
 	},
+	# o guarda do portão (Parte 3): um único dossiê serve os seis reinos, e a
+	# voz é sempre a MESMA — cansada, informal — porque ele não é o rei.
+	"guarda": {
+		"insulto": ["Já ouvi pior no meu próprio velório, moço. Mas guardo isso — e conto pra ele."],
+		"elogio": ["Ah, é? Bom saber que alguém nota o trabalho duro por aqui."],
+		"ameaca": ["Ameace o rei, não a mim. Eu só tranco o portão. Ele que decida o que fazer com você."],
+		"saudacao": ["Frio hoje, não? Fale rápido — o turno é longo e a paciência é curta."],
+		"neutro": ["Isso aí é assunto de quem usa capa. Eu uso lança."],
+	},
 }
 
 ## Queda de relação por insulto, por personalidade (documento "Era do Aço",
@@ -98,14 +107,28 @@ const INSULTO_DELTA := {
 	"orgulhoso": {"leve": -25, "grave": -45},  # "explode"/"gelo, cai muito"
 }
 
+## Intenções que a escada de acesso (Parte 2) pode trancar: pedidos
+## PRIVILEGIADOS — audiência de negócio, não reação social. Insulto, elogio,
+## ameaça, suborno, saudação e despedida NUNCA são trancados: são coisas que
+## o jogador FAZ ao NPC, não favores que pede dele, e continuam valendo
+## mesmo com o portão fechado — é assim que "Odiado" ainda consegue reagir a
+## uma ameaça, por exemplo.
+const INTENCOES_PRIVILEGIADAS := ["perguntar_guerra", "perguntar_preco", "pedir_contrato", "pedir_paz", "chantagear"]
+
+## Título mínimo pra um Neutro falar com o rei em pessoa (Parte 2): "Capitão
+## Mercenário" ou acima. Espelha Contratos.titulo(), que só devolve uma
+## destas cinco strings.
+const TITULO_RANK := {
+	"Mercenário": 0, "Capitão Mercenário": 1, "Senhor": 2, "Conde": 3, "Rei": 4,
+}
+
 ## ---------- DOSSIÊS DE PERSONAGEM (documento "Era do Aço" — Parte 4) ----------
 ## Camada 2 do prompt de LLM: identidade FIXA de cada rei — obsessão, voz,
 ## o que sabe e o que finge não saber, e frases de referência para o tom.
 ## Ao contrário de VOZES (linhas prontas, usadas sem LLM), isto é contexto
 ## para um modelo GERAR a fala — por isso descritivo, não falas finais.
-## Só os seis reis por enquanto: a escada de acesso (guarda do portão, Parte
-## 2/3 do documento) ainda não existe no jogo, então não há dossiê de guarda
-## para injetar. Fica para quando esse NPC existir de fato.
+## Só os seis reis: o guarda do portão (Parte 2/3) tem dossiê PRÓPRIO, único
+## para os seis reinos — ver GUARDA_DOSSIE logo abaixo desta tabela.
 const DOSSIES := {
 	"rei_imperio": {
 		"obsessao": "O pedágio. Toda estrada do continente passa por ele, e ele cobra de tudo que respira. Quer o ferro de Ignis e a prata de Frederico — nessa ordem.",
@@ -173,6 +196,34 @@ const DOSSIES := {
 			"Se você veio oferecer proteção, diga logo o preço. Todo mundo cobra.",
 		],
 	},
+}
+
+## ---------- O GUARDA DO PORTÃO (documento "Era do Aço" — Parte 2/3) ----------
+## Um único dossiê serve os seis reinos — só o sotaque muda (GUARDA_SOTAQUE).
+## O guarda é sempre o primeiro contato; o rei é privilégio conquistado
+## (ver `quem_atende`). Insultá-lo derruba a relação com o reino INTEIRO, de
+## propósito: ele usa o mesmo `id` ("rei_<reino>") que o rei — a relação é
+## uma só, só quem FALA muda.
+const GUARDA_DOSSIE := {
+	"identidade": "Homem de meia-idade, lanceiro de guarnição, dez anos no mesmo portão. Não tem nome próprio — o jogador o chama de \"guarda\", e ele prefere assim. Ganha pouco, sabe muito, não é pago para saber.",
+	"voz": "Cansado e informal. Trata o jogador como igual — os dois trabalham para homens mais ricos. Fala de frio, de turno, de comida ruim. Usa \"senhor\" com ironia leve. Fofoca com prazer, mas se fecha na hora que a pergunta fica militar.",
+	"sabe": "Quem é o rei dele, o humor do rei essa semana, quem o rei odeia. O que o reino produz e o que anda caro no mercado. Rumores da Crônica. Estação, estradas ruins, quem passou pelo portão recentemente.",
+	"nao_sabe": "Tamanho de exército, tesouro, planos de guerra (\"Isso é assunto de quem usa capa. Eu uso lança.\"). Segredos de nobres. Qualquer número.",
+	"ancoras": [
+		"Você chegou na semana errada. Ele anda mandando enforcar gente por pouco.",
+		"Anuncio, mas não prometo nada. Se ele estiver de mau humor, a culpa não é minha nem sua.",
+		"Isso aí é assunto de quem usa capa. Eu uso lança.",
+	],
+}
+
+## Uma linha de sotaque por reino (Parte 3, "variação por reino").
+const GUARDA_SOTAQUE := {
+	"imperio":   "Burocrático — cobra taxa de entrada antes de qualquer conversa.",
+	"alvorecer": "Bem alimentado — comenta preço de tudo.",
+	"leoes":     "Disciplinado, desconfortável com fofoca, fala pouco.",
+	"rosa":      "Simpático demais, faz perguntas de volta.",
+	"aguias":    "Imita o desprezo do patrão, sem ter direito a ele.",
+	"touros":    "Congelando, mal-humorado — o mais honesto dos seis.",
 }
 
 ## ---------- PROMPT DE SISTEMA (documento "Era do Aço" — Parte 1) ----------
@@ -274,6 +325,16 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 	var resposta := ""
 	var principal: String = intencoes[0]["id"] if intencoes.size() > 0 else ""
 
+	# escada de acesso (Parte 2): `quem_atende` pode restringir o falante a
+	# um punhado de intenções privilegiadas. Fora dessa lista, tudo passa —
+	# só pedido de negócio esbarra no portão fechado.
+	var permitidas = npc.get("intencoes_permitidas")
+	if permitidas != null and INTENCOES_PRIVILEGIADAS.has(principal) \
+			and not (permitidas as Array).has(principal):
+		tags["flags"]["ultimo_topico"] = principal
+		return {"resposta": str(npc.get("recusa", "Isso não é comigo. Fale com quem manda.")),
+			"efeitos": [], "acoes": [], "intencao": principal}
+
 	match principal:
 		"insulto":
 			tags["flags"]["insultou"] = int(tags["flags"].get("insultou", 0)) + 1
@@ -356,6 +417,11 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			resposta = "Não tenho paciência para balbucios. Fale claro ou saia." \
 				if tags["relacao"] <= -40 else Dados.rnd(voz["neutro"])
 
+	# Leal (Parte 2): o rei oferece informação sem ser perguntado — só quando
+	# ele mesmo está falando (o guarda não tem essa cortesia com ninguém).
+	if npc.get("papel", "") == "rei" and int(tags["relacao"]) >= 60 and principal != "":
+		efeitos.append("[Leal: ele compartilha algo sem você precisar perguntar]")
+
 	tags["flags"]["ultimo_topico"] = principal
 	return {"resposta": resposta, "efeitos": efeitos, "acoes": acoes, "intencao": principal}
 
@@ -425,6 +491,66 @@ static func _resposta_paz(state: Dictionary, npc: Dictionary, efeitos: Array) ->
 		efeitos.append("[+15 Renome]")
 		return "Sua palavra tem peso comigo. Que seja. Mandarei emissários."
 	return "Paz se negocia entre iguais ou entre amigos. Você não é nenhum dos dois. Ainda."
+
+## ---------- ESCADA DE ACESSO (documento "Era do Aço", Parte 2) ----------
+## Quem de fato atende o jogador na Corte de um reino: o guarda (sempre o
+## primeiro contato) ou o rei (privilégio conquistado). Devolve um npc PRONTO
+## pra `falar()`/`montar_prompt_llm()` — mesmo `id` do rei (a relação é uma
+## só, seja quem for que fale), mas `papel`, `personalidade`, `nome` e
+## `intencoes_permitidas` mudam com a relação e o título do jogador.
+##
+## Ganho colateral que o documento já aponta: o guarda é voz/dossiê curto,
+## o rei é longo — quando isto alimenta um LLM de verdade, conversa fiada
+## gasta a chamada barata, e a cara só roda quando o jogador merece audiência.
+static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
+	var rel: int = int(tags_de(state, "rei_" + reino_id)["relacao"])
+	var reino: Dictionary = {}
+	for r in state["reinos"]:
+		if r["id"] == reino_id:
+			reino = r
+			break
+	var rei_dados: Dictionary = reino.get("rei", {})
+	# `intencoes_permitidas` sempre existe, mesmo que null (acesso liberado):
+	# um dict sem a chave quebraria `npc["intencoes_permitidas"]` em runtime
+	# (GDScript não devolve null sozinho pra `[]`, só `.get()` faz isso).
+	var guarda := {
+		"id": "rei_" + reino_id, "reino_id": reino_id, "papel": "guarda",
+		"nome": "o guarda de %s" % str(reino.get("capital", reino_id)),
+		"personalidade": "guarda", "intencoes_permitidas": null,
+	}
+	var rei := {
+		"id": "rei_" + reino_id, "reino_id": reino_id, "papel": "rei",
+		"nome": str(rei_dados.get("nome", reino_id)),
+		"personalidade": str(rei_dados.get("personalidade", "honrado")),
+		"intencoes_permitidas": null,
+	}
+
+	if rel <= -60:
+		# Odiado: nada. Nem o guarda cede — é o "ameaça de prisão" do documento.
+		guarda["intencoes_permitidas"] = []
+		guarda["recusa"] = "Já era pra você não estar aqui. Mais uma palavra e chamo os outros — cadeia é o mais generoso que ele manda hoje."
+		return guarda
+	if rel <= -20:
+		# Hostil: só anuncia (libera tudo, ainda pelo guarda) com renome ≥ 50
+		if int(state["jogador"]["renome"]) < 50:
+			guarda["intencoes_permitidas"] = []
+			guarda["recusa"] = "Não. Nem anuncio. Volte quando seu nome valer alguma coisa por aqui."
+		else:
+			guarda["intencoes_permitidas"] = null
+		return guarda
+	if rel < 20:
+		# Neutro: rei em pessoa SE o título já pesa; senão, o guarda de sempre
+		var Contratos = load("res://scripts/contratos.gd")
+		var titulo: String = Contratos.titulo(state)
+		if int(TITULO_RANK.get(titulo, 0)) >= 1:
+			rei["intencoes_permitidas"] = ["saudacao", "pedir_contrato", "perguntar_preco"]
+			rei["recusa"] = "Vá direto ao ponto — não tenho tempo pra rodeios com quem não provou nada."
+			return rei
+		guarda["intencoes_permitidas"] = ["perguntar_preco"]
+		guarda["recusa"] = "Isso não é comigo. Fale com quem usa coroa — se um dia chegar lá."
+		return guarda
+	# Amistoso (+20 a +59) e Leal (≥60): rei em pessoa, sem restrição alguma
+	return rei
 
 # ---------- adaptador LLM (fase 2: HTTPRequest ao llama.cpp) ----------
 ## Postura do NPC em relação ao jogador — uma função só, usada pela UI
@@ -517,6 +643,8 @@ static func _total_tropas(j: Dictionary) -> int:
 ## sabe/não sabe, frases de referência). Reis fora de DOSSIES (NPCs da
 ## taverna, por ora) caem na linha genérica de sempre — só personalidade.
 static func _dossie(npc: Dictionary) -> String:
+	if npc.get("papel", "") == "guarda":
+		return _dossie_guarda(npc)
 	var d: Dictionary = DOSSIES.get(npc["id"], {})
 	if d.is_empty():
 		return "Personalidade: %s." % npc.get("personalidade", "reservado")
@@ -529,6 +657,23 @@ static func _dossie(npc: Dictionary) -> String:
 	if not (d.get("ancoras", []) as Array).is_empty():
 		l.append("Frases no seu tom (referência de voz, não repita ao pé da letra): \"%s\""
 			% "\" / \"".join(d["ancoras"]))
+	return "\n".join(l)
+
+## Dossiê do guarda: mesma identidade fixa nos seis reinos, só o sotaque
+## muda por porta (GUARDA_SOTAQUE, chaveado pelo `reino_id` que
+## `quem_atende` grava no npc).
+static func _dossie_guarda(npc: Dictionary) -> String:
+	var l: Array = [
+		"Identidade: %s" % GUARDA_DOSSIE["identidade"],
+		"Como fala: %s" % GUARDA_DOSSIE["voz"],
+		"O que sabe: %s" % GUARDA_DOSSIE["sabe"],
+		"O que NÃO sabe (nunca inventa isso, nem sob pressão): %s" % GUARDA_DOSSIE["nao_sabe"],
+	]
+	var reino_id: String = str(npc.get("reino_id", ""))
+	if GUARDA_SOTAQUE.has(reino_id):
+		l.append("Sotaque deste portão: %s" % GUARDA_SOTAQUE[reino_id])
+	l.append("Frases no seu tom (referência de voz, não repita ao pé da letra): \"%s\""
+		% "\" / \"".join(GUARDA_DOSSIE["ancoras"]))
 	return "\n".join(l)
 
 ## O prompt completo, em três camadas (documento "Era do Aço", Parte 0):

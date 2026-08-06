@@ -326,6 +326,74 @@ func _init() -> void:
 	Contratos.executar(sc9, contrato_aguias, Jogo.log_para(sc9))
 	ok(int(sc9["jogador"]["ouro"]) == ouro_antes_c2 + 130, "Frederico paga 30% a mais — o melhor contratante do mapa")
 
+	# ---------- escada de acesso (documento "Era do Aço", Parte 2) ----------
+	# Odiado: o guarda barra tudo, mesmo pedido banal — e o texto ameaça prisão
+	var sa1 := Jogo.novo_jogo("Acesso1")
+	Dialogo.tags_de(sa1, "rei_touros")["relacao"] = -80
+	var qa1 := Dialogo.quem_atende(sa1, "touros")
+	ok(qa1["papel"] == "guarda", "Odiado: quem atende é o guarda, nunca o rei")
+	var ra1 := Dialogo.falar(sa1, qa1, "quanto custa o trigo?")
+	ok(ra1["resposta"].contains("cadeia"), "Odiado: recusa até um pedido banal, com ameaça de prisão")
+
+	# insultar/ameaçar continua valendo mesmo com o portão fechado — é ação
+	# do jogador, não um favor pedido
+	var sa1b := Jogo.novo_jogo("Acesso1b")
+	Dialogo.tags_de(sa1b, "rei_touros")["relacao"] = -80
+	var qa1b := Dialogo.quem_atende(sa1b, "touros")
+	Dialogo.falar(sa1b, qa1b, "seu porco idiota")
+	ok(int(Dialogo.tags_de(sa1b, "rei_touros")["relacao"]) < -80,
+		"mas insultar o guarda ainda derruba a relação com o reino inteiro")
+
+	# Hostil com renome baixo: mesma recusa do guarda
+	var sa2 := Jogo.novo_jogo("Acesso2")
+	Dialogo.tags_de(sa2, "rei_touros")["relacao"] = -30
+	sa2["jogador"]["renome"] = 10
+	var qa2 := Dialogo.quem_atende(sa2, "touros")
+	ok(qa2["papel"] == "guarda" and qa2["intencoes_permitidas"] == [],
+		"Hostil com renome baixo: guarda recusa tudo")
+
+	# Hostil com renome ≥50: o guarda "anuncia" — libera o pedido, mas
+	# continua sendo ELE quem responde, não o rei
+	var sa3 := Jogo.novo_jogo("Acesso3")
+	Dialogo.tags_de(sa3, "rei_touros")["relacao"] = -30
+	sa3["jogador"]["renome"] = 60
+	var qa3 := Dialogo.quem_atende(sa3, "touros")
+	ok(qa3["papel"] == "guarda" and qa3["intencoes_permitidas"] == null,
+		"Hostil com renome ≥50: ainda o guarda, mas sem restrição de intenção")
+	var ra3 := Dialogo.falar(sa3, qa3, "conte-me sobre a guerra")
+	ok(not ra3["resposta"].contains("Isso não é comigo"), "e o pedido passa de verdade")
+
+	# Neutro sem título: guarda, intenções bem curtas
+	var sa4 := Jogo.novo_jogo("Acesso4")
+	var qa4 := Dialogo.quem_atende(sa4, "touros")
+	ok(qa4["papel"] == "guarda" and qa4["intencoes_permitidas"] == ["perguntar_preco"],
+		"Neutro sem título: guarda, só pergunta de preço")
+	var ra4 := Dialogo.falar(sa4, qa4, "quero um contrato de trabalho")
+	ok(ra4["resposta"].contains("coroa"), "contrato é negado pelo guarda sem título")
+
+	# Neutro com título (Capitão Mercenário+): rei em pessoa, mas seco e limitado
+	var sa5 := Jogo.novo_jogo("Acesso5")
+	sa5["jogador"]["renome"] = 50
+	var qa5 := Dialogo.quem_atende(sa5, "touros")
+	ok(qa5["papel"] == "rei", "Neutro com título ≥ Capitão Mercenário: o rei atende em pessoa")
+	ok((qa5["intencoes_permitidas"] as Array).has("pedir_contrato")
+		and not (qa5["intencoes_permitidas"] as Array).has("pedir_paz"),
+		"mas só pra intenções liberadas — paz continua fora de alcance")
+
+	# Amistoso e Leal: rei sem restrição alguma
+	var sa6 := Jogo.novo_jogo("Acesso6")
+	Dialogo.tags_de(sa6, "rei_touros")["relacao"] = 30
+	var qa6 := Dialogo.quem_atende(sa6, "touros")
+	ok(qa6["papel"] == "rei" and qa6["intencoes_permitidas"] == null,
+		"Amistoso: rei em pessoa, todas as intenções")
+
+	var sa7 := Jogo.novo_jogo("Acesso7")
+	Dialogo.tags_de(sa7, "rei_touros")["relacao"] = 65
+	var qa7 := Dialogo.quem_atende(sa7, "touros")
+	var ra7 := Dialogo.falar(sa7, qa7, "quero saber dos preços por aqui")
+	ok(ra7["efeitos"].has("[Leal: ele compartilha algo sem você precisar perguntar]"),
+		"Leal: o rei oferece informação extra sem ser perguntado")
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)

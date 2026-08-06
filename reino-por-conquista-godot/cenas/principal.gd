@@ -859,7 +859,10 @@ func _aba_taverna(c: Container) -> void:
 func _aba_corte(c: Container) -> void:
 	var reino := _reino_local()
 	_titulo_secao(c, "Corte de %s" % reino["capital"])
-	_card_npc(c, reino["rei"])
+	# escada de acesso (Parte 2): o guarda do portão é sempre o primeiro
+	# contato — o rei só atende em pessoa quando a relação (e, no Neutro, o
+	# título) já foi conquistada. quem_atende() devolve o card certo pronto.
+	_card_npc(c, Dialogo.quem_atende(state, reino["id"]))
 	_par(c, "Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
 
 	# ---- a SUA corte: gente que nasceu durante a partida ----
