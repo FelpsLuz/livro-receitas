@@ -21,7 +21,6 @@ const Sfx = preload("res://scripts/sfx.gd")
 const Llm = preload("res://scripts/llm.gd")
 const CidadeView = preload("res://scripts/cidade_view.gd")
 const CidadeCena = preload("res://scripts/cidade_cena.gd")
-const VilaCena = preload("res://scripts/vila_cena.gd")
 const CenarioV3View = preload("res://scripts/cenario_v3_view.gd")
 const Icones = preload("res://scripts/icones.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
@@ -264,15 +263,20 @@ func _mmss(seg: int) -> String:
 ## o tempo restante — quem guarda é a fila, dentro do state. O Timer só
 ## empurra o relógio 1 segundo por vez, exatamente como o turno mensal faz
 ## com 600 de uma vez. Salvar no meio do treino não perde nada.
-## A cena da terra, na ordem de preferência: cenário v3 em imagem única por
-## estágio → vila de cima em TileMap → cenário procedural. As três têm a
-## mesma API (.estado e semear_npcs), então quem chama não precisa saber
-## qual entrou.
+## A cena da terra: um CARTÃO por nível, não um mundo navegável.
+##
+## Havia uma vila de cima em TileMap no meio desta cadeia — com câmera,
+## aldeões passeando e Y-Sort. Ela saiu por decisão de escopo: este jogo é
+## uma planilha de gerenciamento, o jogador passa o tempo no Mercado e no
+## Quartel, e a aba da terra é um cartão de estado. Uma ilustração boa por
+## nível vale mais que um mundo medíocre, e é UMA imagem em vez de trinta
+## assets que nunca ficam coerentes entre si.
+##
+## As duas restantes têm a mesma API (.estado e semear_npcs), então quem
+## chama não precisa saber qual entrou.
 func _nova_cena() -> SubViewportContainer:
 	if CenarioV3View.disponivel():
 		return CenarioV3View.new()
-	if VilaCena.disponivel():
-		return VilaCena.new()
 	return CidadeCena.new()
 
 func _montar_quartel() -> void:

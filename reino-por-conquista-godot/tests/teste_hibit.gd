@@ -1,30 +1,25 @@
 # ============================================================
-# TESTE DO PIPELINE HI-BIT — as três frentes, medidas.
+# TESTE DA INTERFACE E DO AMBIENTE
 #
 #   xvfb-run godot --rendering-driver opengl3 --path . \
 #       --script res://tests/teste_hibit.gd
 #
-# O que este arquivo protege, e que nada mais protegeria:
+# Era o teste do pipeline Hi-Bit, em três frentes. Duas saíram com a vila
+# navegável: a ponte de geração de arte, os shaders de sprite e o par
+# AgenteMovel/VisualController não têm mais consumidor. O que sobrou é o
+# que a tela do jogo de fato usa:
 #
-#   FRENTE 1  as chaves de pixel perfection no project.godot. São texto num
-#             .cfg: qualquer merge as apaga em silêncio e ninguém percebe
-#             até a arte ferver na tela de alguém.
-#   FRENTE 2  que a ponte de IA NÃO chama a rede sem chave e NÃO roda em
-#             build exportada. É contenção de custo e de vazamento, não
-#             estética — e é a única parte deste pipeline que gasta dinheiro.
-#             Os shaders precisam COMPILAR: shader quebrado não derruba o
-#             jogo, só desenha errado, e isso passa despercebido.
-#   FRENTE 3  que o VisualController observa por SINAL e que a mecânica não
-#             encosta no nó visual. É a regressão que o reacoplamento
-#             inteiro existe para impedir.
+#   · as chaves de renderização no project.godot. São texto num .cfg, e
+#     qualquer merge as apaga em silêncio — ninguém percebe até o texto
+#     voltar a sair esticado na tela de alguém.
+#   · a tipografia. Que a fonte de número seja MESMO monoespaçada não é
+#     detalhe: é o que faz a coluna de preço alinhar sozinha.
+#   · o ciclo de luz, que continua tingindo o cartão da aba "Sua Terra"
+#     sem encostar na interface de pergaminho.
 # ============================================================
 extends SceneTree
 
 const Ambiente = preload("res://scripts/environment_manager.gd")
-const CameraMundo = preload("res://scripts/camera_mundo.gd")
-const AIVisualBridge = preload("res://scripts/ai_visual_bridge.gd")
-const AgenteMovel = preload("res://scripts/agente_movel.gd")
-const VisualController = preload("res://scripts/visual_controller.gd")
 
 var _v := 0
 var _x := 0
@@ -40,12 +35,8 @@ func ok(cond: bool, nome: String, obs: String = "") -> void:
 
 
 func _initialize() -> void:
-	print("\n=== FRENTE 1 · pipeline de renderização ===")
+	print("\n=== RENDERIZAÇÃO E TIPOGRAFIA ===")
 	_frente1()
-	print("\n=== FRENTE 2 · IA e shaders ===")
-	_frente2()
-	print("\n=== FRENTE 3 · reacoplamento por sinal ===")
-	await _frente3()
 	print("\n=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [_v, _x])
 	quit(1 if _x > 0 else 0)
@@ -161,149 +152,5 @@ func _frente1() -> void:
 	ok(amb.cor_atual().is_equal_approx(Color.WHITE),
 		"intensidade 0 devolve o neutro do multiply (branco)")
 
-	# ---- CameraMundo ----
-	var cam := CameraMundo.criar(Vector2(960, 540))
-	root.add_child(cam)
-	ok(cam.limit_right == 960 and cam.limit_bottom == 540,
-		"limites da câmera no tamanho do mundo",
-		"%d x %d" % [cam.limit_right, cam.limit_bottom])
-	ok(cam.position_smoothing_enabled, "suavização de posição ligada")
-	var alvo := Node2D.new()
-	alvo.position = Vector2(400, 300)
-	root.add_child(alvo)
-	# a conversão de espaço é a armadilha: o alvo vive em escala 0,5
-	cam.seguir(alvo, 0.5)
-	ok(cam.position.is_equal_approx(Vector2(200, 150)),
-		"câmera converte o espaço do alvo pela escala", str(cam.position))
-	alvo.free()
-	cam.free()
 	vp.free()
 	amb.free()
-
-
-# ------------------------------------------------------------
-func _frente2() -> void:
-	# ---- a ponte NÃO pode gastar sozinha ----
-	var ponte := AIVisualBridge.new()
-	root.add_child(ponte)
-	var tem_chave := AIVisualBridge.chave() != ""
-	print("      (chave no ambiente: %s)" % ("sim" if tem_chave else "não"))
-
-	var prompt := AIVisualBridge.montar_prompt({
-		"tipo": "character", "tamanho": 32, "acao": "walking down",
-		"quadro": 1, "descricao": "young knight in leather armor"})
-	ok(prompt.begins_with("32x32 pixel art"),
-		"prompt começa pela resolução alvo", prompt.substr(0, 40) + "…")
-	ok(prompt.contains("Stardew Valley") and prompt.contains("hi-bit"),
-		"assinatura Hi-Bit no prompt")
-	ok(prompt.contains("walking down") and prompt.contains("frame 1"),
-		"estado da entidade entra no prompt")
-	ok(prompt.contains("transparent background"),
-		"pede fundo transparente — sprite com fundo é retrabalho manual")
-
-	# o teto de gasto tem que barrar ANTES de qualquer request
-	ponte.teto_usd = 0.0
-	var falhas: Array = []
-	ponte.falhou.connect(func(id: String, motivo: String): falhas.append(motivo))
-	var aceitou := ponte.pedir("teste_teto", {"tamanho": 32})
-	ok(not aceitou and falhas.size() == 1,
-		"teto de gasto barra o pedido antes de tocar na rede",
-		falhas[0] if falhas.size() > 0 else "não barrou")
-
-	# modo simulado: fluxo inteiro, custo zero
-	ponte.teto_usd = 1.0
-	ponte.simular = true
-	var recebidas: Array = []
-	ponte.pronto.connect(func(id: String, tex: ImageTexture): recebidas.append(id))
-	ponte.pedir("simulado", {"tamanho": 32})
-	ok(recebidas.size() == 1 and ponte.gasto_usd == 0.0,
-		"modo simulado devolve textura sem gastar",
-		"gasto US$ %.4f" % ponte.gasto_usd)
-
-	ok(not AIVisualBridge.disponivel() or not OS.has_feature("template"),
-		"a ponte nunca se declara disponível numa build exportada")
-	ponte.free()
-
-	# ---- os três shaders precisam COMPILAR ----
-	for caminho in ["res://shaders/vento_folhagem.gdshader",
-			"res://shaders/contorno.gdshader",
-			"res://shaders/paleta_dinamica.gdshader"]:
-		var sh = load(caminho)
-		var nome: String = caminho.get_file()
-		if not (sh is Shader):
-			ok(false, "%s carrega" % nome, "não é Shader")
-			continue
-		# um shader com erro de sintaxe carrega mesmo assim e só falha ao
-		# desenhar; get_shader_uniform_list vazio denuncia isso
-		var uniformes: Array = sh.get_shader_uniform_list()
-		ok(uniformes.size() > 0, "%s compila e expõe uniformes" % nome,
-			"%d uniformes" % uniformes.size())
-
-
-# ------------------------------------------------------------
-func _frente3() -> void:
-	var agente := AgenteMovel.new()
-	root.add_child(agente)
-	var vc := VisualController.novo(agente)
-	vc.usar_personagem("heroi_jogador", 0.55)
-	var ligou := vc.observar(agente)
-
-	ok(ligou, "VisualController se liga ao agente")
-	ok(vc.estado()["por_sinal"], "a ligação é por SINAL, não por leitura",
-		"sem _physics_process rodando à toa")
-	ok(agente.has_signal("moveu") and agente.has_signal("parou")
-		and agente.has_signal("direcao_mudou"),
-		"o agente emite os três sinais do contrato")
-
-	# A prova do desacoplamento: o agente não pode ter NENHUMA referência ao
-	# nó visual. Se tivesse, a mecânica voltaria a depender da arte.
-	var f := FileAccess.open("res://scripts/agente_movel.gd", FileAccess.READ)
-	var texto := f.get_as_text() if f != null else ""
-	var sujo: Array = []
-	if texto == "":
-		sujo.append("não consegui ler agente_movel.gd")
-	# só CÓDIGO: o cabeçalho do arquivo explica o acoplamento que ele desfez
-	# e cita os tipos visuais de propósito. Uma varredura de texto cru
-	# reprovava o arquivo pelos próprios comentários.
-	var codigo := ""
-	for linha in texto.split("\n"):
-		var l := str(linha)
-		var jogo := l.find("#")
-		if jogo >= 0:
-			l = l.substr(0, jogo)
-		if l.strip_edges() != "":
-			codigo += l + "\n"
-	for termo in ["Sprite2D", "AnimatedSprite2D", "sprite_frames", "texture",
-			"PersonagensV2", "VisualController"]:
-		if codigo.contains(termo):
-			sujo.append(termo)
-	ok(sujo.is_empty(), "o agente não cita nenhum tipo visual", ", ".join(sujo))
-
-	# movimento real: a rota move o agente e a animação segue sozinha
-	agente.position = Vector2.ZERO
-	agente.definir_rota([Vector2(300, 0)])
-	for i in 6:
-		await physics_frame
-	ok(agente.position.x > 0.0, "o agente andou pela rota",
-		"x = %.1f" % agente.position.x)
-	ok(agente.direcao == "east", "direção deduzida do vetor", agente.direcao)
-	var an: AnimatedSprite2D = vc.visual as AnimatedSprite2D
-	ok(an.animation == "east_walk",
-		"o visual entrou na caminhada sem a mecânica mandar", an.animation)
-
-	agente.definir_rota([])
-	agente.esperar(0.1)
-	await physics_frame
-	ok(an.animation == "east", "parar volta para a pose parada", an.animation)
-
-	# a origem tem que ficar nos PÉS, senão o Y-Sort compara o centro
-	ok(an.offset.y < 0.0, "visual ancorado nos pés (Y-Sort correto)",
-		"offset.y = %.1f" % an.offset.y)
-
-	# luz de ponto com gradiente gerado
-	var luz := vc.acender(Color(1, 0.7, 0.4), 96.0)
-	ok(luz != null and luz.texture is GradientTexture2D,
-		"luz de ponto com textura de gradiente gerada")
-	ok(luz.blend_mode == Light2D.BLEND_MODE_ADD, "luz em modo aditivo")
-
-	agente.free()
