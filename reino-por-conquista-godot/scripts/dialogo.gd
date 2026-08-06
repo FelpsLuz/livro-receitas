@@ -509,6 +509,23 @@ static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
 		if r["id"] == reino_id:
 			reino = r
 			break
+	# Parte 7, risco 5: "Rei conquistado não dá audiência." Se outro reino
+	# (não o jogador) tomou o trono, não há mais rei — nem guarda dele — pra
+	# atender. A relação salva com "rei_<reino>" fica intacta e inerte; quem
+	# manda agora é o vencedor, e é com ELE que o jogador precisa falar.
+	var dominado: String = str(reino.get("dominado_por", ""))
+	if dominado != "" and dominado != "jogador":
+		var senhor: String = dominado
+		for r2 in state["reinos"]:
+			if r2["id"] == dominado:
+				senhor = str(r2.get("nome", dominado))
+				break
+		return {
+			"id": "rei_" + reino_id, "reino_id": reino_id, "papel": "conquistado",
+			"nome": "o trono vazio de %s" % str(reino.get("capital", reino_id)),
+			"personalidade": "guarda", "intencoes_permitidas": [],
+			"recusa": "Não há mais rei aqui. %s tomou este trono — fale com ele, se tiver coragem." % senhor,
+		}
 	var rei_dados: Dictionary = reino.get("rei", {})
 	# `intencoes_permitidas` sempre existe, mesmo que null (acesso liberado):
 	# um dict sem a chave quebraria `npc["intencoes_permitidas"]` em runtime
@@ -643,6 +660,8 @@ static func _total_tropas(j: Dictionary) -> int:
 ## sabe/não sabe, frases de referência). Reis fora de DOSSIES (NPCs da
 ## taverna, por ora) caem na linha genérica de sempre — só personalidade.
 static func _dossie(npc: Dictionary) -> String:
+	if npc.get("papel", "") == "conquistado":
+		return "Não há ninguém para falar aqui: este trono caiu para outro reino. Não narre o rei antigo — ele não está mais no poder."
 	if npc.get("papel", "") == "guarda":
 		return _dossie_guarda(npc)
 	var d: Dictionary = DOSSIES.get(npc["id"], {})

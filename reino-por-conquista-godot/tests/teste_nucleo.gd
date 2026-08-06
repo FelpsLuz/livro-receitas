@@ -394,6 +394,26 @@ func _init() -> void:
 	ok(ra7["efeitos"].has("[Leal: ele compartilha algo sem você precisar perguntar]"),
 		"Leal: o rei oferece informação extra sem ser perguntado")
 
+	# Parte 7, risco 5: rei conquistado por OUTRO reino não dá audiência —
+	# nem o guarda dele. Conquistado pelo JOGADOR é um caso diferente (o
+	# trono é dele agora) e não entra nesse bloqueio.
+	var sa8 := Jogo.novo_jogo("Acesso8")
+	Dialogo.tags_de(sa8, "rei_touros")["relacao"] = 80  # bem além de Leal
+	for r in sa8["reinos"]:
+		if r["id"] == "touros":
+			r["dominado_por"] = "imperio"
+	var qa8 := Dialogo.quem_atende(sa8, "touros")
+	ok(qa8["papel"] == "conquistado", "reino conquistado por outro reino não tem mais rei nem guarda")
+	var ra8 := Dialogo.falar(sa8, qa8, "quero um contrato de trabalho")
+	ok(ra8["resposta"].contains("Império Central"), "a recusa nomeia quem tomou o trono")
+
+	var sa9 := Jogo.novo_jogo("Acesso9")
+	for r in sa9["reinos"]:
+		if r["id"] == "touros":
+			r["dominado_por"] = "jogador"
+	var qa9 := Dialogo.quem_atende(sa9, "touros")
+	ok(qa9["papel"] != "conquistado", "mas conquistado PELO jogador não bloqueia — o trono é dele agora")
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)
