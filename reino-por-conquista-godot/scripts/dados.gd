@@ -15,25 +15,31 @@ const MERCADORIAS := {
 }
 
 # Mundo oficial (Era do Aço, sem magia) — em paridade com a build HTML5.
+#
+# Nomes de casa e de rei alinhados ao PATCH CONSOLIDADO v2 (Parte IV, Estágio
+# 0). Só nome e rei.nome mudam — id, cor, capital, nobres e producao ficam
+# EXATAMENTE como estavam. É rename puro: nenhum outro arquivo lê estes
+# reinos por string de exibição (conferido — só dois comentários e dois
+# fixtures de teste citavam os nomes antigos, nenhum por lógica).
 const REINOS_BASE := [
 	{"id": "imperio", "nome": "Império Central", "cor": "#1a4a2a", "imperial": true, "nobres": 10,
 	 "producao": ["ferro", "cavalos"], "capital": "Trono Verde",
-	 "rei": {"id": "rei_imperio", "nome": "Felps, o Destruidor", "genero": "m", "personalidade": "cruel"}},
-	{"id": "touros", "nome": "Touros Negros", "cor": "#1c1c22", "nobres": 3,
+	 "rei": {"id": "rei_imperio", "nome": "Felippe, o Sangrento", "genero": "m", "personalidade": "cruel"}},
+	{"id": "touros", "nome": "Ursos de Ferro", "cor": "#1c1c22", "nobres": 3,
 	 "producao": ["madeira", "sal"], "capital": "Covil Negro",
-	 "rei": {"id": "rei_touros", "nome": "Touro Bill", "genero": "m", "personalidade": "orgulhoso"}},
-	{"id": "alvorecer", "nome": "Alvorecer Dourado", "cor": "#c9a227", "nobres": 6,
+	 "rei": {"id": "rei_touros", "nome": "Bjorne, o Orgulhoso", "genero": "m", "personalidade": "orgulhoso"}},
+	{"id": "alvorecer", "nome": "Sol de Bronze", "cor": "#c9a227", "nobres": 6,
 	 "producao": ["trigo", "tecidos"], "capital": "Aurora Alta",
-	 "rei": {"id": "rei_alvorecer", "nome": "Enzo Noites", "genero": "m", "personalidade": "calculista"}},
-	{"id": "leoes", "nome": "Leões Carmesins", "cor": "#8b1a1a", "nobres": 5,
+	 "rei": {"id": "rei_alvorecer", "nome": "Enzo Tenebris", "genero": "m", "personalidade": "calculista"}},
+	{"id": "leoes", "nome": "Cervos Escarlates", "cor": "#8b1a1a", "nobres": 5,
 	 "producao": ["ferro", "trigo"], "capital": "Chama Rubra",
-	 "rei": {"id": "rei_leoes", "nome": "Fogo no Leão", "genero": "m", "personalidade": "honrado"}},
-	{"id": "aguias", "nome": "Águias Prateadas", "cor": "#9aa4ae", "nobres": 4,
+	 "rei": {"id": "rei_leoes", "nome": "Ignis, o Escarlate", "genero": "m", "personalidade": "honrado"}},
+	{"id": "aguias", "nome": "Garças de Prata", "cor": "#9aa4ae", "nobres": 4,
 	 "producao": ["tecidos", "cavalos"], "capital": "Ninho de Prata",
-	 "rei": {"id": "rei_aguias", "nome": "Fred Prateado", "genero": "m", "personalidade": "orgulhoso"}},
-	{"id": "rosa", "nome": "Rosa Azul", "cor": "#2d4a8a", "nobres": 5,
+	 "rei": {"id": "rei_aguias", "nome": "Frederico Silver", "genero": "m", "personalidade": "orgulhoso"}},
+	{"id": "rosa", "nome": "Víboras de Safira", "cor": "#2d4a8a", "nobres": 5,
 	 "producao": ["sal", "madeira"], "capital": "Jardim Azul",
-	 "rei": {"id": "rei_rosa", "nome": "Eva Rosada", "genero": "f", "personalidade": "calculista"}},
+	 "rei": {"id": "rei_rosa", "nome": "Eva, a Víbora", "genero": "f", "personalidade": "calculista"}},
 ]
 
 # ---------------------------------------------------------------

@@ -189,10 +189,17 @@ static func melhorar_terra(state: Dictionary) -> Dictionary:
 	if int(t["nivel"]) >= Dados.NIVEIS_TERRA.size() - 1:
 		return {"ok": false, "msg": "Nível máximo."}
 	var prox: Dictionary = Dados.NIVEIS_TERRA[t["nivel"] + 1]
-	if state["jogador"]["ouro"] < prox["custo_ouro"] or t["madeira"] < prox["custo_madeira"]:
+	# Capataz LEAL na Corte é mestre de obra: -10% no custo de MATERIAL do
+	# próximo degrau (não no ouro). Hoje "material" é só madeira — quando a
+	# pedra entrar na escada (Estágio 1 do patch), este desconto se aplica
+	# a ela também, sem precisar tocar aqui de novo.
+	var custo_material: int = int(prox["custo_madeira"])
+	if Cidadaos.oficio_ativo(state, "capataz"):
+		custo_material = roundi(custo_material * 0.9)
+	if state["jogador"]["ouro"] < prox["custo_ouro"] or t["madeira"] < custo_material:
 		return {"ok": false, "msg": "Recursos insuficientes."}
 	state["jogador"]["ouro"] -= int(prox["custo_ouro"])
-	t["madeira"] = int(t["madeira"]) - int(prox["custo_madeira"])
+	t["madeira"] = int(t["madeira"]) - custo_material
 	t["nivel"] += 1
 	t["populacao"] += Dados.ri(10, 20)
 	return {"ok": true, "msg": "Evoluiu para %s!" % prox["nome"]}
@@ -272,14 +279,7 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 				var mult: int = 2 if lider != "" else 1
 				var rebeldes := {"tropas": {"campones": Dados.ri(15, 30) * mult,
 					"lanceiro": Dados.ri(2, 5) * mult}, "equip": 0, "formacao": "cerco"}
-				# Capataz LEAL na Corte rende +10% de defesa à guarnição — mas só
-				# ajuda a defender a PRÓPRIA terra, não a esmagar o povo dela: se
-				# é ele mesmo quem lidera a revolta, o cargo está comprometido e
-				# o bônus não existe.
-				var bonus_capataz: float = 1.0
-				if lider == "" and Cidadaos.oficio_ativo(state, "capataz"):
-					bonus_capataz = 1.10
-				resultado = Combate.batalhar(state, rebeldes, "Rebelião camponesa", "cerco", bonus_capataz)
+				resultado = Combate.batalhar(state, rebeldes, "Rebelião camponesa")
 				if resultado["vitoria"]:
 					state["terra"]["felicidade"] = 35
 					state["terra"]["populacao"] = maxi(5, int(state["terra"]["populacao"]) - Dados.ri(4, 8) * mult)

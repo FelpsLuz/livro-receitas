@@ -4,8 +4,8 @@
 # `entre()` é o primitivo: procura "A_B", depois "B_A", e só então desiste
 # num fallback caro. `caminho()` é o que dá sentido ao grafo — acha a rota
 # mais curta atravessando terceiros, e é por isso que os gargalos importam:
-# marchar do seu vale até os Leões custa passar pelo Império (ou dar a volta
-# inteira pelo Jardim Azul, mais longe e mais perigoso).
+# marchar do seu vale até os Cervos Escarlates custa passar pelo Império (ou
+# dar a volta inteira pelo Jardim Azul, mais longe e mais perigoso).
 # ============================================================
 extends RefCounted
 

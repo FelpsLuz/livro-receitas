@@ -449,22 +449,25 @@ func _init() -> void:
 	ok("capataz LEAL não é líder de rebelião nenhuma",
 		Cidadaos.capataz_lider(terra_cap).is_empty())
 
-	# Combate.batalhar: o parâmetro novo `bonus_defesa_extra` precisa
-	# realmente mudar o resultado — sem isso, o "+10% de defesa" do
-	# capataz seria só um comentário sem efeito.
-	var Combate2 = load("res://scripts/combate.gd")
-	var defesa_normal := com_terra(0, 200)
-	defesa_normal["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 20})
-	var defesa_bonus := com_terra(0, 200)
-	defesa_bonus["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 20})
-	var atacante := {"tropas": {"campones": 30, "lanceiro": 5}, "equip": 0, "formacao": "cerco"}
-	seed(555)
-	var r_normal: Dictionary = Combate2.batalhar(defesa_normal, atacante.duplicate(true), "teste", "cerco", 1.0)
-	seed(555)
-	var r_bonus: Dictionary = Combate2.batalhar(defesa_bonus, atacante.duplicate(true), "teste", "cerco", 1.10)
-	ok("bonus_defesa_extra reduz as baixas do defensor com a mesma sorte",
-		int(r_bonus["baixas_jogador"]) <= int(r_normal["baixas_jogador"]),
-		"%d baixas sem bônus, %d com" % [int(r_normal["baixas_jogador"]), int(r_bonus["baixas_jogador"])])
+	# Capataz LEAL (Corte v2): -10% no custo de MATERIAL do próximo degrau,
+	# não no ouro. O documento corrigiu a própria versão anterior aqui — a
+	# primeira dava "+10% de defesa da guarnição da própria terra", um
+	# sistema que não existe (nenhum exército marcha contra a terra do
+	# jogador; conferido em marchas.gd, Q5 da Parte VI).
+	var sem_capataz := com_terra(4, 200)
+	var com_capataz := com_terra(4, 200)
+	com_capataz["terra"]["notaveis"] = [{"nome": "Mestre Obra", "oficio": "capataz",
+		"lealdade": 90, "riqueza": 50, "ambicao": 3, "lorde": false}]
+	var madeira_antes_sem := int(sem_capataz["terra"]["madeira"])
+	var madeira_antes_com := int(com_capataz["terra"]["madeira"])
+	Jogo.melhorar_terra(sem_capataz)
+	Jogo.melhorar_terra(com_capataz)
+	var gasto_sem := madeira_antes_sem - int(sem_capataz["terra"]["madeira"])
+	var gasto_com := madeira_antes_com - int(com_capataz["terra"]["madeira"])
+	ok("capataz leal baixa o custo de madeira do próximo degrau",
+		gasto_com < gasto_sem, "%d sem · %d com" % [gasto_sem, gasto_com])
+	ok("o custo em OURO não muda — o desconto é só de material",
+		int(sem_capataz["jogador"]["ouro"]) == int(com_capataz["jogador"]["ouro"]))
 
 	# ---- integração completa: capataz LIDERANDO a rebelião, via resolver_evento ----
 	var reprime := com_terra(3, 200)
