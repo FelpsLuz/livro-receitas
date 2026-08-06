@@ -1,0 +1,60 @@
+; Reino por Conquista — port Godot 4.3
+; Fase 1: núcleo de sistemas portado e testado (headless).
+; Fase 2: cenas visuais (cidade pixel art, conversa, abas).
+
+config_version=5
+
+[application]
+
+config/name="Reino por Conquista"
+config/description="De mercenário sem nome a rei — estratégia medieval offline"
+run/main_scene="res://cenas/principal.tscn"
+config/features=PackedStringArray("4.3")
+
+[autoload]
+
+; Atmosfera Hi-Bit: ciclo de luz por CanvasModulate. Como o barramento, o
+; código NUNCA cita este nome como identificador — scripts/ambiente.gd
+; resolve o nó em runtime, senão os testes (--script, sem autoload) não
+; compilariam.
+EnvironmentManager="*res://scripts/environment_manager.gd"
+
+; Barramento de sinais. O núcleo NÃO cita este nome como identificador —
+; scripts/sinais.gd resolve o nó em runtime, senão os testes (que rodam com
+; --script, onde autoload não é registrado) não compilariam.
+Eventos="*res://scripts/eventos.gd"
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=540
+;  ---- MODO DE INTERFACE, não de pixel art ----
+; "viewport" renderizava TUDO — inclusive o texto — numa grade de 960x540 e
+; ampliava o conjunto. Num jogo cuja tela é dez abas de tabela, é isso que
+; fazia a interface parecer protótipo: cada letra era um bitmap esticado.
+;
+; "canvas_items" mantém 960x540 como sistema de COORDENADAS (nenhum layout
+; se move) mas manda a fonte para o rasterizador na resolução real do
+; monitor. Numa janela de 1920 o texto ganha 4x mais pixels sem uma linha
+; de layout mudar.
+;
+; aspect "expand" e não "keep": tabela agradece largura, e letterbox numa
+; tela de gerenciamento é espaço jogado fora.
+; scale_mode fracionário porque a restrição a múltiplos inteiros existia
+; para proteger a grade de pixel — que agora só vale dentro do cartão da
+; aba "Sua Terra", e lá ela é garantida pelo proprio nó.
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/stretch/scale_mode="fractional"
+window/handheld/orientation=1
+
+[rendering]
+
+; §G do addendum v3: sem os snaps, skew/scale fracionário nas sombras de
+; contato gera tremulação de subpixel.
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true
+; 0 = Nearest. Filtro linear numa arte de 32x32 borra a grade inteira.
+textures/canvas_textures/default_texture_filter=0
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

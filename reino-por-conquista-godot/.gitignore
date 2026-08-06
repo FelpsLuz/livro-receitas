@@ -1,0 +1,6 @@
+.godot/
+
+# builds exportados (godot --export-release) — binários regeneráveis, não
+# código-fonte. Comitar um .exe de 85 MB infla o histórico do repositório
+# para sempre; refazer o export é uma linha de comando.
+dist/
