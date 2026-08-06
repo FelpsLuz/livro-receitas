@@ -771,105 +771,163 @@ RETRATOS_TROPA = {
 # ESTÁGIOS DA TERRA — nove quadros, a MESMA terra
 # ===============================================================
 # 400×224: o endpoint recusa lado acima de 400 e exige ambos divisíveis por
-# 4. Gerar menor e ampliar não servia (×1,2 não é inteiro e borraria a
-# grade), então a grade nativa da cena desceu até a arte.
+# 4. A referência do Felipe é 512×293 (proporção 1,75); 400×224 dá 1,786 —
+# diferença invisível, e sem reamostragem em ponto nenhum.
 #
 # ---------------------------------------------------------------
-# A FORTALEZA CENTRAL — o que fez esta leva funcionar
+# O ENQUADRAMENTO EM FAIXAS — a coisa que resolveu tudo
 # ---------------------------------------------------------------
-# Cinco arquiteturas anteriores brigaram com o mesmo problema, e nenhuma
-# venceu: partindo de PAISAGEM — vale vazio, ou acampamento numa clareira —
-# o gerador nunca constrói cidade. Ele pinta o que a partida já é. Medido:
+# Cinco arquiteturas foram testadas antes desta e todas morreram no mesmo
+# lugar: a muralha não aparecia, as zonas não apareciam, e o gerador
+# devolvia "o mesmo vale com mais duas cabanas". A leitura na época foi que
+# faltava força, ou obediência ao texto. As duas estavam erradas — medido:
+# baixar a força perde o vale, e `text_guidance_scale` de 8 para 14 não
+# mudou absolutamente nada.
 #
-#   cadeia em série, força 195→70 e 170→128 ... nove quadros de TENDA
-#   âncora no vale vazio, força 105 fixa ..... os degraus grandes somem
-#   âncora no vale vazio, força 95 e 85 ...... mercado vira duas cabanas
+# O problema era a COMPOSIÇÃO. Os quadros antigos eram um vale RECUANDO
+# para um ponto de fuga. Nessa geometria, acrescentar uma cidade ou uma
+# muralha obriga a redesenhar a perspectiva do quadro inteiro — distância
+# que nenhum init_image_strength vence, porque não é uma edição local, é um
+# desenho novo.
 #
-# A saída não veio de mexer na força. Veio de mudar O QUE ESTÁ NO QUADRO
-# desde o primeiro degrau: uma RUÍNA DE CASTELO no centro, presente nos
-# nove. Com pedra e escala já no quadro de partida, "restaurar mais um
-# pedaço e acrescentar uma zona" é um passo CURTO até no fim da escada — e a
-# distância que nenhuma força vencia ("encher um vale vazio de cidade")
-# simplesmente deixa de existir.
+# A referência resolve com um DIORAMA CHAPADO EM FAIXAS:
 #
-# A ruína também resolve a narrativa: o jogador ainda sai do NADA — acampa ao
-# pé de uma ruína que não é dele — e chega a senhor de castelo. Nenhum nome
-# de Dados.NIVEIS_TERRA precisou mudar.
+#     céu com nuvens e sol
+#     silhueta de montanha nevada no horizonte
+#     linha de pinheiros
+#     >>> PRATELEIRA VERDE PLANA — tudo que se constrói assenta aqui <<<
+#     rio atravessando reto na borda de baixo
+#
+# Numa prateleira plana, acrescentar um moinho é uma edição LOCAL, e a
+# muralha é literalmente uma faixa horizontal que se deita sobre a cena. É
+# por isso que a referência consegue pôr muralha e castelo onde eu não
+# conseguia: não é técnica melhor, é geometria que admite acréscimo.
+#
+# (Medido na referência: as seis também foram encadeadas — a diferença do
+# céu contra o primeiro quadro cresce 1 → 3 → 6 → 8 → 16, que é a assinatura
+# de img2img em cadeia. A técnica sempre foi a mesma; só o palco mudou.)
 ESTAGIO_LADO = (400, 224)
 
+## O palco. Repetido em TODAS as nove chamadas — é ele que segura as faixas
+## no lugar enquanto a prateleira do meio se enche.
+##
+## Diz "onde o assentamento assenta", e NÃO "onde as construções ficam em
+## fila". A primeira versão dizia a segunda coisa, e por isso o degrau 1 —
+## que é acampamento de lona — saiu com casas de madeira: a cláusula de
+## câmera estava pedindo construção nos NOVE prompts, inclusive naquele em
+## que não deve haver nenhuma. O palco descreve o palco; quem povoa é a
+## descrição do degrau.
 ESTAGIO_CAMERA = (
-    "side view landscape panorama seen from across the valley, horizon line "
-    "two thirds up, a river curving through the valley floor, dark pine "
-    "forest on both slopes, blue mountain ridges behind, summer daylight")
+    "flat side view diorama composed in horizontal bands, no perspective "
+    "recession, everything standing at the same ground level: bright blue "
+    "sky with small fluffy white clouds and a warm sun in the upper right, a "
+    "distant snow-capped mountain range along the horizon, a dark pine "
+    "treeline below it, a flat level green meadow shelf across the middle "
+    "where the settlement stands, and a river running straight across the "
+    "very bottom edge")
 
-# A ordem das ZONAS é a do guia: recursos primeiro (cabanas e madeireira),
-# depois defesa (academia militar), depois sustento (moinho, campos,
-# armazéns). Cada degrau nomeia o ESTADO DA FORTALEZA e REPETE as zonas já
-# presentes — repetir é o que impede o gerador de "esquecer" a madeireira
-# quando a academia entra.
+# A ordem das ZONAS é a do guia do Felipe: recursos → defesa → sustento.
+# Cada linha nomeia o que a cena É, em substantivo concreto, e REPETE as
+# construções já presentes — repetir é o que impede o gerador de esquecer o
+# moinho quando o mercado entra.
 #
-# E cada linha nomeia o que a cena É, em substantivo concreto. Escrever como
-# acréscimo ("as tendas continuam, e agora há uma cerca") foi testado e
-# piorou: dizer o que fica manda o gerador MANTER, e ele mantém. A
-# continuidade é trabalho do init_image; a descrição existe para empurrar na
-# direção contrária.
+# Dois truques copiados da referência, de propósito:
+#   · a MURALHA entra como faixa de LARGURA INTEIRA (degrau 7), não como
+#     cerca em volta de um povoado em perspectiva. É a forma que a prateleira
+#     plana aceita.
+#   · o castelo aparece primeiro COM ANDAIME (degrau 8) e só depois pronto
+#     (degrau 9). Num jogo de gerenciamento, ver a obra em andamento vale
+#     mais que ver só o antes e o depois.
 ESTAGIOS = [
     ("estagio_01",
-     "a crumbling ruined stone keep with broken walls and ivy standing in "
-     "the centre of the valley floor, three canvas tents and a campfire "
-     "pitched at its foot, a supply cart"),
+     "a small mercenary camp on a patch of bare trampled earth in the "
+     "meadow: two large pointed canvas tents, a campfire with a cooking pot "
+     "on a tripod, three villagers sitting around it, a supply cart, a dirt "
+     "path down to a log raft crossing the river"),
     ("estagio_02",
-     "a crumbling ruined stone keep in the centre, now ringed by a rough "
-     "wooden palisade with a gate, canvas tents and one log cabin inside "
-     "the ring, a dug well"),
+     "a mercenary camp behind a rough wooden palisade fence with a gate: "
+     "canvas tents, a campfire, one log cabin, a dug well, a dirt path to a "
+     "log crossing over the river"),
     ("estagio_03",
-     "a ruined stone keep in the centre with its rubble cleared, log cabins "
-     "around it, a lumber yard with stacked logs and a sawpit, a wooden "
-     "palisade"),
+     "a hamlet of thatched timber houses with smoking chimneys standing in a "
+     "row on the flat meadow, a wooden palisade fence, small vegetable "
+     "plots, a wooden footbridge over the river"),
     ("estagio_04",
-     "a stone keep in the centre with its ground floor rebuilt and a new "
-     "timber roof, log cabins and a small wooden chapel around it, a lumber "
-     "yard with stacked logs"),
+     "a village on the flat meadow: a tall wooden windmill on the left, "
+     "thatched timber houses with smoking chimneys, fenced vegetable plots "
+     "and a livestock pen, a wooden bridge over the river"),
     ("estagio_05",
-     "a stone keep in the centre restored to two floors with a banner, a "
-     "military training yard with archery targets and a timber barracks "
-     "beside it, houses and a lumber yard around them"),
+     "a busy market town on the flat meadow: a wooden windmill, thatched "
+     "houses, market stalls under striped awnings, villagers walking the "
+     "dirt road, a wooden bridge over the river"),
     ("estagio_06",
-     "a fully restored grey stone keep in the centre, a quarry cut into the "
-     "hillside, a stone arch bridge over the river, houses rebuilt in stone, "
-     "a training yard and a lumber yard"),
+     "a market town rebuilt in grey stone: a wooden windmill, stone houses "
+     "with tiled roofs, a stone quarry with cut blocks, market stalls, a "
+     "stone arch bridge over the river"),
     ("estagio_07",
-     "a restored stone keep in the centre encircled by a grey stone curtain "
-     "wall with a gatehouse and corner towers, stone houses packed inside "
-     "the walls, a quarry on the hillside"),
+     "a walled town: a long grey stone curtain wall with battlements running "
+     "the full width of the scene behind the houses, a gatehouse in the "
+     "middle, the windmill and market stalls and stone houses in front of "
+     "the wall, a stone bridge over the river"),
     ("estagio_08",
-     "a walled stone town around a central keep, and outside the walls a "
-     "farm zone: a windmill on the rise, ploughed fields, granaries and "
-     "timber storehouses"),
+     "a castle under construction rising behind the full width stone curtain "
+     "wall: stone towers half built and wrapped in wooden scaffolding, a "
+     "timber crane, the windmill and market stalls and houses in front of "
+     "the wall, a stone bridge over the river"),
     ("estagio_09",
-     "a great castle: the central keep grown tall with banners and round "
-     "towers, concentric stone walls, the walled town and its farms and "
-     "windmill spread around it, a paved road climbing to the gate"),
+     "a finished stone castle standing behind the full width curtain wall, "
+     "no scaffolding: a tall gatehouse keep with round towers and a banner "
+     "flying, the windmill and market stalls and houses in front of the "
+     "wall, villagers on the dirt road, a stone bridge over the river"),
 ]
 
-# A cadeia é em SÉRIE, e desta vez funciona pelo motivo que faltava antes: a
-# partida carrega a fortaleza desde o degrau 1, então nenhum passo precisa
-# inventar pedra ou escala do zero.
+# A força por degrau, pelo TIPO de mudança que ele pede.
 #
-# A força não é uma rampa: ela depende do TIPO de mudança que o degrau pede.
-# Medido nesta leva, com a ruína no centro:
+# A prateleira plana NÃO permite força mais alta, e essa hipótese foi testada
+# e reprovada: com 165 no degrau 2 a paliçada e a cabana simplesmente não
+# apareceram — saiu o mesmo acampamento com os engradados virando carroça.
 #
-#   RESTAURAR um pedaço da fortaleza ......... 135–150 basta
-#   ACRESCENTAR UMA ZONA nova ................ 130 NÃO basta — a 130 a
-#       academia militar do degrau 5 simplesmente não apareceu, e o quadro
-#       saiu igual ao 4. Zona nova precisa de ~100.
-#   MUDAR A SILHUETA (muralha, castelo) ...... ~80
+# O enquadramento resolve ONDE a coisa cabe; ele não resolve QUANTA LICENÇA o
+# gerador precisa para desenhá-la. Os dois eixos são independentes, e a faixa
+# útil medida ao longo de toda esta sessão é a mesma de sempre:
 #
-# É a mesma lição de todas as levas anteriores, agora com o eixo certo: o que
-# manda não é a posição na escada, é o quanto do quadro precisa mudar. Os
-# degraus que só restauram podem obedecer muito à imagem; os que introduzem
-# uma zona ou fecham uma muralha precisam de licença para redesenhar.
-FORCA_POR_ESTAGIO = [None, 150, 140, 135, 100, 95, 80, 100, 80]
+#   acrescentar uma construção visível .... ~100–110
+#   trocar o MATERIAL do que já está lá ... ~90–95
+#   mudar a SILHUETA (muralha, castelo) ... ~80–90
+#   mudança local num quadro já cheio ..... até ~130 (tirar o andaime)
+FORCA_POR_ESTAGIO = [None, 110, 105, 105, 100, 95, 85, 90, 125]
+
+# ---------------------------------------------------------------
+# ATÉ ONDE ESTA CADEIA CHEGA — e onde ela para
+# ---------------------------------------------------------------
+# Com o enquadramento em faixas, os degraus 1 a 4 saem CERTOS: acampamento
+# de lona, paliçada com poço, casas de colmo, moinho. É o melhor resultado
+# de toda a investigação, e prova que a composição era mesmo o diagnóstico.
+#
+# Do degrau 5 em diante a cadeia DESABA. Aos 95 a reconstrução em pedra não
+# acontece; aos 85 a muralha aparece como faixa no lugar do RIO, o rio some,
+# a mata muda e o estilo achata num desenho saturado que não é mais o mesmo
+# jogo. Continuidade perdida.
+#
+# A conclusão, depois de medir 60, 80, 85, 95, 100, 105, 110, 115, 120, 125,
+# 130, 140, 150, 165, 170, 195, 200 e 300 em CINCO composições diferentes:
+#
+#   NÃO EXISTE valor de init_image_strength que ao mesmo tempo preserve a
+#   cena e acrescente uma estrutura grande. Alto demais não muda nada; baixo
+#   o bastante para construir já abandonou a imagem de partida. Os dois
+#   comportamentos se encostam sem deixar janela no meio.
+#
+# Isso é limite da FERRAMENTA (pixflux img2img), não de calibragem. Insistir
+# aqui é afinar um parafuso que não existe.
+#
+# O CAMINHO QUE FECHA ISSO é composição, não geração encadeada: gerar UMA vez
+# a placa de fundo, gerar cada construção como sprite TRANSPARENTE separado,
+# e montar os nove quadros em código. O fundo passa a ser literalmente o
+# mesmo arquivo em todos — continuidade perfeita, sem deriva — e o que
+# aparece em cada degrau vira uma decisão de lista, não uma negociação com o
+# modelo. Casa exatamente com o conceito de ZONAS: cada zona é um sprite que
+# entra no nível dela.
+
 
 def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
     """Os nove quadros da terra, EM CADEIA: cada um nasce do anterior.
