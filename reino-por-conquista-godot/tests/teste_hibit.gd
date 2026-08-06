@@ -95,19 +95,29 @@ func _frente_terra() -> void:
 	ok(tex != null and tex.get_width() == 400 and tex.get_height() == 224,
 		"o estágio carrega o PNG, não o caixote",
 		"%d×%d" % [tex.get_width(), tex.get_height()])
-	# e os seis têm que existir, senão um nível qualquer cai no cinza
+	# todos têm que existir, senão um nível qualquer cai no cinza
 	var faltam: Array[String] = []
 	for i in vista.cena.NOMES.size():
 		if not ResourceLoader.exists("res://assets/sprites/%s.png"
 				% vista.cena.NOMES[i]):
 			faltam.append(str(vista.cena.NOMES[i]))
-	ok(faltam.is_empty(), "os seis estágios existem em disco",
+	ok(faltam.is_empty(), "todo estágio existe em disco",
 		"faltando: %s" % ("nenhum" if faltam.is_empty() else ", ".join(faltam)))
+
+	# ---- as duas escadas têm que ter o mesmo número de degraus ----
+	# `_aplicar` traduz nível de terra em índice de estágio direto, e com
+	# `clampi` no meio. Se a tabela de níveis crescer e a arte não, os níveis
+	# de cima passam a mostrar todos o MESMO último quadro — e em silêncio,
+	# porque o clamp é justamente o que impede o erro de aparecer.
+	var Dados = load("res://scripts/dados.gd")
+	ok(Dados.NIVEIS_TERRA.size() == vista.cena.NOMES.size(),
+		"um quadro para cada degrau da terra",
+		"%d níveis · %d estágios"
+		% [Dados.NIVEIS_TERRA.size(), vista.cena.NOMES.size()])
 	vista.queue_free()
 
 	# ---- retratos de tropa ----
 	var Retratos = load("res://scripts/retratos.gd")
-	var Dados = load("res://scripts/dados.gd")
 	var sem_retrato: Array[String] = []
 	var lados := {}
 	for tipo in Dados.TROPAS:
@@ -119,6 +129,20 @@ func _frente_terra() -> void:
 	ok(sem_retrato.is_empty(), "as nove tropas têm retrato de 64px",
 		"sem arte: %s" % ("nenhuma" if sem_retrato.is_empty()
 			else ", ".join(sem_retrato)))
+
+	# ---- ilustrações de evento ----
+	var sem_arte: Array[String] = []
+	for ev in Retratos.EVENTOS:
+		var t: Texture2D = Retratos.ilustracao(str(ev))
+		if t == null or t.get_width() != Retratos.LADO_EVENTO:
+			sem_arte.append(str(ev))
+	ok(sem_arte.is_empty(), "os dez eventos têm ilustração de 128px",
+		"sem arte: %s" % ("nenhum" if sem_arte.is_empty()
+			else ", ".join(sem_arte)))
+	# a lista FECHADA é o que faz um typo aparecer como ausência, e não como
+	# ilustração errada — que é o defeito que ninguém rastreia até a causa
+	ok(Retratos.ilustracao("emboscda") == null,
+		"evento com typo devolve null, não arte de outro evento")
 
 
 # ------------------------------------------------------------

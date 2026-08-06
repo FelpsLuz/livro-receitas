@@ -56,9 +56,33 @@ func _init() -> void:
 	ok("o teto de tropas cresce a cada nível", cap_sobe)
 	ok("o imposto por habitante cresce a cada nível", imp_sobe)
 
+	# A ESCADA TEM QUE SER SUBÍVEL ATÉ O FIM.
+	# `melhorar_terra` já teve o teto escrito à mão (`nivel >= 5`). Com nove
+	# degraus isso travava o jogador na Vila de Pedra e respondia "nível
+	# máximo" — uma mensagem que era mentira, e que nenhum teste pegava
+	# porque a função devolvia `ok: false` educadamente.
+	var subindo := com_terra(0, 100)
+	subindo["jogador"]["ouro"] = 999999
+	subindo["terra"]["madeira"] = 999999
+	var degraus := 0
+	while degraus < Dados.NIVEIS_TERRA.size() + 5:
+		var r: Dictionary = Jogo.melhorar_terra(subindo)
+		if not r["ok"]:
+			break
+		degraus += 1
+	ok("com ouro e madeira de sobra, dá para chegar ao último degrau",
+		int(subindo["terra"]["nivel"]) == Dados.NIVEIS_TERRA.size() - 1,
+		"parou no nível %d de %d (%s)" % [int(subindo["terra"]["nivel"]),
+			Dados.NIVEIS_TERRA.size() - 1,
+			str(Dados.NIVEIS_TERRA[int(subindo["terra"]["nivel"])]["nome"])])
+
 	# o teto vem da INFRAESTRUTURA, não da população crua
+	# o topo vem da TABELA. Escrito à mão, este 5 continuaria "passando"
+	# depois que a escada foi para nove degraus — só que comparando o
+	# acampamento com a Vila de Pedra, e chamando isso de castelo.
+	var TOPO: int = Dados.NIVEIS_TERRA.size() - 1
 	var acamp := com_terra(0, 500)
-	var castelo := com_terra(5, 500)
+	var castelo := com_terra(TOPO, 500)
 	ok("mesma população, teto diferente por nível",
 		Recrutamento.pop_maxima(acamp) < Recrutamento.pop_maxima(castelo),
 		"%d vs %d" % [Recrutamento.pop_maxima(acamp), Recrutamento.pop_maxima(castelo)])
@@ -66,7 +90,7 @@ func _init() -> void:
 		Recrutamento.pop_maxima(acamp) == int(Dados.NIVEIS_TERRA[0]["cap"]),
 		"%d" % Recrutamento.pop_maxima(acamp))
 	# vila pequena limita mesmo com castelo: o menor dos dois manda
-	var pequeno := com_terra(5, 40)
+	var pequeno := com_terra(TOPO, 40)
 	ok("população pequena ainda limita o castelo",
 		Recrutamento.pop_maxima(pequeno) == 40, "%d" % Recrutamento.pop_maxima(pequeno))
 	ok("sem terra, o bando é minúsculo",

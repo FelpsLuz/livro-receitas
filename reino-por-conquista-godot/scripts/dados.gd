@@ -150,14 +150,49 @@ const FORMACOES := {
 #
 # A tensão que isso cria é de propósito: subir de nível custa ouro e madeira
 # AGORA para render teto e imposto DEPOIS.
+#
+# ---------------------------------------------------------------
+# POR QUE NOVE DEGRAUS E NÃO SEIS
+# ---------------------------------------------------------------
+# A escada tinha seis, e o salto era grande demais: de TENDAS DE LONA para
+# CASTELO DE PEDRA em cinco compras. Num jogo de gerenciamento isso custa
+# caro de duas formas.
+#
+#   · Os degraus do meio ficam sem identidade. Se o jogador vai de aldeia a
+#     cidade num pagamento, "Vila" e "Burgo" viram números de passagem, não
+#     lugares — e a decisão de parar e acumular perde o sentido.
+#   · A evolução parece MÁGICA. Faltava o degrau em que a madeira acumulada
+#     vira pedra. Aparecia muralha sem que nada antes explicasse de onde ela
+#     saiu.
+#
+# Nove degraus resolvem os dois, e a ordem agora tem uma lógica de MATERIAL,
+# não só de tamanho:
+#
+#     0–1   lona          o acampamento se fixa e ganha cerca
+#     2–4   madeira       casa, capela, moinho, mercado
+#     5     PEDRA ENTRA   pedreira, primeira construção de pedra
+#     6–7   muralha       o povoado vira praça fechada e depois cidade
+#     8     castelo       a torre de menagem corta o morro
+#
+# O CUSTO TOTAL DO CAMINHO QUASE NÃO MUDOU (9.960 de ouro contra 9.400
+# antes, 2.530 de madeira contra 2.310). Isso é deliberado: o pedido era
+# mais degraus, não um jogo mais longo. O que muda é o TAMANHO de cada
+# compra — a primeira subida custa 80 em vez de 200, então o jogador vê a
+# terra mudar no primeiro mês em vez do quinto, e a recompensa visual chega
+# com o dobro da frequência.
+#
+# `cap` e `imposto` continuam estritamente crescentes (teste_reino cobra).
 # ---------------------------------------------------------------
 const NIVEIS_TERRA := [
-	{"nome": "Acampamento", "custo_ouro": 0,    "custo_madeira": 0,    "cap": 30,  "imposto": 0.35},
-	{"nome": "Aldeia",      "custo_ouro": 200,  "custo_madeira": 60,   "cap": 80,  "imposto": 0.55},
-	{"nome": "Vila",        "custo_ouro": 500,  "custo_madeira": 150,  "cap": 160, "imposto": 0.85},
-	{"nome": "Burgo",       "custo_ouro": 1200, "custo_madeira": 300,  "cap": 300, "imposto": 1.25},
-	{"nome": "Cidade",      "custo_ouro": 2500, "custo_madeira": 600,  "cap": 550, "imposto": 1.75},
-	{"nome": "Castelo",     "custo_ouro": 5000, "custo_madeira": 1200, "cap": 900, "imposto": 2.40},
+	{"nome": "Acampamento",   "custo_ouro": 0,    "custo_madeira": 0,    "cap": 30,  "imposto": 0.35},
+	{"nome": "Paliçada",      "custo_ouro": 80,   "custo_madeira": 25,   "cap": 50,  "imposto": 0.44},
+	{"nome": "Aldeia",        "custo_ouro": 200,  "custo_madeira": 55,   "cap": 85,  "imposto": 0.55},
+	{"nome": "Vila",          "custo_ouro": 380,  "custo_madeira": 105,  "cap": 135, "imposto": 0.70},
+	{"nome": "Burgo",         "custo_ouro": 650,  "custo_madeira": 175,  "cap": 200, "imposto": 0.88},
+	{"nome": "Vila de Pedra", "custo_ouro": 1050, "custo_madeira": 270,  "cap": 290, "imposto": 1.10},
+	{"nome": "Cidade Murada", "custo_ouro": 1600, "custo_madeira": 400,  "cap": 410, "imposto": 1.40},
+	{"nome": "Cidadela",      "custo_ouro": 2400, "custo_madeira": 600,  "cap": 590, "imposto": 1.80},
+	{"nome": "Castelo",       "custo_ouro": 3600, "custo_madeira": 900,  "cap": 900, "imposto": 2.40},
 ]
 
 # ---------------------------------------------------------------

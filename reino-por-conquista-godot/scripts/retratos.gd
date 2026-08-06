@@ -82,10 +82,23 @@ static func textura_tropa(tipo: String) -> Texture2D:
 
 
 ## Ilustração de evento para os modais (cerco, emboscada, inverno…).
-## Devolve null para evento desconhecido: o modal segue só com texto.
+##
+## A lista EVENTOS continua fechada e continua mandando: evento desconhecido
+## devolve null e o modal segue só com texto. Não é detalhe de estilo — se
+## qualquer string ganhasse arte, um typo apareceria como IMAGEM ERRADA no
+## modal, e imagem errada é o defeito que ninguém liga ao typo que o causou.
+##
+## As dez existem como PNG opaco de 128×128 (ver `--eventos` em
+## ferramentas/hibit). Evento listado mas ainda sem arquivo cai no caixote,
+## que é o que mantém o layout enquanto uma ilustração nova não nasce.
 static func ilustracao(evento: String) -> Texture2D:
 	if not EVENTOS.has(evento):
 		return null
+	var caminho := PASTA + "evento_" + evento + ".png"
+	if ResourceLoader.exists(caminho):
+		var t = load(caminho)
+		if t is Texture2D:
+			return t
 	return Arte.caixa(LADO_EVENTO)
 
 

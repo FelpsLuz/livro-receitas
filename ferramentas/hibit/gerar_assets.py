@@ -618,11 +618,15 @@ def main() -> None:
     ap.add_argument("--colher-icones", action="store_true")
     ap.add_argument("--retratos", action="store_true",
                     help="os nove bustos de tropa (opacos, sem recorte)")
+    ap.add_argument("--eventos", action="store_true",
+                    help="as dez ilustrações de modal (opacas)")
+    ap.add_argument("--interpolados", action="store_true",
+                    help="os 3 degraus que faltam entre os 6 provados")
     ap.add_argument("--estagios", action="store_true",
                     help="os seis quadros da terra, em cadeia")
     ap.add_argument("--forca", type=int, default=0,
                     help="fixa init_image_strength em todos os degraus; "
-                         "0 (padrão) usa a rampa FORCA_CADEIA")
+                         "0 (padrão) usa FORCA_POR_ESTAGIO")
     ap.add_argument("--recolher", action="store_true",
                     help="busca tilesets já pagos (ids.json) sem gerar de novo")
     ap.add_argument("--variantes", type=int, default=1,
@@ -643,6 +647,20 @@ def main() -> None:
         antes = saldo()
         print(f"saldo antes: US$ {antes:.4f}")
         gerar_retratos_tropa()
+        print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
+        return
+
+    if a.eventos:
+        antes = saldo()
+        print(f"saldo antes: US$ {antes:.4f}")
+        gerar_eventos()
+        print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
+        return
+
+    if a.interpolados:
+        antes = saldo()
+        print(f"saldo antes: US$ {antes:.4f}")
+        gerar_interpolados()
         print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
         return
 
@@ -799,31 +817,126 @@ RETRATOS_TROPA = {
 # Daí a RAMPA: a força cai a cada degrau. Os primeiros passos são pequenos e
 # a imagem manda; os últimos são saltos de escala e a descrição manda. O vale
 # sobrevive porque cada passo ainda parte do ANTERIOR — o 70 do último degrau
-# olha para um burgo, não para o acampamento, e por isso não perde o rio como
-# perdeu no teste ancorado.
-FORCA_CADEIA = [None, 170, 145, 115, 90, 70]
+# olha para uma cidadela, não para o acampamento, e por isso não perde o rio
+# como perdeu no teste ancorado.
+#
+# ---------------------------------------------------------------
+# POR QUE A CADEIA EM SÉRIE FOI ABANDONADA
+# ---------------------------------------------------------------
+# Com seis degraus, encadear cada estágio no ANTERIOR funcionou. Com nove,
+# não funcionou de jeito nenhum — duas rampas foram testadas e as duas
+# devolveram NOVE QUADROS DE TENDA:
+#
+#   195 → 70   o castelo do último degrau saiu como o acampamento com uma
+#              torrinha no meio
+#   170 → 128  idem: no estágio 4, que devia ser vila com capela e campos
+#              arados, ainda eram as mesmas três tendas
+#
+# A primeira leitura foi que a força estava alta. Estava, mas não era essa a
+# causa. O problema é ESTRUTURAL: encadeando em série, cada degrau herda do
+# anterior o VALE *e a TENDA*, e o gerador não distingue "o que é cenário" de
+# "o que é povoado". Nove passos multiplicam a herança em vez de diluí-la — a
+# tenda atravessa a escada inteira porque nunca existiu um quadro sem ela
+# para partir. Baixar mais a força não salva: aos ~60 a imagem de partida
+# deixa de ser referência e o vale se perde junto (medido).
+#
+# A SAÍDA é separar as duas coisas. Gera-se UMA VEZ o vale VAZIO — sem
+# povoado nenhum — e os nove degraus são ancorados NELE, não uns nos outros:
+#
+#   · a continuidade vem do vale, que é o mesmo arquivo nas nove chamadas
+#   · a diferença vem da descrição, que nasce limpa a cada degrau, sem tenda
+#     nem muralha herdada para o gerador se agarrar
+#
+# Custa uma imagem a mais e devolve o controle: mudar o degrau 5 não mexe nos
+# degraus 6 a 9, o que na cadeia em série obrigava a refazer tudo abaixo.
+ESTAGIO_BASE = ("an empty wide green river valley with no buildings and no "
+                "people: a river winding through open meadow, dark pine "
+                "forest on both slopes, blue mountain ridges behind")
+
+# ---------------------------------------------------------------
+# A ÂNCORA HÍBRIDA — e por que as duas puras falharam
+# ---------------------------------------------------------------
+# Duas arquiteturas foram testadas inteiras, e cada uma falhou pelo motivo
+# OPOSTO à outra. É o par de fracassos que aponta a saída.
+#
+#   SÉRIE PURA (cada degrau nasce do anterior).
+#   Funcionou com seis degraus, quebrou com nove: a TENDA atravessa a escada
+#   toda. O gerador não separa "cenário" de "povoado", então cada passo herda
+#   os dois — e com nove passos a herança se multiplica em vez de diluir.
+#   Testado em 195→70 e em 170→128: nove quadros de tenda nas duas.
+#
+#   VALE PURO (todos os degraus nascem do mesmo vale vazio).
+#   Resolve a tenda — cada descrição nasce limpa — e resolve os degraus
+#   PEQUENOS: acampamento, paliçada, aldeia e vila saem certos. Mas os
+#   GRANDES somem: com 95 o mercado virou duas cabanas, com 85 a vila de
+#   pedra virou carroças num campo. Partindo do vazio, encher o vale é
+#   distância demais, e a força que o gerador precisaria (~60) é a mesma que
+#   já se mediu como o ponto em que o vale deixa de ser referência.
+#
+# O padrão: o vale vazio é boa partida ENQUANTO O POVOADO É PEQUENO, e má
+# partida depois. O anterior é boa partida QUANDO JÁ HÁ POVOADO PARA HERDAR,
+# e má partida quando o que há para herdar é uma tenda que devia ter sumido.
+#
+# Daí o corte em dois trechos:
+#
+#   0–3   ancorados no VALE VAZIO. Povoado pequeno, distância curta, e
+#         nenhuma tenda herdada porque não há de quem herdar.
+#   4–8   em SÉRIE a partir do degrau 3. Aqui já existe uma vila de verdade
+#         no quadro de partida, então "adicionar mercado" e "refazer em
+#         pedra" são passos curtos — que é exatamente o que a cadeia de seis
+#         degraus provou saber fazer.
+#
+# A força cai ao longo dos dois trechos porque o alvo se afasta da partida em
+# ambos, só que por razões diferentes: no primeiro trecho o povoado cresce
+# sobre o vazio, no segundo a escala cresce sobre o povoado.
+CORTE_SERIE = 4
+FORCA_POR_ESTAGIO = [130, 118, 108, 100, 120, 105, 90, 78, 68]
 ESTAGIO_LADO = (400, 224)
 ESTAGIO_CAMERA = (
     "side view landscape panorama seen from across the valley, horizon line "
     "two thirds up, a river curving in from the left, wooded hills on the "
     "right, open sky above, summer daylight")
 
+# NOVE, e cada uma descreve o ALVO em substantivos concretos.
+#
+# A tentativa de escrever como acréscimo ("as tendas continuam, e agora há
+# uma cerca em volta") piorou o resultado, não melhorou: dizer o que fica
+# manda o gerador MANTER, e ele mantém — as tendas atravessaram os nove
+# quadros. A continuidade é trabalho do `init_image`; a descrição existe para
+# puxar na direção contrária, senão nada empurra.
+#
+# Por isso cada linha nomeia o que a cena É, e nomeia o MATERIAL: "casas de
+# madeira com telhado de colmo", "capela de pedra cinza", "muralha de pedra".
+# É o substantivo que o gerador pinta.
+#
+# A ordem segue Dados.NIVEIS_TERRA, degrau a degrau, e a lógica é de
+# MATERIAL: lona → madeira → pedra → muralha → castelo. O degrau 6 é o eixo
+# da coisa toda — é onde a pedra entra, e sem ele a muralha do 7 apareceria
+# sem que nada antes explicasse de onde veio.
 ESTAGIOS = [
-    ("estagio_01", "a small mercenary camp: three canvas tents, a campfire "
-                   "with a cooking pot, a cart, bare trampled ground"),
-    ("estagio_02", "a young hamlet: six thatched wooden huts, a vegetable "
-                   "plot, a wooden fence, a well"),
-    ("estagio_03", "a village: a dozen timber houses, a stone chapel with a "
-                   "small bell tower, ploughed fields, a wooden bridge"),
-    ("estagio_04", "a walled market town: tiled roofs packed together, a "
-                   "wooden palisade with a gatehouse, a watermill on the "
-                   "river, market awnings"),
-    ("estagio_05", "a large city: stone curtain wall with towers, a "
-                   "cathedral spire, dense rooftops, a stone bridge, docks "
-                   "on the river"),
-    ("estagio_06", "a great castle city: a high keep with banners on the "
-                   "hill, concentric stone walls and towers, the whole city "
-                   "spread below, a paved road to the gate"),
+    ("estagio_01", "a mercenary camp of three canvas tents around a "
+                   "campfire, a supply cart, bare trampled earth"),
+    ("estagio_02", "a fortified camp: canvas tents ringed by a rough wooden "
+                   "palisade with a gate, one log cabin, a dug well"),
+    ("estagio_03", "a hamlet of small thatched timber houses, a livestock "
+                   "pen, vegetable plots, a wooden palisade around it"),
+    ("estagio_04", "a village of timber houses with a wooden chapel and bell "
+                   "tower, ploughed strip fields, a wooden bridge over the "
+                   "river"),
+    ("estagio_05", "a busy market town of packed timber roofs, market stalls "
+                   "under striped awnings, a watermill turning on the river, "
+                   "craft workshops"),
+    ("estagio_06", "a town rebuilt in grey stone: a stone chapel, a stone "
+                   "arch bridge over the river, a quarry cut into the "
+                   "hillside, carts hauling blocks"),
+    ("estagio_07", "a walled town: a grey stone curtain wall with a "
+                   "gatehouse and corner towers encircling tiled rooftops"),
+    ("estagio_08", "a citadel: tall stone towers along the city wall, a "
+                   "cathedral spire above dense tiled roofs, timber docks "
+                   "and moored boats on the river"),
+    ("estagio_09", "a great stone castle on the hill above a walled city: a "
+                   "high keep with banners, concentric walls and round "
+                   "towers, a paved road climbing to the gate"),
 ]
 
 
@@ -857,23 +970,141 @@ def gerar_retratos_tropa(seed: int = 4242) -> None:
             print("\n    ❌ resposta sem imagem")
             continue
         _salvar_b64(b64, destino)
+        anterior_b64 = b64
         print(f"  ✅ US$ {real:.4f}")
 
 
-def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
-    """Os seis quadros da terra, EM CADEIA: cada um nasce do anterior.
+# ---------------------------------------------------------------
+# A ESPINHA DORSAL — seis quadros provados, três interpolados
+# ---------------------------------------------------------------
+# Cinco arquiteturas foram testadas para gerar os nove de uma vez, e todas
+# falharam no MESMO ponto: os degraus grandes (mercado, cidade, cidadela)
+# saíam como campo vazio. O padrão, depois de tudo:
+#
+#   Qualquer imagem de partida que seja PAISAGEM AMPLA puxa para o vazio, em
+#   qualquer força que ainda preserve o vale. O gerador pinta o que a
+#   partida já é; um vale com dois celeiros continua um vale com dois
+#   celeiros, e a descrição não o enche.
+#
+# O único run que produziu cidade murada e castelo de verdade foi a cadeia de
+# SEIS, e o que a fez funcionar não foi a força — foi a partida: cada degrau
+# partia de um quadro que JÁ ERA POVOADO, então "adensar" era um passo curto.
+#
+# Daí a estratégia final: as seis provadas viram a ESPINHA DORSAL da escada
+# de nove, e só os três degraus que faltam são gerados — cada um a partir do
+# VIZINHO DE BAIXO, que é o passo curto que se sabe funcionar.
+#
+#   1 Acampamento    ← provado 01
+#   2 Paliçada       ← GERADO a partir do 1
+#   3 Aldeia         ← provado 02
+#   4 Vila           ← provado 03
+#   5 Burgo          ← provado 04
+#   6 Vila de Pedra  ← GERADO a partir do 5
+#   7 Cidade Murada  ← provado 05
+#   8 Cidadela       ← GERADO a partir do 7
+#   9 Castelo        ← provado 06
+#
+# Os três novos ficam entre dois quadros conhecidos, então cada um tem um
+# antes e um depois para não destoar — o que nenhuma das cinco tentativas
+# anteriores teve.
+INTERPOLADOS = {
+    "estagio_02": ("estagio_01", 150,
+                   "a mercenary camp of canvas tents now enclosed by a rough "
+                   "wooden palisade fence with a gate, a log cabin and a dug "
+                   "well beside the tents"),
+    # 85 e não 115: a 115 a pedra simplesmente não entrava — o quadro saía
+    # como o 05 com uma casa a mais. "Refazer em pedra" troca o MATERIAL de
+    # tudo que já está lá, que é um passo maior do que acrescentar prédio, e
+    # por isso pede mais licença que os outros dois interpolados.
+    "estagio_06": ("estagio_05", 85,
+                   "the same village rebuilt in grey stone: a stone chapel, "
+                   "a stone arch bridge over the river, a quarry cut into "
+                   "the hillside, carts hauling stone blocks"),
+    "estagio_08": ("estagio_07", 125,
+                   "the same walled town grown into a citadel: tall stone "
+                   "towers along the wall, a cathedral spire above dense "
+                   "tiled roofs, timber docks and moored boats on the river"),
+}
 
-    `forca` em 0 usa a RAMPA (FORCA_CADEIA). Um valor explícito fixa o mesmo
+
+def gerar_interpolados(seed: int = 4242) -> None:
+    """Os três degraus que faltam, cada um a partir do vizinho de baixo."""
+    CRU.mkdir(parents=True, exist_ok=True)
+    for nome in sorted(INTERPOLADOS):
+        destino = CRU / f"{nome}.png"
+        if destino.exists():
+            print(f"  \u00b7 {nome} j\u00e1 existe")
+            continue
+        de, forca, desc = INTERPOLADOS[nome]
+        partida = CRU / f"{de}.png"
+        if not partida.exists():
+            print(f"  \u274c {nome}: falta a partida {de}.png")
+            continue
+        corpo = {
+            "description": "%s, %s, %s" % (desc, ESTAGIO_CAMERA, ESTILO),
+            "image_size": {"width": ESTAGIO_LADO[0], "height": ESTAGIO_LADO[1]},
+            "view": "side", "outline": "selective outline",
+            "shading": "detailed shading", "detail": "highly detailed",
+            "text_guidance_scale": 8.0, "seed": seed,
+            "init_image": {"type": "base64",
+                           "base64": base64.b64encode(
+                               partida.read_bytes()).decode()},
+            "init_image_strength": forca,
+        }
+        print(f"  \u27f3 {nome} \u2190 {de} @{forca}", end="", flush=True)
+        c, d = _post("/create-image-pixflux", corpo, tempo=600)
+        if c != 200:
+            print(f"\n    \u274c HTTP {c}: {str(d.get('erro'))[:250]}")
+            continue
+        real = _registrar(nome, d)
+        b64 = _extrair(d)
+        if not b64:
+            print("\n    \u274c resposta sem imagem")
+            continue
+        _salvar_b64(b64, destino)
+        print(f"  \u2705 US$ {real:.4f}")
+
+
+def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
+    """Os quadros da terra, todos ancorados no MESMO vale vazio.
+
+    `forca` em 0 usa FORCA_POR_ESTAGIO. Um valor explícito fixa o mesmo
     número em todos os degraus — serve para experimentar, não para produzir.
     """
     CRU.mkdir(parents=True, exist_ok=True)
+    # ---- o vale, uma vez só ----
+    base = CRU / "estagio_base.png"
+    if not base.exists():
+        corpo = {
+            "description": "%s, %s, %s" % (ESTAGIO_BASE, ESTAGIO_CAMERA, ESTILO),
+            "image_size": {"width": ESTAGIO_LADO[0], "height": ESTAGIO_LADO[1]},
+            "view": "side", "outline": "selective outline",
+            "shading": "detailed shading", "detail": "highly detailed",
+            "text_guidance_scale": 8.0, "seed": seed,
+        }
+        print("  \u27f3 estagio_base (o vale vazio)", end="", flush=True)
+        c, d = _post("/create-image-pixflux", corpo, tempo=600)
+        if c != 200:
+            print(f"\n    \u274c HTTP {c}: {str(d.get('erro'))[:250]}")
+            return
+        real = _registrar("estagio_base", d)
+        b64 = _extrair(d)
+        if not b64:
+            print("\n    \u274c resposta sem imagem")
+            return
+        _salvar_b64(b64, base)
+        print(f"  \u2705 US$ {real:.4f}")
+    vale_b64 = base64.b64encode(base.read_bytes()).decode()
     anterior_b64 = ""
+
     for i, (nome, desc) in enumerate(ESTAGIOS):
         destino = CRU / f"{nome}.png"
         if destino.exists():
-            print(f"  · {nome} já existe")
-            # relê para servir de partida ao próximo, senão a cadeia quebra
-            # exatamente onde ela é mais necessária: no meio.
+            print(f"  \u00b7 {nome} j\u00e1 existe")
+            # relê: o trecho em SÉRIE precisa deste quadro como partida.
+            # Sem isto, retomar um run parcial faz o primeiro degrau do
+            # trecho serial cair de volta no vale vazio — e cair em silêncio,
+            # porque o resultado ainda é uma imagem plausível.
             anterior_b64 = base64.b64encode(destino.read_bytes()).decode()
             continue
         corpo = {
@@ -887,22 +1118,106 @@ def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
             "no_background": False,
             "seed": seed,
         }
-        if anterior_b64:
-            f = forca if forca else (FORCA_CADEIA[i] or FORCA_CADEIA[-1])
-            corpo["init_image"] = {"type": "base64", "base64": anterior_b64}
-            corpo["init_image_strength"] = f
-        print(f"  ⟳ {nome} ({ESTAGIO_LADO[0]}×{ESTAGIO_LADO[1]})"
-              f"{' ← ' + ESTAGIOS[i - 1][0] if anterior_b64 else ''}",
-              end="", flush=True)
+        em_serie = i >= CORTE_SERIE and anterior_b64 != ""
+        partida = anterior_b64 if em_serie else vale_b64
+        corpo["init_image"] = {"type": "base64", "base64": partida}
+        corpo["init_image_strength"] = (
+            forca if forca else FORCA_POR_ESTAGIO[min(i, len(FORCA_POR_ESTAGIO) - 1)])
+        de = ESTAGIOS[i - 1][0] if em_serie else "vale"
+        print(f"  ⟳ {nome} ({ESTAGIO_LADO[0]}×{ESTAGIO_LADO[1]}) ← {de} "
+              f"@{corpo['init_image_strength']}", end="", flush=True)
         c, d = _post("/create-image-pixflux", corpo, tempo=600)
         if c != 200:
             print(f"\n    ❌ HTTP {c}: {str(d.get('erro'))[:250]}")
-            return   # sem o anterior, a cadeia não continua
+            continue   # um degrau que falha não derruba os outros
         real = _registrar(nome, d)
         b64 = _extrair(d)
         if not b64:
             print("\n    ❌ resposta sem imagem")
             return
+        _salvar_b64(b64, destino)
+        anterior_b64 = b64
+        print(f"  ✅ US$ {real:.4f}")
+
+
+
+# ===============================================================
+# ILUSTRAÇÕES DE EVENTO — as dez faixas dos modais
+# ===============================================================
+# 128×128 porque é o que `Retratos.LADO_EVENTO` promete, e o layout já está
+# construído em cima disso (`_faixa` mostra a 110–120px de altura com aspecto
+# preservado). Mudar o número aqui mexeria em `principal.gd`; o contrato veio
+# primeiro.
+#
+# OPACAS. Como os retratos, são QUADROS: aparecem dentro do modal com o texto
+# embaixo, não recortadas sobre o painel. Nada a recortar, nada a errar.
+#
+# A lista é FECHADA e espelha `Retratos.EVENTOS`. Um evento com typo tem que
+# continuar devolvendo null — se `ilustracao()` inventasse arte para qualquer
+# string, o erro só apareceria como imagem errada no modal, que é o tipo de
+# defeito que ninguém liga ao typo que o causou.
+EVENTO_LADO = 128
+EVENTO_ENQUADRE = (
+    "single dramatic scene, medieval, wide composition, strong readable "
+    "silhouette, no text, no frame, no border, no user interface")
+
+EVENTOS = {
+    "cerco": "a besieged castle gate under attack, siege ladders against the "
+             "wall, a trebuchet, smoke rising",
+    "coroacao": "a crown being lowered onto a kneeling lord in a cathedral, "
+                "banners and candlelight",
+    "derrota": "a broken banner lying in the mud of a lost battlefield, "
+               "scattered shields, crows overhead",
+    "emboscada": "armed men bursting from a dark forest onto a narrow road, "
+                 "a toppled cart",
+    # "empty granary with bare shelves" devolveu um celeiro ABASTECIDO: o
+    # gerador pinta o substantivo (celeiro, prateleira) e ignora o adjetivo
+    # que o nega. A fome tem que estar no que se VÊ, não no que se nega —
+    # daí campo morto, gente caída e o saco virado.
+    "fome": "a dead withered wheat field under a harsh sky, cracked bare "
+            "earth, an overturned empty sack, gaunt ragged peasants sitting "
+            "on the ground with empty bowls, a crow on a bare branch",
+    "inverno": "a snowbound village under heavy grey sky, frozen river, "
+               "smoke from one lone chimney",
+    "juramento": "a knight kneeling and laying his sword at a lord's feet, "
+                 "witnesses in a torchlit hall",
+    "rebeliao": "angry peasants with torches and pitchforks massed before a "
+                "manor gate at night",
+    "saque": "soldiers carrying off sacks and chests from a burning village",
+    "traicao": "a hooded figure passing a dagger behind a nobleman's back in "
+               "a shadowed corridor",
+}
+
+
+def gerar_eventos(seed: int = 4242) -> None:
+    """As dez faixas de modal. Opacas, sem recorte."""
+    CRU.mkdir(parents=True, exist_ok=True)
+    for chave, desc in EVENTOS.items():
+        destino = CRU / f"evento_{chave}.png"
+        if destino.exists():
+            print(f"  · evento_{chave} já existe")
+            continue
+        corpo = {
+            "description": "%s, %s, %s" % (desc, EVENTO_ENQUADRE, ESTILO),
+            "image_size": {"width": EVENTO_LADO, "height": EVENTO_LADO},
+            "view": "side",
+            "outline": "selective outline",
+            "shading": "detailed shading",
+            "detail": "highly detailed",
+            "text_guidance_scale": 8.0,
+            "no_background": False,
+            "seed": seed,
+        }
+        print(f"  ⟳ evento_{chave}", end="", flush=True)
+        c, d = _post("/create-image-pixflux", corpo, tempo=600)
+        if c != 200:
+            print(f"\n    ❌ HTTP {c}: {str(d.get('erro'))[:200]}")
+            continue
+        real = _registrar("evento_" + chave, d)
+        b64 = _extrair(d)
+        if not b64:
+            print("\n    ❌ resposta sem imagem")
+            continue
         _salvar_b64(b64, destino)
         anterior_b64 = b64
         print(f"  ✅ US$ {real:.4f}")

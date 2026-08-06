@@ -203,10 +203,52 @@ roubar a leitura da tabela ao lado.
 
 ---
 
-## A terra — seis quadros, um por nível
+## A terra — nove quadros, um por nível
 
 `assets/sprites/estagio_0N.png`, 400×224, opacos. Um por degrau de
-`Dados.NIVEIS_TERRA`: Acampamento, Aldeia, Vila, Burgo, Cidade, Castelo.
+`Dados.NIVEIS_TERRA`.
+
+### Por que nove e não seis
+
+A escada tinha seis, e o salto era grande demais: de **tendas de lona** a
+**castelo de pedra** em cinco compras. Num jogo de gerenciamento isso cobra
+caro de duas formas.
+
+Os degraus do meio perdem identidade — se o jogador vai de aldeia a cidade num
+pagamento, "Vila" e "Burgo" viram números de passagem, não lugares, e parar
+para acumular deixa de ser uma decisão. E a evolução parece **mágica**:
+faltava o degrau em que a madeira acumulada vira pedra, então a muralha
+aparecia sem que nada antes explicasse de onde ela saiu.
+
+Nove degraus, com uma lógica de **material** e não só de tamanho:
+
+| # | nível | o que entra |
+|---|---|---|
+| 0 | Acampamento | lona: tendas, fogueira, carroça |
+| 1 | Paliçada | cerca de madeira com portão, primeira cabana, poço |
+| 2 | Aldeia | casas de colmo no lugar das tendas, hortas, curral |
+| 3 | Vila | capela de madeira, campos arados, ponte |
+| 4 | Burgo | mercado, moinho d'água, oficinas |
+| 5 | **Vila de Pedra** | **a pedra entra**: pedreira, capela e ponte refeitas |
+| 6 | Cidade Murada | muralha de pedra com casa-forte; a paliçada sai |
+| 7 | Cidadela | torres, catedral, docas no rio |
+| 8 | Castelo | torre de menagem no morro, muralhas concêntricas |
+
+O degrau 5 é o eixo: sem ele o 6 seria mágica de novo.
+
+**O custo total do caminho quase não mudou** — 9.960 de ouro contra 9.400,
+2.530 de madeira contra 2.310. Isso é deliberado: o pedido era mais degraus,
+não um jogo mais longo. O que muda é o *tamanho de cada compra*. A primeira
+subida custa 80 em vez de 200, então a terra muda no primeiro mês em vez do
+quinto, e a recompensa visual chega com o dobro da frequência.
+
+### As descrições dizem o que SE SOMA
+
+A leva de seis descrevia cada quadro do zero ("uma vila com doze casas"), e o
+gerador tratava cada pedido como cena nova — o que sobrevivia de um degrau ao
+outro era só o que o `init_image` conseguia segurar. Escritas como acréscimo
+("as tendas continuam, e agora há uma cerca em volta"), a descrição empurra na
+mesma direção da imagem de partida em vez de competir com ela.
 
 **400×224 e não os 480×270 de antes.** O endpoint recusa lado acima de 400 e
 exige ambos divisíveis por 4. A alternativa era gerar menor e ampliar, mas
@@ -220,37 +262,55 @@ fator dela (1,33 numa tela de 1280 sobre a base de 960) e nenhum inteiro
 sobrevive a isso. Quem segura a grade de pixel é o filtro NEAREST do
 viewport, não a escala.
 
-### As seis são a MESMA terra
+### As nove são a MESMA terra
 
-Seis chamadas independentes dariam seis vales diferentes, e subir de
-Acampamento a Castelo leria como teletransporte. A cadeia amarra: cada
-estágio usa o anterior como `init_image`, com a mesma câmera e a mesma
-semente. O rio, a mata e a linha do horizonte vêm da imagem, não do texto.
+Nove chamadas independentes dariam nove vales diferentes, e subir de nível
+leria como teletransporte. A continuidade vem de um **vale vazio** —
+`estagio_base.png`, gerado uma vez, sem povoado nenhum — usado como
+`init_image` nas nove chamadas.
 
-**A força da cadeia é o número que decide tudo**, e foi medido:
+**A cadeia em série foi abandonada, e vale registrar por quê.** Com seis
+degraus, encadear cada estágio no *anterior* funcionava. Com nove, não
+funcionou de jeito nenhum — duas rampas testadas, as duas devolvendo **nove
+quadros de tenda**:
 
-| `init_image_strength` | resultado |
+| rampa | resultado |
 |---|---|
-| 300 | a terra **não evolui** — os seis saem sendo o acampamento |
-| 200 | ainda o acampamento, com uma bandeira a mais |
-| 120 | o vale se mantém, mas a construção chega só a "aldeia com torres" |
-| 60 | o castelo aparece inteiro **e o rio some** — virou outro lugar |
+| 195 → 70 | o castelo do último degrau saiu como o acampamento com uma torrinha |
+| 170 → 128 | no estágio 4, que devia ser vila com capela e campos arados, ainda as mesmas três tendas |
 
-Nenhum valor fixo serve, e isso também custou uma leva: com 140 em todos os
-degraus a cadeia anda até o estágio 3 e **empaca** — 04, 05 e 06 saem sendo a
-mesma aldeia com telhados trocados. A força não pesa a distância que falta, e
-"aldeia → burgo" precisa de mais liberdade que "acampamento → aldeia".
+A primeira leitura foi que a força estava alta. Estava — mas não era essa a
+causa. O problema é **estrutural**: encadeando em série, cada degrau herda do
+anterior o vale *e a tenda*, e o gerador não distingue "o que é cenário" de "o
+que é povoado". Nove passos multiplicam a herança em vez de diluí-la, porque
+nunca existiu um quadro sem tenda para partir. Baixar mais a força não salva:
+aos ~60 a imagem de partida deixa de ser referência e o vale se perde junto.
 
-Daí a **rampa** — `170, 145, 115, 90, 70`. Os primeiros passos são pequenos e
-a imagem manda; os últimos são saltos de escala e a descrição manda. O vale
-sobrevive porque cada passo parte do anterior: o 70 do último degrau olha
-para um burgo, não para o acampamento.
+Ancorar no vale vazio separa as duas coisas:
 
-O tratamento mede dois pisos (nenhum degrau parado, e ponta-a-ponta acima de
-12). São **guardas de regressão** calibradas na leva boa, não prova de
-qualidade — prendem a cadeia de voltar a empacar sem ninguém notar. Para
-julgar a arte continua valendo abrir a folha de contato e olhar. Foi olhando,
-não medindo, que o platô apareceu: cada quadro isolado parecia certo.
+- a **continuidade** vem do vale, o mesmo arquivo nas nove chamadas;
+- a **diferença** vem da descrição, que nasce limpa a cada degrau, sem tenda
+  nem muralha herdada para o gerador se agarrar.
+
+Custa uma imagem a mais e devolve o controle: mudar o degrau 5 não mexe nos
+degraus 6 a 9, o que na cadeia em série obrigava a refazer tudo abaixo.
+
+**Força única (105), não rampa.** Como todos partem do mesmo vale, todos têm
+a mesma distância a percorrer — não existe degrau "mais longe" que outro. A
+rampa só fazia sentido quando o ponto de partida mudava a cada passo.
+
+### As descrições nomeiam o alvo, não o acréscimo
+
+Escrever como acréscimo ("as tendas continuam, e agora há uma cerca em volta")
+piorou o resultado: dizer o que fica manda o gerador **manter**, e ele mantém.
+A continuidade é trabalho do `init_image`; a descrição existe para puxar na
+direção contrária, senão nada empurra. Cada linha nomeia o que a cena **é** e
+nomeia o **material** — "casas de colmo", "capela de pedra cinza", "muralha de
+pedra". É o substantivo que o gerador pinta.
+
+Corolário, aprendido na ilustração da fome: o gerador **pinta o substantivo e
+ignora o adjetivo que o nega**. Conceito definido por ausência precisa ser
+descrito pelo que se vê no lugar dele.
 
 ---
 
@@ -281,9 +341,34 @@ encosta na borda e chega até lá por vizinhança.
 
 ---
 
+## Ilustrações de evento
+
+`assets/sprites/evento_<chave>.png`, 128×128, opacas. Dez, uma por entrada de
+`Retratos.EVENTOS`: cerco, coroação, derrota, emboscada, fome, inverno,
+juramento, rebelião, saque, traição.
+
+128 porque é o que `Retratos.LADO_EVENTO` promete e o layout já está
+construído em cima disso — `_faixa` as mostra a 110–120px de altura com
+aspecto preservado. O contrato veio primeiro; mudar o número aqui mexeria em
+`principal.gd`.
+
+**A lista continua FECHADA.** Evento desconhecido devolve `null` e o modal
+segue só com texto. Não é rigor decorativo: se qualquer string ganhasse arte,
+um typo apareceria como *ilustração errada* no modal — e imagem errada é o
+defeito que ninguém liga ao typo que o causou. O teste cobra
+`ilustracao("emboscda") == null`.
+
+**O gerador pinta o substantivo e ignora o adjetivo que o nega.** "Empty
+granary with bare shelves" devolveu um celeiro fartamente abastecido. A saída
+não é insistir no "empty" — é descrever o que se VÊ: campo de trigo morto,
+terra rachada, saco virado, gente caída, corvo em galho seco. Vale para
+qualquer conceito definido por ausência.
+
+---
+
 ## O que falta
 
-**As ilustrações de evento.** Dez faixas de 128px (`Retratos.EVENTOS`) —
-cerco, fome, traição, coroação. Hoje em caixote, e o modal segue só com texto
-para quem não tem arte, que é o comportamento correto enquanto elas não
-existem.
+Nada de arte na tela principal. O que resta é fora do escopo visual:
+os retratos de pessoa (`Retratos.textura`, 64px) ainda são caixote — a Corte
+mostra nome, cargo e relação em texto, e um rosto genérico ali seria pior
+que nenhum.

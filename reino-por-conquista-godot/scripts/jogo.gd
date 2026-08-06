@@ -183,7 +183,10 @@ static func melhorar_terra(state: Dictionary) -> Dictionary:
 	if state["terra"] == null:
 		return {"ok": false, "msg": "Sem terras."}
 	var t: Dictionary = state["terra"]
-	if t["nivel"] >= 5:
+	# O teto vem da TABELA, não de um 5 escrito à mão. Com a escada em nove
+	# degraus o literal teria travado o jogador na "Vila de Pedra" — e sem
+	# erro nenhum, só uma mensagem de "nível máximo" que era mentira.
+	if int(t["nivel"]) >= Dados.NIVEIS_TERRA.size() - 1:
 		return {"ok": false, "msg": "Nível máximo."}
 	var prox: Dictionary = Dados.NIVEIS_TERRA[t["nivel"] + 1]
 	if state["jogador"]["ouro"] < prox["custo_ouro"] or t["madeira"] < prox["custo_madeira"]:

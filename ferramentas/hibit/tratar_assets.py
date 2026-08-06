@@ -564,41 +564,65 @@ def main() -> int:
     # cenario_v3_cena.gd NATIVO) e que os seis não sejam a mesma imagem — uma
     # cadeia com init_image forte demais devolve seis quadros quase idênticos,
     # e aí a evolução de Acampamento a Castelo não aparece.
-    estagios = sorted(CRU.glob("estagio_*.png"))
+    # o vale vazio é INSUMO da geração, não quadro do jogo: se entrasse na
+    # lista viraria um décimo estágio que a cena nunca pede, e a asserção de
+    # "um quadro por degrau" passaria a comparar 9 contra 10.
+    estagios = sorted(p for p in CRU.glob("estagio_*.png")
+                      if p.stem != "estagio_base")
     if estagios:
         print("\n── estágios da terra (opacos) ──")
-        assinaturas = []
         for p in estagios:
             im = Image.open(p).convert("RGB")
             destino = DEST / p.name
             im.save(destino)
             if not a.sem_import:
                 _import_pixelart(destino)
-            arr = np.array(im)
-            assinaturas.append(arr.reshape(-1, 3).mean(axis=0))
             ok(im.size == (400, 224), p.stem,
                "%d×%d (a cena pede 400×224)" % im.size)
         # A EVOLUÇÃO TEM QUE CHEGAR AO FIM.
         #
-        # Com força fixa a cadeia andou até o estágio 3 e empacou: 04, 05 e 06
-        # saíram sendo a mesma aldeia com telhados trocados. Isso foi visto
-        # OLHANDO as seis lado a lado, não por medida — cada quadro isolado
-        # parecia perfeitamente certo, e é por isso que a folha de contato
-        # existe.
+        # A medida aqui era a diferença entre as MÉDIAS de RGB dos quadros, e
+        # ela é estruturalmente cega: reprovou o par cidadela→castelo com
+        # 0,60 quando os dois são visivelmente imagens diferentes. Duas
+        # fortalezas de pedra clara num vale verde têm quase a mesma média,
+        # por mais que a silhueta mude. Média não vê forma.
         #
-        # As duas medidas abaixo são GUARDAS DE REGRESSÃO, não prova de
-        # qualidade: os pisos foram calibrados na leva boa (1,2 e 12,9), não
-        # derivados de um princípio. Elas prendem a cadeia de voltar a empacar
-        # sem ninguém notar; não sabem dizer se a arte está bonita. Para isso
-        # continua valendo abrir a folha de contato e olhar.
-        difs = [float(np.abs(assinaturas[i] - assinaturas[i - 1]).mean())
-                for i in range(1, len(assinaturas))]
-        if difs:
-            ok(min(difs) > 1.0, "nenhum degrau da cadeia é um degrau parado",
-               "menor variação entre vizinhos: %.1f (mínimo 1,0)" % min(difs))
-            ponta = float(np.abs(assinaturas[-1] - assinaturas[0]).mean())
-            ok(ponta > 12.0, "o castelo não é o acampamento",
-               "distância estágio 1 → 6: %.1f (mínimo 12,0)" % ponta)
+        # A medida boa é a FRAÇÃO DE PIXELS que mudou. No mesmo par ela dá
+        # 51,7%, e no par mais fraco da escada (cidade murada → cidadela,
+        # que de fato é o passo mais curto) dá 19%.
+        #
+        # Como antes: são GUARDAS DE REGRESSÃO com pisos calibrados na leva
+        # boa, não prova de qualidade. Prendem a escada de voltar a empacar
+        # sem ninguém notar. Para julgar a arte, monte a folha de contato e
+        # olhe — foi assim que os platôs apareceram, todas as vezes.
+        arr = [np.array(Image.open(DEST / p.name).convert("RGB")).astype(int)
+               for p in estagios]
+        passos = [float((np.abs(arr[i] - arr[i - 1]).max(axis=2) > 24).mean())
+                  for i in range(1, len(arr))]
+        if passos:
+            ok(min(passos) > 0.12, "nenhum degrau da escada é um degrau parado",
+               "menor mudança entre vizinhos: %.0f%% dos pixels (mínimo 12%%)"
+               % (min(passos) * 100))
+            ponta = float((np.abs(arr[-1] - arr[0]).max(axis=2) > 24).mean())
+            ok(ponta > 0.60, "o castelo não é o acampamento",
+               "estágio 1 → %d: %.0f%% dos pixels (mínimo 60%%)"
+               % (len(arr), ponta * 100))
+
+    # ---- ilustrações de evento ----
+    # Opacas e quadradas, como os retratos: o modal as mostra como faixa com
+    # aspecto preservado (`_faixa`), então o que importa é o CONTRATO de
+    # tamanho com Retratos.LADO_EVENTO. Nada a recortar.
+    eventos = sorted(CRU.glob("evento_*.png"))
+    if eventos:
+        print("\n── ilustrações de evento (opacas) ──")
+        for p in eventos:
+            im = Image.open(p).convert("RGB")
+            destino = DEST / p.name
+            im.save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            ok(im.size == (128, 128), p.stem,
+               "%d×%d (Retratos.LADO_EVENTO pede 128)" % im.size)
 
     # ---- retratos de tropa ----
     retratos = sorted(CRU.glob("tropa_*.png"))

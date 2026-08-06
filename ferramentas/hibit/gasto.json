@@ -1,5 +1,5 @@
 {
- "total_usd": 0.324903855588701,
+ "total_usd": 0.6799898900985718,
  "chamadas": [
   {
    "rotulo": "prop_arvore_carvalho",
@@ -432,6 +432,190 @@
   {
    "rotulo": "estagio_06",
    "usd": 0.006897063970565796
+  },
+  {
+   "rotulo": "evento_cerco",
+   "usd": 0.006693204508887397
+  },
+  {
+   "rotulo": "evento_coroacao",
+   "usd": 0.0075903094079759394
+  },
+  {
+   "rotulo": "evento_derrota",
+   "usd": 0.0063867725796169705
+  },
+  {
+   "rotulo": "evento_emboscada",
+   "usd": 0.007824918058183458
+  },
+  {
+   "rotulo": "evento_fome",
+   "usd": 0.00713593520058526
+  },
+  {
+   "rotulo": "evento_inverno",
+   "usd": 0.007424654192394681
+  },
+  {
+   "rotulo": "evento_juramento",
+   "usd": 0.007749984529283311
+  },
+  {
+   "rotulo": "evento_rebeliao",
+   "usd": 0.007197998550203111
+  },
+  {
+   "rotulo": "evento_saque",
+   "usd": 0.01552131994565328
+  },
+  {
+   "rotulo": "evento_traicao",
+   "usd": 0.006618081198798286
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008775299919976129
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.008508315165837606
+  },
+  {
+   "rotulo": "evento_fome",
+   "usd": 0.00793220427301195
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.00720201661851671
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.008703269905514188
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.006930456161499024
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007305376927057902
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.006887535360124377
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.007101746612124973
+  },
+  {
+   "rotulo": "estagio_09",
+   "usd": 0.006646924098332723
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.007567759037017823
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007515935023625691
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007927816179063586
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.00795977677239312
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.008064903073840671
+  },
+  {
+   "rotulo": "estagio_base",
+   "usd": 0.006994457483291626
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008921008772320218
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.006932619783613417
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007155298471450806
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.007052607827716404
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.006975113418367174
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.008846188015407987
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007787666983074612
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.00915652714835273
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.008192039251327514
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007469059361351862
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.006983800676133897
+  },
+  {
+   "rotulo": "estagio_09",
+   "usd": 0.008183665964338515
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007310908026165432
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.0070897450447082525
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007100924571355184
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007719745212131077
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007155498001310561
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.0071863874329461
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.007378419902589586
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.008321839862399632
   }
  ]
 }

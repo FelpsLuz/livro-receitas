@@ -23,7 +23,8 @@ const Arte = preload("res://scripts/arte.gd")
 ## Nomes posicionais: são a ordem narrativa dos seis estágios, e é essa
 ## ordem — não a arte — que casa com Dados.NIVEIS_TERRA.
 const NOMES := ["estagio_01", "estagio_02", "estagio_03",
-		"estagio_04", "estagio_05", "estagio_06"]
+		"estagio_04", "estagio_05", "estagio_06",
+		"estagio_07", "estagio_08", "estagio_09"]
 ## 400×224, e não os 480×270 de antes. O endpoint do gerador recusa acima de
 ## 400 e exige lado múltiplo de 4, então a arte NASCE em 400×224. A saída era
 ## gerar menor e ampliar — mas ×1,2 não é fator inteiro e borraria a grade

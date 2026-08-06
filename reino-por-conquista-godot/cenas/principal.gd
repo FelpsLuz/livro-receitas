@@ -627,7 +627,11 @@ func _aba_terra(c: Container) -> void:
 			_faixa(c, Retratos.ilustracao("inverno"), 110)
 		if int(t["felicidade"]) <= 30:
 			_par(c, "O povo murmura. Felicidade baixa termina em foices e tochas.")
-		if int(t["nivel"]) < 5:
+		# o topo vem da TABELA. Era um 5 escrito à mão, irmão do que estava em
+		# `melhorar_terra`: com a escada em nove degraus, o botão de evoluir
+		# simplesmente SUMIA na Vila de Pedra e o jogador ficava sem caminho,
+		# sem mensagem nenhuma explicando por quê.
+		if int(t["nivel"]) < Dados.NIVEIS_TERRA.size() - 1:
 			var prox: Dictionary = Dados.NIVEIS_TERRA[int(t["nivel"]) + 1]
 			_botao(c, "Evoluir para %s (%d + %d)" % [prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
 				var r: Dictionary = Jogo.melhorar_terra(state)
