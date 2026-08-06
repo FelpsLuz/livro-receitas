@@ -13,43 +13,47 @@ const SANGUE := Color("8b2635")
 const VERDE := Color("3e5f3e")
 
 # ============================================================
-# TIPOGRAFIA — o erro mais barulhento que o jogo tinha.
+# TIPOGRAFIA — fonte de INTERFACE, não de pixel art.
 #
-# A fonte padrão da Godot é vetorial e anti-aliased: cada letra saía com
-# gradiente na borda, ao lado de arte onde cada pixel foi colocado à mão. Não
-# existe quantidade de arte boa que sobreviva a isso — é o primeiro frame que
-# o jogador vê, e nele já dava para saber que era um protótipo web.
+# As duas fontes pixel saíram. A razão não é que fossem ruins — foram
+# escolhidas medindo 361 candidatas, e o critério estava certo. A razão é
+# que ESTE jogo é uma planilha: dez abas de tabela, preço, carga, prazo e
+# moral. Fonte pixel obriga o texto inteiro a viver na grade de 960×270 e
+# a ser ampliado com o resto, e é isso que fazia a interface parecer
+# protótipo por mais bonita que a arte ficasse.
 #
-# Duas fontes, e a divisão entre elas NÃO é estética — é consequência de
-# medida. `ferramentas/testar_fontes.py` comparou os 45 pares de dígitos de
-# 361 candidatas, pixel a pixel. A tabela inteira está em ferramentas/FONTES.md.
+# Com `stretch/mode = canvas_items` (ver project.godot), o texto passa a
+# renderizar na resolução REAL do monitor. Aí uma fonte vetorial de
+# interface não é concessão: é a única que aproveita isso.
 #
-#   · XGA-AI 12x20  — NÚMEROS e corpo denso. Melhor separação de dígitos
-#                     medida no lote: IoU do pior par 61%, seis pontos abaixo
-#                     da segunda colocada. Grade 20 → nítida em 20 e 40.
-#   · ToshibaTxL1   — TÍTULOS e rótulos. Serifada de verdade (flare 5,0 na
-#                     haste do "I", contra 1,0 de uma sem serifa) e a melhor
-#                     nos pares que arruínam um título: E/C 60%, N/M 53%.
-#                     Grade 16 → nítida em 16, 32, 48.
+# O critério antigo sobrevive, e é o que decide o par:
 #
-# Os dígitos da ToshibaTxL1 são ruins (8/9 a 92% de identidade), e é por isso
-# que NÚMERO NENHUM usa esta fonte. As duas anteriores caíram exatamente aqui:
-# a Pixelify Sans tinha 21 pares de dígitos acima do teto — "custo 20" lendo
-# como "custo 80" não era azar, era o esperado — e a Jacquard 12 punha E/C a
-# 96%, que é "REINO POR CONQUISTA" virando "RCIND PVR CVNQVISTA".
+#   · DejaVu Sans        TEXTO. Altura de x generosa, e os pares que
+#                        arruínam leitura vêm resolvidos de fábrica —
+#                        o "1" tem base e esporão, o "l" é reto, o "I"
+#                        tem serifa. Cobre os 15 acentos do português.
+#   · DejaVu Sans Mono   NÚMERO E TABELA. Monoespaçada, então a coluna de
+#                        preço alinha sozinha, sem tabular-figures e sem
+#                        contar caractere. Num jogo em que o jogador
+#                        compara 1.240 com 980 na vertical, isso não é
+#                        estética — é a leitura.
+#   · DejaVu Sans Bold   TÍTULO. Mesma família: hierarquia por peso, não
+#                        por troca de tipo. Duas famílias numa interface
+#                        de gerenciamento já são uma a mais.
 #
-# Ambas cobrem os 15 acentos do português, incluindo Ç e Õ maiúsculos.
-# Ultimate Oldschool PC Font Pack (VileR), CC BY-SA 4.0.
+# Licença Bitstream Vera / DejaVu — uso comercial liberado.
 # ============================================================
 const PASTA_FONTES := "res://assets/fontes/"
-## Tamanhos em que cada fonte é NÍTIDA — múltiplos inteiros da grade nativa.
-## Fonte pixel em tamanho intermediário vira borrão, e aí não se corrigiu
-## nada: só se trocou o tipo de borrão.
-const CORPO := 16              # grade 16 da ToshibaTxL1 (serifada)
-const NUMERO := 20             # grade 20 da XGA-AI — só para dígito
-const CORPO_G := 32            # 2× — destaque
-const TITULO_SECAO := 32       # 2× da grade 16 — título maior que o corpo
-const TITULO_JOGO := 32        # 2×
+
+## Escala tipográfica, em unidades da viewport base (960×540).
+## Razão ~1,25 entre degraus: o suficiente para hierarquia sem degrau
+## intermediário que ninguém distingue.
+const MICRO := 12              # rótulo de aba, legenda, unidade
+const CORPO := 15              # texto corrido e item de lista
+const NUMERO := 16             # dígito em tabela — mono, um degrau acima
+const CORPO_G := 19            # destaque dentro de um painel
+const TITULO_SECAO := 24       # cabeçalho de aba
+const TITULO_JOGO := 40        # tela de título, só ali
 
 static func _fonte(arquivo: String) -> FontFile:
 	var caminho := PASTA_FONTES + arquivo
@@ -67,21 +71,21 @@ static func _fonte(arquivo: String) -> FontFile:
 	f.generate_mipmaps = false
 	return f
 
-## A fonte de NÚMERO. Só isso: HUD, cards de recurso, estatística.
+## A fonte de NÚMERO. Monoespaçada: a coluna alinha sozinha.
 ##
-## Ela é uma fonte de terminal, e é ótima no que foi contratada para fazer —
-## dígito inequívoco. Mas parágrafo inteiro nela lê como console de DOS, que é
-## o oposto da referência. Prosa não usa esta fonte.
+## Prosa NÃO usa esta fonte: monoespaçada em parágrafo lê como terminal.
+## Só dígito, tabela e HUD.
 static func fonte_numero() -> FontFile:
-	return _fonte("PxPlus_IBM_XGA-AI_12x20.ttf")
+	return _fonte("DejaVuSansMono.ttf")
 
-## A fonte de TEXTO: serifada, e é ela que dá o tom da tela.
+## A fonte de TEXTO. Sem serifa: numa tela de gerenciamento a serifa
+## disputa atenção com o número, que é quem manda.
 static func fonte_corpo() -> FontFile:
-	return _fonte("PxPlus_ToshibaTxL1_8x16.ttf")
+	return _fonte("DejaVuSans.ttf")
 
 ## Títulos, rótulos e botões — a mesma família do corpo, em tamanho maior.
 static func fonte_forte() -> FontFile:
-	return fonte_corpo()
+	return _fonte("DejaVuSans-Bold.ttf")
 
 static func fonte_titulo() -> FontFile:
 	return fonte_forte()
@@ -114,20 +118,13 @@ static func criar() -> Theme:
 	painel.set_content_margin_all(12)
 	t.set_stylebox("panel", "PanelContainer", painel)
 
-	# OVERHAUL v2: se a moldura Pro do PixelLab existir, ela substitui o painel
-	# chapado em TODA a interface de uma vez (StyleBoxTexture com 9-slice, então
-	# os cantos não deformam). Sem o PNG, segue valendo o StyleBoxFlat acima.
-	var UIv2 = load("res://scripts/ui_v2.gd")
-	var moldura = UIv2.stylebox("painel_madeira")
-	if moldura != null:
-		t.set_stylebox("panel", "PanelContainer", moldura)
-		t.set_stylebox("panel", "Panel", moldura)
-	# NÃO chamamos UIv2.estilos_botao() aqui. Ele existia e era sobrescrito
-	# quatro linhas abaixo — o botão de madeira do PixelLab nunca chegou a
-	# aparecer uma vez sequer. E é melhor assim: `botao_madeira.png` mede 76%
-	# de saturação média, o pior ativo de UI do pacote, e a moldura dele é
-	# vazada. O botão desenhado abaixo é opaco, dessaturado e tem os três
-	# estados de verdade.
+	# Nada de StyleBoxTexture aqui. O painel é CHAPADO, em código.
+	#
+	# Havia uma adoção automática da moldura de textura quando ela existisse,
+	# e depois do visual strip ela passou a existir SEMPRE — como caixote
+	# cinza. Resultado: todo PanelContainer do jogo virou um retângulo cinza
+	# por cima do pergaminho. Painel de gerenciamento não precisa de moldura
+	# ilustrada; precisa de contraste e de borda fina que separe as regiões.
 
 	# ---- botão em três estados DESENHADOS ----
 	# Mudar só a cor de fundo é o que faz botão parecer HTML. O apertado desce

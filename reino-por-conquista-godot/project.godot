@@ -28,14 +28,24 @@ Eventos="*res://scripts/eventos.gd"
 
 window/size/viewport_width=960
 window/size/viewport_height=540
-window/stretch/mode="viewport"
-window/stretch/aspect="keep"
-; ESCALA INTEIRA. Era o que faltava para "pixel perfect" de verdade: com
-; scale_mode fracionário, uma janela de 1500x844 escala 960x540 por 1,5625 e
-; um pixel de arte vira ora 1, ora 2 pixels de tela — a grade fica irregular
-; e a pixel art "ferve" ao redimensionar. Em "integer" a Godot escala por 1x,
-; 2x, 3x e deixa borda; a borda é o preço, e é o preço certo num Hi-Bit.
-window/stretch/scale_mode="integer"
+;  ---- MODO DE INTERFACE, não de pixel art ----
+; "viewport" renderizava TUDO — inclusive o texto — numa grade de 960x540 e
+; ampliava o conjunto. Num jogo cuja tela é dez abas de tabela, é isso que
+; fazia a interface parecer protótipo: cada letra era um bitmap esticado.
+;
+; "canvas_items" mantém 960x540 como sistema de COORDENADAS (nenhum layout
+; se move) mas manda a fonte para o rasterizador na resolução real do
+; monitor. Numa janela de 1920 o texto ganha 4x mais pixels sem uma linha
+; de layout mudar.
+;
+; aspect "expand" e não "keep": tabela agradece largura, e letterbox numa
+; tela de gerenciamento é espaço jogado fora.
+; scale_mode fracionário porque a restrição a múltiplos inteiros existia
+; para proteger a grade de pixel — que agora só vale dentro do cartão da
+; aba "Sua Terra", e lá ela é garantida pelo proprio nó.
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/stretch/scale_mode="fractional"
 window/handheld/orientation=1
 
 [rendering]

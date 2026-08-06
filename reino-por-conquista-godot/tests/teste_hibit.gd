@@ -53,15 +53,53 @@ func _initialize() -> void:
 
 # ------------------------------------------------------------
 func _frente1() -> void:
+	# ---- MODO DE INTERFACE ----
+	# A asserção inverteu junto com a direção. Ela cobrava "viewport" +
+	# "keep" + "integer", que é a receita para proteger uma GRADE DE PIXEL:
+	# tudo renderizado em 960×540 e ampliado em múltiplo inteiro.
+	#
+	# Só que a tela deste jogo é dez abas de tabela, e nessa receita cada
+	# letra virava um bitmap esticado. "canvas_items" mantém 960×540 como
+	# sistema de coordenadas — nenhum layout se move — e manda a fonte para
+	# o rasterizador na resolução real do monitor.
+	#
+	# A grade de pixel não sumiu: ela vive dentro do cartão da aba "Sua
+	# Terra", e lá quem garante é o nó, com NEAREST e escala inteira própria.
 	var modo := str(ProjectSettings.get_setting("display/window/stretch/mode"))
-	ok(modo == "viewport" or modo == "canvas_items", "stretch mode de pixel art",
-		modo)
-	ok(str(ProjectSettings.get_setting("display/window/stretch/aspect")) == "keep",
-		"aspect keep (sem deformar a grade)",
+	ok(modo == "canvas_items", "stretch mode de interface (texto nativo)", modo)
+	ok(str(ProjectSettings.get_setting("display/window/stretch/aspect")) == "expand",
+		"aspect expand — tabela agradece largura",
 		str(ProjectSettings.get_setting("display/window/stretch/aspect")))
-	ok(str(ProjectSettings.get_setting("display/window/stretch/scale_mode")) == "integer",
-		"escala INTEIRA (o pixel não vira 1,5 pixel)",
-		str(ProjectSettings.get_setting("display/window/stretch/scale_mode")))
+
+	# ---- TIPOGRAFIA DE GERENCIAMENTO ----
+	var Tema = load("res://scripts/tema.gd")
+	var num: FontFile = Tema.fonte_numero()
+	var corpo: FontFile = Tema.fonte_corpo()
+	ok(num != null and corpo != null, "as duas fontes carregam")
+	if num != null:
+		# monoespaçada: a coluna de preço alinha sozinha. Se o "1" e o "8"
+		# tiverem larguras diferentes, a tabela desalinha e ninguém compara
+		# 1.240 com 980 na vertical.
+		var l1 := num.get_string_size("1", 0, -1, 16).x
+		var l8 := num.get_string_size("8", 0, -1, 16).x
+		var lw := num.get_string_size("W", 0, -1, 16).x
+		ok(is_equal_approx(l1, l8) and is_equal_approx(l1, lw),
+			"fonte de número é MONOESPAÇADA",
+			"1=%.1f 8=%.1f W=%.1f" % [l1, l8, lw])
+	if corpo != null:
+		# prosa em monoespaçada lê como terminal: o corpo TEM que ser
+		# proporcional, senão a diferença entre as duas some
+		var i_l := corpo.get_string_size("i", 0, -1, 16).x
+		var m_l := corpo.get_string_size("M", 0, -1, 16).x
+		ok(m_l > i_l * 1.8, "fonte de texto é PROPORCIONAL",
+			"i=%.1f M=%.1f" % [i_l, m_l])
+		ok(corpo.get_string_size("ÇÃÕáéíóúâêô", 0, -1, 16).x > 0,
+			"acentuação do português coberta")
+	ok(Tema.NUMERO > Tema.MICRO and Tema.TITULO_SECAO > Tema.CORPO
+		and Tema.TITULO_JOGO > Tema.TITULO_SECAO,
+		"escala tipográfica é monotônica",
+		"%d < %d < %d < %d" % [Tema.MICRO, Tema.CORPO, Tema.TITULO_SECAO,
+			Tema.TITULO_JOGO])
 	# 0 = Nearest. Qualquer outro valor borra a arte inteira.
 	var filtro := int(ProjectSettings.get_setting(
 		"rendering/textures/canvas_textures/default_texture_filter"))
