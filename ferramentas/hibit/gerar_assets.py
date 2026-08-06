@@ -620,8 +620,6 @@ def main() -> None:
                     help="os nove bustos de tropa (opacos, sem recorte)")
     ap.add_argument("--eventos", action="store_true",
                     help="as dez ilustrações de modal (opacas)")
-    ap.add_argument("--interpolados", action="store_true",
-                    help="os 3 degraus que faltam entre os 6 provados")
     ap.add_argument("--estagios", action="store_true",
                     help="os seis quadros da terra, em cadeia")
     ap.add_argument("--forca", type=int, default=0,
@@ -654,13 +652,6 @@ def main() -> None:
         antes = saldo()
         print(f"saldo antes: US$ {antes:.4f}")
         gerar_eventos()
-        print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
-        return
-
-    if a.interpolados:
-        antes = saldo()
-        print(f"saldo antes: US$ {antes:.4f}")
-        gerar_interpolados()
         print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
         return
 
@@ -777,334 +768,126 @@ RETRATOS_TROPA = {
 
 
 # ===============================================================
-# ESTÁGIOS DA TERRA — a MESMA terra, seis vezes
+# ESTÁGIOS DA TERRA — nove quadros, a MESMA terra
 # ===============================================================
-# 400×224 e não os 480×270 nativos de antes. Duas restrições do endpoint:
-# lado máximo 400, e ambos os lados divisíveis por 4. Em vez de gerar menor e
-# ampliar (×1,2 não é fator inteiro — borraria a grade inteira), a grade
-# nativa da cena desce até a arte. Zero reamostragem em qualquer ponto.
-#
-# O QUE FAZ AS SEIS SEREM A MESMA TERRA
-# -------------------------------------
-# Seis chamadas independentes dariam seis vales diferentes, e a evolução de
-# Acampamento a Castelo leria como teletransporte. Duas amarras:
-#
-#   1. `init_image`: cada estágio nasce do ANTERIOR já pronto. O rio, a
-#      colina e a linha do horizonte vêm da imagem, não da descrição.
-#   2. A mesma cláusula de câmera em todos os seis, e a mesma semente.
-#
-# A FORÇA DA CADEIA — o número que decide tudo
-# --------------------------------------------
-# `init_image_strength` alto = obedece mais a imagem de partida. Medido, com
-# a mesma descrição de castelo partindo sempre do acampamento:
-#
-#   300  a terra NÃO EVOLUI. Os seis quadros saem sendo o acampamento com
-#        mudanças de folhagem. Foi a primeira leva inteira, e o defeito só
-#        apareceu vendo as seis lado a lado — cada uma isolada parecia certa.
-#   200  ainda o acampamento, com uma bandeira a mais.
-#   120  o vale se mantém (rio, mata, montanha) e a construção entra, mas
-#        devagar: chega a "aldeia com torres", não a castelo.
-#    60  o castelo aparece inteiro — E O RIO SOME. Força baixa demais e a
-#        imagem de partida deixa de ser referência: vira outro lugar.
-#
-# Uma força FIXA não resolve, e isso também foi medido. Com 140 nos cinco
-# passos, a cadeia anda até o estágio 3 e depois EMPACA: 04, 05 e 06 saem
-# sendo a mesma aldeia com telhados trocados. O motivo é que a força não pesa
-# a distância que falta — quanto mais a imagem de partida já parece um
-# povoado, mais ela ancora, e "aldeia → burgo" precisa de mais liberdade que
-# "acampamento → aldeia".
-#
-# Daí a RAMPA: a força cai a cada degrau. Os primeiros passos são pequenos e
-# a imagem manda; os últimos são saltos de escala e a descrição manda. O vale
-# sobrevive porque cada passo ainda parte do ANTERIOR — o 70 do último degrau
-# olha para uma cidadela, não para o acampamento, e por isso não perde o rio
-# como perdeu no teste ancorado.
+# 400×224: o endpoint recusa lado acima de 400 e exige ambos divisíveis por
+# 4. Gerar menor e ampliar não servia (×1,2 não é inteiro e borraria a
+# grade), então a grade nativa da cena desceu até a arte.
 #
 # ---------------------------------------------------------------
-# POR QUE A CADEIA EM SÉRIE FOI ABANDONADA
+# A FORTALEZA CENTRAL — o que fez esta leva funcionar
 # ---------------------------------------------------------------
-# Com seis degraus, encadear cada estágio no ANTERIOR funcionou. Com nove,
-# não funcionou de jeito nenhum — duas rampas foram testadas e as duas
-# devolveram NOVE QUADROS DE TENDA:
+# Cinco arquiteturas anteriores brigaram com o mesmo problema, e nenhuma
+# venceu: partindo de PAISAGEM — vale vazio, ou acampamento numa clareira —
+# o gerador nunca constrói cidade. Ele pinta o que a partida já é. Medido:
 #
-#   195 → 70   o castelo do último degrau saiu como o acampamento com uma
-#              torrinha no meio
-#   170 → 128  idem: no estágio 4, que devia ser vila com capela e campos
-#              arados, ainda eram as mesmas três tendas
+#   cadeia em série, força 195→70 e 170→128 ... nove quadros de TENDA
+#   âncora no vale vazio, força 105 fixa ..... os degraus grandes somem
+#   âncora no vale vazio, força 95 e 85 ...... mercado vira duas cabanas
 #
-# A primeira leitura foi que a força estava alta. Estava, mas não era essa a
-# causa. O problema é ESTRUTURAL: encadeando em série, cada degrau herda do
-# anterior o VALE *e a TENDA*, e o gerador não distingue "o que é cenário" de
-# "o que é povoado". Nove passos multiplicam a herança em vez de diluí-la — a
-# tenda atravessa a escada inteira porque nunca existiu um quadro sem ela
-# para partir. Baixar mais a força não salva: aos ~60 a imagem de partida
-# deixa de ser referência e o vale se perde junto (medido).
+# A saída não veio de mexer na força. Veio de mudar O QUE ESTÁ NO QUADRO
+# desde o primeiro degrau: uma RUÍNA DE CASTELO no centro, presente nos
+# nove. Com pedra e escala já no quadro de partida, "restaurar mais um
+# pedaço e acrescentar uma zona" é um passo CURTO até no fim da escada — e a
+# distância que nenhuma força vencia ("encher um vale vazio de cidade")
+# simplesmente deixa de existir.
 #
-# A SAÍDA é separar as duas coisas. Gera-se UMA VEZ o vale VAZIO — sem
-# povoado nenhum — e os nove degraus são ancorados NELE, não uns nos outros:
-#
-#   · a continuidade vem do vale, que é o mesmo arquivo nas nove chamadas
-#   · a diferença vem da descrição, que nasce limpa a cada degrau, sem tenda
-#     nem muralha herdada para o gerador se agarrar
-#
-# Custa uma imagem a mais e devolve o controle: mudar o degrau 5 não mexe nos
-# degraus 6 a 9, o que na cadeia em série obrigava a refazer tudo abaixo.
-ESTAGIO_BASE = ("an empty wide green river valley with no buildings and no "
-                "people: a river winding through open meadow, dark pine "
-                "forest on both slopes, blue mountain ridges behind")
-
-# ---------------------------------------------------------------
-# A ÂNCORA HÍBRIDA — e por que as duas puras falharam
-# ---------------------------------------------------------------
-# Duas arquiteturas foram testadas inteiras, e cada uma falhou pelo motivo
-# OPOSTO à outra. É o par de fracassos que aponta a saída.
-#
-#   SÉRIE PURA (cada degrau nasce do anterior).
-#   Funcionou com seis degraus, quebrou com nove: a TENDA atravessa a escada
-#   toda. O gerador não separa "cenário" de "povoado", então cada passo herda
-#   os dois — e com nove passos a herança se multiplica em vez de diluir.
-#   Testado em 195→70 e em 170→128: nove quadros de tenda nas duas.
-#
-#   VALE PURO (todos os degraus nascem do mesmo vale vazio).
-#   Resolve a tenda — cada descrição nasce limpa — e resolve os degraus
-#   PEQUENOS: acampamento, paliçada, aldeia e vila saem certos. Mas os
-#   GRANDES somem: com 95 o mercado virou duas cabanas, com 85 a vila de
-#   pedra virou carroças num campo. Partindo do vazio, encher o vale é
-#   distância demais, e a força que o gerador precisaria (~60) é a mesma que
-#   já se mediu como o ponto em que o vale deixa de ser referência.
-#
-# O padrão: o vale vazio é boa partida ENQUANTO O POVOADO É PEQUENO, e má
-# partida depois. O anterior é boa partida QUANDO JÁ HÁ POVOADO PARA HERDAR,
-# e má partida quando o que há para herdar é uma tenda que devia ter sumido.
-#
-# Daí o corte em dois trechos:
-#
-#   0–3   ancorados no VALE VAZIO. Povoado pequeno, distância curta, e
-#         nenhuma tenda herdada porque não há de quem herdar.
-#   4–8   em SÉRIE a partir do degrau 3. Aqui já existe uma vila de verdade
-#         no quadro de partida, então "adicionar mercado" e "refazer em
-#         pedra" são passos curtos — que é exatamente o que a cadeia de seis
-#         degraus provou saber fazer.
-#
-# A força cai ao longo dos dois trechos porque o alvo se afasta da partida em
-# ambos, só que por razões diferentes: no primeiro trecho o povoado cresce
-# sobre o vazio, no segundo a escala cresce sobre o povoado.
-CORTE_SERIE = 4
-FORCA_POR_ESTAGIO = [130, 118, 108, 100, 120, 105, 90, 78, 68]
+# A ruína também resolve a narrativa: o jogador ainda sai do NADA — acampa ao
+# pé de uma ruína que não é dele — e chega a senhor de castelo. Nenhum nome
+# de Dados.NIVEIS_TERRA precisou mudar.
 ESTAGIO_LADO = (400, 224)
+
 ESTAGIO_CAMERA = (
     "side view landscape panorama seen from across the valley, horizon line "
-    "two thirds up, a river curving in from the left, wooded hills on the "
-    "right, open sky above, summer daylight")
+    "two thirds up, a river curving through the valley floor, dark pine "
+    "forest on both slopes, blue mountain ridges behind, summer daylight")
 
-# NOVE, e cada uma descreve o ALVO em substantivos concretos.
+# A ordem das ZONAS é a do guia: recursos primeiro (cabanas e madeireira),
+# depois defesa (academia militar), depois sustento (moinho, campos,
+# armazéns). Cada degrau nomeia o ESTADO DA FORTALEZA e REPETE as zonas já
+# presentes — repetir é o que impede o gerador de "esquecer" a madeireira
+# quando a academia entra.
 #
-# A tentativa de escrever como acréscimo ("as tendas continuam, e agora há
-# uma cerca em volta") piorou o resultado, não melhorou: dizer o que fica
-# manda o gerador MANTER, e ele mantém — as tendas atravessaram os nove
-# quadros. A continuidade é trabalho do `init_image`; a descrição existe para
-# puxar na direção contrária, senão nada empurra.
-#
-# Por isso cada linha nomeia o que a cena É, e nomeia o MATERIAL: "casas de
-# madeira com telhado de colmo", "capela de pedra cinza", "muralha de pedra".
-# É o substantivo que o gerador pinta.
-#
-# A ordem segue Dados.NIVEIS_TERRA, degrau a degrau, e a lógica é de
-# MATERIAL: lona → madeira → pedra → muralha → castelo. O degrau 6 é o eixo
-# da coisa toda — é onde a pedra entra, e sem ele a muralha do 7 apareceria
-# sem que nada antes explicasse de onde veio.
+# E cada linha nomeia o que a cena É, em substantivo concreto. Escrever como
+# acréscimo ("as tendas continuam, e agora há uma cerca") foi testado e
+# piorou: dizer o que fica manda o gerador MANTER, e ele mantém. A
+# continuidade é trabalho do init_image; a descrição existe para empurrar na
+# direção contrária.
 ESTAGIOS = [
-    ("estagio_01", "a mercenary camp of three canvas tents around a "
-                   "campfire, a supply cart, bare trampled earth"),
-    ("estagio_02", "a fortified camp: canvas tents ringed by a rough wooden "
-                   "palisade with a gate, one log cabin, a dug well"),
-    ("estagio_03", "a hamlet of small thatched timber houses, a livestock "
-                   "pen, vegetable plots, a wooden palisade around it"),
-    ("estagio_04", "a village of timber houses with a wooden chapel and bell "
-                   "tower, ploughed strip fields, a wooden bridge over the "
-                   "river"),
-    ("estagio_05", "a busy market town of packed timber roofs, market stalls "
-                   "under striped awnings, a watermill turning on the river, "
-                   "craft workshops"),
-    ("estagio_06", "a town rebuilt in grey stone: a stone chapel, a stone "
-                   "arch bridge over the river, a quarry cut into the "
-                   "hillside, carts hauling blocks"),
-    ("estagio_07", "a walled town: a grey stone curtain wall with a "
-                   "gatehouse and corner towers encircling tiled rooftops"),
-    ("estagio_08", "a citadel: tall stone towers along the city wall, a "
-                   "cathedral spire above dense tiled roofs, timber docks "
-                   "and moored boats on the river"),
-    ("estagio_09", "a great stone castle on the hill above a walled city: a "
-                   "high keep with banners, concentric walls and round "
-                   "towers, a paved road climbing to the gate"),
+    ("estagio_01",
+     "a crumbling ruined stone keep with broken walls and ivy standing in "
+     "the centre of the valley floor, three canvas tents and a campfire "
+     "pitched at its foot, a supply cart"),
+    ("estagio_02",
+     "a crumbling ruined stone keep in the centre, now ringed by a rough "
+     "wooden palisade with a gate, canvas tents and one log cabin inside "
+     "the ring, a dug well"),
+    ("estagio_03",
+     "a ruined stone keep in the centre with its rubble cleared, log cabins "
+     "around it, a lumber yard with stacked logs and a sawpit, a wooden "
+     "palisade"),
+    ("estagio_04",
+     "a stone keep in the centre with its ground floor rebuilt and a new "
+     "timber roof, log cabins and a small wooden chapel around it, a lumber "
+     "yard with stacked logs"),
+    ("estagio_05",
+     "a stone keep in the centre restored to two floors with a banner, a "
+     "military training yard with archery targets and a timber barracks "
+     "beside it, houses and a lumber yard around them"),
+    ("estagio_06",
+     "a fully restored grey stone keep in the centre, a quarry cut into the "
+     "hillside, a stone arch bridge over the river, houses rebuilt in stone, "
+     "a training yard and a lumber yard"),
+    ("estagio_07",
+     "a restored stone keep in the centre encircled by a grey stone curtain "
+     "wall with a gatehouse and corner towers, stone houses packed inside "
+     "the walls, a quarry on the hillside"),
+    ("estagio_08",
+     "a walled stone town around a central keep, and outside the walls a "
+     "farm zone: a windmill on the rise, ploughed fields, granaries and "
+     "timber storehouses"),
+    ("estagio_09",
+     "a great castle: the central keep grown tall with banners and round "
+     "towers, concentric stone walls, the walled town and its farms and "
+     "windmill spread around it, a paved road climbing to the gate"),
 ]
 
-
-def gerar_retratos_tropa(seed: int = 4242) -> None:
-    """Os nove bustos. Opacos: nada aqui passa por chroma key."""
-    CRU.mkdir(parents=True, exist_ok=True)
-    for chave, desc in RETRATOS_TROPA.items():
-        destino = CRU / f"tropa_{chave}.png"
-        if destino.exists():
-            print(f"  · tropa_{chave} já existe")
-            continue
-        corpo = {
-            "description": "%s, %s, %s" % (desc, RETRATO_ENQUADRE, ESTILO),
-            "image_size": {"width": RETRATO_LADO, "height": RETRATO_LADO},
-            "view": "side",
-            "outline": "single color black outline",
-            "shading": "basic shading",
-            "detail": "highly detailed",
-            "text_guidance_scale": 8.5,
-            "no_background": False,
-            "seed": seed,
-        }
-        print(f"  ⟳ tropa_{chave}", end="", flush=True)
-        c, d = _post("/create-image-pixflux", corpo)
-        if c != 200:
-            print(f"\n    ❌ HTTP {c}: {str(d.get('erro'))[:200]}")
-            continue
-        real = _registrar("tropa_" + chave, d)
-        b64 = _extrair(d)
-        if not b64:
-            print("\n    ❌ resposta sem imagem")
-            continue
-        _salvar_b64(b64, destino)
-        anterior_b64 = b64
-        print(f"  ✅ US$ {real:.4f}")
-
-
-# ---------------------------------------------------------------
-# A ESPINHA DORSAL — seis quadros provados, três interpolados
-# ---------------------------------------------------------------
-# Cinco arquiteturas foram testadas para gerar os nove de uma vez, e todas
-# falharam no MESMO ponto: os degraus grandes (mercado, cidade, cidadela)
-# saíam como campo vazio. O padrão, depois de tudo:
+# A cadeia é em SÉRIE, e desta vez funciona pelo motivo que faltava antes: a
+# partida carrega a fortaleza desde o degrau 1, então nenhum passo precisa
+# inventar pedra ou escala do zero.
 #
-#   Qualquer imagem de partida que seja PAISAGEM AMPLA puxa para o vazio, em
-#   qualquer força que ainda preserve o vale. O gerador pinta o que a
-#   partida já é; um vale com dois celeiros continua um vale com dois
-#   celeiros, e a descrição não o enche.
+# A força não é uma rampa: ela depende do TIPO de mudança que o degrau pede.
+# Medido nesta leva, com a ruína no centro:
 #
-# O único run que produziu cidade murada e castelo de verdade foi a cadeia de
-# SEIS, e o que a fez funcionar não foi a força — foi a partida: cada degrau
-# partia de um quadro que JÁ ERA POVOADO, então "adensar" era um passo curto.
+#   RESTAURAR um pedaço da fortaleza ......... 135–150 basta
+#   ACRESCENTAR UMA ZONA nova ................ 130 NÃO basta — a 130 a
+#       academia militar do degrau 5 simplesmente não apareceu, e o quadro
+#       saiu igual ao 4. Zona nova precisa de ~100.
+#   MUDAR A SILHUETA (muralha, castelo) ...... ~80
 #
-# Daí a estratégia final: as seis provadas viram a ESPINHA DORSAL da escada
-# de nove, e só os três degraus que faltam são gerados — cada um a partir do
-# VIZINHO DE BAIXO, que é o passo curto que se sabe funcionar.
-#
-#   1 Acampamento    ← provado 01
-#   2 Paliçada       ← GERADO a partir do 1
-#   3 Aldeia         ← provado 02
-#   4 Vila           ← provado 03
-#   5 Burgo          ← provado 04
-#   6 Vila de Pedra  ← GERADO a partir do 5
-#   7 Cidade Murada  ← provado 05
-#   8 Cidadela       ← GERADO a partir do 7
-#   9 Castelo        ← provado 06
-#
-# Os três novos ficam entre dois quadros conhecidos, então cada um tem um
-# antes e um depois para não destoar — o que nenhuma das cinco tentativas
-# anteriores teve.
-INTERPOLADOS = {
-    "estagio_02": ("estagio_01", 150,
-                   "a mercenary camp of canvas tents now enclosed by a rough "
-                   "wooden palisade fence with a gate, a log cabin and a dug "
-                   "well beside the tents"),
-    # 85 e não 115: a 115 a pedra simplesmente não entrava — o quadro saía
-    # como o 05 com uma casa a mais. "Refazer em pedra" troca o MATERIAL de
-    # tudo que já está lá, que é um passo maior do que acrescentar prédio, e
-    # por isso pede mais licença que os outros dois interpolados.
-    "estagio_06": ("estagio_05", 85,
-                   "the same village rebuilt in grey stone: a stone chapel, "
-                   "a stone arch bridge over the river, a quarry cut into "
-                   "the hillside, carts hauling stone blocks"),
-    "estagio_08": ("estagio_07", 125,
-                   "the same walled town grown into a citadel: tall stone "
-                   "towers along the wall, a cathedral spire above dense "
-                   "tiled roofs, timber docks and moored boats on the river"),
-}
-
-
-def gerar_interpolados(seed: int = 4242) -> None:
-    """Os três degraus que faltam, cada um a partir do vizinho de baixo."""
-    CRU.mkdir(parents=True, exist_ok=True)
-    for nome in sorted(INTERPOLADOS):
-        destino = CRU / f"{nome}.png"
-        if destino.exists():
-            print(f"  \u00b7 {nome} j\u00e1 existe")
-            continue
-        de, forca, desc = INTERPOLADOS[nome]
-        partida = CRU / f"{de}.png"
-        if not partida.exists():
-            print(f"  \u274c {nome}: falta a partida {de}.png")
-            continue
-        corpo = {
-            "description": "%s, %s, %s" % (desc, ESTAGIO_CAMERA, ESTILO),
-            "image_size": {"width": ESTAGIO_LADO[0], "height": ESTAGIO_LADO[1]},
-            "view": "side", "outline": "selective outline",
-            "shading": "detailed shading", "detail": "highly detailed",
-            "text_guidance_scale": 8.0, "seed": seed,
-            "init_image": {"type": "base64",
-                           "base64": base64.b64encode(
-                               partida.read_bytes()).decode()},
-            "init_image_strength": forca,
-        }
-        print(f"  \u27f3 {nome} \u2190 {de} @{forca}", end="", flush=True)
-        c, d = _post("/create-image-pixflux", corpo, tempo=600)
-        if c != 200:
-            print(f"\n    \u274c HTTP {c}: {str(d.get('erro'))[:250]}")
-            continue
-        real = _registrar(nome, d)
-        b64 = _extrair(d)
-        if not b64:
-            print("\n    \u274c resposta sem imagem")
-            continue
-        _salvar_b64(b64, destino)
-        print(f"  \u2705 US$ {real:.4f}")
-
+# É a mesma lição de todas as levas anteriores, agora com o eixo certo: o que
+# manda não é a posição na escada, é o quanto do quadro precisa mudar. Os
+# degraus que só restauram podem obedecer muito à imagem; os que introduzem
+# uma zona ou fecham uma muralha precisam de licença para redesenhar.
+FORCA_POR_ESTAGIO = [None, 150, 140, 135, 100, 95, 80, 100, 80]
 
 def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
-    """Os quadros da terra, todos ancorados no MESMO vale vazio.
+    """Os nove quadros da terra, EM CADEIA: cada um nasce do anterior.
 
     `forca` em 0 usa FORCA_POR_ESTAGIO. Um valor explícito fixa o mesmo
     número em todos os degraus — serve para experimentar, não para produzir.
     """
     CRU.mkdir(parents=True, exist_ok=True)
-    # ---- o vale, uma vez só ----
-    base = CRU / "estagio_base.png"
-    if not base.exists():
-        corpo = {
-            "description": "%s, %s, %s" % (ESTAGIO_BASE, ESTAGIO_CAMERA, ESTILO),
-            "image_size": {"width": ESTAGIO_LADO[0], "height": ESTAGIO_LADO[1]},
-            "view": "side", "outline": "selective outline",
-            "shading": "detailed shading", "detail": "highly detailed",
-            "text_guidance_scale": 8.0, "seed": seed,
-        }
-        print("  \u27f3 estagio_base (o vale vazio)", end="", flush=True)
-        c, d = _post("/create-image-pixflux", corpo, tempo=600)
-        if c != 200:
-            print(f"\n    \u274c HTTP {c}: {str(d.get('erro'))[:250]}")
-            return
-        real = _registrar("estagio_base", d)
-        b64 = _extrair(d)
-        if not b64:
-            print("\n    \u274c resposta sem imagem")
-            return
-        _salvar_b64(b64, base)
-        print(f"  \u2705 US$ {real:.4f}")
-    vale_b64 = base64.b64encode(base.read_bytes()).decode()
     anterior_b64 = ""
 
     for i, (nome, desc) in enumerate(ESTAGIOS):
         destino = CRU / f"{nome}.png"
         if destino.exists():
             print(f"  \u00b7 {nome} j\u00e1 existe")
-            # relê: o trecho em SÉRIE precisa deste quadro como partida.
-            # Sem isto, retomar um run parcial faz o primeiro degrau do
-            # trecho serial cair de volta no vale vazio — e cair em silêncio,
-            # porque o resultado ainda é uma imagem plausível.
+            # relê: a cadeia precisa deste quadro como partida do próximo.
+            # Sem isto, retomar um run parcial quebra a corrente no meio — e
+            # quebra em silêncio, porque o quadro seguinte ainda sai como uma
+            # imagem plausível, só que de outro lugar.
             anterior_b64 = base64.b64encode(destino.read_bytes()).decode()
             continue
         corpo = {
@@ -1118,27 +901,28 @@ def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
             "no_background": False,
             "seed": seed,
         }
-        em_serie = i >= CORTE_SERIE and anterior_b64 != ""
-        partida = anterior_b64 if em_serie else vale_b64
-        corpo["init_image"] = {"type": "base64", "base64": partida}
-        corpo["init_image_strength"] = (
-            forca if forca else FORCA_POR_ESTAGIO[min(i, len(FORCA_POR_ESTAGIO) - 1)])
-        de = ESTAGIOS[i - 1][0] if em_serie else "vale"
-        print(f"  ⟳ {nome} ({ESTAGIO_LADO[0]}×{ESTAGIO_LADO[1]}) ← {de} "
-              f"@{corpo['init_image_strength']}", end="", flush=True)
+        if anterior_b64:
+            corpo["init_image"] = {"type": "base64", "base64": anterior_b64}
+            corpo["init_image_strength"] = (
+                forca if forca
+                else FORCA_POR_ESTAGIO[min(i, len(FORCA_POR_ESTAGIO) - 1)])
+        de = ESTAGIOS[i - 1][0] if anterior_b64 else "do zero"
+        forca_msg = corpo.get("init_image_strength", "")
+        print(f"  \u27f3 {nome} \u2190 {de}"
+              f"{' @' + str(forca_msg) if forca_msg else ''}",
+              end="", flush=True)
         c, d = _post("/create-image-pixflux", corpo, tempo=600)
         if c != 200:
-            print(f"\n    ❌ HTTP {c}: {str(d.get('erro'))[:250]}")
-            continue   # um degrau que falha não derruba os outros
+            print(f"\n    \u274c HTTP {c}: {str(d.get('erro'))[:250]}")
+            return   # sem o anterior, a cadeia não continua
         real = _registrar(nome, d)
         b64 = _extrair(d)
         if not b64:
-            print("\n    ❌ resposta sem imagem")
+            print("\n    \u274c resposta sem imagem")
             return
         _salvar_b64(b64, destino)
         anterior_b64 = b64
-        print(f"  ✅ US$ {real:.4f}")
-
+        print(f"  \u2705 US$ {real:.4f}")
 
 
 # ===============================================================

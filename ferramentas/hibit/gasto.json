@@ -1,5 +1,5 @@
 {
- "total_usd": 0.6799898900985718,
+ "total_usd": 0.7733971213234797,
  "chamadas": [
   {
    "rotulo": "prop_arvore_carvalho",
@@ -616,6 +616,54 @@
   {
    "rotulo": "estagio_06",
    "usd": 0.008321839862399632
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008582706133524578
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007086372057596843
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.008396481169594659
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.0082053472465939
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.00819232890341017
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007754639254675972
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007262115134133234
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007085784700181749
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.00821660304069519
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007208180824915568
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.007707354307174683
+  },
+  {
+   "rotulo": "estagio_09",
+   "usd": 0.007709318452411228
   }
  ]
 }
