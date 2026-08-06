@@ -20,10 +20,19 @@
 class_name Arte
 extends RefCounted
 
-## Cinza neutro: não sugere material nenhum, e some contra qualquer fundo
-## menos do que uma cor saturada sugeriria intenção de arte.
-const TOM := Color(0.62, 0.62, 0.65, 1.0)
-const BORDA := Color(0.28, 0.28, 0.32, 1.0)
+## O placeholder mora na paleta da INTERFACE, um degrau acima da superfície.
+##
+## Ele era cinza 0,62 — escolhido quando o tema era pergaminho claro, onde
+## some. Sobre o slate escuro do tema novo, o mesmo cinza vira o elemento
+## mais claro da tela: a ausência de arte passou a gritar mais alto que a
+## arte. Placeholder tem que dizer "falta uma peça aqui", não roubar a
+## leitura da tabela ao lado.
+##
+## Os valores espelham Tema.ELEVADO e Tema.BORDA. Não são importados de lá
+## para o Arte não depender do tema — este nó também roda em teste headless,
+## onde não há Theme montado.
+const TOM := Color(0.16, 0.19, 0.22, 1.0)
+const BORDA := Color(0.24, 0.28, 0.33, 1.0)
 ## Silhueta (sombra projetada, oclusor): o caixote em preto, sem borda.
 const VULTO := Color(0.0, 0.0, 0.0, 1.0)
 

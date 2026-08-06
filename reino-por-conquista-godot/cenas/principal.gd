@@ -114,7 +114,7 @@ func _montar_titulo() -> void:
 	if f_titulo != null:
 		titulo.add_theme_font_override("font", f_titulo)
 	titulo.add_theme_font_size_override("font_size", Tema.TITULO_JOGO)
-	titulo.add_theme_color_override("font_color", Tema.SANGUE)
+	titulo.add_theme_color_override("font_color", Tema.ACENTO)
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(titulo)
 	var sub := Label.new()
@@ -359,19 +359,19 @@ func _montar_hud(j: Dictionary) -> void:
 	var moral: int = Economia.moral(state)
 	_celula_hud("moedas", str(int(j["ouro"])), Tema.OURO, "Ouro no cofre")
 	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])),
-		Tema.PERGAMINHO, "Homens em armas")
+		Tema.TEXTO, "Homens em armas")
 	# a moral só ganha destaque quando vira problema: acima de 60 é ruído
 	_celula_hud("moral", "%d" % moral,
-		Tema.SANGUE if moral <= 35 else Color("9c8a6c"),
+		Tema.SANGUE if moral <= 35 else Tema.TEXTO_2,
 		"Moral do exército — abaixo de 35 os homens desertam")
-	_celula_hud("renome", str(int(j["renome"])), Color("9c8a6c"), "Renome")
+	_celula_hud("renome", str(int(j["renome"])), Tema.TEXTO_2, "Renome")
 	if int(j["guardas"]) > 0:
-		_celula_hud("escudo", str(int(j["guardas"])), Color("9c8a6c"),
+		_celula_hud("escudo", str(int(j["guardas"])), Tema.TEXTO_2,
 			"Guardas de elite na sua casa")
 	var t = state.get("terra")
 	if t != null:
 		_celula_hud("trigo", str(int(t["alimento"])),
-			Tema.SANGUE if int(t["alimento"]) <= 0 else Color("9c8a6c"), "Celeiro")
+			Tema.SANGUE if int(t["alimento"]) <= 0 else Tema.TEXTO_2, "Celeiro")
 	# a estação pinta o ícone do calendário: a UI muda de temperatura com o mundo
 	_celula_hud("calendario", Estacoes.nome(state), Estacoes.cor(state),
 		Estacoes.nota(state))
@@ -435,7 +435,7 @@ func _titulo_secao(c: Container, texto: String) -> void:
 	if f != null:
 		l.add_theme_font_override("font", f)
 	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
-	l.add_theme_color_override("font_color", Tema.SANGUE)
+	l.add_theme_color_override("font_color", Tema.ACENTO)
 	c.add_child(l)
 
 func _par(c: Container, texto: String) -> Label:
@@ -546,7 +546,7 @@ func _aviso(msg: String) -> void:
 		return
 	var linha := Label.new()
 	linha.text = "- " + msg
-	linha.add_theme_color_override("font_color", Tema.SANGUE)
+	linha.add_theme_color_override("font_color", Tema.ACENTO)
 	_conteudo_aba().add_child(linha)
 	var timer := get_tree().create_timer(3.5)
 	timer.timeout.connect(func():
@@ -1374,7 +1374,7 @@ func _modal(titulo: String, corpo: String, botoes: Array, arte: Texture2D = null
 	var l_titulo := Label.new()
 	l_titulo.text = titulo
 	l_titulo.add_theme_font_size_override("font_size", 22)
-	l_titulo.add_theme_color_override("font_color", Tema.SANGUE)
+	l_titulo.add_theme_color_override("font_color", Tema.ACENTO)
 	v.add_child(l_titulo)
 	var l_corpo := Label.new()
 	l_corpo.text = corpo

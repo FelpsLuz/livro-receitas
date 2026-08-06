@@ -1,16 +1,62 @@
 # ============================================================
-# TEMA MEDIEVAL — pergaminho, madeira e ouro, criado em código.
+# TEMA — interface de gerenciamento, chapada, em código.
+#
+# O tema anterior era pergaminho, madeira e ouro: bonito de descrever e
+# errado para o que esta tela é. Um jogo de gerenciamento passa a partida
+# inteira em tabela — preço, carga, prazo, moral — e textura de madeira
+# atrás de número é ruído competindo com o dado.
+#
+# A regra que organiza tudo aqui: TERRENO em quatro degraus de um slate
+# frio, TEXTO em três pesos, e UM acento quente. A ousadia mora num lugar
+# só; o resto fica quieto. Um latão sobre slate lê como moeda sem precisar
+# de tábua nem de rebite.
+#
+# Por que escuro. Não é moda: é que os números coloridos — ganho, custo,
+# alarme — precisam saltar, e sobre creme eles competem com o fundo. Sobre
+# slate, o verde e o terracota carregam sozinhos.
+#
+# Por que canto RETO. Antes era imposição da pixel art (curva anti-aliased
+# no canto de um painel gritava "isto é CSS"). A pixel art saiu, então
+# agora é ESCOLHA: canto vivo e borda de 1px leem como instrumento e como
+# livro-razão, que é o que o jogo é. Raio de canto puxaria para app de
+# celular.
 # ============================================================
 extends RefCounted
 
-const MADEIRA := Color("2b1d12")
-const MADEIRA_CLARA := Color("4a3421")
-const PERGAMINHO := Color("e8d8b0")
-const PERGAMINHO_CLARO := Color("f5ecd4")
-const TINTA := Color("2d1f10")
-const OURO := Color("c9a227")
-const SANGUE := Color("8b2635")
-const VERDE := Color("3e5f3e")
+# ---- terreno: quatro degraus, do fundo para a superfície ----
+const FUNDO := Color("12151a")        # a tela por trás de tudo
+const SUPERFICIE := Color("1b2027")   # painel, aba ativa
+const ELEVADO := Color("232a33")      # linha de tabela, campo de entrada
+const BORDA := Color("333c48")        # separador de 1px
+
+# ---- texto: três pesos, e nenhum deles é branco puro ----
+## Branco puro sobre escuro vibra e cansa em sessão longa. Um off-white
+## levemente frio assenta com o slate e mantém 13:1 de contraste.
+const TEXTO := Color("e4e9ef")
+const TEXTO_2 := Color("98a3b0")      # rótulo, unidade, texto de apoio
+const TEXTO_3 := Color("5f6b79")      # dica, desabilitado
+
+# ---- acento: o ÚNICO quente da paleta ----
+const ACENTO := Color("e0a93b")       # latão: ouro, título, valor de destaque
+const ACENTO_FORTE := Color("f0c060") # hover
+
+# ---- semântico: separado do acento de propósito ----
+## Cor semântica não é cor de marca. Se o ganho fosse o mesmo latão do
+## título, "subiu" e "isto é um cabeçalho" leriam igual.
+const GANHO := Color("57b98b")
+const PERIGO := Color("e0664a")
+
+# ---- nomes antigos, mantidos como APELIDO ----
+## Doze pontos fora deste arquivo ainda os citam. Apontam para o papel
+## certo no vocabulário novo, não para a cor antiga.
+const MADEIRA := FUNDO
+const MADEIRA_CLARA := BORDA
+const PERGAMINHO := TEXTO
+const PERGAMINHO_CLARO := ELEVADO
+const TINTA := TEXTO
+const OURO := ACENTO
+const SANGUE := PERIGO
+const VERDE := GANHO
 
 # ============================================================
 # TIPOGRAFIA — fonte de INTERFACE, não de pixel art.
@@ -111,9 +157,9 @@ static func criar() -> Theme:
 	# arco suavizado no canto de um painel é o mesmo crime que a fonte vetorial,
 	# e num jogo de pixel art é o detalhe que grita "isto é CSS".
 	var painel := StyleBoxFlat.new()
-	painel.bg_color = PERGAMINHO
-	painel.border_color = MADEIRA_CLARA
-	painel.set_border_width_all(2)
+	painel.bg_color = SUPERFICIE
+	painel.border_color = BORDA
+	painel.set_border_width_all(1)
 	painel.set_corner_radius_all(0)
 	painel.set_content_margin_all(12)
 	t.set_stylebox("panel", "PanelContainer", painel)
@@ -126,64 +172,67 @@ static func criar() -> Theme:
 	# por cima do pergaminho. Painel de gerenciamento não precisa de moldura
 	# ilustrada; precisa de contraste e de borda fina que separe as regiões.
 
-	# ---- botão em três estados DESENHADOS ----
-	# Mudar só a cor de fundo é o que faz botão parecer HTML. O apertado desce
-	# 1px e inverte a rampa de sombra: a luz que estava em cima vai para baixo,
-	# que é como um botão físico se comporta e como o olho espera ler.
-	t.set_stylebox("normal", "Button", _botao(Color("5d4428"), false))
-	t.set_stylebox("hover", "Button", _botao(Color("77563a"), false))
-	t.set_stylebox("pressed", "Button", _botao(Color("3a2a18"), true))
-	t.set_stylebox("focus", "Button", _botao(Color("5d4428"), false))
-	var desativado := _botao(Color("4a4038"), false)
-	desativado.border_color = Color("6b5f52")
-	t.set_stylebox("disabled", "Button", desativado)
-	t.set_color("font_color", "Button", PERGAMINHO)
-	t.set_color("font_hover_color", "Button", Color("f5ecd4"))
-	t.set_color("font_pressed_color", "Button", Color("c9a227"))
-	t.set_color("font_disabled_color", "Button", Color("8a7f70"))
+	# ---- botão CHAPADO, estado por preenchimento ----
+	# A versão anterior desenhava uma rampa de sombra: 1px claro em cima,
+	# 3px escuro embaixo, invertidos ao apertar. Isso é skeuomorfismo — um
+	# botão físico —, e num tema chapado ele é a peça que denuncia que o
+	# resto foi só recolorido. Aqui o estado vem do PREENCHIMENTO, e o
+	# apertado ainda desce 1px: o deslocamento é a única pista tátil que
+	# sobrevive ao achatamento, e sem ela o clique não confirma nada.
+	t.set_stylebox("normal", "Button", _botao(ELEVADO, BORDA, false))
+	t.set_stylebox("hover", "Button", _botao(Color("2e3742"), ACENTO, false))
+	t.set_stylebox("pressed", "Button", _botao(Color("1a1f26"), ACENTO, true))
+	var foco := _botao(ELEVADO, ACENTO, false)
+	t.set_stylebox("focus", "Button", foco)
+	t.set_stylebox("disabled", "Button", _botao(Color("1d2229"), Color("2a323b"), false))
+	t.set_color("font_color", "Button", TEXTO)
+	t.set_color("font_hover_color", "Button", ACENTO_FORTE)
+	t.set_color("font_pressed_color", "Button", ACENTO)
+	t.set_color("font_disabled_color", "Button", TEXTO_3)
 
 	var entrada := StyleBoxFlat.new()
-	entrada.bg_color = PERGAMINHO_CLARO
-	entrada.border_color = MADEIRA_CLARA
-	entrada.set_border_width_all(2)
+	entrada.bg_color = ELEVADO
+	entrada.border_color = BORDA
+	entrada.set_border_width_all(1)
 	entrada.set_corner_radius_all(0)
 	entrada.set_content_margin_all(8)
 	t.set_stylebox("normal", "LineEdit", entrada)
-	t.set_color("font_color", "LineEdit", TINTA)
-	t.set_color("caret_color", "LineEdit", TINTA)
-	# o texto de dica estava em cinza claro sobre creme: praticamente invisível
-	t.set_color("font_placeholder_color", "LineEdit", Color("7a6a52"))
+	t.set_color("font_color", "LineEdit", TEXTO)
+	t.set_color("caret_color", "LineEdit", ACENTO)
+	t.set_color("font_placeholder_color", "LineEdit", TEXTO_3)
 
-	t.set_color("font_color", "Label", TINTA)
-	t.set_color("default_color", "RichTextLabel", TINTA)
+	t.set_color("font_color", "Label", TEXTO)
+	t.set_color("default_color", "RichTextLabel", TEXTO)
 
 	var aba_sel := StyleBoxFlat.new()
-	aba_sel.bg_color = PERGAMINHO
+	# a aba ativa é a MESMA superfície do painel que ela abre: sem costura
+	# entre a aba e o conteúdo, a barra deixa de parecer um menu solto
+	aba_sel.bg_color = SUPERFICIE
 	aba_sel.set_corner_radius_all(0)
 	aba_sel.set_content_margin_all(8)
-	aba_sel.border_color = OURO
+	aba_sel.border_color = ACENTO
 	aba_sel.border_width_top = 2
 	var aba_normal := StyleBoxFlat.new()
-	aba_normal.bg_color = MADEIRA_CLARA
+	aba_normal.bg_color = FUNDO
 	aba_normal.set_corner_radius_all(0)
 	aba_normal.set_content_margin_all(8)
 	t.set_stylebox("tab_selected", "TabContainer", aba_sel)
 	t.set_stylebox("tab_unselected", "TabContainer", aba_normal)
 	t.set_stylebox("tab_hovered", "TabContainer", aba_normal)
-	t.set_color("font_selected_color", "TabContainer", TINTA)
-	t.set_color("font_unselected_color", "TabContainer", Color("d4c090"))
+	t.set_color("font_selected_color", "TabContainer", TEXTO)
+	t.set_color("font_unselected_color", "TabContainer", TEXTO_2)
 	var aba_painel := painel.duplicate()
 	t.set_stylebox("panel", "TabContainer", aba_painel)
 
 	# barra de rolagem: a padrão da engine tem cantos arredondados e cinza de
 	# sistema — no meio de um pergaminho ela é a última peça de "site" na tela
 	var trilho := StyleBoxFlat.new()
-	trilho.bg_color = Color("d8c69c")
+	trilho.bg_color = FUNDO
 	trilho.set_corner_radius_all(0)
 	trilho.content_margin_left = 4
 	trilho.content_margin_right = 4
 	var polegar := StyleBoxFlat.new()
-	polegar.bg_color = MADEIRA_CLARA
+	polegar.bg_color = BORDA
 	polegar.set_corner_radius_all(0)
 	polegar.content_margin_left = 4
 	polegar.content_margin_right = 4
@@ -191,58 +240,47 @@ static func criar() -> Theme:
 		t.set_stylebox("scroll", classe, trilho)
 		t.set_stylebox("grabber", classe, polegar)
 		var realce := polegar.duplicate()
-		realce.bg_color = Color("6b4f30")
+		realce.bg_color = ACENTO
 		t.set_stylebox("grabber_highlight", classe, realce)
 		t.set_stylebox("grabber_pressed", classe, realce)
 
 	return t
 
-## Um botão de três estados com rampa de sombra desenhada, não gerada por CSS.
-static func _botao(fundo: Color, apertado: bool) -> StyleBoxFlat:
+## Botão chapado: preenchimento e borda, sem bisel. O apertado desce 1px —
+## a única pista tátil que sobrevive ao achatamento.
+static func _botao(fundo: Color, borda: Color, apertado: bool) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = fundo
-	sb.border_color = OURO
-	sb.set_border_width_all(2)
+	sb.border_color = borda
+	sb.set_border_width_all(1)
 	sb.set_corner_radius_all(0)
 	sb.set_content_margin_all(8)
-	# a rampa: 1px claro em cima e 1px escuro embaixo — invertidos quando aperta
-	sb.border_width_top = 1
-	sb.border_width_bottom = 3 if not apertado else 1
 	if apertado:
-		# desce 1px: o conteúdo inteiro anda junto, é o que dá o "clique"
 		sb.content_margin_top = 9
 		sb.content_margin_bottom = 7
-		sb.border_width_top = 3
 	return sb
 
-## Fundo de um CARD de lista (tropa, lorde, reino, contrato).
-##
-## A moldura de madeira do PixelLab é ótima para um painel grande, mas ela tem
-## listras de tábua e o 9-slice as estica: numa faixa de 56px de altura as
-## listras caem exatamente em cima das linhas de texto. O card usa pergaminho
-## claro sobre o pergaminho da aba — separado pela borda, e legível.
-## Fundo OPACO para modal e tela de conversa.
-##
-## `painel_madeira` é uma moldura VAZADA — o miolo tem alpha zero. Isso serve
-## para emoldurar algo que já tem fundo, mas num modal deixava a aba inteira
-## aparecendo através do texto. Aqui o fundo é sólido, e a moldura de madeira
-## continua livre para entrar por cima quando alguém quiser.
+## Fundo OPACO para modal e tela de conversa. Um degrau ACIMA do painel:
+## o modal precisa ler como camada nova, não como o mesmo plano.
 static func estilo_modal() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = PERGAMINHO
-	sb.border_color = OURO
-	sb.set_border_width_all(2)
+	sb.bg_color = ELEVADO
+	sb.border_color = ACENTO
+	sb.set_border_width_all(1)
 	sb.set_corner_radius_all(0)
 	sb.set_content_margin_all(16)
 	# sem `shadow_size`: a sombra do StyleBoxFlat é um borrão gaussiano, e
-	# gradiente é justamente o que não pode existir aqui. O véu escuro do modal
-	# já faz o trabalho de separar do fundo.
+	# borrão numa interface chapada é a peça que não pertence. O véu escuro
+	# do modal já separa do fundo.
 	return sb
 
+## Card de linha de tabela. Um degrau acima da superfície, com borda fina —
+## é a borda, e não o preenchimento, que faz vinte linhas seguidas ainda
+## lerem como vinte itens.
 static func estilo_card() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = PERGAMINHO_CLARO
-	sb.border_color = MADEIRA_CLARA
+	sb.bg_color = ELEVADO
+	sb.border_color = BORDA
 	sb.set_border_width_all(1)
 	sb.set_corner_radius_all(0)
 	sb.set_content_margin_all(10)
