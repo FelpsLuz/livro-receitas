@@ -1,0 +1,8 @@
+{
+ "campo_terra_atlas": "fb942bb0-9529-4f3d-b325-bae454a49788",
+ "grama_pedra_atlas": "0e520592-9aef-4290-bc8e-f32506008b29",
+ "praia_agua_atlas": "d23a8ac6-236d-4869-99ab-e0b1ec1b1143",
+ "walk": "{\"background_job_ids\": \"['17ce8659-89d9-4990-be5a-42dbe321fbf9', 'a5e2b25b-661c-409c-a700-ee6dffcbe357', '728a1f86-28f9-4afa-81a2-ede09a409846', '4898da66-e661-4703-8186-d6a7724176c1']\"}",
+ "campo_terra_flush": "0bb8c741-d2af-4185-9f4a-3a80cfa0f68c",
+ "campo_terra_sutil": "ab83e382-7521-472a-8532-31d6bcbe9372"
+}

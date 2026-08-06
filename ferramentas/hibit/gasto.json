@@ -1,0 +1,713 @@
+{
+ "total_usd": 0.863228169043859,
+ "chamadas": [
+  {
+   "rotulo": "prop_arvore_carvalho",
+   "usd": 0.006556162357330322
+  },
+  {
+   "rotulo": "prop_pedra",
+   "usd": 0.0061588796774546305
+  },
+  {
+   "rotulo": "prop_arbusto",
+   "usd": 0.005875681214862399
+  },
+  {
+   "rotulo": "prop_tronco",
+   "usd": 0.006149069256252713
+  },
+  {
+   "rotulo": "campo_terra_atlas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "aldeao_sul",
+   "usd": 0.006379095315933228
+  },
+  {
+   "rotulo": "aldeao_norte",
+   "usd": 0.010196180211173165
+  },
+  {
+   "rotulo": "aldeao_leste",
+   "usd": 0.0061129514111412896
+  },
+  {
+   "rotulo": "grama_pedra_atlas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "praia_agua_atlas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "pedra_a_s0",
+   "usd": 0.006698678016662598
+  },
+  {
+   "rotulo": "pedra_a_s1",
+   "usd": 0.006550143135918511
+  },
+  {
+   "rotulo": "pedra_b_s0",
+   "usd": 0.005727254470189413
+  },
+  {
+   "rotulo": "pedra_b_s1",
+   "usd": 0.005840847810109457
+  },
+  {
+   "rotulo": "tronco_a_s0",
+   "usd": 0.005682972086800469
+  },
+  {
+   "rotulo": "tronco_a_s1",
+   "usd": 0.0063460956944359674
+  },
+  {
+   "rotulo": "tronco_b_s0",
+   "usd": 0.006433160013622708
+  },
+  {
+   "rotulo": "tronco_b_s1",
+   "usd": 0.005961213164859348
+  },
+  {
+   "rotulo": "grama_pedra_atlas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "aldeao_sul_nb",
+   "usd": 0.006076217757331
+  },
+  {
+   "rotulo": "aldeao_4dir",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "praia_agua_atlas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "campo_terra_atlas_pro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "grama_pedra_atlas_pro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "praia_agua_atlas_pro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "walk_4dir",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "arvore_a",
+   "usd": 0.00628204255633884
+  },
+  {
+   "rotulo": "arvore_b",
+   "usd": 0.006348326630062528
+  },
+  {
+   "rotulo": "pedra_a",
+   "usd": 0.006259706947538588
+  },
+  {
+   "rotulo": "pedra_b",
+   "usd": 0.006012980540593465
+  },
+  {
+   "rotulo": "campo_terra_atlas_org",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "grama_pedra_atlas_org",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "praia_agua_atlas_org",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "campo_terra_flush",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "prop_arbusto",
+   "usd": 0.0061724414295620394
+  },
+  {
+   "rotulo": "prop_tronco",
+   "usd": 0.006153270430035062
+  },
+  {
+   "rotulo": "campo_terra_sutil",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_moedas",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_trigo",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_madeira",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_espada",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_escudo",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_arco",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_lanca",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_pao",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_cerveja",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_pergaminho",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_gema",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_coroa",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_ferro",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_sal",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_tecidos",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_cavalos",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_espiao",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_neblina",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_populacao",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_moral",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_ampulheta",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_cerco",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_renome",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_calendario",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_felicidade",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_tropa",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_alianca",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_carta",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_correntes",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_caveira",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_louros",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_forca",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_carisma",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_gestao",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_intriga",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_lorde",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_som",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_mudo",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_gema",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_terra",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_mapa",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_mercado",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_familia",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_mapa",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "icone_mercado",
+   "usd": 0.0
+  },
+  {
+   "rotulo": "tropa_campones",
+   "usd": 0.00685650889078776
+  },
+  {
+   "rotulo": "tropa_campones",
+   "usd": 0.006428815073437161
+  },
+  {
+   "rotulo": "tropa_lanceiro",
+   "usd": 0.006213920831680298
+  },
+  {
+   "rotulo": "tropa_espadachim",
+   "usd": 0.006450755225287544
+  },
+  {
+   "rotulo": "tropa_barbaro",
+   "usd": 0.0069973431693183055
+  },
+  {
+   "rotulo": "tropa_arqueiro",
+   "usd": 0.006282623529434204
+  },
+  {
+   "rotulo": "tropa_explorador",
+   "usd": 0.005781308809916178
+  },
+  {
+   "rotulo": "tropa_cav_leve",
+   "usd": 0.0072990424897935655
+  },
+  {
+   "rotulo": "tropa_arq_cavalo",
+   "usd": 0.0063213173813290065
+  },
+  {
+   "rotulo": "tropa_cav_pesada",
+   "usd": 0.0068204783863491485
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.007064853297339546
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007157869365480211
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007168314430448745
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.008622309631771512
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.006787991338306003
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007004641612370809
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.009042340887917413
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007017628060446845
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.0071057870388031
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007854604244232177
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.0074357815583546965
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007120948606067234
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.00782774199379815
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.007556954012976753
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007813541624281141
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.006897063970565796
+  },
+  {
+   "rotulo": "evento_cerco",
+   "usd": 0.006693204508887397
+  },
+  {
+   "rotulo": "evento_coroacao",
+   "usd": 0.0075903094079759394
+  },
+  {
+   "rotulo": "evento_derrota",
+   "usd": 0.0063867725796169705
+  },
+  {
+   "rotulo": "evento_emboscada",
+   "usd": 0.007824918058183458
+  },
+  {
+   "rotulo": "evento_fome",
+   "usd": 0.00713593520058526
+  },
+  {
+   "rotulo": "evento_inverno",
+   "usd": 0.007424654192394681
+  },
+  {
+   "rotulo": "evento_juramento",
+   "usd": 0.007749984529283311
+  },
+  {
+   "rotulo": "evento_rebeliao",
+   "usd": 0.007197998550203111
+  },
+  {
+   "rotulo": "evento_saque",
+   "usd": 0.01552131994565328
+  },
+  {
+   "rotulo": "evento_traicao",
+   "usd": 0.006618081198798286
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008775299919976129
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.008508315165837606
+  },
+  {
+   "rotulo": "evento_fome",
+   "usd": 0.00793220427301195
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.00720201661851671
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.008703269905514188
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.006930456161499024
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007305376927057902
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.006887535360124377
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.007101746612124973
+  },
+  {
+   "rotulo": "estagio_09",
+   "usd": 0.006646924098332723
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.007567759037017823
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007515935023625691
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007927816179063586
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.00795977677239312
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.008064903073840671
+  },
+  {
+   "rotulo": "estagio_base",
+   "usd": 0.006994457483291626
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008921008772320218
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.006932619783613417
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007155298471450806
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.007052607827716404
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.006975113418367174
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.008846188015407987
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007787666983074612
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.00915652714835273
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.008192039251327514
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007469059361351862
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.006983800676133897
+  },
+  {
+   "rotulo": "estagio_09",
+   "usd": 0.008183665964338515
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007310908026165432
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.0070897450447082525
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007100924571355184
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007719745212131077
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007155498001310561
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.0071863874329461
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.007378419902589586
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.008321839862399632
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008582706133524578
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007086372057596843
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.008396481169594659
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.0082053472465939
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.00819232890341017
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007754639254675972
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007262115134133234
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007085784700181749
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.00821660304069519
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.007208180824915568
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.007707354307174683
+  },
+  {
+   "rotulo": "estagio_09",
+   "usd": 0.007709318452411228
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.007721887509028117
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.008759982029596965
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.008752461327446831
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.008725700696309409
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.006992563803990682
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.0075249454180399585
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.00835797667503357
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.008339713573455811
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.00821450866593255
+  },
+  {
+   "rotulo": "estagio_07",
+   "usd": 0.008217796537611219
+  },
+  {
+   "rotulo": "estagio_08",
+   "usd": 0.00822351148393419
+  }
+ ]
+}

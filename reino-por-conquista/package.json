@@ -1,0 +1,38 @@
+{
+  "name": "reino-por-conquista",
+  "productName": "Reino por Conquista",
+  "version": "1.0.0",
+  "description": "De mercenário sem nome a rei — jogo de estratégia medieval offline",
+  "main": "electron-main.js",
+  "author": "FelpsLuz",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist-linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "br.com.felpsluz.reinoporconquista",
+    "productName": "Reino por Conquista",
+    "directories": { "output": "dist" },
+    "files": [
+      "electron-main.js",
+      "index.html",
+      "css/**/*",
+      "js/**/*"
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Reino por Conquista"
+    },
+    "linux": { "target": ["AppImage"] }
+  }
+}

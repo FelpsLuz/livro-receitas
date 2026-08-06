@@ -1,0 +1,709 @@
+#!/usr/bin/env python3
+"""Trata a arte crua do PixelLab e grava em res://assets/sprites/.
+
+    python3 ferramentas/hibit/tratar_assets.py
+
+Lê de ferramentas/hibit/cru/ e escreve em
+reino-por-conquista-godot/assets/sprites/. Não chama API: dá para rodar
+quantas vezes quiser, ajustando limiar, sem gastar um centavo.
+
+--------------------------------------------------------------------
+O CHROMA KEY NÃO PODE SER POR IGUALDADE
+--------------------------------------------------------------------
+O prompt pediu fundo "#FF00FF". O modelo NÃO devolve #FF00FF: devolve o
+magenta que ele achou parecido, e um diferente por imagem —
+
+    arbusto  (221, 71,171)      pedra    (174, 46,151)
+    árvore   (253, 99,138)      tronco   (196, 53,145)
+
+Um `if cor == (255,0,255)` recortaria zero pixels em todas as quatro. Por
+isso a chave é MEDIDA em cada imagem (a cor modal do anel de borda) e o
+corte é por DISTÂNCIA, em três passadas:
+
+  1. INUNDAÇÃO a partir da borda, com limiar frouxo. Pega o fundo contíguo
+     sem tocar em cor parecida que esteja DENTRO do sprite.
+  2. VARREDURA global pela mesma chave, com limiar apertado. Pega o fundo
+     ilhado — o vão entre dois galhos, que a inundação não alcança.
+  3. DESCASCA da franja: pixel opaco encostado em transparente e ainda
+     puxando para a chave é anti-alias de borda. Numa arte de 32px, três
+     pixels de franja rosa são 10% da silhueta.
+  4. FAMÍLIA DE MATIZ. A árvore veio com 123px de #971765 numa faixa sob o
+     tronco: o modelo desenhou a SOMBRA no matiz do fundo que a gente pediu.
+     Está a 132 de distância da chave — longe demais para as passadas 1 a 3 —
+     mas é magenta saturado, e nada nesta arte (verde e marrom, matiz 25–130°)
+     é magenta. Cortar por família de matiz é seguro AQUI e o relatório diz
+     quanto foi cortado, para o dia em que um sprite tiver uma flor roxa.
+
+O alfa sai BINÁRIO (0 ou 255). Alfa parcial em pixel art com filtro Nearest
+não suaviza nada — só produz borda suja que aparece contra qualquer fundo.
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import sys
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+RAIZ = Path(__file__).resolve().parent.parent.parent
+CRU = Path(__file__).resolve().parent / "cru"
+DEST = RAIZ / "reino-por-conquista-godot" / "assets" / "sprites"
+
+# Distâncias em RGB (euclidiana, 0..441). Medidas contra as quatro imagens:
+# o fundo varia ~12 de ruído interno, e a cor mais próxima de sprite real
+# (a madeira rosada do tronco) fica a ~95 da chave.
+# LIMIAR ADAPTATIVO. Um número fixo não serve quando o fundo muda de cor.
+# Com fundo MAGENTA a arte mais próxima estava a ~95 da chave e 78 era
+# folgado. Com fundo VERDE — que é vizinho da folhagem — a arte real da
+# pedra chega a 48 e a da árvore a 67: 78 comeria os dois sprites.
+#
+# A calibragem sai do próprio ANEL DE BORDA, que é fundo puro por definição:
+# mede-se quanto o fundo varia dentro dele e abre-se uma margem sobre isso.
+# Assim o limiar acompanha o ruído da imagem em vez de ser chutado.
+LIM_INUNDACAO_TETO = 78
+LIM_INUNDACAO_PISO = 16
+MARGEM_RUIDO = 3.0     # múltiplo do desvio do fundo
+LIM_ILHA = 55          # apertado: fundo ilhado, sem vizinho para confirmar
+LIM_FRANJA = 118       # anti-alias: mais frouxo, mas só na borda do alfa
+# Família de matiz: janela ASSIMÉTRICA em volta da chave.
+#
+# Simétrica não serve. Quando o modelo escurece o magenta do fundo, ele o
+# empurra para o VIOLETA — a sombra da pedra saiu em rgb(135,12,149), a 294°,
+# enquanto a chave está a 336°. Uma janela de ±55° pegaria isso, mas o outro
+# lado chegaria a 31° e comeria o tronco laranja da árvore, que vive a ~35°.
+#
+# Então a janela abre 58° para o lado do violeta e só 14° para o lado do
+# vermelho. O piso de croma existe para não comer cinza: cinza tem matiz
+# instável e croma perto de zero.
+MATIZ_VIOLETA = 58.0      # sentido decrescente a partir da chave
+MATIZ_VERMELHO = 14.0     # sentido crescente
+LIM_CROMA = 0.30
+
+_verdes = 0
+_vermelhos = 0
+
+
+def ok(cond: bool, nome: str, obs: str = "") -> bool:
+    global _verdes, _vermelhos
+    print(f"  {'✅' if cond else '❌'} {nome}" + (f" — {obs}" if obs else ""))
+    if cond:
+        _verdes += 1
+    else:
+        _vermelhos += 1
+    return cond
+
+
+def _limiar_do_fundo(a: np.ndarray, chave: np.ndarray) -> float:
+    """Quanto o fundo varia no anel de borda, com margem. Ver a nota acima."""
+    anel = np.concatenate([
+        a[:2].reshape(-1, 3), a[-2:].reshape(-1, 3),
+        a[:, :2].reshape(-1, 3), a[:, -2:].reshape(-1, 3)])
+    d = np.sqrt(((anel.astype(float) - chave) ** 2).sum(axis=-1))
+    # percentil 98 e não o máximo: uma quina do sprite encostando na borda
+    # levaria o máximo para o valor da ARTE e abriria o limiar demais
+    ruido = float(np.percentile(d, 98))
+    return float(np.clip(max(ruido * MARGEM_RUIDO, LIM_INUNDACAO_PISO),
+                         LIM_INUNDACAO_PISO, LIM_INUNDACAO_TETO))
+
+
+def _chave_da_borda(a: np.ndarray) -> np.ndarray:
+    """A cor de fundo é a MODA do anel de 2px da borda.
+
+    Moda e não média: média de duas cores de fundo com ruído devolve uma
+    cor que não existe na imagem, e todo o corte fica descentrado. (Mesma
+    lição que derrubou quatro tentativas de preenchimento no cenário v2.)
+    """
+    anel = np.concatenate([
+        a[:2].reshape(-1, 3), a[-2:].reshape(-1, 3),
+        a[:, :2].reshape(-1, 3), a[:, -2:].reshape(-1, 3)])
+    contagem = collections.Counter(map(tuple, anel))
+    return np.array(contagem.most_common(1)[0][0], dtype=float)
+
+
+def _dist(a: np.ndarray, chave: np.ndarray) -> np.ndarray:
+    return np.sqrt(((a.astype(float) - chave) ** 2).sum(axis=-1))
+
+
+def _hsv(a: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Matiz em graus e croma normalizado (0..1)."""
+    f = a.astype(float) / 255.0
+    mx = f.max(axis=-1)
+    mn = f.min(axis=-1)
+    dif = mx - mn
+    r, g, b = f[..., 0], f[..., 1], f[..., 2]
+    h = np.zeros_like(mx)
+    seguro = dif > 1e-6
+    idx = seguro & (mx == r)
+    h[idx] = (60.0 * ((g[idx] - b[idx]) / dif[idx])) % 360.0
+    idx = seguro & (mx == g)
+    h[idx] = (60.0 * ((b[idx] - r[idx]) / dif[idx]) + 120.0) % 360.0
+    idx = seguro & (mx == b)
+    h[idx] = (60.0 * ((r[idx] - g[idx]) / dif[idx]) + 240.0) % 360.0
+    croma = np.where(mx > 1e-6, dif / np.maximum(mx, 1e-6), 0.0)
+    return h, croma
+
+
+def _despicar(saida: np.ndarray, limiar: float = 96.0) -> int:
+    """Troca pixel interior ÚNICO que não tem parente entre os 8 vizinhos.
+
+    Conservador de propósito. Uma versão por componente conexo foi testada e
+    reprovada: com `area_max=5` ela trocava 119px na árvore e 67 na pedra —
+    em pixel art quase todo realce é um aglomerado pequeno e "destoante",
+    então o critério apagava o SOMBREAMENTO junto com o ruído. Aqui só cai
+    o pixel que está sozinho de verdade.
+
+    A troca é pela MODA dos vizinhos, nunca pela média — média de duas cores
+    de granito devolve um cinza que não existe na paleta da arte.
+    """
+    H, W, _ = saida.shape
+    opaco = saida[..., 3] == 255
+    rgb = saida[..., :3].astype(int)
+    trocas = 0
+    for y in range(1, H - 1):
+        for x in range(1, W - 1):
+            if not opaco[y, x]:
+                continue
+            vizinhos = []
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if (dy or dx) and opaco[y + dy, x + dx]:
+                        vizinhos.append(tuple(rgb[y + dy, x + dx]))
+            if len(vizinhos) < 6:
+                continue
+            cor = rgb[y, x]
+            if any(sum((int(v[i]) - int(cor[i])) ** 2 for i in range(3))
+                   < limiar * limiar for v in vizinhos):
+                continue
+            saida[y, x, :3] = collections.Counter(vizinhos).most_common(1)[0][0]
+            trocas += 1
+    return trocas
+
+
+def _cortar_ilhas_magenta(saida: np.ndarray, area_max: int = 8) -> int:
+    """Última rede: ilha MINÚSCULA de magenta cravada no interior.
+
+    A pedra ficou com um trio de rgb(135,12,149) no meio do granito, longe
+    da borda do alfa e sem conexão com o fundo — nenhuma das passadas
+    anteriores alcança. O teste é o mesmo da verificação (vermelho e azul
+    altos com o verde afundado) mais um teto de área: um elemento de arte
+    roxo de verdade não cabe em 8 pixels, e se couber o relatório mostra.
+
+    Corta em vez de trocar porque, no interior de um sprite opaco, um furo
+    de 3px sob um pixel de contorno não aparece; uma cor inventada aparece.
+    """
+    H, W, _ = saida.shape
+    opaco = saida[..., 3] == 255
+    rgb = saida[..., :3].astype(int)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    alvo = opaco & (r > 120) & (b > 90) & (g < np.minimum(r, b) * 0.72)
+    visto = np.zeros((H, W), bool)
+    cortados = 0
+    ys, xs = np.nonzero(alvo)
+    for y0, x0 in zip(ys.tolist(), xs.tolist()):
+        if visto[y0, x0]:
+            continue
+        grupo = [(y0, x0)]
+        visto[y0, x0] = True
+        pilha = [(y0, x0)]
+        while pilha and len(grupo) <= area_max:
+            y, x = pilha.pop()
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < H and 0 <= nx < W and alvo[ny, nx] \
+                            and not visto[ny, nx]:
+                        visto[ny, nx] = True
+                        grupo.append((ny, nx))
+                        pilha.append((ny, nx))
+        if len(grupo) > area_max:
+            continue
+        for (y, x) in grupo:
+            saida[y, x] = (0, 0, 0, 0)
+        cortados += len(grupo)
+    return cortados
+
+
+def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
+    rgba = np.array(im.convert("RGBA"))
+    rgb = rgba[..., :3]
+    H, W, _ = rgb.shape
+    chave = _chave_da_borda(rgb)
+    d = _dist(rgb, chave)
+    lim_inundacao = _limiar_do_fundo(rgb, chave)
+
+    # ---- 1. inundação a partir da borda ----
+    fundo = np.zeros((H, W), bool)
+    pilha = []
+    for x in range(W):
+        for y in (0, H - 1):
+            if d[y, x] < lim_inundacao and not fundo[y, x]:
+                fundo[y, x] = True
+                pilha.append((y, x))
+    for y in range(H):
+        for x in (0, W - 1):
+            if d[y, x] < lim_inundacao and not fundo[y, x]:
+                fundo[y, x] = True
+                pilha.append((y, x))
+    while pilha:
+        y, x = pilha.pop()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < H and 0 <= nx < W and not fundo[ny, nx] \
+                    and d[ny, nx] < lim_inundacao:
+                fundo[ny, nx] = True
+                pilha.append((ny, nx))
+    n_inundacao = int(fundo.sum())
+
+    # ---- 2. fundo ilhado (vão entre galhos) ----
+    ilhas = (d < min(LIM_ILHA, lim_inundacao * 0.7)) & ~fundo
+    fundo |= ilhas
+    n_ilhas = int(ilhas.sum())
+
+    # ---- 3. descasca da franja de anti-alias ----
+    n_franja = 0
+    for _ in range(3):
+        vizinho_vazio = np.zeros((H, W), bool)
+        vizinho_vazio[1:] |= fundo[:-1]
+        vizinho_vazio[:-1] |= fundo[1:]
+        vizinho_vazio[:, 1:] |= fundo[:, :-1]
+        vizinho_vazio[:, :-1] |= fundo[:, 1:]
+        franja = vizinho_vazio & ~fundo & (d < min(LIM_FRANJA, lim_inundacao * 1.5))
+        if not franja.any():
+            break
+        n_franja += int(franja.sum())
+        fundo |= franja
+
+    # ---- 4. família de matiz da chave (ver o cabeçalho) ----
+    h, croma = _hsv(rgb)
+    h_chave, _ = _hsv(chave.reshape(1, 1, 3).astype(np.uint8))
+    # A família de matiz só vale CONECTADA AO FUNDO. Solta, ela reprovou:
+    # a túnica do aldeão tem sombreado avermelhado dentro da janela, e a
+    # passada global comia 107px de um sprite que só tem ~150 — sobrava 5%
+    # de silhueta. A sombra magenta da árvore, que é o alvo real, ENCOSTA no
+    # fundo; o sombreado de uma roupa não encosta.
+    # A família de matiz existe para pegar a SOMBRA que o modelo desenha no
+    # tom do fundo. Com fundo magenta isso é seguro — nada na arte é
+    # magenta. Com fundo VERDE seria suicídio: copa, arbusto e musgo são
+    # verdes. A passada só roda quando a chave está na banda magenta/violeta.
+    rel = (h - float(h_chave[0, 0]) + 180.0) % 360.0 - 180.0
+    chave_magenta = 275.0 <= float(h_chave[0, 0]) <= 355.0
+    elegivel = (rel > -MATIZ_VIOLETA) & (rel < MATIZ_VERMELHO) \
+        & (croma > LIM_CROMA) & ~fundo
+    if not chave_magenta:
+        elegivel = np.zeros_like(elegivel)
+    n_familia = 0
+    pilha = []
+    ys, xs = np.nonzero(elegivel)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < H and 0 <= nx < W and fundo[ny, nx]:
+                pilha.append((y, x))
+                break
+    while pilha:
+        y, x = pilha.pop()
+        if fundo[y, x] or not elegivel[y, x]:
+            continue
+        fundo[y, x] = True
+        n_familia += 1
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < H and 0 <= nx < W and elegivel[ny, nx] \
+                    and not fundo[ny, nx]:
+                pilha.append((ny, nx))
+
+    saida = rgba.copy()
+    saida[..., 3] = np.where(fundo, 0, 255)      # alfa BINÁRIO
+    saida[fundo, :3] = 0                          # cor zerada onde é vazio
+
+    # ---- 5. mancha isolada no INTERIOR ----
+    # A pedra ficou com 3px de rgb(135,12,149) no meio do granito cinza:
+    # fundo que vazou para dentro, longe da borda do alfa e a 42° de matiz
+    # da chave — fora do alcance das passadas 1 a 4.
+    #
+    # Aqui se SUBSTITUI, não se corta: são pixels interiores, e cortar
+    # abriria buraco no sprite. A cor nova é a MODA dos 8 vizinhos opacos,
+    # nunca a média — média de duas cores de granito devolve um cinza que
+    # não existe na paleta da arte.
+    n_mancha = _despicar(saida)
+    n_mancha += _cortar_ilhas_magenta(saida)
+
+    restante = int((~fundo & (d < min(LIM_FRANJA, lim_inundacao * 1.5))).sum())
+    return Image.fromarray(saida, "RGBA"), {
+        "chave": tuple(int(v) for v in chave), "limiar": round(lim_inundacao, 1),
+        "inundacao": n_inundacao, "ilhas": n_ilhas, "franja": n_franja,
+        "familia": n_familia, "mancha": n_mancha,
+        "fundo_total": int(fundo.sum()), "px": H * W,
+        "residuo": restante,
+    }
+
+
+# ---------------------------------------------------------------
+# RETRATOS DE TROPA — nove fundos diferentes viram um só
+# ---------------------------------------------------------------
+# O gerador devolveu os nove com fundos que não combinam: ardósia num,
+# cinza claro noutro, esverdeado num terceiro. Nove quadros empilhados numa
+# coluna com nove fundos diferentes não leem como ELENCO — leem como nove
+# imagens achadas em lugares diferentes.
+#
+# A normalização é só do FUNDO, e por INUNDAÇÃO A PARTIR DA BORDA, não por
+# limiar global. A diferença decide o resultado: o espadachim é armadura
+# CINZA sobre fundo CINZA, e um limiar global comeria a armadura junto. Só
+# vira fundo o que encosta na borda e chega até lá por vizinhança — a
+# armadura no meio do quadro nunca é alcançada.
+#
+# Sai OPACO, na cor do painel: o retrato é um quadro pendurado na linha do
+# quartel, não um sprite solto. Nada é recortado, então não há franja para
+# errar — que é exatamente onde os personagens deste projeto se perderam da
+# primeira vez.
+PAINEL = (0x2F, 0x27, 0x21)   # Tema.ELEVADO
+
+
+def normalizar_retrato(im: Image.Image) -> tuple[Image.Image, dict]:
+    a = np.array(im.convert("RGB"))
+    H, W = a.shape[:2]
+    chave = _chave_da_borda(a)
+    lim = _limiar_do_fundo(a, chave)
+    d = _dist(a, chave)
+
+    fundo = np.zeros((H, W), bool)
+    pilha = []
+    for x in range(W):
+        for y in (0, H - 1):
+            if d[y, x] < lim and not fundo[y, x]:
+                fundo[y, x] = True
+                pilha.append((y, x))
+    for y in range(H):
+        for x in (0, W - 1):
+            if d[y, x] < lim and not fundo[y, x]:
+                fundo[y, x] = True
+                pilha.append((y, x))
+    while pilha:
+        y, x = pilha.pop()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < H and 0 <= nx < W and not fundo[ny, nx] \
+                    and d[ny, nx] < lim:
+                fundo[ny, nx] = True
+                pilha.append((ny, nx))
+
+    saida = a.copy()
+    saida[fundo] = PAINEL
+    frac = int(fundo.sum()) * 100 // (H * W)
+    return Image.fromarray(saida, "RGB").convert("RGBA"), {
+        "fundo": frac, "chave": tuple(int(v) for v in chave), "limiar": lim}
+
+
+def _import_pixelart(caminho: Path) -> None:
+    """Escreve o .import com os parâmetros de pixel art.
+
+    Três chaves importam, e as três defaults da Godot estão erradas para
+    este uso:
+
+      compress/mode=0            Lossless. O default (VRAM comprimido)
+                                 aplica compressão com perda por bloco — num
+                                 sprite de 32px isso muda cor de pixel, e
+                                 pixel art não tem onde esconder isso.
+      process/fix_alpha_border   false. Ele sangra a cor do sprite para
+                                 dentro dos pixels transparentes, para o
+                                 filtro linear não puxar preto na borda. Com
+                                 Nearest não existe esse problema, e o
+                                 sangramento ALTERA os pixels de borda que
+                                 acabamos de recortar com cuidado.
+      detect_3d/compress_to=0    desliga a heurística que recomprime a
+                                 textura sozinha se ela for usada em 3D.
+    """
+    uid = "uid://" + _uid_de(caminho)
+    caminho.with_suffix(caminho.suffix + ".import").write_text(
+        f'''[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="{uid}"
+path="res://.godot/imported/{caminho.name}-{_md5(caminho)}.ctex"
+metadata={{
+"vram_texture": false
+}}
+
+[deps]
+
+source_file="res://assets/sprites/{caminho.name}"
+dest_files=["res://.godot/imported/{caminho.name}-{_md5(caminho)}.ctex"]
+
+[params]
+
+compress/mode=0
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=false
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=false
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=0
+''')
+
+
+def _md5(caminho: Path) -> str:
+    import hashlib
+    return hashlib.md5(str(caminho.name).encode()).hexdigest()
+
+
+def _uid_de(caminho: Path) -> str:
+    """UID determinístico a partir do nome — a Godot exige um, e um estável
+    evita que cada reimportação gere um id novo e suje o diff."""
+    import hashlib
+    h = hashlib.md5(("hibit:" + caminho.name).encode()).digest()
+    alfabeto = "abcdefghijklmnopqrstuvwxyz0123456789"
+    n = int.from_bytes(h[:8], "big")
+    saida = ""
+    for _ in range(12):
+        saida += alfabeto[n % len(alfabeto)]
+        n //= len(alfabeto)
+    return saida
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sem-import", action="store_true",
+                    help="não reescreve os .import (deixa a Godot gerar)")
+    a = ap.parse_args()
+
+    if not CRU.exists():
+        sys.exit("nada em ferramentas/hibit/cru/ — rode gerar_assets.py antes")
+    DEST.mkdir(parents=True, exist_ok=True)
+
+    print("\n=== TRATAMENTO ===\n")
+    print("── tilesets (opacos, só copiados) ──")
+    for p in sorted(CRU.glob("*_atlas.png")):
+        im = Image.open(p).convert("RGBA")
+        destino = DEST / p.name
+        im.save(destino)
+        a_min = int(np.array(im)[..., 3].min())
+        ok(im.size == (128, 128) and a_min == 255, p.stem,
+           f"{im.size[0]}×{im.size[1]} · alfa mínimo {a_min} (deve ser opaco)")
+        if not a.sem_import:
+            _import_pixelart(destino)
+
+    # Os personagens vêm de /create-character-with-4-directions com alfa já
+    # BINÁRIO e fundo transparente — passar chroma key neles seria procurar
+    # um fundo magenta que não existe e, pior, cortar a roupa por matiz.
+    print("\n── personagens: poses e CICLO DE CAMINHADA ──")
+    # /animate-character devolve os quadros já transparentes e com alfa
+    # binário. Passar chroma key aqui seria procurar um fundo que não
+    # existe e, pior, cortar a roupa por matiz.
+    for p in sorted(CRU.glob("aldeao_*.png")):
+        im = Image.open(p).convert("RGBA")
+        arr = np.array(im)
+        parcial = int(((arr[..., 3] > 0) & (arr[..., 3] < 255)).sum())
+        if parcial:
+            arr[..., 3] = np.where(arr[..., 3] > 127, 255, 0)
+            im = Image.fromarray(arr, "RGBA")
+        destino = DEST / p.name
+        im.save(destino)
+        if not a.sem_import:
+            _import_pixelart(destino)
+        cob = int((np.array(im)[..., 3] == 255).sum()) * 100 // (im.size[0] * im.size[1])
+        # cada quadro isolado não vale um ✅ na lista (seriam 32 linhas);
+        # o que interessa é nenhum sair vazio
+        if "_walk_" in p.stem:
+            if cob < 5:
+                ok(False, p.stem, f"quadro vazio ({cob}%)")
+            continue
+        ok(cob >= 5, p.stem, f"{im.size[0]}×{im.size[1]} · {cob}% de silhueta"
+                             f" · {parcial}px parciais binarizados")
+
+    # ---- ícones de interface ----
+    # Vêm de /generate-ui-v2 com alfa já limpo. O tratamento aqui é outro:
+    # forçar UMA COR e alfa BINÁRIO.
+    #
+    # O gerador devolve o latão com variação de tom — 1058 cores únicas no
+    # primeiro teste. Isso é anti-alias e sombreado leve, e num ícone de
+    # interface é defeito: vinte ícones com vinte latões diferentes não leem
+    # como conjunto, e a interface perde a capacidade de TINGIR o ícone
+    # (para alerta, para desabilitado) porque a tinta cai sobre cor variada.
+    #
+    # A saída é branca com alfa: o arquivo guarda só a SILHUETA, e quem dá a
+    # cor é o `modulate` da interface. Um arquivo, todos os estados.
+    icones = sorted(CRU.glob("icone_*.png"))
+    if icones:
+        print("\n── ícones (silhueta monocromática) ──")
+        for p in icones:
+            im = Image.open(p).convert("RGBA")
+            arr = np.array(im)
+            alfa = arr[..., 3]
+            # limiar no meio: alfa parcial vira dentro ou fora, sem meio-termo
+            dentro = alfa > 127
+            saida = np.zeros_like(arr)
+            saida[..., 0:3] = 255
+            saida[..., 3] = np.where(dentro, 255, 0)
+            destino = DEST / p.name
+            Image.fromarray(saida, "RGBA").save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            cob = int(dentro.sum()) * 100 // dentro.size
+            if not (4 <= cob <= 70):
+                ok(False, p.stem, f"cobertura {cob}% fora de 4–70%")
+        ok(True, "%d ícones em silhueta branca" % len(icones),
+           "a cor vem do modulate da interface, não do arquivo")
+
+    # ---- estágios da terra ----
+    # Opacos e do tamanho da grade nativa: nada a recortar, nada a binarizar.
+    # O que vale medir é o CONTRATO com a cena (400×224, ver
+    # cenario_v3_cena.gd NATIVO) e que os seis não sejam a mesma imagem — uma
+    # cadeia com init_image forte demais devolve seis quadros quase idênticos,
+    # e aí a evolução de Acampamento a Castelo não aparece.
+    # o vale vazio é INSUMO da geração, não quadro do jogo: se entrasse na
+    # lista viraria um décimo estágio que a cena nunca pede, e a asserção de
+    # "um quadro por degrau" passaria a comparar 9 contra 10.
+    estagios = sorted(p for p in CRU.glob("estagio_*.png")
+                      if p.stem != "estagio_base")
+    if estagios:
+        print("\n── estágios da terra (opacos) ──")
+        for p in estagios:
+            im = Image.open(p).convert("RGB")
+            destino = DEST / p.name
+            im.save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            ok(im.size == (400, 224), p.stem,
+               "%d×%d (a cena pede 400×224)" % im.size)
+        # A EVOLUÇÃO TEM QUE CHEGAR AO FIM.
+        #
+        # A medida aqui era a diferença entre as MÉDIAS de RGB dos quadros, e
+        # ela é estruturalmente cega: reprovou o par cidadela→castelo com
+        # 0,60 quando os dois são visivelmente imagens diferentes. Duas
+        # fortalezas de pedra clara num vale verde têm quase a mesma média,
+        # por mais que a silhueta mude. Média não vê forma.
+        #
+        # A medida boa é a FRAÇÃO DE PIXELS que mudou. No mesmo par ela dá
+        # 51,7%, e no par mais fraco da escada (cidade murada → cidadela,
+        # que de fato é o passo mais curto) dá 19%.
+        #
+        # Como antes: são GUARDAS DE REGRESSÃO com pisos calibrados na leva
+        # boa, não prova de qualidade. Prendem a escada de voltar a empacar
+        # sem ninguém notar. Para julgar a arte, monte a folha de contato e
+        # olhe — foi assim que os platôs apareceram, todas as vezes.
+        arr = [np.array(Image.open(DEST / p.name).convert("RGB")).astype(int)
+               for p in estagios]
+        passos = [float((np.abs(arr[i] - arr[i - 1]).max(axis=2) > 24).mean())
+                  for i in range(1, len(arr))]
+        if passos:
+            ok(min(passos) > 0.12, "nenhum degrau da escada é um degrau parado",
+               "menor mudança entre vizinhos: %.0f%% dos pixels (mínimo 12%%)"
+               % (min(passos) * 100))
+            ponta = float((np.abs(arr[-1] - arr[0]).max(axis=2) > 24).mean())
+            ok(ponta > 0.60, "o castelo não é o acampamento",
+               "estágio 1 → %d: %.0f%% dos pixels (mínimo 60%%)"
+               % (len(arr), ponta * 100))
+
+    # ---- ilustrações de evento ----
+    # Opacas e quadradas, como os retratos: o modal as mostra como faixa com
+    # aspecto preservado (`_faixa`), então o que importa é o CONTRATO de
+    # tamanho com Retratos.LADO_EVENTO. Nada a recortar.
+    eventos = sorted(CRU.glob("evento_*.png"))
+    if eventos:
+        print("\n── ilustrações de evento (opacas) ──")
+        for p in eventos:
+            im = Image.open(p).convert("RGB")
+            destino = DEST / p.name
+            im.save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            ok(im.size == (128, 128), p.stem,
+               "%d×%d (Retratos.LADO_EVENTO pede 128)" % im.size)
+
+    # ---- retratos de tropa ----
+    retratos = sorted(CRU.glob("tropa_*.png"))
+    if retratos:
+        print("\n── retratos de tropa (fundo normalizado) ──")
+        for p in retratos:
+            im, r = normalizar_retrato(Image.open(p))
+            destino = DEST / p.name
+            im.save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            # fundo de 0% quer dizer que a inundação não pegou nada e o
+            # quadro saiu com o fundo do gerador; acima de ~85% ela vazou
+            # para dentro da figura e sobrou pouco retrato
+            ok(8 <= r["fundo"] <= 85, p.stem,
+               "fundo %d%% · chave %s · limiar %.1f"
+               % (r["fundo"], r["chave"], r["limiar"]))
+        cores = set()
+        for p in retratos:
+            cores.add(tuple(np.array(Image.open(DEST / p.name)
+                                     .convert("RGB"))[0, 0]))
+        ok(len(cores) == 1, "os nove retratos partilham UM fundo",
+           "%d cor(es) de canto distinta(s)" % len(cores))
+
+    print("\n── props (chroma key) ──")
+    for p in sorted(CRU.glob("prop_*.png")):
+        im = Image.open(p)
+        cortada, r = recortar(im)
+        destino = DEST / p.name
+        cortada.save(destino)
+        if not a.sem_import:
+            _import_pixelart(destino)
+        frac = r["fundo_total"] * 100 // r["px"]
+        print(f"  {p.stem:22} chave {str(r['chave']):16} lim {r['limiar']:5.1f} "
+              f"fundo {frac:2d}% (borda {r['inundacao']} + ilha {r['ilhas']} "
+              f"+ franja {r['franja']} + matiz {r['familia']}) "
+              f"· manchas {r['mancha']}")
+
+    quadros = len(list(DEST.glob("aldeao_walk_*.png")))
+    ok(quadros == 28, "ciclo de caminhada: 7 quadros × 4 direções",
+       f"{quadros} quadros")
+
+    print("\n=== VERIFICAÇÃO ===\n")
+    andar = 0
+    for p in sorted(DEST.glob("*.png")):
+        arr = np.array(Image.open(p).convert("RGBA"))
+        alfa = arr[..., 3]
+        parcial = int(((alfa > 0) & (alfa < 255)).sum())
+        if "_walk_" in p.stem:
+            andar += parcial
+            continue
+        ok(parcial == 0, f"{p.stem}: alfa binário", f"{parcial}px parciais")
+    ok(andar == 0, "os 28 quadros de caminhada: alfa binário",
+       f"{andar}px parciais somados")
+
+    for p in sorted(list(DEST.glob("prop_*.png"))
+            + [q for q in DEST.glob("aldeao_*.png") if "_walk_" not in q.stem]):
+        arr = np.array(Image.open(p).convert("RGBA"))
+        opaco = arr[..., 3] == 255
+        if not opaco.any():
+            ok(False, f"{p.stem}: sobrou sprite", "recorte comeu tudo")
+            continue
+        rgb = arr[..., :3][opaco].astype(int)
+        r, g, b = rgb[:, 0], rgb[:, 1], rgb[:, 2]
+        # magenta remanescente: vermelho e azul altos com verde afundado
+        mag = int((((r > 120) & (b > 90) & (g < np.minimum(r, b) * 0.72))).sum())
+        ok(mag == 0, f"{p.stem}: sem magenta residual", f"{mag}px")
+        cobertura = int(opaco.sum()) * 100 // opaco.size
+        ok(8 <= cobertura <= 92, f"{p.stem}: silhueta plausível",
+           f"{cobertura}% do quadro é sprite")
+
+    if not a.sem_import:
+        n = len(list(DEST.glob("*.png.import")))
+        print()
+        ok(n == len(list(DEST.glob("*.png"))),
+           ".import escrito para todo PNG", f"{n} arquivos")
+
+    print("\n" + "=" * 50)
+    print(f"{_verdes} verdes · {_vermelhos} vermelhos")
+    return 1 if _vermelhos else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

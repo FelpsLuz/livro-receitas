@@ -1,0 +1,869 @@
+#!/usr/bin/env python3
+"""
+generate_assets_v2.py — assets Pro do PixelLab para o projeto Godot.
+
+Cobre os quatro grupos do overhaul, cada um no endpoint próprio da API v2:
+
+  ui        POST /generate-ui-v2            molduras 9-slice, botões, barras (síncrono)
+  tileset   POST /create-tileset            terreno contínuo Wang/Pro   (assíncrono)
+  objeto    POST /map-objects               árvores, casas, baús        (assíncrono)
+  objeto1d  POST /create-1-direction-object variação barata de objeto   (assíncrono)
+  heroi     POST /create-character-v3       personagem com 8 rotações   (assíncrono)
+
+Tudo cai em reino-por-conquista-godot/assets_v2/{ui,characters,tilesets,objects}
+com canal alfa. Os assíncronos são acompanhados por polling até concluir.
+
+  export PIXELLAB_SECRET="..."
+  python3 generate_assets_v2.py --saldo            # cota restante, sem gastar
+  python3 generate_assets_v2.py --listar           # o catálogo e o custo em gerações
+  python3 generate_assets_v2.py --grupo ui         # gera um grupo
+  python3 generate_assets_v2.py --apenas painel_pergaminho
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import os
+import sys
+import time
+from io import BytesIO
+from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parent
+BASE = os.environ.get("PIXELLAB_BASE_URL", "https://api.pixellab.ai/v2").rstrip("/")
+DESTINO = RAIZ / "reino-por-conquista-godot" / "assets_v2"
+
+# identidade visual única: é o que faz UI, mundo e personagens parecerem o mesmo jogo
+PALETA = "weathered parchment, dark oak brown, aged gold, iron grey, deep blood red"
+ESTILO_MUNDO = ("grim low-fantasy medieval, no magic, iron age, worn materials, "
+                "muted earthy palette with warm gold accents")
+
+# ------------------------------------------------------------------ catálogo
+# Cada entrada: (grupo, endpoint, parâmetros). Os textos vêm da lore do jogo:
+# pergaminho, madeira e ouro — a mesma linguagem do tema atual, agora em pixel art.
+CATALOGO = {
+    # ---------- UI (9-slice, botões, HUD) ----------
+    "painel_pergaminho": dict(grupo="ui", tipo="ui", size=(256, 256),
+        desc="medieval parchment panel frame for a game UI window, aged yellowed paper "
+             "stretched on a dark oak wood border with iron corner rivets, empty center, "
+             "symmetrical, seamless 9-slice frame, thick readable border"),
+    "painel_madeira": dict(grupo="ui", tipo="ui", size=(256, 256),
+        desc="dark oak wood panel frame for a game inventory window, carved planks with "
+             "iron nails at the corners and a thin gold inlay line, empty center, "
+             "symmetrical 9-slice frame"),
+    "botao_madeira": dict(grupo="ui", tipo="ui", size=(192, 64),
+        desc="medieval wooden button for a game menu, horizontal oak plank with beveled "
+             "edges, gold trim and two iron rivets, empty center for text, "
+             "clean readable silhouette"),
+    "botao_madeira_apertado": dict(grupo="ui", tipo="ui", size=(192, 64),
+        desc="medieval wooden button in PRESSED state, same oak plank but darker and "
+             "recessed, inset shadow at the top, gold trim dimmed, empty center for text"),
+    "moldura_retrato": dict(grupo="ui", tipo="ui", size=(128, 128),
+        desc="ornate square portrait frame for a medieval game HUD, dark iron and gold "
+             "filigree border, empty transparent center, symmetrical"),
+    "barra_hud": dict(grupo="ui", tipo="ui", size=(256, 48),
+        desc="medieval progress bar frame for a game HUD, empty horizontal iron and gold "
+             "trough with riveted ends, hollow center to be filled"),
+    "quadro_inventario": dict(grupo="ui", tipo="ui", size=(128, 128),
+        desc="single inventory slot for a medieval game, square dark leather pad inside a "
+             "riveted iron border, slightly inset, empty center"),
+
+    # ---------- TILESETS (terreno) ----------
+    "campo_terra": dict(grupo="tilesets", tipo="tileset", tile=(32, 32),
+        lower="lush green medieval grassland with small wildflowers and clumps of grass",
+        upper="packed dirt road and bare brown earth with pebbles and wheel ruts",
+        transicao="grass thinning into dirt with scattered tufts and small stones"),
+    "grama_pedra": dict(grupo="tilesets", tipo="tileset", tile=(32, 32),
+        lower="green meadow grass with tiny flowers",
+        upper="grey mountain rock shelf with cracks and moss patches",
+        transicao="loose scree and small boulders between grass and rock"),
+
+    # ---------- OBJETOS DE CENÁRIO ----------
+    "arvore_carvalho": dict(grupo="objects", tipo="objeto", size=(128, 160),
+        desc="large old oak tree with thick gnarled trunk and dense green canopy, "
+             "medieval countryside, " + ESTILO_MUNDO),
+    "arvore_pinheiro": dict(grupo="objects", tipo="objeto", size=(112, 160),
+        desc="tall dark pine tree with layered branches, northern medieval forest, " + ESTILO_MUNDO),
+    "casa_camponesa": dict(grupo="objects", tipo="objeto", size=(160, 160),
+        desc="small medieval peasant cottage, timber frame with wattle-and-daub walls and "
+             "a thatched straw roof, wooden door, stone chimney, " + ESTILO_MUNDO),
+    "torre_castelo": dict(grupo="objects", tipo="objeto", size=(160, 192),
+        desc="medieval stone keep tower with crenellated top, arrow slits, wooden gate and "
+             "a red banner, " + ESTILO_MUNDO),
+    "bau_tesouro": dict(grupo="objects", tipo="objeto", size=(96, 96),
+        desc="closed medieval treasure chest, dark wood with iron bands and a heavy padlock, "
+             + ESTILO_MUNDO),
+    "poco_pedra": dict(grupo="objects", tipo="objeto", size=(96, 112),
+        desc="stone village well with wooden roof, rope and bucket, moss on the stones, " + ESTILO_MUNDO),
+    "barril_carga": dict(grupo="objects", tipo="objeto", size=(80, 80),
+        desc="wooden barrel with iron hoops, medieval market cargo, " + ESTILO_MUNDO),
+    "fogueira_acampamento": dict(grupo="objects", tipo="objeto", size=(96, 96),
+        desc="campfire with stacked logs inside a ring of stones, warm embers, " + ESTILO_MUNDO),
+
+    # ---------- ETAPA 2: VILA E COSTA ----------
+    "ferraria": dict(grupo="objects", tipo="objeto", size=(160, 160),
+        desc="medieval blacksmith forge building, stone base and timber upper floor, "
+             "open front with anvil and glowing forge, chimney with smoke stain, " + ESTILO_MUNDO),
+    "moinho_vento": dict(grupo="objects", tipo="objeto", size=(160, 192),
+        desc="medieval windmill, round stone tower with wooden cap and four cloth sails, "
+             "small door at the base, " + ESTILO_MUNDO),
+    "muralha_pedra": dict(grupo="objects", tipo="objeto", size=(160, 128),
+        desc="straight section of medieval stone curtain wall with crenellations and a "
+             "walkway on top, weathered grey blocks, " + ESTILO_MUNDO),
+    "portao_fortificado": dict(grupo="objects", tipo="objeto", size=(160, 160),
+        desc="fortified gatehouse with raised iron portcullis, two square towers and "
+             "an arched wooden gate, " + ESTILO_MUNDO),
+    "barraca_mercado": dict(grupo="objects", tipo="objeto", size=(144, 128),
+        desc="medieval market stall, wooden counter under a striped red and cream awning, "
+             "crates of goods and hanging scales, " + ESTILO_MUNDO),
+    "praia_agua": dict(grupo="tilesets", tipo="tileset", tile=(32, 32),
+        lower="shallow clear blue water with gentle ripples and sandy bottom",
+        upper="pale golden beach sand with scattered pebbles and shells",
+        transicao="wet sand with foam line where the water meets the shore"),
+
+    # ---------- ETAPA 3: ACAMPAMENTO, FLORESTA, VFX E ÍCONES ----------
+    # Acampamento habitado: o nível -1 tinha só fogueira e barris, parecia
+    # um piquenique. Tendas, carroça e suprimentos contam "mercenários moram aqui".
+    "tenda_simples": dict(grupo="objects", tipo="objeto", size=(96, 96),
+        desc="small medieval military tent, worn canvas over wooden poles, rope "
+             "pegs, patched fabric, closed flap, " + ESTILO_MUNDO),
+    "tenda_grande": dict(grupo="objects", tipo="objeto", size=(128, 112),
+        desc="large medieval war-camp commander tent, dark canvas with a red "
+             "banner on the center pole, open flap showing shadow inside, " + ESTILO_MUNDO),
+    "carroca": dict(grupo="objects", tipo="objeto", size=(128, 96),
+        desc="wooden supply cart with two large spoked wheels, loaded with sacks "
+             "and a rolled tarp, no horse, " + ESTILO_MUNDO),
+    "sacos_carga": dict(grupo="objects", tipo="objeto", size=(80, 64),
+        desc="pile of burlap grain sacks and a small wooden crate, camp supplies, "
+             + ESTILO_MUNDO),
+    "tocha_estaca": dict(grupo="objects", tipo="objeto", size=(48, 96),
+        desc="standing torch, wooden stake driven into the ground with a burning "
+             "oil-soaked head, small flame, " + ESTILO_MUNDO),
+    "ponte_madeira": dict(grupo="objects", tipo="objeto", size=(112, 160),
+        desc="vertical wooden plank bridge crossing water, seen from high top-down, "
+             "worn planks with rope railings on both sides, " + ESTILO_MUNDO),
+    # Floresta fechada para emoldurar o mapa — o limite do mundo deixa de ser
+    # grama cortada na borda da tela.
+    "grama_floresta": dict(grupo="tilesets", tipo="tileset", tile=(32, 32),
+        lower="green meadow grass with tiny flowers",
+        upper="dense dark forest canopy seen from above, packed treetops in deep "
+              "green with small highlights",
+        transicao="forest edge with bushes, ferns and scattered saplings"),
+    # VFX: texturas mínimas para CPUParticles2D — o movimento vem do Godot,
+    # a API só entrega o "material" (um tufo de fumaça, uma brasa).
+    "fumaca_nuvem": dict(grupo="vfx", tipo="icone", size=(48, 48),
+        desc="single soft puff of grey smoke, round fluffy cloud shape, "
+             "semi-transparent wispy edges, isolated sprite"),
+    "brasa_fagulha": dict(grupo="vfx", tipo="icone", size=(32, 32),
+        desc="single tiny glowing orange fire ember, bright hot center with "
+             "warm falloff, isolated spark sprite"),
+    # Ícones de inventário/mercado para os slots da UI Pro (quadro_inventario).
+    "icone_moedas": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, small pile of gold coins, " + ESTILO_MUNDO),
+    "icone_trigo": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, tied sheaf of golden wheat, " + ESTILO_MUNDO),
+    "icone_madeira": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, three stacked cut logs, " + ESTILO_MUNDO),
+    "icone_espada": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, iron arming sword with leather grip, " + ESTILO_MUNDO),
+    "icone_escudo": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, round wooden shield with iron boss, " + ESTILO_MUNDO),
+    "icone_arco": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, wooden longbow with a single arrow, " + ESTILO_MUNDO),
+    "icone_lanca": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, war spear with iron tip, diagonal, " + ESTILO_MUNDO),
+    "icone_pao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, rustic round bread loaf with cut slice, " + ESTILO_MUNDO),
+    "icone_cerveja": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, wooden tankard of ale with foam, " + ESTILO_MUNDO),
+    "icone_pergaminho": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, rolled parchment scroll with red wax seal, " + ESTILO_MUNDO),
+    "icone_gema": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, cut red ruby gemstone, " + ESTILO_MUNDO),
+    "icone_coroa": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, golden crown with small jewels, " + ESTILO_MUNDO),
+    # as MERCADORIAS de dados.gd que faltavam — o mercado é quem mais usa ícone
+    "icone_ferro": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, three stacked grey iron ingots, " + ESTILO_MUNDO),
+    "icone_sal": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, open burlap pouch of white salt crystals, " + ESTILO_MUNDO),
+    "icone_tecidos": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, folded bolts of dyed cloth in red and blue, " + ESTILO_MUNDO),
+    "icone_cavalos": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game inventory icon, brown horse head with bridle, side profile, " + ESTILO_MUNDO),
+
+    # ---------- ícones de ABA ----------
+    # A referência põe um ícone antes do rótulo de cada uma das dez abas. Eles
+    # têm um problema próprio: aparecem a 16px, não a 24, e lado a lado com
+    # nove irmãos. Cada um precisa de UMA forma bruta distinta — anel, cunha,
+    # torre, taça, coroa — porque a essa altura a cor some antes da silhueta.
+    "icone_aba_terra": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, single thatched cottage seen from the front with "
+             "one door and one window, homestead, " + ESTILO_MUNDO),
+    "icone_aba_mapa": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, unrolled parchment map with a dotted route line "
+             "and a compass rose in one corner, " + ESTILO_MUNDO),
+    "icone_aba_mercado": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, market stall awning with two striped cloth panels "
+             "over a plank counter, front view, " + ESTILO_MUNDO),
+    "icone_aba_taverna": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, wooden tankard of ale with a thick handle and "
+             "foam over the rim, seen from the side, " + ESTILO_MUNDO),
+    "icone_aba_corte": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, tall stone throne with a high back seen from the "
+             "front, empty, two steps at the base, " + ESTILO_MUNDO),
+    "icone_aba_exercito": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, two crossed spears behind a small round shield, "
+             "symmetrical, " + ESTILO_MUNDO),
+    "icone_aba_clas": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, wolf head howling in profile, muzzle pointing up "
+             "to the left, solid silhouette, mercenary clan, " + ESTILO_MUNDO),
+    "icone_aba_intrigas": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, large ROUND red wax seal cracked in half down the "
+             "middle, a small dagger tip showing behind it, bold circular "
+             "silhouette, broken oath, no candle, " + ESTILO_MUNDO),
+    "icone_aba_familia": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, two adult figures side by side with one small "
+             "child figure between them, front view, lineage, " + ESTILO_MUNDO),
+    "icone_aba_cronica": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui tab icon, open leather-bound book with two visible pages "
+             "and a quill pen resting on it, " + ESTILO_MUNDO),
+
+    # ---------- ícones de AÇÃO ----------
+    "icone_exportar": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, wooden crate with a thick arrow leaving it to the "
+             "right, shipment out, " + ESTILO_MUNDO),
+    "icone_passar_mes": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, hourglass with sand running and one curved arrow "
+             "sweeping around it clockwise, time advancing, " + ESTILO_MUNDO),
+    "icone_ataque": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, arming sword pointing down-right striking through a "
+             "cracked shield, assault, " + ESTILO_MUNDO),
+    "icone_traicao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, long dagger crossing DIAGONALLY IN FRONT of a small "
+             "coin purse, blade large and dominant, purse small behind it, "
+             "betrayal for gold, " + ESTILO_MUNDO),
+    "icone_contrato": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, unrolled contract scroll with three ruled text lines "
+             "and a red wax seal at the bottom, " + ESTILO_MUNDO),
+    "icone_informante": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, single large ear with three short listening arcs "
+             "beside it, eavesdropper, " + ESTILO_MUNDO),
+    "icone_pedra": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, three stacked cut grey stone blocks with chisel "
+             "marks, masonry material, " + ESTILO_MUNDO),
+
+    # ---------- ícones de MECÂNICA (economia, espionagem, guerra) ----------
+    # Estes não são mercadoria: são estados que a UI hoje mostra só com emoji —
+    # neblina de guerra, moral, fila do quartel, população em armas.
+    "icone_espiao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, hooded spy head in profile, face in shadow under the "
+             "cowl, a small dagger crossed behind, " + ESTILO_MUNDO),
+    "icone_neblina": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, thick grey fog bank hiding a distant tower, only the "
+             "silhouette visible, unknown territory, " + ESTILO_MUNDO),
+    "icone_populacao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, three simple peasant figures standing together seen "
+             "from the front, one taller in the middle, " + ESTILO_MUNDO),
+    "icone_moral": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, war banner on a pole flying upward in the wind, red "
+             "cloth with a gold device, " + ESTILO_MUNDO),
+    "icone_ampulheta": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, wooden framed hourglass with running golden sand, "
+             + ESTILO_MUNDO),
+    # ---------- folha que substitui os EMOJI ----------
+    # Com a fonte bitmap no lugar, os 177 emoji viraram o defeito mais
+    # barulhento da tela: glifos vetoriais coloridos do sistema ao lado de
+    # letras em grade de pixel. Estes são os que carregam INFORMAÇÃO — os
+    # decorativos (o 🍺 antes do nome da taverna) simplesmente saem do texto.
+    "icone_renome": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, laurel wreath open at the top with a small star "
+             "between the tips, renown emblem, " + ESTILO_MUNDO),
+    "icone_calendario": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, small wooden almanac board with notched tally "
+             "marks and a bone peg, medieval calendar, " + ESTILO_MUNDO),
+    "icone_felicidade": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, flat yellow circle with two black dot eyes and one "
+             "upward curved black smile line, nothing else, simple smiley "
+             "token, no hair, no face shading, no portrait, " + ESTILO_MUNDO),
+    "icone_tropa": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, single iron kettle helmet seen from the front with "
+             "a nasal bar, soldier headcount emblem, " + ESTILO_MUNDO),
+    "icone_alianca": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, two armored gauntlets clasped in a firm handshake "
+             "seen from the side, oath of alliance, " + ESTILO_MUNDO),
+    "icone_carta": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, folded letter closed with a round red wax seal and "
+             "a ribbon, sealed message, " + ESTILO_MUNDO),
+    "icone_correntes": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, three heavy iron chain links with an open shackle "
+             "at one end, captivity emblem, " + ESTILO_MUNDO),
+    "icone_caveira": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, plain bone skull seen from the front, empty eye "
+             "sockets, defeat emblem, no crossbones, " + ESTILO_MUNDO),
+    "icone_louros": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, golden victor crown of laurel leaves forming a "
+             "closed ring, triumph emblem, " + ESTILO_MUNDO),
+    "icone_forca": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, clenched bare fist seen from the front, strength "
+             "attribute emblem, " + ESTILO_MUNDO),
+    "icone_carisma": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, empty speech scroll banner unfurled horizontally with "
+             "a small bird perched on it, herald and persuasion emblem, "
+             "no face, no person, " + ESTILO_MUNDO),
+    "icone_gestao": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, TWO-PAN BALANCE SCALE: one vertical stand, one "
+             "horizontal beam, and two small round pans hanging by chains at "
+             "each end of the beam, level, seen from the front, "
+             "no food, no bowls on the ground, " + ESTILO_MUNDO),
+    "icone_intriga": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, slim curved dagger pointing down with a drop at "
+             "the tip, intrigue attribute emblem, " + ESTILO_MUNDO),
+    "icone_lorde": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, heraldic fleur-de-lis in gold, sworn vassal "
+             "emblem, symmetrical, " + ESTILO_MUNDO),
+    "icone_som": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, small brass war horn pointing right with two "
+             "curved sound arcs, audio on, " + ESTILO_MUNDO),
+    "icone_mudo": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, brass war horn pointing right, IDENTICAL to a sound-on "
+             "horn icon, with ONE thick red diagonal slash drawn across the "
+             "whole icon from top-left to bottom-right, muted, " + ESTILO_MUNDO),
+
+    "icone_cerco": dict(grupo="icons", tipo="icone", size=(64, 64),
+        desc="game ui icon, single wooden catapult on wheels seen from the side, "
+             "throwing arm loaded with a grey stone, taut rope, isolated siege "
+             "engine object, no building, no house, no wall, " + ESTILO_MUNDO),
+
+    # ---------- ANIMAÇÕES (a partir de um personagem já criado) ----------
+    "heroi_caminhando": dict(grupo="characters", tipo="animacao",
+        personagem="heroi_jogador", acao="walking, steady march, arms swinging",
+        quadros=8, direcoes=["south", "south-east", "east", "north-east",
+                              "north", "north-west", "west", "south-west"]),
+
+    # ---------- PERSONAGEM COM 8 ROTAÇÕES ----------
+    "heroi_jogador": dict(grupo="characters", tipo="heroi", size=(64, 64),
+        desc="medieval mercenary captain, leather and mail armor, dark green cloak, "
+             "sword at the hip, determined face, " + ESTILO_MUNDO),
+}
+
+# preço estimado em USD por asset, da tabela oficial de preços do PixelLab.
+# (A cota "generations" do trial é consumida primeiro; os créditos em dólar
+#  entram como fallback. É o valor em dólar que importa para orçar o lote.)
+CUSTO = {
+    "ui": 0.095,        # generate-ui-v2, até 256×256
+    "tileset": 0.0099,  # create-tileset, tiles 32×32
+    "objeto": 0.0099,   # map-objects, por objeto
+    "objeto1d": 0.095,  # create-1-direction-object, até 168×168
+    "heroi": 0.041,     # create-character-v3, 64×64 (8 rotações)
+    "animacao": 0.116,  # animate-character v3: ~0,0145 por direção × 8
+    "icone": 0.0084,    # create-image-pixflux, 64×64 com alfa
+}
+
+
+def cabecalho() -> dict:
+    seg = os.environ.get("PIXELLAB_SECRET", "").strip()
+    if not seg:
+        raise SystemExit("❌ Falta PIXELLAB_SECRET no ambiente.")
+    return {"Authorization": f"Bearer {seg}", "content-type": "application/json"}
+
+
+def erro(resp) -> str:
+    mapa = {401: "chave inválida", 402: "SEM COTA/CRÉDITOS — recarregue em pixellab.ai",
+            422: "parâmetros recusados", 429: "limite de concorrência", 529: "limite de taxa"}
+    try:
+        det = resp.json()
+        det = det.get("detail") or det.get("error") or json.dumps(det)[:200]
+        if isinstance(det, list):
+            det = json.dumps(det)[:200]
+    except Exception:
+        det = resp.text[:200]
+    return f"{mapa.get(resp.status_code, f'HTTP {resp.status_code}')} — {det}"
+
+
+def saldo() -> dict:
+    import requests
+    r = requests.get(f"{BASE}/balance", headers=cabecalho(), timeout=40)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    return r.json()
+
+
+def _png(b64: str):
+    import PIL.Image
+    return PIL.Image.open(BytesIO(base64.b64decode(b64))).convert("RGBA")
+
+
+def baixar_url(url: str):
+    """Alguns endpoints (map-objects, characters) não devolvem base64: entregam
+    um download_url. A imagem só chega por aqui — e a URL exige o mesmo Bearer."""
+    import requests
+    # o CDN às vezes derruba a conexão no meio de um lote grande: tenta de novo
+    ultimo = None
+    for tentativa in range(4):
+        for cabecalhos in ({"Authorization": cabecalho()["Authorization"]}, {}):
+            try:
+                r = requests.get(url, headers=cabecalhos, timeout=180, allow_redirects=True)
+                if r.ok:
+                    import PIL.Image
+                    return PIL.Image.open(BytesIO(r.content)).convert("RGBA")
+                ultimo = erro(r)
+            except Exception as e:
+                ultimo = str(e)[:120]
+        time.sleep(2 * (tentativa + 1))
+    raise RuntimeError(f"download falhou após 4 tentativas: {ultimo}")
+    import PIL.Image
+    return PIL.Image.open(BytesIO(r.content)).convert("RGBA")
+
+
+def _acha_urls(no, achadas=None):
+    """Varre a resposta atrás das URLs das imagens (em qualquer nível).
+
+    Dois formatos convivem:
+      download_url: str                      → um arquivo só
+      rotation_urls: {direcao: url, ...}     → as 8 rotações do personagem,
+                                               e a CHAVE é o nome da direção.
+    """
+    achadas = achadas if achadas is not None else []
+    if isinstance(no, dict):
+        rot = no.get("rotation_urls")
+        if isinstance(rot, dict):
+            for direcao, url in rot.items():
+                if isinstance(url, str) and url.startswith("http"):
+                    achadas.append((direcao, url))
+        for k, v in no.items():
+            if k == "rotation_urls":
+                continue
+            if isinstance(v, str) and v.startswith("http") and (
+                    "download" in k or "url" in k):
+                achadas.append((no.get("direction") or no.get("name") or "", v))
+            else:
+                _acha_urls(v, achadas)
+    elif isinstance(no, list):
+        for v in no:
+            _acha_urls(v, achadas)
+    return achadas
+
+
+def _acha_imagens(no, achadas=None):
+    """A v2 aninha as imagens de formas diferentes por endpoint; varre recursivo."""
+    achadas = achadas if achadas is not None else []
+    if isinstance(no, dict):
+        if "base64" in no and isinstance(no["base64"], str) and len(no["base64"]) > 200:
+            achadas.append((no.get("direction") or no.get("name") or no.get("id") or "", no["base64"]))
+        for k, v in no.items():
+            if k != "base64":
+                _acha_imagens(v, achadas)
+    elif isinstance(no, list):
+        for v in no:
+            _acha_imagens(v, achadas)
+    return achadas
+
+
+def esperar_job(job_id: str, limite: int = 600) -> dict:
+    """Acompanha um job assíncrono até concluir."""
+    import requests
+    inicio = time.time()
+    while time.time() - inicio < limite:
+        time.sleep(6)
+        r = requests.get(f"{BASE}/background-jobs/{job_id}", headers=cabecalho(), timeout=60)
+        if not r.ok:
+            raise RuntimeError(erro(r))
+        info = r.json()
+        estado = str(info.get("status", "")).lower()
+        if estado in ("completed", "succeeded", "success", "done", "finished"):
+            return info
+        if estado in ("failed", "error", "cancelled"):
+            raise RuntimeError(f"job falhou: {json.dumps(info)[:220]}")
+        print(f"      … {estado or 'processando'} ({int(time.time() - inicio)}s)", end="\r", flush=True)
+    raise RuntimeError("tempo esgotado no job " + job_id)
+
+
+def buscar(caminho: str) -> dict:
+    import requests
+    r = requests.get(f"{BASE}{caminho}", headers=cabecalho(), timeout=120)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    return r.json()
+
+
+# --------------------------------------------------------------- geradores
+def gerar_ui(spec: dict, seed: int):
+    """POST /generate-ui-v2 — síncrono."""
+    import requests
+    w, h = spec["size"]
+    corpo = {"description": spec["desc"], "image_size": {"width": w, "height": h},
+             "no_background": True, "color_palette": PALETA, "seed": seed}
+    r = requests.post(f"{BASE}/generate-ui-v2", json=corpo, headers=cabecalho(), timeout=300)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    dados = r.json()
+    imgs = _acha_imagens(dados)
+    if not imgs:
+        # alguns retornos são assíncronos: cai no polling
+        job = dados.get("background_job_id")
+        if job:
+            imgs = _acha_imagens(esperar_job(job))
+    if not imgs:
+        raise RuntimeError(f"sem imagem: {json.dumps(dados)[:200]}")
+    return [("", _png(imgs[0][1]))], dados
+
+
+def gerar_tileset(spec: dict, seed: int):
+    """POST /create-tileset — assíncrono, modo 'pro'."""
+    import requests
+    tw, th = spec["tile"]
+    corpo = {
+        "lower_description": spec["lower"], "upper_description": spec["upper"],
+        "transition_description": spec.get("transicao", ""),
+        "tile_size": {"width": tw, "height": th},
+        # mode "pro" exige conta Tier 1+ (erro 3006). "standard" gera o Wang
+        # tileset clássico e roda em qualquer tier.
+        "mode": os.environ.get("PIXELLAB_TILESET_MODE", "standard"), "view": "high top-down",
+        "outline": "selective outline", "shading": "medium shading", "detail": "highly detailed",
+        "transition_size": 0.5, "seed": seed,
+    }
+    r = requests.post(f"{BASE}/create-tileset", json=corpo, headers=cabecalho(), timeout=180)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    envio = r.json()
+    tid = envio.get("tileset_id") or envio.get("id")
+    job = envio.get("background_job_id")
+    resultado = esperar_job(job) if job else envio
+    if tid:
+        try:
+            resultado = buscar(f"/tilesets/{tid}")
+        except Exception:
+            pass
+    imgs = _acha_imagens(resultado)
+    if imgs:
+        return [(n, _png(b)) for n, b in imgs], envio
+    urls = _acha_urls(resultado)
+    if urls:
+        return [(n, baixar_url(u)) for n, u in urls], envio
+    raise RuntimeError(f"tileset sem imagem: {json.dumps(resultado)[:200]}")
+
+
+def gerar_objeto(spec: dict, seed: int):
+    """POST /map-objects — assíncrono."""
+    import requests
+    w, h = spec["size"]
+    # ATENÇÃO: /map-objects tem enum PRÓPRIO de detail — 'high detail', e não
+    # 'highly detailed' como o pixflux/tileset. Enums divergem por endpoint.
+    corpo = {"description": spec["desc"], "image_size": {"width": w, "height": h},
+             "view": "side", "outline": "selective outline", "shading": "medium shading",
+             "detail": "high detail", "seed": seed}
+    r = requests.post(f"{BASE}/map-objects", json=corpo, headers=cabecalho(), timeout=180)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    envio = r.json()
+    oid, job = envio.get("object_id"), envio.get("background_job_id")
+    resultado = esperar_job(job) if job else envio
+    if oid:
+        try:
+            resultado = buscar(f"/map-objects/{oid}")
+        except Exception:
+            pass
+    imgs = _acha_imagens(resultado)
+    if imgs:
+        return [("", _png(imgs[0][1]))], envio
+    urls = _acha_urls(resultado)
+    if urls:
+        return [("", baixar_url(urls[0][1]))], envio
+    raise RuntimeError(f"objeto sem imagem: {json.dumps(resultado)[:200]}")
+
+
+def gerar_heroi(spec: dict, seed: int):
+    """POST /create-character-v3 — assíncrono, 8 rotações."""
+    import requests
+    w, h = spec["size"]
+    corpo = {"description": spec["desc"], "image_size": {"width": w, "height": h},
+             "view": "side", "no_background": True, "outline": "selective outline",
+             "detail": "highly detailed", "enhance_prompt": True, "seed": seed}
+    r = requests.post(f"{BASE}/create-character-v3", json=corpo, headers=cabecalho(), timeout=180)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    envio = r.json()
+    cid, job = envio.get("character_id"), envio.get("background_job_id")
+    resultado = esperar_job(job) if job else envio
+    if cid:
+        resultado = buscar(f"/characters/{cid}")
+    imgs = _acha_imagens(resultado)
+    if imgs:
+        return [(n or str(i), im) for i, (n, im) in enumerate((n, _png(b)) for n, b in imgs)], envio
+    urls = _acha_urls(resultado)
+    if urls:
+        return [(n or str(i), baixar_url(u)) for i, (n, u) in enumerate(urls)], envio
+    raise RuntimeError(f"personagem sem imagens: {json.dumps(resultado)[:200]}")
+
+
+def gerar_icone(spec: dict, seed: int):
+    """POST /create-image-pixflux — síncrono, com alfa. Serve ícones e VFX:
+    imagem pequena, um objeto só, fundo transparente."""
+    import requests
+    w, h = spec["size"]
+    corpo = {
+        "description": spec["desc"],
+        "negative_description": "background, frame, border, text, watermark",
+        "image_size": {"width": w, "height": h},
+        "outline": "selective outline", "shading": "medium shading",
+        "detail": "highly detailed", "view": "side",
+        "isometric": False, "no_background": True, "seed": seed,
+    }
+    r = requests.post(f"{BASE}/create-image-pixflux", json=corpo,
+                      headers=cabecalho(), timeout=300)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    dados = r.json()
+    imgs = _acha_imagens(dados)
+    if not imgs:
+        raise RuntimeError(f"sem imagem: {json.dumps(dados)[:200]}")
+    return [("", _png(imgs[0][1]))], dados
+
+
+def _meta_personagens(pasta: Path) -> dict:
+    """character_id de cada personagem já criado (para animar depois)."""
+    arq = pasta / "personagens.json"
+    if arq.exists():
+        try:
+            return json.loads(arq.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def gerar_animacao(spec: dict, seed: int, pasta: Path):
+    """POST /animate-character — anima um personagem QUE JÁ EXISTE na conta.
+
+    Diferente dos outros: devolve background_job_ids (um por direção). Ao fim,
+    GET /characters/{id} traz as animações com as URLs de cada quadro.
+    """
+    import requests
+    meta = _meta_personagens(pasta)
+    base_pers = spec["personagem"]
+    if base_pers not in meta:
+        raise RuntimeError(
+            f"'{base_pers}' ainda não foi criado (falta o character_id em "
+            f"characters/personagens.json). Gere o personagem antes de animá-lo.")
+    cid = meta[base_pers]["character_id"]
+    corpo = {
+        "character_id": cid,
+        "animation_name": spec.get("nome_animacao", "walk"),
+        "action_description": spec["acao"],
+        "mode": "v3",                       # v3 é o barato (~US$ 0,0145/direção)
+        "frame_count": spec.get("quadros", 8),
+        "directions": spec.get("direcoes"),
+        "keep_first_frame": True,
+        "seed": seed,
+    }
+    r = requests.post(f"{BASE}/animate-character", json=corpo, headers=cabecalho(), timeout=180)
+    if not r.ok:
+        raise RuntimeError(erro(r))
+    envio = r.json()
+    jobs = envio.get("background_job_ids") or []
+    if not jobs:
+        raise RuntimeError(f"sem jobs de animação: {json.dumps(envio)[:200]}")
+    print(f"      … {len(jobs)} direções em processamento", flush=True)
+    for j in jobs:
+        try:
+            esperar_job(j, limite=900)
+        except Exception as e:
+            print(f"      ⚠️ direção falhou: {str(e)[:90]}", flush=True)
+    # o personagem agora carrega as animações
+    detalhe = buscar(f"/characters/{cid}")
+    # formato real da resposta:
+    #   animations: [ { display_name, directions: [ {direction, frames:[url...]} ] } ]
+    imagens = []
+    for anim in (detalhe.get("animations") or []):
+        nome_anim = anim.get("display_name") or anim.get("name") or "walk"
+        for bloco in (anim.get("directions") or []):
+            direcao = bloco.get("direction") or "south"
+            for i, url in enumerate(bloco.get("frames") or []):
+                if isinstance(url, str) and url.startswith("http"):
+                    imagens.append((f"{nome_anim}_{direcao}_{i:02d}", baixar_url(url)))
+    if not imagens:
+        raise RuntimeError(f"animação sem quadros: {json.dumps(detalhe)[:220]}")
+    return imagens, envio
+
+
+GERADORES = {"ui": gerar_ui, "tileset": gerar_tileset, "objeto": gerar_objeto,
+             "heroi": gerar_heroi, "animacao": gerar_animacao, "icone": gerar_icone}
+
+
+def indexar_animacoes(pasta: Path) -> dict:
+    """Escreve characters/animacoes.json — o manifesto que a Godot lê para saber
+    quantos quadros cada direção tem, sem precisar adivinhar nomes de arquivo.
+
+    Varre o que está EM DISCO (não o que a API prometeu), então roda de graça e
+    conserta o manifesto se algum download tiver falhado no meio.
+    """
+    manifesto: dict = {}
+    for pid, spec in CATALOGO.items():
+        if spec.get("tipo") != "animacao":
+            continue
+        nome_anim = spec.get("nome_animacao", "walk")
+        prefixo = f"{pid}_{nome_anim}"
+        direcoes = {}
+        for d in spec.get("direcoes") or []:
+            n = len(list(pasta.glob(f"{prefixo}_{d}_*.png")))
+            if n:
+                direcoes[d] = n
+        if direcoes:
+            manifesto.setdefault(spec["personagem"], {})[nome_anim] = {
+                "prefixo": prefixo, "direcoes": direcoes}
+    (pasta / "animacoes.json").write_text(
+        json.dumps(manifesto, indent=1, ensure_ascii=False))
+    return manifesto
+
+
+def montar_atlas(pasta: Path, pid: str, tile: int = 32) -> Path | None:
+    """O create-tileset devolve os 16 tiles Wang SOLTOS, um PNG cada.
+    O TileSetAtlasSource da Godot quer um atlas único, então costuramos os
+    16 numa grade 4×4 — preservando a ordem, que é o índice Wang."""
+    import PIL.Image
+    partes = []
+    principal = pasta / f"{pid}.png"
+    if principal.exists():
+        partes.append(principal)
+    i = 1
+    while (pasta / f"{pid}_{i}.png").exists():
+        partes.append(pasta / f"{pid}_{i}.png")
+        i += 1
+    if len(partes) < 2:
+        return None
+    cols = 4 if len(partes) >= 16 else len(partes)
+    linhas = (len(partes) + cols - 1) // cols
+    atlas = PIL.Image.new("RGBA", (cols * tile, linhas * tile), (0, 0, 0, 0))
+    for n, caminho in enumerate(partes):
+        im = PIL.Image.open(caminho).convert("RGBA")
+        if im.size != (tile, tile):
+            im = im.resize((tile, tile), PIL.Image.NEAREST)
+        atlas.paste(im, ((n % cols) * tile, (n // cols) * tile))
+    destino = pasta / f"{pid}_atlas.png"
+    atlas.save(destino)
+    return destino
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Gera os assets Pro do jogo (PixelLab v2).")
+    ap.add_argument("--grupo", choices=["ui", "tilesets", "objects", "characters", "vfx", "icons"])
+    ap.add_argument("--apenas", metavar="ID")
+    ap.add_argument("--tudo", action="store_true")
+    ap.add_argument("--listar", action="store_true")
+    ap.add_argument("--saldo", action="store_true")
+    ap.add_argument("--forcar", action="store_true")
+    ap.add_argument("--indexar", action="store_true",
+                    help="só reescreve characters/animacoes.json (não gasta API)")
+    ap.add_argument("--destino", default=str(DESTINO))
+    args = ap.parse_args()
+
+    if args.saldo:
+        s = saldo()
+        sub = s.get("subscription") or {}
+        print(json.dumps(s, indent=1))
+        cr = s.get("credits") or {}
+        print(f"\n➡️  créditos: US$ {cr.get('usd', 0):.2f}"
+              f" · cota do plano: {sub.get('generations', 0)} de {sub.get('total', 0)}")
+        usd = float(cr.get("usd") or 0)
+        if usd > 0:
+            print(f"   dá para ~{int(usd / 0.095)} assets de UI Pro"
+                  f" ou ~{int(usd / 0.0099)} objetos/tiles")
+        return 0
+
+    if args.indexar:
+        m = indexar_animacoes(Path(args.destino) / "characters")
+        for pers, anims in m.items():
+            for nome, dados in anims.items():
+                print(f"  {pers} · {nome}: {len(dados['direcoes'])} direções, "
+                      f"{sum(dados['direcoes'].values())} quadros")
+        if not m:
+            print("  (nenhuma animação em disco)")
+        return 0
+
+    if args.apenas:
+        ids = [args.apenas]
+    elif args.grupo:
+        ids = [k for k, v in CATALOGO.items() if v["grupo"] == args.grupo]
+    elif args.tudo or args.listar:
+        ids = list(CATALOGO)
+    else:
+        ap.error("escolha --grupo, --apenas, --tudo, --listar ou --saldo")
+
+    faltando = [i for i in ids if i not in CATALOGO]
+    if faltando:
+        print("❌ desconhecidos:", ", ".join(faltando), file=sys.stderr)
+        return 2
+
+    if args.listar:
+        print(f"{'ID':<26} {'GRUPO':<12} {'TIPO':<9} {'US$':>8}  DESCRIÇÃO")
+        print("-" * 106)
+        total = 0.0
+        for i in ids:
+            s = CATALOGO[i]
+            c = CUSTO[s["tipo"]]
+            total += c
+            d = s.get("desc") or s.get("lower", "")
+            print(f"{i:<26} {s['grupo']:<12} {s['tipo']:<9} {c:>8.4f}  {d[:42]}…")
+        print(f"\n{len(ids)} assets · custo estimado ≈ US$ {total:.2f}")
+        try:
+            sub = saldo().get("subscription") or {}
+            print(f"cota disponível agora: {sub.get('generations')} de {sub.get('total')}")
+        except Exception:
+            pass
+        return 0
+
+    base = Path(args.destino)
+    feitos, pulados, falhas = 0, 0, []
+    print(f"🎨 {len(ids)} assets Pro · destino {base}\n")
+    for n, pid in enumerate(ids, 1):
+        spec = CATALOGO[pid]
+        pasta = base / spec["grupo"]
+        pasta.mkdir(parents=True, exist_ok=True)
+        alvo = pasta / f"{pid}.png"
+        if alvo.exists() and not args.forcar:
+            print(f"[{n}/{len(ids)}] ⏭️  {pid} — já existe")
+            pulados += 1
+            continue
+        seed = abs(hash(pid)) % 100000
+        try:
+            if spec["tipo"] == "animacao":
+                imagens, envio = gerar_animacao(spec, seed, pasta)
+                # cada quadro vira um arquivo: <id>_<anim>_<direcao>_<n>.png
+                for nome, img in imagens:
+                    img.save(pasta / f"{pid}_{nome}.png")
+                indexar_animacoes(pasta)   # manifesto que a Godot lê
+            else:
+                imagens, envio = GERADORES[spec["tipo"]](spec, seed)
+                for idx, (nome, img) in enumerate(imagens):
+                    destino_img = alvo if idx == 0 else pasta / f"{pid}_{nome or idx}.png"
+                    img.save(destino_img)
+            feitos += 1
+            extra = ""
+            if spec["tipo"] == "tileset":
+                atlas = montar_atlas(pasta, pid, spec.get("tile", (32, 32))[0])
+                if atlas:
+                    extra = f" + atlas {atlas.name}"
+            print(f"[{n}/{len(ids)}] ✅ {pid} → {len(imagens)} arquivo(s) em {spec['grupo']}/{extra}")
+            time.sleep(1.5)
+        except Exception as e:
+            falhas.append((pid, str(e)[:170]))
+            print(f"[{n}/{len(ids)}] ❌ {pid} — {str(e)[:170]}", file=sys.stderr)
+            if "SEM COTA" in str(e):
+                print("\n⛔ Cota esgotada — parando para não desperdiçar chamadas.", file=sys.stderr)
+                break
+
+    print(f"\n📊 {feitos} gerados, {pulados} pulados, {len(falhas)} falhas")
+    try:
+        st = saldo()
+        cr = st.get("credits") or {}
+        sub = st.get("subscription") or {}
+        print(f"   saldo: US$ {cr.get('usd', 0):.4f} · cota {sub.get('generations', 0)}/{sub.get('total', 0)}")
+    except Exception:
+        pass
+    return 1 if falhas else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

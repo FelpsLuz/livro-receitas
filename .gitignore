@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+
+# espelho dos PNGs antes da requantização (ferramentas/requantizar.py --restaurar)
+reino-por-conquista-godot/.original/
+
+# arte crua da API — o tratado vai para assets/sprites/ e é o que o jogo usa.
+# O cru fica fora: são 400 KB que se regeram com --recolher, e versioná-lo
+# duplicaria cada asset no repositório.
+ferramentas/hibit/cru/
