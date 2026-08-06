@@ -1,20 +1,23 @@
 # Interface — o guia de estilo, implementado
 
-Não é proposta: são os valores que `scripts/tema.gd` usa agora. Guarda:
-`tests/teste_hibit.gd`.
+Não é proposta: são os valores que `scripts/tema.gd` e `scripts/icones.gd`
+usam agora. Guarda: `tests/teste_hibit.gd`.
 
 ---
 
 ## A regra que organiza tudo
 
-**Terreno em quatro degraus. Texto em três pesos. Um acento quente.**
+**Terreno em quatro degraus de umbra. Texto em três pesos. Um acento de
+latão. Cada ícone na cor da coisa que ele é.**
 
-A ousadia mora num lugar só — o latão. Todo o resto fica quieto, e é por
-isso que o número saltou: ele é a única coisa colorida numa tela de slate.
+A tela é escura porque um jogo de gerenciamento passa a partida inteira em
+tabela, e fundo claro por trás de vinte linhas cansa. Mas escura em **umbra**,
+não em slate: a primeira versão desta paleta era cinza azulado, que é o
+vocabulário de painel de controle industrial. Um reino medieval precisa de
+terra queimada, não de aço frio.
 
-O tema anterior era pergaminho, madeira e ouro. Bonito de descrever, errado
-para o que esta tela é: um jogo de gerenciamento passa a partida inteira em
-tabela, e textura de madeira atrás de número é ruído competindo com o dado.
+O que saiu junto foi a *textura* de madeira e pergaminho — tábua atrás de
+número é ruído competindo com o dado. O calor ficou; o entalhe não.
 
 ---
 
@@ -24,45 +27,124 @@ tabela, e textura de madeira atrás de número é ruído competindo com o dado.
 
 | token | hex | onde |
 |---|---|---|
-| `FUNDO` | `#12151A` | a tela por trás de tudo, aba inativa, trilho de rolagem |
-| `SUPERFICIE` | `#1B2027` | painel, aba ativa |
-| `ELEVADO` | `#232A33` | linha de tabela, campo de entrada, botão em repouso, modal |
-| `BORDA` | `#333C48` | separador de 1px |
+| `FUNDO` | `#1A1613` | a tela por trás de tudo, aba inativa, trilho de rolagem |
+| `SUPERFICIE` | `#241E19` | painel, aba ativa |
+| `ELEVADO` | `#2F2721` | linha de tabela, campo de entrada, botão em repouso, modal |
+| `BORDA` | `#453A2E` | separador de 1px |
 
 Quatro degraus e não três: a linha de tabela precisa de um plano próprio
 acima do painel, senão vinte linhas seguidas viram um bloco. É a **borda**,
 não o preenchimento, que faz vinte linhas lerem como vinte itens.
 
+**Como se mede "quente mas não madeira".** Os quatro têm `r > b` — isso é o
+calor. E o croma de todos fica abaixo de **0,12**, medido como amplitude
+absoluta dos canais (`max − min`), não como saturação HSV.
+
+A distinção importa e custou uma asserção errada: saturação HSV divide pelo
+canal máximo, então quanto mais escura a cor, maior o número para a mesma
+diferença física. Pelo HSV, `#010000` é "100% saturado" — e é preto. Num
+terreno que vive entre valor 0,10 e 0,27, medir por HSV mede o escuro, não o
+colorido. O `BORDA` atual dá 0,33 de saturação HSV e 0,09 de croma real.
+
+O teto de 0,12 não é arbitrário nem foi ajustado até caber: o teste também
+verifica que ele **reprova** `#6B4423`, `#8B5A2B` e `#A0522D` — madeira de
+verdade, que dá 0,28 a 0,45. Sobra um fator de três de folga para os dois
+lados.
+
 ### Texto
 
 | token | hex | contraste sobre `SUPERFICIE` | onde |
 |---|---|---|---|
-| `TEXTO` | `#E4E9EF` | 13,0:1 | corpo, número, rótulo de botão |
-| `TEXTO_2` | `#98A3B0` | 5,9:1 | unidade, apoio, aba inativa |
-| `TEXTO_3` | `#5F6B79` | 2,7:1 | dica de campo, desabilitado |
+| `TEXTO` | `#F0E7D8` | 13,4:1 | corpo, número, rótulo de botão |
+| `TEXTO_2` | `#B5A48C` | 6,8:1 | unidade, apoio, aba inativa |
+| `TEXTO_3` | `#7A6B58` | — | dica de campo, desabilitado |
 
 Nenhum é branco puro. Branco sobre escuro vibra e cansa em sessão longa; um
-off-white levemente frio assenta com o slate sem perder contraste.
+off-white de osso assenta com a umbra sem perder contraste.
 
-### Acento — o único quente
+### Acento — o latão
 
 | token | hex | onde |
 |---|---|---|
-| `ACENTO` | `#E0A93B` | latão: ouro no HUD, título de seção, borda de foco, aba ativa |
-| `ACENTO_FORTE` | `#F0C060` | hover de botão |
+| `ACENTO` | `#E8B04B` | ouro no HUD, título de seção, borda de foco, aba ativa |
+| `ACENTO_FORTE` | `#F5C86B` | hover de botão |
 
-Latão sobre slate lê como moeda sem precisar de tábua nem de rebite. É o que
-carrega a identidade de reino depois que a madeira saiu.
+É a cor da **marca**, não a de nenhum item. Nada na tela é mais saturado que
+ele — o teste verifica.
 
 ### Semântico — separado do acento de propósito
 
 | token | hex | onde |
 |---|---|---|
-| `GANHO` | `#57B98B` | variação positiva, estação favorável |
-| `PERIGO` | `#E0664A` | moral ≤ 35, celeiro vazio, perda |
+| `GANHO` | `#8FBF6A` | variação positiva, estação favorável |
+| `PERIGO` | `#D9603F` | moral ≤ 35, celeiro vazio, perda |
 
 Cor semântica não é cor de marca. Se o ganho fosse o mesmo latão do título,
 "subiu" e "isto é um cabeçalho" leriam igual.
+
+---
+
+## Ícones
+
+42 arquivos em `assets/sprites/icone_*.png`, 192×192, gerados pela API do
+PixelLab e tratados por `ferramentas/hibit/tratar_assets.py`.
+
+### O arquivo é branco; a cor entra em runtime
+
+Cada PNG é **silhueta branca com alfa binário** — nada de tom, nada de
+sombra, nada de anti-alias. A cor vem da tabela `COR` em `icones.gd`.
+
+Isso não é economia de arquivo. É o que deixa a paleta ser decidida num lugar
+só: mudar o tom do trigo é uma linha, não 42 imagens regeradas. E é o que
+permite um ícone mudar de cor por **estado** — o trigo em terracota quando o
+celeiro está vazio — sem um segundo arquivo.
+
+### Cada ícone na cor da coisa
+
+| família | exemplos |
+|---|---|
+| metais | ferro `#A9B2BA` · correntes `#8D949B` · gema `#6FBFB4` |
+| campo e mesa | trigo `#DCC067` · pão `#D4A05F` · cerveja `#D09A4A` · sal `#E2DED2` · madeira `#B07A4A` · tecidos `#A382BD` |
+| guerra | espada e lança `#BCC4CC` · escudo `#9FB0C2` · cerco `#D0705A` |
+| papel | pergaminho, carta, calendário `#D8C9A8` · coroa `#F5C86B` |
+| gente | população, família, aliança `#86A9C4` · moral `#8FBF6A` |
+| sombra | espião e intriga `#9B8BB5` · neblina `#8B96A3` |
+
+**Por que não tudo em latão.** Num mercado com doze linhas, doze ícones da
+mesma cor viram uma coluna de manchas iguais, e o olho é obrigado a ler o
+texto para saber o que é cada linha. Com trigo dourado, ferro em aço e
+madeira em castanho, a linha se acha pela cor **antes** de se ler a palavra —
+que é o trabalho que um ícone tem numa tabela.
+
+**Duas regras, ambas medidas.** Toda cor passa de 3:1 de contraste sobre o
+painel — uma cor bonita no editor que some no escuro é pior que o latão
+uniforme, porque some sem avisar. E nenhuma é mais saturada que o `ACENTO`: o
+latão continua sendo a coisa mais forte da tela. Foi essa segunda regra que
+reprovou o `#D8952F` da cerveja e o `#D9603F` do cerco, hoje suavizados.
+
+### Modulado ou assado
+
+`Icones.imagem()` tinge por `modulate` — barato, e o `TextureRect` aceita.
+
+`Icones.textura_tingida()` **assa a cor nos pixels**, com cache. É o caminho
+obrigatório para `TabContainer.set_tab_icon` e `Button.icon`: os dois desenham
+a textura crua e não passam por `modulate`, então uma silhueta branca chegaria
+branca na aba.
+
+### Filtro LINEAR, não NEAREST
+
+O ícone é forma vetorial rasterizada em 192px e a interface o mostra em 20–48.
+Nearest numa redução de 4× serrilha a curva inteira. O filtro que a pixel art
+do cenário exige é justamente o que estraga o ícone — por isso o
+`texture_filter` é setado por nó, e não herdado do projeto.
+
+### O gerador mente às vezes
+
+Dois dos 42 pedidos voltaram com status `completed` e uma imagem **192×192 de
+alfa zero**. Um "sucesso" que é um arquivo vazio entra no projeto e só aparece
+como um buraco no HUD. `gerar_assets.py` agora mede a cobertura antes de
+aceitar, descarta o vazio e repete o pedido com outra semente — repetir com a
+mesma semente devolveria a mesma imagem vazia para sempre.
 
 ---
 
@@ -77,28 +159,27 @@ Cor semântica não é cor de marca. Se o ganho fosse o mesmo latão do título,
 | `TITULO_SECAO` | 24 | Sans Bold | cabeçalho de aba |
 | `TITULO_JOGO` | 40 | Sans Bold | só a tela de título |
 
-Tamanhos em unidades da viewport base (960×540). Razão ~1,25 entre degraus:
-o suficiente para hierarquia sem degrau intermediário que ninguém distingue.
-
 **DejaVu Sans** para texto, **DejaVu Sans Mono** para número, **DejaVu Sans
 Bold** para título. Uma família só — hierarquia por peso, não por troca de
-tipo. Duas famílias numa interface de gerenciamento já são uma a mais.
+tipo. Licença Bitstream Vera / DejaVu, uso comercial liberado.
 
 A monoespaçada no número não é gosto: é o que faz a coluna de preço alinhar
-sozinha. Num jogo em que se compara 1.240 com 980 na vertical, isso é
-leitura. `teste_hibit` mede — se `1`, `8` e `W` não tiverem a mesma largura,
-o teste cai.
+sozinha. Num jogo em que se compara 1.240 com 980 na vertical, isso é leitura.
+`teste_hibit` mede — se `1`, `8` e `W` não tiverem a mesma largura, cai.
 
-Licença Bitstream Vera / DejaVu, uso comercial liberado.
+**Anti-alias LIGADO** (`FONT_ANTIALIASING_GRAY` + `HINTING_LIGHT`). Isto é o
+oposto do que fonte de pixel quer, e ficou desligado por herança depois que as
+fontes de pixel saíram — serrilhando DejaVu a 15px e jogando fora o ganho do
+`stretch/mode = canvas_items` sem que nada acusasse. O teste agora trava.
 
 ---
 
 ## Forma
 
-**Canto reto, em tudo.** Antes era imposição da pixel art (curva
-anti-aliased no canto gritava "isto é CSS"). A pixel art saiu, então agora é
-**escolha**: canto vivo e borda de 1px leem como instrumento e como
-livro-razão, que é o que o jogo é. Raio de canto puxaria para app de celular.
+**Canto reto, em tudo.** Antes era imposição da pixel art. A pixel art da
+interface saiu, então agora é **escolha**: canto vivo e borda de 1px leem como
+instrumento e como livro-razão, que é o que o jogo é. Raio de canto puxaria
+para app de celular.
 
 **Borda de 1px, não de 2.** Com a paleta escura o contraste entre planos já
 separa as regiões; 2px vira moldura.
@@ -106,9 +187,8 @@ separa as regiões; 2px vira moldura.
 **Botão chapado.** A versão anterior desenhava rampa de sombra — 1px claro em
 cima, 3px escuro embaixo, invertidos ao apertar. É skeuomorfismo, e num tema
 chapado é a peça que denuncia que o resto foi só recolorido. O estado vem do
-**preenchimento**; o apertado ainda desce 1px, porque o deslocamento é a
-única pista tátil que sobrevive ao achatamento e sem ela o clique não
-confirma nada.
+**preenchimento**; o apertado ainda desce 1px, porque o deslocamento é a única
+pista tátil que sobrevive ao achatamento — sem ela o clique não confirma nada.
 
 **Sem sombra.** A do `StyleBoxFlat` é um borrão gaussiano, e borrão numa
 interface chapada é a peça que não pertence.
@@ -117,33 +197,23 @@ interface chapada é a peça que não pertence.
 
 ## Placeholder
 
-`Arte.caixa()` devolve `#28303880` sobre borda `#3D4653` — um degrau acima da
-superfície, **quieto**.
-
-Ele era cinza `0,62`, escolhido quando o tema era pergaminho claro, onde
-some. Sobre o slate o mesmo cinza virava o elemento mais claro da tela: a
-ausência de arte gritava mais alto que a arte. Placeholder tem que dizer
-"falta uma peça aqui", não roubar a leitura da tabela ao lado.
+`Arte.caixa()` devolve `#2F2721` sobre borda `#453A2E` — um degrau acima da
+superfície, **quieto**. Placeholder tem que dizer "falta uma peça aqui", não
+roubar a leitura da tabela ao lado.
 
 ---
 
 ## O que falta
 
-**Ícones de recurso.** São os retângulos vazios no HUD e nas linhas de
-mercado, quartel e clãs. Trigo, madeira, ferro, sal, moedas, população,
-moral, ataque, defesa, equipamento.
+**A ilustração da aba "Sua Terra".** Seis imagens, uma por nível de terra
+(`Dados.NIVEIS_TERRA`). Hoje é o caixote de 480×270 que ocupa a aba inteira —
+o maior buraco visual que sobrou, e o único lugar do jogo onde arte ilustrada
+cabe de verdade.
 
-Direção para o gerador, agora que a paleta existe:
+**Os retratos de tropa.** Nove unidades, 52px cada, hoje em caixote.
 
-```
-flat vector icon, single color #E0A93B on transparent background,
-minimal geometric shape, 2px uniform stroke, no gradient, no shadow,
-no outline box, centered, 64x64, medieval resource: <trigo | madeira | ...>
-```
-
-Um traço só e uma cor só: o ícone não deve competir com o número que está do
-lado dele. Se precisar de estado (alerta, ganho), quem tinge é a interface —
-o arquivo nasce monocromático.
-
-**A ilustração da aba "Sua Terra".** Seis imagens, uma por nível de terra,
-na mesma paleta. É a única superfície do jogo onde arte ilustrada cabe.
+Não dá para resolver com os ícones que existem: são **três** cavalarias
+(leve, arqueiro montado, pesada) contra **um** ícone de cavalo, e três linhas
+idênticas na tabela é pior que três caixotes neutros — a repetição parece bug,
+o caixote parece pendência. Ou nascem nove retratos próprios, ou as linhas
+ficam sem imagem e se distinguem só pelo nome.

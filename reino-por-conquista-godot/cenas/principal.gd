@@ -43,11 +43,17 @@ const NPCS_TAVERNA := [
 ]
 ## As dez abas: rótulo visível e o sufixo do ícone (icone_aba_<sufixo>).
 ## Uma tabela só, para nome e ícone não saírem de sincronia.
+# [rótulo, id da aba, ÍCONE]. O terceiro campo existe porque nem toda aba
+# tem um ícone com o seu próprio nome: a Taverna se anuncia pela caneca e o
+# Exército pela espada. Antes o código montava "aba_" + id e pedia
+# `aba_taverna`, que nunca existiu — as dez abas caíam no caixote cinza sem
+# que nada acusasse, porque o fallback do Icones é silencioso de propósito.
 const ABAS := [
-	["Sua Terra", "terra"], ["Mapa", "mapa"], ["Mercado", "mercado"],
-	["Taverna", "taverna"], ["Corte", "corte"], ["Exército", "exercito"],
-	["Clãs", "clas"], ["Intrigas", "intrigas"], ["Família", "familia"],
-	["Crônica", "cronica"],
+	["Sua Terra", "terra", "terra"], ["Mapa", "mapa", "mapa"],
+	["Mercado", "mercado", "mercado"], ["Taverna", "taverna", "cerveja"],
+	["Corte", "corte", "coroa"], ["Exército", "exercito", "espada"],
+	["Clãs", "clas", "alianca"], ["Intrigas", "intrigas", "intriga"],
+	["Família", "familia", "familia"], ["Crônica", "cronica", "pergaminho"],
 ]
 
 const MESES := ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -204,7 +210,8 @@ func _montar_jogo() -> void:
 		# ícone antes do rótulo, como na referência. `set_tab_icon` desenha o
 		# ícone dentro da própria plaqueta da aba, então o relevo do stylebox
 		# envolve os dois — o que uma HBox de botões por fora não daria.
-		var ic := Icones.textura("aba_" + str(ABAS[i][1]))
+		# tingida, não modulada: a TabBar desenha o ícone cru
+		var ic := Icones.textura_tingida(str(ABAS[i][2]))
 		if ic != null:
 			tabs.set_tab_icon(i, ic)
 			tabs.set_tab_icon_max_width(i, 16)
@@ -218,13 +225,13 @@ func _montar_jogo() -> void:
 	b_mes.pressed.connect(_passar_mes)
 	rodape.add_child(b_mes)
 	var b_mudo := Button.new()
-	b_mudo.icon = Icones.textura("som")
+	b_mudo.icon = Icones.textura_tingida("som")
 	b_mudo.expand_icon = true
 	b_mudo.custom_minimum_size = Vector2(46, 0)
 	b_mudo.tooltip_text = "Som"
 	b_mudo.pressed.connect(func():
 		Sfx.mudo = not Sfx.mudo
-		b_mudo.icon = Icones.textura("mudo" if Sfx.mudo else "som"))
+		b_mudo.icon = Icones.textura_tingida("mudo" if Sfx.mudo else "som"))
 	rodape.add_child(b_mudo)
 
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário

@@ -6,14 +6,24 @@
 # inteira em tabela — preço, carga, prazo, moral — e textura de madeira
 # atrás de número é ruído competindo com o dado.
 #
-# A regra que organiza tudo aqui: TERRENO em quatro degraus de um slate
-# frio, TEXTO em três pesos, e UM acento quente. A ousadia mora num lugar
-# só; o resto fica quieto. Um latão sobre slate lê como moeda sem precisar
-# de tábua nem de rebite.
+# A regra que organiza tudo aqui: TERRENO em quatro degraus, TEXTO em três
+# pesos, e UM acento. A ousadia mora num lugar só; o resto fica quieto.
 #
-# Por que escuro. Não é moda: é que os números coloridos — ganho, custo,
-# alarme — precisam saltar, e sobre creme eles competem com o fundo. Sobre
-# slate, o verde e o terracota carregam sozinhos.
+# Por que escuro. Não é moda: os números coloridos — ganho, custo, alarme —
+# precisam saltar, e sobre creme eles competem com o fundo. Sobre um
+# terreno escuro, o verde e o terracota carregam sozinhos.
+#
+# Por que QUENTE e não slate frio. A primeira versão desta paleta era um
+# slate azulado, e ela estava errada por um motivo que não é de gosto: azul
+# frio é o vocabulário de painel de controle, de SaaS, de ferramenta. Este
+# jogo é um reino, e a tela precisa parecer um salão à luz de vela, não um
+# terminal. O calor entra nos NEUTROS — o cinza tem viés de umbra, não de
+# aço — e é isso que separa "acolhedor" de "corporativo" sem trazer de
+# volta a textura de madeira.
+#
+# O pergaminho não sumiu: ele virou a cor do TEXTO. É a inversão que
+# permite ficar quente sem voltar ao painel bege — creme sobre umbra em vez
+# de tinta sobre creme.
 #
 # Por que canto RETO. Antes era imposição da pixel art (curva anti-aliased
 # no canto de um painel gritava "isto é CSS"). A pixel art saiu, então
@@ -23,28 +33,37 @@
 # ============================================================
 extends RefCounted
 
-# ---- terreno: quatro degraus, do fundo para a superfície ----
-const FUNDO := Color("12151a")        # a tela por trás de tudo
-const SUPERFICIE := Color("1b2027")   # painel, aba ativa
-const ELEVADO := Color("232a33")      # linha de tabela, campo de entrada
-const BORDA := Color("333c48")        # separador de 1px
+# ---- terreno: quatro degraus de UMBRA, do fundo para a superfície ----
+## Não são marrons: são neutros com viés quente. Saturação entre 12% e 18% —
+## alta o bastante para o olho ler calor, baixa o bastante para não virar
+## madeira. Acima de ~25% o painel volta a parecer tábua.
+const FUNDO := Color("1a1613")        # a tela por trás de tudo
+const SUPERFICIE := Color("241e19")   # painel, aba ativa
+const ELEVADO := Color("2f2721")      # linha de tabela, campo de entrada
+const BORDA := Color("453a2e")        # separador de 1px
 
 # ---- texto: três pesos, e nenhum deles é branco puro ----
-## Branco puro sobre escuro vibra e cansa em sessão longa. Um off-white
-## levemente frio assenta com o slate e mantém 13:1 de contraste.
-const TEXTO := Color("e4e9ef")
-const TEXTO_2 := Color("98a3b0")      # rótulo, unidade, texto de apoio
-const TEXTO_3 := Color("5f6b79")      # dica, desabilitado
+## O creme do pergaminho antigo virou a cor do TEXTO. Branco puro sobre
+## escuro vibra e cansa em sessão longa; um creme levemente quente assenta
+## com a umbra e mantém 13:1 de contraste sobre a superfície.
+const TEXTO := Color("f0e7d8")
+const TEXTO_2 := Color("b5a48c")      # rótulo, unidade, texto de apoio
+const TEXTO_3 := Color("7a6b58")      # dica, desabilitado
 
-# ---- acento: o ÚNICO quente da paleta ----
-const ACENTO := Color("e0a93b")       # latão: ouro, título, valor de destaque
-const ACENTO_FORTE := Color("f0c060") # hover
+# ---- acento ----
+const ACENTO := Color("e8b04b")       # latão: ouro, título, valor de destaque
+const ACENTO_FORTE := Color("f5c86b") # hover
 
 # ---- semântico: separado do acento de propósito ----
 ## Cor semântica não é cor de marca. Se o ganho fosse o mesmo latão do
 ## título, "subiu" e "isto é um cabeçalho" leriam igual.
-const GANHO := Color("57b98b")
-const PERIGO := Color("e0664a")
+##
+## O verde é SÁLVIA e o alarme é TERRACOTA, não menta e vermelho de alerta:
+## dentro de uma paleta quente, um verde frio salta como corpo estranho.
+## Cor semântica precisa de contraste de MATIZ contra o terreno, não de
+## temperatura contra a paleta.
+const GANHO := Color("8fbf6a")
+const PERIGO := Color("d9603f")
 
 # ---- nomes antigos, mantidos como APELIDO ----
 ## Doze pontos fora deste arquivo ainda os citam. Apontam para o papel
@@ -108,11 +127,21 @@ static func _fonte(arquivo: String) -> FontFile:
 	var f = load(caminho)
 	if not (f is FontFile):
 		return null
-	# o .import já grava isto, mas repetir aqui garante o comportamento mesmo
-	# se alguém reimportar o projeto com os padrões da engine
-	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	f.hinting = TextServer.HINTING_NONE
-	f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+	# Estas linhas desligavam anti-alias, hinting e posicionamento subpixel.
+	# Estavam CERTAS para as fontes pixel: bitmap suavizado vira borrão, e
+	# meia posição de pixel destrói a grade.
+	#
+	# Para uma fonte VETORIAL são exatamente o contrário. Desligar o
+	# anti-alias de uma DejaVu a 15px devolve letra serrilhada — jogando
+	# fora justamente o ganho do canvas_items, que existe para o texto
+	# renderizar na resolução do monitor. Ficou de herança na troca e teria
+	# passado batido: o texto ainda "melhorou", só que menos do que podia.
+	#
+	# HINTING_LIGHT alinha à grade vertical sem engordar a haste, que é o
+	# que mantém a coluna de números regular.
+	f.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+	f.hinting = TextServer.HINTING_LIGHT
+	f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
 	f.force_autohinter = false
 	f.generate_mipmaps = false
 	return f
@@ -180,11 +209,11 @@ static func criar() -> Theme:
 	# apertado ainda desce 1px: o deslocamento é a única pista tátil que
 	# sobrevive ao achatamento, e sem ela o clique não confirma nada.
 	t.set_stylebox("normal", "Button", _botao(ELEVADO, BORDA, false))
-	t.set_stylebox("hover", "Button", _botao(Color("2e3742"), ACENTO, false))
-	t.set_stylebox("pressed", "Button", _botao(Color("1a1f26"), ACENTO, true))
+	t.set_stylebox("hover", "Button", _botao(Color("3b3129"), ACENTO, false))
+	t.set_stylebox("pressed", "Button", _botao(Color("221c17"), ACENTO, true))
 	var foco := _botao(ELEVADO, ACENTO, false)
 	t.set_stylebox("focus", "Button", foco)
-	t.set_stylebox("disabled", "Button", _botao(Color("1d2229"), Color("2a323b"), false))
+	t.set_stylebox("disabled", "Button", _botao(Color("241f1a"), Color("352d25"), false))
 	t.set_color("font_color", "Button", TEXTO)
 	t.set_color("font_hover_color", "Button", ACENTO_FORTE)
 	t.set_color("font_pressed_color", "Button", ACENTO)

@@ -25,6 +25,16 @@ var _v := 0
 var _x := 0
 
 
+## Luminância relativa do WCAG — não é o `v` do HSV. `v` é o canal máximo,
+## e usá-lo para contraste dá razões erradas em cor saturada.
+func _lum(c: Color) -> float:
+	var canais := [c.r, c.g, c.b]
+	var f: Array[float] = []
+	for v in canais:
+		f.append(v / 12.92 if v <= 0.03928 else pow((v + 0.055) / 1.055, 2.4))
+	return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+
 func ok(cond: bool, nome: String, obs: String = "") -> void:
 	print("  %s %s%s" % ["✅" if cond else "❌", nome,
 		("  —  " + obs) if obs != "" else ""])
@@ -91,6 +101,135 @@ func _frente1() -> void:
 		"escala tipográfica é monotônica",
 		"%d < %d < %d < %d" % [Tema.MICRO, Tema.CORPO, Tema.TITULO_SECAO,
 			Tema.TITULO_JOGO])
+	# fonte VETORIAL com anti-alias. A herança das fontes pixel desligava
+	# isto, e desligado ele devolve DejaVu serrilhada a 15px — jogando fora
+	# o ganho do canvas_items sem que nada acuse.
+	if corpo != null:
+		ok(corpo.antialiasing == TextServer.FONT_ANTIALIASING_GRAY,
+			"fonte de texto com anti-alias ligado",
+			"valor %d" % corpo.antialiasing)
+
+	# ---- PALETA ----
+	# Terreno QUENTE. A primeira versão desta paleta era slate azulado, que
+	# é o vocabulário de painel de controle. Um reino precisa de umbra.
+	var quentes := 0
+	for c in [Tema.FUNDO, Tema.SUPERFICIE, Tema.ELEVADO, Tema.BORDA]:
+		if c.r > c.b:
+			quentes += 1
+	ok(quentes == 4, "os quatro degraus do terreno são QUENTES (r > b)",
+		"%d de 4" % quentes)
+	# ...mas neutros, não madeira: croma alto vira tábua de novo.
+	#
+	# O croma aqui é a AMPLITUDE ABSOLUTA dos canais (max − min), não a
+	# saturação HSV. A saturação divide pelo canal máximo, então quanto mais
+	# escura a cor, mais alto o número para a mesma diferença física: pelo
+	# HSV, #010000 é "100% saturado" e é preto. Num terreno que vive entre
+	# valor 0,10 e 0,27, medir por HSV mede o escuro, não o colorido.
+	var croma_max := 0.0
+	for c in [Tema.FUNDO, Tema.SUPERFICIE, Tema.ELEVADO, Tema.BORDA]:
+		croma_max = maxf(croma_max, maxf(c.r, maxf(c.g, c.b))
+			- minf(c.r, minf(c.g, c.b)))
+	ok(croma_max < 0.12, "terreno é neutro quente, não madeira",
+		"croma máximo %.2f (teto 0,12)" % croma_max)
+	# ...e o teto acima só vale se REJEITAR tábua de verdade. Sem este
+	# controle, baixar o teto até caber é indistinguível de medir certo.
+	var tabuas := [Color("6b4423"), Color("8b5a2b"), Color("a0522d")]
+	var reprovadas := 0
+	for c in tabuas:
+		if maxf(c.r, maxf(c.g, c.b)) - minf(c.r, minf(c.g, c.b)) >= 0.12:
+			reprovadas += 1
+	ok(reprovadas == tabuas.size(),
+		"o teto de croma reprova madeira de verdade",
+		"%d de %d tábuas reprovadas" % [reprovadas, tabuas.size()])
+	# a escada precisa SUBIR: quatro degraus que não separam são um degrau
+	ok(Tema.FUNDO.v < Tema.SUPERFICIE.v and Tema.SUPERFICIE.v < Tema.ELEVADO.v
+		and Tema.ELEVADO.v < Tema.BORDA.v,
+		"os quatro degraus sobem em valor",
+		"%.2f < %.2f < %.2f < %.2f" % [Tema.FUNDO.v, Tema.SUPERFICIE.v,
+			Tema.ELEVADO.v, Tema.BORDA.v])
+	# contraste do texto sobre a superfície, por luminância relativa (WCAG)
+	var lum_sup := _lum(Tema.SUPERFICIE)
+	var razao := (_lum(Tema.TEXTO) + 0.05) / (lum_sup + 0.05)
+	ok(razao >= 7.0, "texto principal em contraste AAA sobre o painel",
+		"%.1f:1 (mínimo 7,0)" % razao)
+	var razao2 := (_lum(Tema.TEXTO_2) + 0.05) / (lum_sup + 0.05)
+	ok(razao2 >= 4.5, "texto de apoio em contraste AA",
+		"%.1f:1 (mínimo 4,5)" % razao2)
+	var razao_ac := (_lum(Tema.ACENTO) + 0.05) / (lum_sup + 0.05)
+	ok(razao_ac >= 4.5, "acento legível como texto sobre o painel",
+		"%.1f:1" % razao_ac)
+	# semântico separado do acento: se o ganho tivesse o matiz do latão,
+	# "subiu" e "isto é um cabeçalho" leriam igual
+	ok(absf(Tema.GANHO.h - Tema.ACENTO.h) > 0.08
+		and absf(Tema.PERIGO.h - Tema.ACENTO.h) > 0.02,
+		"ganho e perigo têm matiz próprio, distinto do acento",
+		"acento %.2f · ganho %.2f · perigo %.2f"
+		% [Tema.ACENTO.h, Tema.GANHO.h, Tema.PERIGO.h])
+
+	# ---- ÍCONES ----
+	var Icones = load("res://scripts/icones.gd")
+	var inv: Dictionary = Icones.inventario()
+	print("      (ícones: %d gerados, %d faltando)"
+		% [inv["tem"].size(), inv["falta"].size()])
+	if inv["tem"].size() > 0:
+		var nome: String = inv["tem"][0]
+		var t = Icones.textura(nome)
+		ok(t is Texture2D, "ícone carrega como textura", nome)
+		# SILHUETA: o arquivo é branco com alfa, e quem dá a cor é o
+		# modulate. Se o arquivo já viesse colorido, tingir para alerta
+		# aplicaria tinta sobre tinta e a cor sairia errada.
+		var img: Image = t.get_image()
+		var coloridos := 0
+		var parciais := 0
+		for y in range(0, img.get_height(), 3):
+			for x in range(0, img.get_width(), 3):
+				var c := img.get_pixel(x, y)
+				if c.a > 0.9 and (c.r < 0.98 or c.g < 0.98 or c.b < 0.98):
+					coloridos += 1
+				if c.a > 0.02 and c.a < 0.98:
+					parciais += 1
+		ok(coloridos == 0, "ícone é silhueta BRANCA, não arte colorida",
+			"%d px coloridos" % coloridos)
+		ok(parciais == 0, "alfa do ícone é binário", "%d px parciais" % parciais)
+		var tr: TextureRect = Icones.imagem(nome, 24)
+		ok(tr != null and tr.modulate.is_equal_approx(Icones.cor_de(nome)),
+			"a interface tinge o ícone na COR DELE, o arquivo não",
+			"%s → %s" % [nome, Icones.cor_de(nome).to_html(false)])
+		ok(tr.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR,
+			"ícone usa filtro LINEAR",
+			"Nearest numa redução de 192→24 serrilharia a curva inteira")
+
+	# ---- as cores dos ícones ----
+	# Uma cor bonita no editor que some no painel escuro é pior que o latão
+	# uniforme: some sem avisar. Todas passam pelo mesmo piso do texto de
+	# apoio — um ícone é informação, não decoração.
+	var fracos: Array[String] = []
+	var berrantes: Array[String] = []
+	for chave in Icones.COR:
+		var c: Color = Icones.COR[chave]
+		if (_lum(c) + 0.05) / (lum_sup + 0.05) < 3.0:
+			fracos.append(str(chave))
+		# ...e nenhuma pode ser mais saturada que o próprio acento de marca:
+		# o latão precisa continuar sendo a coisa mais forte da tela.
+		if c.s > Tema.ACENTO.s:
+			berrantes.append(str(chave))
+	ok(fracos.is_empty(), "toda cor de ícone se lê sobre o painel",
+		"apagados: %s" % ("nenhum" if fracos.is_empty() else ", ".join(fracos)))
+	ok(berrantes.is_empty(), "nenhum ícone grita mais alto que o acento",
+		"acima de %.2f: %s" % [Tema.ACENTO.s,
+			"nenhum" if berrantes.is_empty() else ", ".join(berrantes)])
+	# a tingida tem que ser DIFERENTE da branca: se `textura_tingida`
+	# devolvesse a original, a aba voltaria a ser branca sem nada acusar
+	var tingida: Texture2D = Icones.textura_tingida("trigo")
+	var img_t := tingida.get_image()
+	var achou_cor := false
+	for y in range(0, img_t.get_height(), 4):
+		for x in range(0, img_t.get_width(), 4):
+			var p := img_t.get_pixel(x, y)
+			if p.a > 0.9 and p.b < 0.9:
+				achou_cor = true
+	ok(achou_cor, "textura_tingida assa a cor no pixel (aba e botão)",
+		"a TabBar desenha o ícone cru — modulate não a alcança")
 	# 0 = Nearest. Qualquer outro valor borra a arte inteira.
 	var filtro := int(ProjectSettings.get_setting(
 		"rendering/textures/canvas_textures/default_texture_filter"))

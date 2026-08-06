@@ -468,6 +468,40 @@ def main() -> int:
         ok(cob >= 5, p.stem, f"{im.size[0]}×{im.size[1]} · {cob}% de silhueta"
                              f" · {parcial}px parciais binarizados")
 
+    # ---- ícones de interface ----
+    # Vêm de /generate-ui-v2 com alfa já limpo. O tratamento aqui é outro:
+    # forçar UMA COR e alfa BINÁRIO.
+    #
+    # O gerador devolve o latão com variação de tom — 1058 cores únicas no
+    # primeiro teste. Isso é anti-alias e sombreado leve, e num ícone de
+    # interface é defeito: vinte ícones com vinte latões diferentes não leem
+    # como conjunto, e a interface perde a capacidade de TINGIR o ícone
+    # (para alerta, para desabilitado) porque a tinta cai sobre cor variada.
+    #
+    # A saída é branca com alfa: o arquivo guarda só a SILHUETA, e quem dá a
+    # cor é o `modulate` da interface. Um arquivo, todos os estados.
+    icones = sorted(CRU.glob("icone_*.png"))
+    if icones:
+        print("\n── ícones (silhueta monocromática) ──")
+        for p in icones:
+            im = Image.open(p).convert("RGBA")
+            arr = np.array(im)
+            alfa = arr[..., 3]
+            # limiar no meio: alfa parcial vira dentro ou fora, sem meio-termo
+            dentro = alfa > 127
+            saida = np.zeros_like(arr)
+            saida[..., 0:3] = 255
+            saida[..., 3] = np.where(dentro, 255, 0)
+            destino = DEST / p.name
+            Image.fromarray(saida, "RGBA").save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            cob = int(dentro.sum()) * 100 // dentro.size
+            if not (4 <= cob <= 70):
+                ok(False, p.stem, f"cobertura {cob}% fora de 4–70%")
+        ok(True, "%d ícones em silhueta branca" % len(icones),
+           "a cor vem do modulate da interface, não do arquivo")
+
     print("\n── props (chroma key) ──")
     for p in sorted(CRU.glob("prop_*.png")):
         im = Image.open(p)

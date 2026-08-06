@@ -422,18 +422,223 @@ def _baixar_rotacoes(nome: str, cid: str) -> bool:
     return achados >= 4
 
 
+# ---------------------------------------------------------------
+# ÍCONES DE INTERFACE
+# ---------------------------------------------------------------
+# `/generate-ui-v2`, não pixflux. Pixflux devolve pixel art, e a interface
+# deixou de ser pixel art — ver docs/INTERFACE.md.
+#
+# UMA COR SÓ, e é a regra que faz vinte ícones parecerem um conjunto:
+# o ícone não pode competir com o número que está do lado dele. Quem tinge
+# para alerta ou ganho é a interface, em runtime; o arquivo nasce
+# monocromático no latão do tema.
+#
+# Custa ~US$ 0,095 por ícone — 10x uma chamada de sprite. É o preço de um
+# endpoint que devolve alfa binário e silhueta limpa sem tratamento.
+ICONE_ESTILO = ("flat minimal icon, single solid color silhouette, clean "
+                "geometric shape, thick uniform stroke, no gradient, no "
+                "shadow, no frame, no text, no border box, centered, "
+                "medieval fantasy resource icon for a management game UI")
+ICONE_PALETA = "single warm brass gold #E8B04B on transparent background"
+ICONE_LADO = 192
+
+## O que cada ícone DESENHA. A chave é o nome que Icones.TODOS usa.
+ICONES = {
+    "moedas": "a small stack of three round coins",
+    "trigo": "a bundled sheaf of wheat",
+    "madeira": "two stacked cut logs seen from the end",
+    "espada": "an upright straight sword",
+    "escudo": "a heater shield",
+    "arco": "a longbow with its string",
+    "lanca": "an upright spear with a leaf blade",
+    "pao": "a round rustic loaf of bread",
+    "cerveja": "a foaming tankard",
+    "pergaminho": "a partly unrolled scroll",
+    "gema": "a faceted gemstone",
+    "coroa": "a simple five point crown",
+    "ferro": "an iron ingot bar",
+    "sal": "an open sack of salt",
+    "tecidos": "a folded bolt of cloth",
+    "cavalos": "a horse head in profile",
+    "espiao": "a hooded head in profile",
+    "neblina": "three stacked horizontal fog bands",
+    "populacao": "three simple human figures side by side",
+    "moral": "a raised banner on a pole",
+    "ampulheta": "an hourglass",
+    "cerco": "a trebuchet arm",
+    "renome": "a laurel wreath around a star",
+    "calendario": "a calendar page grid",
+    "felicidade": "a simple smiling face",
+    "tropa": "three upright spears in formation",
+    "alianca": "two clasped hands",
+    "carta": "a sealed letter with a wax seal",
+    "correntes": "three chain links",
+    "caveira": "a skull",
+    "louros": "a laurel wreath",
+    "forca": "a flexed arm",
+    "carisma": "a speaking mouth with sound lines",
+    "gestao": "a balance scale",
+    "intriga": "a dagger behind a mask",
+    "lorde": "a crowned head in profile",
+    "som": "a bell with sound waves",
+    "mudo": "a bell with a slash through it",
+    # ícones de ABA: um por seção da interface. Reaproveitar os de recurso
+    # nas abas confundiria — a aba Mercado com a moeda do HUD faria o
+    # jogador ler "ouro" onde a interface diz "seção".
+    "terra": "a plowed field with furrows",
+    "mapa": "an unrolled map with a route line",
+    "mercado": "a market stall with an awning",
+    "familia": "two adult figures and a child",
+}
+
+
+## Tier 0 da API aceita 8 jobs simultâneos. Disparar os 38 de uma vez
+## devolve 429 nos 30 últimos — e o 429 não custa nada, mas também não
+## gera nada. A fila abaixo mantém a janela cheia sem estourar.
+CONCORRENTES = 8
+
+
+def gerar_icones_em_lote(nomes: list[str], jobs_arq: Path) -> None:
+    """Mantém 8 jobs no ar até a lista acabar, colhendo conforme terminam."""
+    import time as _t
+    fila = [n for n in nomes if not (CRU / f"icone_{n}.png").exists()]
+    ativos: dict = {}
+    if jobs_arq.exists():
+        ativos = {k: v for k, v in json.loads(jobs_arq.read_text()).items()
+                  if not (CRU / f"icone_{k}.png").exists()}
+        fila = [n for n in fila if n not in ativos]
+    feitos = 0
+    tentativas: dict = {}
+    while fila or ativos:
+        while fila and len(ativos) < CONCORRENTES:
+            nome = fila.pop(0)
+            novo = pedir_icones([nome], tentativas.get(nome, 0))
+            if novo:
+                ativos.update(novo)
+            else:
+                fila.append(nome)   # 429: devolve para o fim e espera
+                break
+        jobs_arq.write_text(json.dumps(ativos, indent=1))
+        _t.sleep(8)
+        faltam, refazer = colher_icones(ativos)
+        feitos += len(ativos) - len(faltam) - len(refazer)
+        ativos = {k: v for k, v in ativos.items() if k in faltam}
+        for nome in refazer:
+            tentativas[nome] = tentativas.get(nome, 0) + 1
+            if tentativas[nome] <= 3:
+                fila.append(nome)
+            else:
+                print(f"  ❌ {nome}: 4 tentativas, todas vazias — desisto")
+        print(f"    [{feitos} prontos · {len(ativos)} no ar · "
+              f"{len(fila)} na fila]", flush=True)
+    print(f"\n{feitos} ícones gerados")
+
+
+def pedir_icones(nomes: list[str], tentativa: int = 0) -> dict:
+    """Dispara os jobs e devolve {nome: job_id}. NÃO espera.
+
+    `tentativa` desloca a semente: repetir um pedido com a MESMA semente
+    devolve a mesma imagem, então um ícone que veio vazio só muda se a
+    semente mudar.
+    """
+    jobs = {}
+    for nome in nomes:
+        corpo = {
+            "description": "%s, %s" % (ICONES[nome], ICONE_ESTILO),
+            "image_size": {"width": ICONE_LADO, "height": ICONE_LADO},
+            "color_palette": ICONE_PALETA,
+            "no_background": True,
+            "seed": 4242 + tentativa * 1000,
+        }
+        c, d = _post("/generate-ui-v2", corpo)
+        if c in (200, 202):
+            _registrar("icone_" + nome, d)
+            jobs[nome] = str(d.get("background_job_id") or "")
+            print(f"  ⟳ {nome:14} {jobs[nome][:8]}")
+        else:
+            print(f"  ❌ {nome:14} HTTP {c} {str(d.get('erro'))[:120]}")
+    return jobs
+
+
+def colher_icones(jobs: dict) -> tuple[list[str], list[str]]:
+    """Baixa os que já terminaram.
+
+    Devolve (ainda_no_ar, refazer): o primeiro são os jobs que continuam
+    rodando, o segundo os que terminaram mas entregaram lixo e precisam de
+    um pedido NOVO — repolar o mesmo job devolveria o mesmo lixo para sempre.
+    """
+    faltam, refazer = [], []
+    for nome, job in jobs.items():
+        destino = CRU / f"icone_{nome}.png"
+        if destino.exists():
+            continue
+        c, d = _get(f"/background-jobs/{job}")
+        lr = d.get("last_response")
+        if str(d.get("status", "")).lower() != "completed" or not isinstance(lr, dict):
+            faltam.append(nome)
+            continue
+        imgs = lr.get("images") or []
+        b64 = str(imgs[0].get("base64", "")) if imgs else ""
+        if not b64:
+            print(f"  ❌ {nome}: terminou sem imagem")
+            refazer.append(nome)
+            continue
+        _salvar_b64(b64, destino)
+        # o gerador às vezes devolve 192×192 de alfa zero — um "sucesso"
+        # que é um arquivo vazio. Sem esta checagem ele entra no projeto e
+        # só aparece como um buraco no HUD, sem nada acusando.
+        if _vazio(destino):
+            print(f"  ❌ {nome}: veio TRANSPARENTE — descartado, vai repetir")
+            destino.unlink()
+            refazer.append(nome)
+            continue
+        print(f"  ✅ {nome}")
+    return faltam, refazer
+
+
+def _vazio(caminho: Path) -> bool:
+    """True se o PNG não tem pixel opaco nenhum."""
+    try:
+        from PIL import Image
+        import numpy as np
+        a = np.array(Image.open(caminho).convert("RGBA"))
+        return bool((a[..., 3] > 127).sum() == 0)
+    except Exception:
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--saldo", action="store_true")
     ap.add_argument("--listar", action="store_true")
     ap.add_argument("--grupo", choices=["tileset", "props", "personagem"])
     ap.add_argument("--tudo", action="store_true")
+    ap.add_argument("--icones", action="store_true",
+                    help="dispara os jobs de ícone e grava jobs_icones.json")
+    ap.add_argument("--colher-icones", action="store_true")
     ap.add_argument("--recolher", action="store_true",
                     help="busca tilesets já pagos (ids.json) sem gerar de novo")
     ap.add_argument("--variantes", type=int, default=1,
                     help="quantas versões de cada imagem gerar (seeds "
                          "diferentes), para escolher a melhor")
     a = ap.parse_args()
+
+    JOBS = Path(__file__).resolve().parent / "jobs_icones.json"
+    if a.icones:
+        CRU.mkdir(parents=True, exist_ok=True)
+        antes = saldo()
+        print(f"saldo antes: US$ {antes:.4f}")
+        gerar_icones_em_lote(list(ICONES.keys()), JOBS)
+        print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
+        return
+
+    if a.colher_icones:
+        jobs = json.loads(JOBS.read_text())
+        faltam, refazer = colher_icones(jobs)
+        print(f"\nfaltam {len(faltam)}: {', '.join(faltam[:12])}")
+        if refazer:
+            print(f"refazer {len(refazer)}: {', '.join(refazer)}")
+        return
 
     if a.recolher:
         ids = json.loads(IDS.read_text()) if IDS.exists() else {}

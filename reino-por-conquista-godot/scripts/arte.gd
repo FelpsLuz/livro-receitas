@@ -31,8 +31,8 @@ extends RefCounted
 ## Os valores espelham Tema.ELEVADO e Tema.BORDA. Não são importados de lá
 ## para o Arte não depender do tema — este nó também roda em teste headless,
 ## onde não há Theme montado.
-const TOM := Color(0.16, 0.19, 0.22, 1.0)
-const BORDA := Color(0.24, 0.28, 0.33, 1.0)
+const TOM := Color(0.185, 0.153, 0.129, 1.0)
+const BORDA := Color(0.27, 0.23, 0.18, 1.0)
 ## Silhueta (sombra projetada, oclusor): o caixote em preto, sem borda.
 const VULTO := Color(0.0, 0.0, 0.0, 1.0)
 
