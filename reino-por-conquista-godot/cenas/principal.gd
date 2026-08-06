@@ -110,7 +110,7 @@ func _montar_titulo() -> void:
 	caixa.add_child(v)
 	# a tela de título mostra um reino no auge — a mesma vila do jogo, nível 5
 	var vitrine: SubViewportContainer = _nova_cena()
-	vitrine.custom_minimum_size = Vector2(480, 270)
+	vitrine.custom_minimum_size = Vector2(CenarioV3View.NATIVO * CenarioV3View.ESCALA)
 	v.add_child(vitrine)
 	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
 	var titulo := Label.new()
@@ -565,7 +565,11 @@ func _aba_terra(c: Container) -> void:
 	var t = state["terra"]
 	_titulo_secao(c, ("%s — %s" % [t["nome"], Dados.NIVEIS_TERRA[t["nivel"]]["nome"]]) if t != null else "Acampamento Mercenário")
 	cidade_view.estado = state
-	cidade_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# SHRINK_CENTER (o padrão do nó), não EXPAND_FILL: o cartão tem tamanho
+	# próprio e esticá-lo não aumenta a imagem — o SubViewportContainer com
+	# `stretch = false` desenha a textura no tamanho nativo e o resto do
+	# retângulo fica vazio. Centrado, ele lê como estampa; esticado, lia como
+	# imagem encostada na margem esquerda.
 	c.add_child(cidade_view)
 	if t == null:
 		_par(c, "Sem terras, sem raízes. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.")

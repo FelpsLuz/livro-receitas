@@ -24,7 +24,12 @@ const Arte = preload("res://scripts/arte.gd")
 ## ordem — não a arte — que casa com Dados.NIVEIS_TERRA.
 const NOMES := ["estagio_01", "estagio_02", "estagio_03",
 		"estagio_04", "estagio_05", "estagio_06"]
-const NATIVO := Vector2i(480, 270)
+## 400×224, e não os 480×270 de antes. O endpoint do gerador recusa acima de
+## 400 e exige lado múltiplo de 4, então a arte NASCE em 400×224. A saída era
+## gerar menor e ampliar — mas ×1,2 não é fator inteiro e borraria a grade
+## inteira, que é justamente o que uma arte pixel não perdoa. A grade nativa
+## desce até a arte; nada é reamostrado em lugar nenhum.
+const NATIVO := Vector2i(400, 224)
 
 # ---- transição de evolução ----
 const CROSSFADE := 0.8
@@ -60,9 +65,18 @@ func _ready() -> void:
 	add_child(_atual)
 
 
-## Um caixote do tamanho da tela nativa. O estágio não muda o desenho — ele
-## muda o índice, e o nome do nível já aparece em texto na interface.
-func _textura(_i: int) -> Texture2D:
+## O quadro do estágio. Os seis nasceram EM CADEIA (cada um usou o anterior
+## como imagem de partida), então são a mesma terra em seis momentos e não
+## seis vales diferentes — é isso que faz o crossfade de `evoluir()` ler como
+## construção em vez de troca de cenário.
+##
+## Estágio sem PNG ainda cai no caixote, como antes.
+func _textura(i: int) -> Texture2D:
+	var caminho := "res://assets/sprites/%s.png" % NOMES[clampi(i, 0, NOMES.size() - 1)]
+	if ResourceLoader.exists(caminho):
+		var t = load(caminho)
+		if t is Texture2D:
+			return t
 	return Arte.caixa(NATIVO.x, NATIVO.y)
 
 

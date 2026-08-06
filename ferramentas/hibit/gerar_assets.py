@@ -616,6 +616,13 @@ def main() -> None:
     ap.add_argument("--icones", action="store_true",
                     help="dispara os jobs de ícone e grava jobs_icones.json")
     ap.add_argument("--colher-icones", action="store_true")
+    ap.add_argument("--retratos", action="store_true",
+                    help="os nove bustos de tropa (opacos, sem recorte)")
+    ap.add_argument("--estagios", action="store_true",
+                    help="os seis quadros da terra, em cadeia")
+    ap.add_argument("--forca", type=int, default=0,
+                    help="fixa init_image_strength em todos os degraus; "
+                         "0 (padrão) usa a rampa FORCA_CADEIA")
     ap.add_argument("--recolher", action="store_true",
                     help="busca tilesets já pagos (ids.json) sem gerar de novo")
     ap.add_argument("--variantes", type=int, default=1,
@@ -629,6 +636,20 @@ def main() -> None:
         antes = saldo()
         print(f"saldo antes: US$ {antes:.4f}")
         gerar_icones_em_lote(list(ICONES.keys()), JOBS)
+        print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
+        return
+
+    if a.retratos:
+        antes = saldo()
+        print(f"saldo antes: US$ {antes:.4f}")
+        gerar_retratos_tropa()
+        print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
+        return
+
+    if a.estagios:
+        antes = saldo()
+        print(f"saldo antes: US$ {antes:.4f}")
+        gerar_estagios(forca=a.forca)
         print(f"saldo depois: US$ {saldo():.4f} (gasto {antes - saldo():.4f})")
         return
 
@@ -688,6 +709,203 @@ def main() -> None:
     depois = saldo()
     print(f"\nsaldo depois: US$ {depois:.4f} · gasto nesta rodada: "
           f"US$ {antes - depois:.4f}")
+
+
+
+# ===============================================================
+# RETRATOS DE TROPA — nove unidades, um quadro cada
+# ===============================================================
+# OPACOS de propósito, sem recorte. O retrato aparece dentro de uma moldura
+# de 52px na linha do quartel; ele é um QUADRO, não um sprite solto no
+# terreno. Nada tem que ser recortado, então não há chroma key para errar —
+# que é onde os personagens deste projeto já se perderam uma vez (o fundo
+# magenta tingiu a túnica e o recorte comeu o personagem junto).
+#
+# Enquadramento igual nos nove: busto, de frente, ombros cortados na base.
+# É o enquadramento repetido que faz nove quadros lerem como um ELENCO em
+# vez de nove ilustrações avulsas — e é o que deixa o jogador comparar
+# unidade com unidade percorrendo a coluna.
+RETRATO_LADO = 64
+# CORPO INTEIRO, e não busto. O primeiro pedido descrevia "bust shot,
+# cropped at the chest" e o gerador devolveu figura inteira mesmo assim — e
+# fez bem: as nove unidades se distinguem pela ARMA e pela MONTARIA, e um
+# corte no peito esconde exatamente as duas. Três das nove são cavalaria;
+# num busto, as três seriam o mesmo rosto com elmos diferentes.
+RETRATO_ENQUADRE = (
+    "full body standing figure facing the viewer, feet near the bottom edge, "
+    "centered, plain flat dark neutral background, no text, no frame, "
+    "no border, no ground shadow")
+
+RETRATOS_TROPA = {
+    "campones": "a poor peasant levy, bare head, patched brown tunic, "
+                "holding a wooden pitchfork",
+    "lanceiro": "a spearman in a padded gambeson and simple iron kettle "
+                "helmet, upright spear shaft beside him",
+    "espadachim": "a swordsman in a mail hauberk and open-faced helmet, "
+                  "sword raised to his shoulder",
+    "barbaro": "a fierce northern barbarian, bare chest, fur cloak, braided "
+               "beard, war axe on his shoulder",
+    "arqueiro": "an archer in a green hood and leather jerkin, longbow held "
+                "across his body",
+    "explorador": "a light scout in a hooded grey cloak, keen watchful eyes, "
+                  "no armour",
+    "cav_leve": "a light horseman in a leather vest and light helmet, "
+                "mounted, javelin in hand",
+    "arq_cavalo": "a horse archer in a fur-trimmed steppe coat, mounted, "
+                  "short recurve bow drawn",
+    "cav_pesada": "a heavy knight in full plate armour with a closed visor "
+                  "and a plume, mounted, lance upright",
+}
+
+
+# ===============================================================
+# ESTÁGIOS DA TERRA — a MESMA terra, seis vezes
+# ===============================================================
+# 400×224 e não os 480×270 nativos de antes. Duas restrições do endpoint:
+# lado máximo 400, e ambos os lados divisíveis por 4. Em vez de gerar menor e
+# ampliar (×1,2 não é fator inteiro — borraria a grade inteira), a grade
+# nativa da cena desce até a arte. Zero reamostragem em qualquer ponto.
+#
+# O QUE FAZ AS SEIS SEREM A MESMA TERRA
+# -------------------------------------
+# Seis chamadas independentes dariam seis vales diferentes, e a evolução de
+# Acampamento a Castelo leria como teletransporte. Duas amarras:
+#
+#   1. `init_image`: cada estágio nasce do ANTERIOR já pronto. O rio, a
+#      colina e a linha do horizonte vêm da imagem, não da descrição.
+#   2. A mesma cláusula de câmera em todos os seis, e a mesma semente.
+#
+# A FORÇA DA CADEIA — o número que decide tudo
+# --------------------------------------------
+# `init_image_strength` alto = obedece mais a imagem de partida. Medido, com
+# a mesma descrição de castelo partindo sempre do acampamento:
+#
+#   300  a terra NÃO EVOLUI. Os seis quadros saem sendo o acampamento com
+#        mudanças de folhagem. Foi a primeira leva inteira, e o defeito só
+#        apareceu vendo as seis lado a lado — cada uma isolada parecia certa.
+#   200  ainda o acampamento, com uma bandeira a mais.
+#   120  o vale se mantém (rio, mata, montanha) e a construção entra, mas
+#        devagar: chega a "aldeia com torres", não a castelo.
+#    60  o castelo aparece inteiro — E O RIO SOME. Força baixa demais e a
+#        imagem de partida deixa de ser referência: vira outro lugar.
+#
+# Uma força FIXA não resolve, e isso também foi medido. Com 140 nos cinco
+# passos, a cadeia anda até o estágio 3 e depois EMPACA: 04, 05 e 06 saem
+# sendo a mesma aldeia com telhados trocados. O motivo é que a força não pesa
+# a distância que falta — quanto mais a imagem de partida já parece um
+# povoado, mais ela ancora, e "aldeia → burgo" precisa de mais liberdade que
+# "acampamento → aldeia".
+#
+# Daí a RAMPA: a força cai a cada degrau. Os primeiros passos são pequenos e
+# a imagem manda; os últimos são saltos de escala e a descrição manda. O vale
+# sobrevive porque cada passo ainda parte do ANTERIOR — o 70 do último degrau
+# olha para um burgo, não para o acampamento, e por isso não perde o rio como
+# perdeu no teste ancorado.
+FORCA_CADEIA = [None, 170, 145, 115, 90, 70]
+ESTAGIO_LADO = (400, 224)
+ESTAGIO_CAMERA = (
+    "side view landscape panorama seen from across the valley, horizon line "
+    "two thirds up, a river curving in from the left, wooded hills on the "
+    "right, open sky above, summer daylight")
+
+ESTAGIOS = [
+    ("estagio_01", "a small mercenary camp: three canvas tents, a campfire "
+                   "with a cooking pot, a cart, bare trampled ground"),
+    ("estagio_02", "a young hamlet: six thatched wooden huts, a vegetable "
+                   "plot, a wooden fence, a well"),
+    ("estagio_03", "a village: a dozen timber houses, a stone chapel with a "
+                   "small bell tower, ploughed fields, a wooden bridge"),
+    ("estagio_04", "a walled market town: tiled roofs packed together, a "
+                   "wooden palisade with a gatehouse, a watermill on the "
+                   "river, market awnings"),
+    ("estagio_05", "a large city: stone curtain wall with towers, a "
+                   "cathedral spire, dense rooftops, a stone bridge, docks "
+                   "on the river"),
+    ("estagio_06", "a great castle city: a high keep with banners on the "
+                   "hill, concentric stone walls and towers, the whole city "
+                   "spread below, a paved road to the gate"),
+]
+
+
+def gerar_retratos_tropa(seed: int = 4242) -> None:
+    """Os nove bustos. Opacos: nada aqui passa por chroma key."""
+    CRU.mkdir(parents=True, exist_ok=True)
+    for chave, desc in RETRATOS_TROPA.items():
+        destino = CRU / f"tropa_{chave}.png"
+        if destino.exists():
+            print(f"  · tropa_{chave} já existe")
+            continue
+        corpo = {
+            "description": "%s, %s, %s" % (desc, RETRATO_ENQUADRE, ESTILO),
+            "image_size": {"width": RETRATO_LADO, "height": RETRATO_LADO},
+            "view": "side",
+            "outline": "single color black outline",
+            "shading": "basic shading",
+            "detail": "highly detailed",
+            "text_guidance_scale": 8.5,
+            "no_background": False,
+            "seed": seed,
+        }
+        print(f"  ⟳ tropa_{chave}", end="", flush=True)
+        c, d = _post("/create-image-pixflux", corpo)
+        if c != 200:
+            print(f"\n    ❌ HTTP {c}: {str(d.get('erro'))[:200]}")
+            continue
+        real = _registrar("tropa_" + chave, d)
+        b64 = _extrair(d)
+        if not b64:
+            print("\n    ❌ resposta sem imagem")
+            continue
+        _salvar_b64(b64, destino)
+        print(f"  ✅ US$ {real:.4f}")
+
+
+def gerar_estagios(seed: int = 4242, forca: int = 0) -> None:
+    """Os seis quadros da terra, EM CADEIA: cada um nasce do anterior.
+
+    `forca` em 0 usa a RAMPA (FORCA_CADEIA). Um valor explícito fixa o mesmo
+    número em todos os degraus — serve para experimentar, não para produzir.
+    """
+    CRU.mkdir(parents=True, exist_ok=True)
+    anterior_b64 = ""
+    for i, (nome, desc) in enumerate(ESTAGIOS):
+        destino = CRU / f"{nome}.png"
+        if destino.exists():
+            print(f"  · {nome} já existe")
+            # relê para servir de partida ao próximo, senão a cadeia quebra
+            # exatamente onde ela é mais necessária: no meio.
+            anterior_b64 = base64.b64encode(destino.read_bytes()).decode()
+            continue
+        corpo = {
+            "description": "%s, %s, %s" % (desc, ESTAGIO_CAMERA, ESTILO),
+            "image_size": {"width": ESTAGIO_LADO[0], "height": ESTAGIO_LADO[1]},
+            "view": "side",
+            "outline": "selective outline",
+            "shading": "detailed shading",
+            "detail": "highly detailed",
+            "text_guidance_scale": 8.0,
+            "no_background": False,
+            "seed": seed,
+        }
+        if anterior_b64:
+            f = forca if forca else (FORCA_CADEIA[i] or FORCA_CADEIA[-1])
+            corpo["init_image"] = {"type": "base64", "base64": anterior_b64}
+            corpo["init_image_strength"] = f
+        print(f"  ⟳ {nome} ({ESTAGIO_LADO[0]}×{ESTAGIO_LADO[1]})"
+              f"{' ← ' + ESTAGIOS[i - 1][0] if anterior_b64 else ''}",
+              end="", flush=True)
+        c, d = _post("/create-image-pixflux", corpo, tempo=600)
+        if c != 200:
+            print(f"\n    ❌ HTTP {c}: {str(d.get('erro'))[:250]}")
+            return   # sem o anterior, a cadeia não continua
+        real = _registrar(nome, d)
+        b64 = _extrair(d)
+        if not b64:
+            print("\n    ❌ resposta sem imagem")
+            return
+        _salvar_b64(b64, destino)
+        anterior_b64 = b64
+        print(f"  ✅ US$ {real:.4f}")
 
 
 if __name__ == "__main__":

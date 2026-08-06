@@ -341,6 +341,62 @@ def recortar(im: Image.Image) -> tuple[Image.Image, dict]:
     }
 
 
+# ---------------------------------------------------------------
+# RETRATOS DE TROPA — nove fundos diferentes viram um só
+# ---------------------------------------------------------------
+# O gerador devolveu os nove com fundos que não combinam: ardósia num,
+# cinza claro noutro, esverdeado num terceiro. Nove quadros empilhados numa
+# coluna com nove fundos diferentes não leem como ELENCO — leem como nove
+# imagens achadas em lugares diferentes.
+#
+# A normalização é só do FUNDO, e por INUNDAÇÃO A PARTIR DA BORDA, não por
+# limiar global. A diferença decide o resultado: o espadachim é armadura
+# CINZA sobre fundo CINZA, e um limiar global comeria a armadura junto. Só
+# vira fundo o que encosta na borda e chega até lá por vizinhança — a
+# armadura no meio do quadro nunca é alcançada.
+#
+# Sai OPACO, na cor do painel: o retrato é um quadro pendurado na linha do
+# quartel, não um sprite solto. Nada é recortado, então não há franja para
+# errar — que é exatamente onde os personagens deste projeto se perderam da
+# primeira vez.
+PAINEL = (0x2F, 0x27, 0x21)   # Tema.ELEVADO
+
+
+def normalizar_retrato(im: Image.Image) -> tuple[Image.Image, dict]:
+    a = np.array(im.convert("RGB"))
+    H, W = a.shape[:2]
+    chave = _chave_da_borda(a)
+    lim = _limiar_do_fundo(a, chave)
+    d = _dist(a, chave)
+
+    fundo = np.zeros((H, W), bool)
+    pilha = []
+    for x in range(W):
+        for y in (0, H - 1):
+            if d[y, x] < lim and not fundo[y, x]:
+                fundo[y, x] = True
+                pilha.append((y, x))
+    for y in range(H):
+        for x in (0, W - 1):
+            if d[y, x] < lim and not fundo[y, x]:
+                fundo[y, x] = True
+                pilha.append((y, x))
+    while pilha:
+        y, x = pilha.pop()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < H and 0 <= nx < W and not fundo[ny, nx] \
+                    and d[ny, nx] < lim:
+                fundo[ny, nx] = True
+                pilha.append((ny, nx))
+
+    saida = a.copy()
+    saida[fundo] = PAINEL
+    frac = int(fundo.sum()) * 100 // (H * W)
+    return Image.fromarray(saida, "RGB").convert("RGBA"), {
+        "fundo": frac, "chave": tuple(int(v) for v in chave), "limiar": lim}
+
+
 def _import_pixelart(caminho: Path) -> None:
     """Escreve o .import com os parâmetros de pixel art.
 
@@ -501,6 +557,71 @@ def main() -> int:
                 ok(False, p.stem, f"cobertura {cob}% fora de 4–70%")
         ok(True, "%d ícones em silhueta branca" % len(icones),
            "a cor vem do modulate da interface, não do arquivo")
+
+    # ---- estágios da terra ----
+    # Opacos e do tamanho da grade nativa: nada a recortar, nada a binarizar.
+    # O que vale medir é o CONTRATO com a cena (400×224, ver
+    # cenario_v3_cena.gd NATIVO) e que os seis não sejam a mesma imagem — uma
+    # cadeia com init_image forte demais devolve seis quadros quase idênticos,
+    # e aí a evolução de Acampamento a Castelo não aparece.
+    estagios = sorted(CRU.glob("estagio_*.png"))
+    if estagios:
+        print("\n── estágios da terra (opacos) ──")
+        assinaturas = []
+        for p in estagios:
+            im = Image.open(p).convert("RGB")
+            destino = DEST / p.name
+            im.save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            arr = np.array(im)
+            assinaturas.append(arr.reshape(-1, 3).mean(axis=0))
+            ok(im.size == (400, 224), p.stem,
+               "%d×%d (a cena pede 400×224)" % im.size)
+        # A EVOLUÇÃO TEM QUE CHEGAR AO FIM.
+        #
+        # Com força fixa a cadeia andou até o estágio 3 e empacou: 04, 05 e 06
+        # saíram sendo a mesma aldeia com telhados trocados. Isso foi visto
+        # OLHANDO as seis lado a lado, não por medida — cada quadro isolado
+        # parecia perfeitamente certo, e é por isso que a folha de contato
+        # existe.
+        #
+        # As duas medidas abaixo são GUARDAS DE REGRESSÃO, não prova de
+        # qualidade: os pisos foram calibrados na leva boa (1,2 e 12,9), não
+        # derivados de um princípio. Elas prendem a cadeia de voltar a empacar
+        # sem ninguém notar; não sabem dizer se a arte está bonita. Para isso
+        # continua valendo abrir a folha de contato e olhar.
+        difs = [float(np.abs(assinaturas[i] - assinaturas[i - 1]).mean())
+                for i in range(1, len(assinaturas))]
+        if difs:
+            ok(min(difs) > 1.0, "nenhum degrau da cadeia é um degrau parado",
+               "menor variação entre vizinhos: %.1f (mínimo 1,0)" % min(difs))
+            ponta = float(np.abs(assinaturas[-1] - assinaturas[0]).mean())
+            ok(ponta > 12.0, "o castelo não é o acampamento",
+               "distância estágio 1 → 6: %.1f (mínimo 12,0)" % ponta)
+
+    # ---- retratos de tropa ----
+    retratos = sorted(CRU.glob("tropa_*.png"))
+    if retratos:
+        print("\n── retratos de tropa (fundo normalizado) ──")
+        for p in retratos:
+            im, r = normalizar_retrato(Image.open(p))
+            destino = DEST / p.name
+            im.save(destino)
+            if not a.sem_import:
+                _import_pixelart(destino)
+            # fundo de 0% quer dizer que a inundação não pegou nada e o
+            # quadro saiu com o fundo do gerador; acima de ~85% ela vazou
+            # para dentro da figura e sobrou pouco retrato
+            ok(8 <= r["fundo"] <= 85, p.stem,
+               "fundo %d%% · chave %s · limiar %.1f"
+               % (r["fundo"], r["chave"], r["limiar"]))
+        cores = set()
+        for p in retratos:
+            cores.add(tuple(np.array(Image.open(DEST / p.name)
+                                     .convert("RGB"))[0, 0]))
+        ok(len(cores) == 1, "os nove retratos partilham UM fundo",
+           "%d cor(es) de canto distinta(s)" % len(cores))
 
     print("\n── props (chroma key) ──")
     for p in sorted(CRU.glob("prop_*.png")):

@@ -23,6 +23,7 @@ extends RefCounted
 
 const Arte = preload("res://scripts/arte.gd")
 
+const PASTA := "res://assets/sprites/"
 const LADO_RETRATO := 64
 const LADO_EVENTO := 128
 
@@ -65,8 +66,19 @@ static func textura_cidadao(_n: Dictionary) -> Texture2D:
 ## Retrato da tropa. O id da arte é SEMPRE "tropa_" + a chave de Dados.TROPAS,
 ## então a UI acha a imagem por cálculo — sem tabela paralela que envelhece
 ## toda vez que uma unidade nova entra no catálogo.
+##
+## Estes nove EXISTEM como PNG (ver ferramentas/hibit ­— `--retratos`). São
+## opacos e já vêm com o fundo na cor do painel: o retrato é um quadro
+## pendurado na linha do quartel, não um sprite recortado. Unidade nova no
+## catálogo continua caindo no caixote até o PNG dela nascer, que é o
+## comportamento que a linha de cima promete.
 static func textura_tropa(tipo: String) -> Texture2D:
-	return textura("tropa_" + tipo)
+	var caminho := PASTA + "tropa_" + tipo + ".png"
+	if ResourceLoader.exists(caminho):
+		var t = load(caminho)
+		if t is Texture2D:
+			return t
+	return Arte.caixa(LADO_RETRATO)
 
 
 ## Ilustração de evento para os modais (cerco, emboscada, inverno…).

@@ -47,9 +47,78 @@ func ok(cond: bool, nome: String, obs: String = "") -> void:
 func _initialize() -> void:
 	print("\n=== RENDERIZAÇÃO E TIPOGRAFIA ===")
 	_frente1()
+	print("\n=== A TERRA NA TELA ===")
+	await _frente_terra()
 	print("\n=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [_v, _x])
 	quit(1 if _x > 0 else 0)
+
+
+# ------------------------------------------------------------
+## A VISTA DA TERRA precisa concordar com o ESTADO.
+##
+## O título da aba lê `state` na hora; a imagem vem de um `_aplicar()` que
+## roda noutro caminho. Quando os dois se soltaram, a aba escreveu
+## "Vale do Ferro — Castelo" por cima do acampamento e nada acusou — porque
+## nenhuma das duas metades estava errada sozinha.
+##
+## O que este teste reproduz é a sequência EXATA do `_aba_terra`: `atualizar()`
+## desmonta a aba, `estado` é atribuído com a vista FORA da árvore, e só
+## depois ela volta. `_aplicar` não age fora da árvore, então sem o gancho de
+## `_enter_tree` a atribuição se perde inteira.
+func _frente_terra() -> void:
+	var Vista = load("res://scripts/cenario_v3_view.gd")
+	var vista = Vista.new()
+	root.add_child(vista)
+	vista.estado = {"mes": 6, "terra": {"nivel": 0}}
+	for i in 4:
+		await process_frame
+	ok(vista.cena.estagio == 0, "a vista monta no estágio do save",
+		"estágio %d para terra nível 0" % vista.cena.estagio)
+
+	# ---- a sequência do _aba_terra, na ordem em que ela acontece ----
+	root.remove_child(vista)
+	vista.estado = {"mes": 6, "terra": {"nivel": 4}}
+	root.add_child(vista)
+	for i in 4:
+		await process_frame
+	# `evoluir` faz crossfade; o estágio troca na hora, o alfa é que demora
+	await create_timer(1.2).timeout
+	await process_frame
+	ok(vista.cena.estagio == 4,
+		"subir de nível FORA da árvore ainda muda a imagem",
+		"estágio %d para terra nível 4" % vista.cena.estagio)
+	ok(not vista.cena.em_transicao(), "o crossfade termina e solta o estado")
+
+	# a arte tem que ser a arte, não o caixote de reserva
+	var tex: Texture2D = vista.cena._textura(4)
+	ok(tex != null and tex.get_width() == 400 and tex.get_height() == 224,
+		"o estágio carrega o PNG, não o caixote",
+		"%d×%d" % [tex.get_width(), tex.get_height()])
+	# e os seis têm que existir, senão um nível qualquer cai no cinza
+	var faltam: Array[String] = []
+	for i in vista.cena.NOMES.size():
+		if not ResourceLoader.exists("res://assets/sprites/%s.png"
+				% vista.cena.NOMES[i]):
+			faltam.append(str(vista.cena.NOMES[i]))
+	ok(faltam.is_empty(), "os seis estágios existem em disco",
+		"faltando: %s" % ("nenhum" if faltam.is_empty() else ", ".join(faltam)))
+	vista.queue_free()
+
+	# ---- retratos de tropa ----
+	var Retratos = load("res://scripts/retratos.gd")
+	var Dados = load("res://scripts/dados.gd")
+	var sem_retrato: Array[String] = []
+	var lados := {}
+	for tipo in Dados.TROPAS:
+		var t: Texture2D = Retratos.textura_tropa(str(tipo))
+		if t == null or t.get_width() != 64:
+			sem_retrato.append(str(tipo))
+		else:
+			lados[t.get_width()] = true
+	ok(sem_retrato.is_empty(), "as nove tropas têm retrato de 64px",
+		"sem arte: %s" % ("nenhuma" if sem_retrato.is_empty()
+			else ", ".join(sem_retrato)))
 
 
 # ------------------------------------------------------------

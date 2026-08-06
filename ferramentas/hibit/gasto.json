@@ -1,5 +1,5 @@
 {
- "total_usd": 0.13997337012820776,
+ "total_usd": 0.324903855588701,
  "chamadas": [
   {
    "rotulo": "prop_arvore_carvalho",
@@ -328,6 +328,110 @@
   {
    "rotulo": "icone_mercado",
    "usd": 0.0
+  },
+  {
+   "rotulo": "tropa_campones",
+   "usd": 0.00685650889078776
+  },
+  {
+   "rotulo": "tropa_campones",
+   "usd": 0.006428815073437161
+  },
+  {
+   "rotulo": "tropa_lanceiro",
+   "usd": 0.006213920831680298
+  },
+  {
+   "rotulo": "tropa_espadachim",
+   "usd": 0.006450755225287544
+  },
+  {
+   "rotulo": "tropa_barbaro",
+   "usd": 0.0069973431693183055
+  },
+  {
+   "rotulo": "tropa_arqueiro",
+   "usd": 0.006282623529434204
+  },
+  {
+   "rotulo": "tropa_explorador",
+   "usd": 0.005781308809916178
+  },
+  {
+   "rotulo": "tropa_cav_leve",
+   "usd": 0.0072990424897935655
+  },
+  {
+   "rotulo": "tropa_arq_cavalo",
+   "usd": 0.0063213173813290065
+  },
+  {
+   "rotulo": "tropa_cav_pesada",
+   "usd": 0.0068204783863491485
+  },
+  {
+   "rotulo": "estagio_01",
+   "usd": 0.007064853297339546
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007157869365480211
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007168314430448745
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.008622309631771512
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.006787991338306003
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.007004641612370809
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.009042340887917413
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.007017628060446845
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.0071057870388031
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007854604244232177
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.0074357815583546965
+  },
+  {
+   "rotulo": "estagio_02",
+   "usd": 0.007120948606067234
+  },
+  {
+   "rotulo": "estagio_03",
+   "usd": 0.00782774199379815
+  },
+  {
+   "rotulo": "estagio_04",
+   "usd": 0.007556954012976753
+  },
+  {
+   "rotulo": "estagio_05",
+   "usd": 0.007813541624281141
+  },
+  {
+   "rotulo": "estagio_06",
+   "usd": 0.006897063970565796
   }
  ]
 }

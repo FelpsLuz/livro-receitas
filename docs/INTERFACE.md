@@ -203,17 +203,87 @@ roubar a leitura da tabela ao lado.
 
 ---
 
+## A terra — seis quadros, um por nível
+
+`assets/sprites/estagio_0N.png`, 400×224, opacos. Um por degrau de
+`Dados.NIVEIS_TERRA`: Acampamento, Aldeia, Vila, Burgo, Cidade, Castelo.
+
+**400×224 e não os 480×270 de antes.** O endpoint recusa lado acima de 400 e
+exige ambos divisíveis por 4. A alternativa era gerar menor e ampliar, mas
+×1,2 não é fator inteiro e borraria a grade toda — então a grade nativa da
+cena desceu até a arte. Zero reamostragem em qualquer ponto.
+
+**O cartão é ×1, não ×2.** A aba tem ~330 unidades de canvas de altura útil;
+em ×2 o cartão pede 448 e a rolagem cortava o pé do castelo. Ampliar também
+não traria nitidez: com `stretch/mode = canvas_items` a janela já aplica o
+fator dela (1,33 numa tela de 1280 sobre a base de 960) e nenhum inteiro
+sobrevive a isso. Quem segura a grade de pixel é o filtro NEAREST do
+viewport, não a escala.
+
+### As seis são a MESMA terra
+
+Seis chamadas independentes dariam seis vales diferentes, e subir de
+Acampamento a Castelo leria como teletransporte. A cadeia amarra: cada
+estágio usa o anterior como `init_image`, com a mesma câmera e a mesma
+semente. O rio, a mata e a linha do horizonte vêm da imagem, não do texto.
+
+**A força da cadeia é o número que decide tudo**, e foi medido:
+
+| `init_image_strength` | resultado |
+|---|---|
+| 300 | a terra **não evolui** — os seis saem sendo o acampamento |
+| 200 | ainda o acampamento, com uma bandeira a mais |
+| 120 | o vale se mantém, mas a construção chega só a "aldeia com torres" |
+| 60 | o castelo aparece inteiro **e o rio some** — virou outro lugar |
+
+Nenhum valor fixo serve, e isso também custou uma leva: com 140 em todos os
+degraus a cadeia anda até o estágio 3 e **empaca** — 04, 05 e 06 saem sendo a
+mesma aldeia com telhados trocados. A força não pesa a distância que falta, e
+"aldeia → burgo" precisa de mais liberdade que "acampamento → aldeia".
+
+Daí a **rampa** — `170, 145, 115, 90, 70`. Os primeiros passos são pequenos e
+a imagem manda; os últimos são saltos de escala e a descrição manda. O vale
+sobrevive porque cada passo parte do anterior: o 70 do último degrau olha
+para um burgo, não para o acampamento.
+
+O tratamento mede dois pisos (nenhum degrau parado, e ponta-a-ponta acima de
+12). São **guardas de regressão** calibradas na leva boa, não prova de
+qualidade — prendem a cadeia de voltar a empacar sem ninguém notar. Para
+julgar a arte continua valendo abrir a folha de contato e olhar. Foi olhando,
+não medindo, que o platô apareceu: cada quadro isolado parecia certo.
+
+---
+
+## Retratos de tropa
+
+`assets/sprites/tropa_<chave>.png`, 64×64, opacos, mostrados a 52px.
+
+**Corpo inteiro, e não busto.** O pedido descrevia "bust shot, cropped at the
+chest" e o gerador devolveu figura inteira — e fez bem. As nove unidades se
+distinguem pela **arma** e pela **montaria**, e um corte no peito esconde
+exatamente as duas; três das nove são cavalaria, que num busto seriam o mesmo
+rosto com elmos diferentes.
+
+Por isso também não dava para resolver com os ícones que já existem: três
+cavalarias contra **um** ícone de cavalo, e três linhas idênticas na tabela é
+pior que três caixotes — a repetição parece bug, o caixote parece pendência.
+
+**Opacos, com o fundo normalizado para `#2F2721`.** O retrato é um quadro
+pendurado na linha do quartel, não um sprite solto no terreno: nada é
+recortado, então não há franja para errar. O gerador devolveu os nove com
+fundos que não combinam (ardósia, cinza claro, esverdeado), e nove quadros
+numa coluna com nove fundos diferentes não leem como elenco.
+
+A normalização é por **inundação a partir da borda**, não por limiar global.
+A diferença decide o resultado: o espadachim é armadura cinza sobre fundo
+cinza, e um limiar global comeria a armadura junto. Só vira fundo o que
+encosta na borda e chega até lá por vizinhança.
+
+---
+
 ## O que falta
 
-**A ilustração da aba "Sua Terra".** Seis imagens, uma por nível de terra
-(`Dados.NIVEIS_TERRA`). Hoje é o caixote de 480×270 que ocupa a aba inteira —
-o maior buraco visual que sobrou, e o único lugar do jogo onde arte ilustrada
-cabe de verdade.
-
-**Os retratos de tropa.** Nove unidades, 52px cada, hoje em caixote.
-
-Não dá para resolver com os ícones que existem: são **três** cavalarias
-(leve, arqueiro montado, pesada) contra **um** ícone de cavalo, e três linhas
-idênticas na tabela é pior que três caixotes neutros — a repetição parece bug,
-o caixote parece pendência. Ou nascem nove retratos próprios, ou as linhas
-ficam sem imagem e se distinguem só pelo nome.
+**As ilustrações de evento.** Dez faixas de 128px (`Retratos.EVENTOS`) —
+cerco, fome, traição, coroação. Hoje em caixote, e o modal segue só com texto
+para quem não tem arte, que é o comportamento correto enquanto elas não
+existem.

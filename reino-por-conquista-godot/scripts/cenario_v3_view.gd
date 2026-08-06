@@ -27,8 +27,20 @@ extends SubViewportContainer
 const CenarioV3Cena = preload("res://scripts/cenario_v3_cena.gd")
 const Ambiente = preload("res://scripts/environment_manager.gd")
 
-const NATIVO := Vector2i(480, 270)
-const ESCALA := 2
+const NATIVO := CenarioV3Cena.NATIVO
+## ESCALA 1, e não 2.
+##
+## A aba tem cerca de 330 unidades de canvas de altura útil. Em ×2 o cartão
+## pede 448 e a rolagem corta o pé da imagem — o castelo aparecia sem a base.
+## Em ×1 o panorama inteiro cabe sem rolar, que é o ponto de um cartão: ser
+## visto de uma vez.
+##
+## Ampliar não traria nitidez de qualquer forma: o jogo roda em
+## `stretch/mode = canvas_items`, então a janela já aplica um fator próprio
+## (1,33 numa tela de 1280 sobre a base de 960) e nenhum inteiro sobrevive
+## a ele. A grade de pixel da arte é preservada pelo filtro NEAREST, não
+## pela escala.
+const ESCALA := 1
 
 var viewport: SubViewport
 var cena: CenarioV3Cena
@@ -54,8 +66,9 @@ func _init() -> void:
 	viewport = SubViewport.new()
 	viewport.size = NATIVO * ESCALA
 	viewport.transparent_bg = false
-	# NEAREST no viewport inteiro: o ×2 é fator inteiro, então cada pixel da
-	# arte vira um bloco 2×2 exato. Filtro linear aqui borraria a grade toda.
+	# NEAREST no viewport inteiro: é ele que segura a grade de pixel da arte
+	# quando a janela aplica o fator do `canvas_items`. Filtro linear aqui
+	# borraria a grade toda.
 	viewport.canvas_item_default_texture_filter = \
 		Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	add_child(viewport)
@@ -63,6 +76,22 @@ func _init() -> void:
 	cena = CenarioV3Cena.new()
 	cena.scale = Vector2(ESCALA, ESCALA)
 	viewport.add_child(cena)
+
+
+## `_aplicar` só age com a cena DENTRO da árvore — e `_aba_terra` atribui
+## `estado` com este nó ainda FORA dela, porque `atualizar()` desmonta a aba
+## inteira e só recoloca a vista depois de configurá-la.
+##
+## Sem este gancho o estágio congelava no valor da primeira montagem: com a
+## terra em nível 5 a aba escrevia "Vale do Ferro — Castelo" e desenhava o
+## acampamento, e nada acusava, porque as duas metades vinham de caminhos
+## diferentes (o título lê `state` na hora; a vista lia um `_aplicar` que
+## nunca chegou a rodar).
+##
+## Diferido, e não direto: durante `_enter_tree` os filhos ainda estão
+## entrando, e `evoluir()` precisa de `create_tween()` num nó já assentado.
+func _enter_tree() -> void:
+	call_deferred("_aplicar")
 
 
 func _ready() -> void:
