@@ -142,10 +142,32 @@ static func forjar_documento(state: Dictionary, reino_id: String) -> Dictionary:
 	Dialogo.mudar_relacao(state, "rei_" + reino_id, -30, "falsificação exposta")
 	return {"ok": true, "msg": "Falsificação EXPOSTA! Relação -30.", "sucesso": false}
 
+## Tabela de pagamento por rei (documento "Era do Aço", Parte 5 — "Chantagem:
+## o que cada um paga"). `bem` é sempre um dos dois `producao` do próprio
+## reino em dados.gd (Trava 5: nada de mercadoria que ele não produza).
+## `fonte` "tesouro" deduz ouro de verdade e converte pro bem ao preço-base
+## dele; "forca" (só Bjorne — ele não tem sobra de ouro) deduz das TROPAS
+## reais na mesma proporção, e o jogador leva o bem como saque, não compra.
+## Ignis não está aqui: ele tem um ramo inteiro à parte (ver `chantagear`).
+const CHANTAGEM_TABELA := {
+	"imperio":   {"bem": "ferro", "teto_pct": 0.15, "fonte": "tesouro"},
+	"alvorecer": {"bem": "trigo", "teto_pct": 0.20, "fonte": "tesouro"},
+	"rosa":      {"bem": "sal",   "teto_pct": 0.20, "fonte": "tesouro"},
+	"aguias":    {"bem": "prata", "teto_pct": 0.25, "fonte": "tesouro"},
+	"touros":    {"bem": "pedra", "teto_pct": 0.30, "fonte": "forca"},
+}
+
 static func chantagear(state: Dictionary, npc: Dictionary) -> Dictionary:
 	if not (npc["id"] as String).begins_with("rei_"):
 		return {"resposta": "Minha vida é um livro aberto. Procure gente importante.", "efeitos": []}
 	var reino_id: String = (npc["id"] as String).replace("rei_", "")
+	# Trava 2: uma chantagem por rei por ano de jogo — checada ANTES de gastar
+	# o segredo, pra uma tentativa recusada não custar a munição.
+	if not state.has("chantagens_ano"):
+		state["chantagens_ano"] = {}
+	if int(state["chantagens_ano"].get(reino_id, -1)) == int(state["ano"]):
+		return {"resposta": "Você já tentou isso este ano. Minha paciência com chantagem não é infinita.",
+			"efeitos": ["[Chantagem esgotada este ano]"]}
 	var idx := -1
 	for i in state["segredos"].size():
 		var s: Dictionary = state["segredos"][i]
@@ -155,22 +177,108 @@ static func chantagear(state: Dictionary, npc: Dictionary) -> Dictionary:
 	if idx < 0:
 		return {"resposta": "Seus olhos dizem que não sabe de nada. Patético.", "efeitos": ["[Blefe falhou]"]}
 	state["segredos"][idx]["usado"] = true
+	state["chantagens_ano"][reino_id] = int(state["ano"])
+
+	# A contra-mecânica da honra (Parte 5): Ignis não joga esse jogo. Ele
+	# convoca a própria corte e expõe o segredo antes que você o use — 0 de
+	# ouro, segredo destruído (já marcado "usado" acima), relação -60,
+	# marcado para morte. É a única defesa do mapa contra a árvore de
+	# intriga, e mora na personalidade dele, não numa trava avulsa.
+	if reino_id == "leoes":
+		Dialogo.mudar_relacao(state, npc["id"], -60, "honra exposta")
+		Dialogo.tags_de(state, npc["id"])["flags"]["marcado_para_morte"] = true
+		return {"resposta": "Convoco minha própria corte agora, e direi eu mesmo o que você guardava contra mim. Você não tem mais nada.",
+			"efeitos": ["[Segredo destruído — ele se expôs antes de você]", "[Relação -60]", "[Marcado para morte]"]}
+
+	# o teto é uma FOTOGRAFIA de agora — se ele se arruinar até você cobrar
+	# (guerra, upkeep, meses passando), o teto não encolhe junto. É o que
+	# torna a Trava 4 (paga o que tem, queda dobra) possível de acontecer:
+	# comparar sempre contra o tesouro ATUAL nunca deixaria faltar nada,
+	# porque um percentual do que existe agora sempre cabe no que existe agora.
 	var efeitos: Array = [Dialogo.mudar_relacao(state, npc["id"], -20, "chantagem")]
-	state["chantagem_pendente"] = {"reino": reino_id}
+	state["chantagem_pendente"] = {"reino": reino_id, "teto": _calcular_teto(state, reino_id)}
 	return {"resposta": "*o sangue foge do rosto* ...O que você quer? Fale logo.", "efeitos": efeitos}
+
+static func _calcular_teto(state: Dictionary, reino_id: String) -> int:
+	var regra: Dictionary = CHANTAGEM_TABELA.get(reino_id, {})
+	if regra.is_empty():
+		return 0
+	Geopolitica.inicializar(state)
+	var reino: Dictionary = Geopolitica.reino_por_id(state, reino_id)
+	if reino.is_empty():
+		return 0
+	var base: int = int(reino.get("forca", 0)) if regra["fonte"] == "forca" else int(reino.get("tesouro", 0))
+	return int(base * float(regra["teto_pct"]))
+
+## A exigência em ouro: nunca um número solto (Parte 0 — "o motor decide").
+## Deduz de verdade do tesouro (ou da força/tropas de Bjorne) e converte no
+## bem que aquele reino de fato produz. `teto` foi calculado NA AMEAÇA — se o
+## reino não tiver mais isso agora (o mundo andou entre a ameaça e a cobrança),
+## paga o que sobrou, e a queda de relação DOBRA (Trava 4).
+static func _pagar_chantagem(state: Dictionary, reino_id: String, teto: int) -> void:
+	var regra: Dictionary = CHANTAGEM_TABELA.get(reino_id, {})
+	if regra.is_empty():
+		return
+	Geopolitica.inicializar(state)
+	var reino: Dictionary = Geopolitica.reino_por_id(state, reino_id)
+	if reino.is_empty():
+		return
+	var bem: String = regra["bem"]
+	var preco: int = maxi(1, int(Dados.MERCADORIAS[bem]["preco_base"]))
+	var pago := 0
+	if regra["fonte"] == "forca":
+		var forca_antes := int(reino.get("forca", 0))
+		pago = mini(teto, forca_antes)
+		if pago > 0 and forca_antes > 0:
+			var fator: float = float(pago) / float(forca_antes)
+			for tipo in reino.get("tropas", {}):
+				reino["tropas"][tipo] = int(reino["tropas"][tipo]) - int(int(reino["tropas"][tipo]) * fator)
+			reino["forca"] = Geopolitica.forca_de(reino)
+	else:
+		pago = mini(teto, int(reino.get("tesouro", 0)))
+		if pago > 0:
+			reino["tesouro"] = int(reino["tesouro"]) - pago
+	if pago > 0:
+		var qtd: int = maxi(1, roundi(pago / float(preco)))
+		state["carga"][bem] = int(state["carga"].get(bem, 0)) + qtd
+	var parcial: bool = pago < teto
+	Dialogo.mudar_relacao(state, "rei_" + reino_id, -20 if parcial else -10, "chantagem paga")
 
 static func resolver_chantagem(state: Dictionary, escolha: String) -> void:
 	var ch = state.get("chantagem_pendente")
 	if ch == null:
 		return
+	var reino_id: String = ch["reino"]
 	match escolha:
 		"ouro":
-			state["jogador"]["ouro"] += Dados.ri(300, 500)
+			_pagar_chantagem(state, reino_id, int(ch.get("teto", 0)))
+			# reações específicas de cada rei DEPOIS de pagar (Parte 5)
+			match reino_id:
+				"imperio":
+					# Felippe paga e marca para morte no mesmo turno — crueldade
+					# não perdoa quem o expôs, mesmo pagando
+					Dialogo.tags_de(state, "rei_imperio")["flags"]["marcado_para_morte"] = true
+				"aguias":
+					# Frederico nunca mais te contrata (Contratos.gerar já lê essa flag)
+					Dialogo.tags_de(state, "rei_aguias")["flags"]["nunca_mais_contrata"] = true
+				"rosa":
+					# Eva é a única que contra-ataca na mesma moeda: planta uma
+					# intriga contra você. Sem inventar um segredo do REINO sobre
+					# o jogador (sistema que não existe), o efeito real é custar
+					# renome — o boato dela corrói sua reputação, não seu cofre
+					state["jogador"]["renome"] = maxi(0, int(state["jogador"]["renome"]) - 10)
+					Dialogo.tags_de(state, "rei_rosa")["flags"]["intriga_plantada"] = true
+				"alvorecer":
+					# Enzo "compra um segredo sobre você" — registrado como flag;
+					# sem um sistema de segredos DO REINO sobre o jogador (fora do
+					# escopo desta reescrita), fica de propósito só como marca de
+					# que ele passou a te vigiar, sem consequência mecânica extra
+					Dialogo.tags_de(state, "rei_alvorecer")["flags"]["sabe_seu_segredo"] = true
 		"casamento":
-			realizar_casamento(state, ch["reino"], true)
+			realizar_casamento(state, reino_id, true)
 		"casusbelli":
-			if not state["casus_belli"].has(ch["reino"]):
-				state["casus_belli"].append(ch["reino"])
+			if not state["casus_belli"].has(reino_id):
+				state["casus_belli"].append(reino_id)
 	state["chantagem_pendente"] = null
 
 static func realizar_casamento(state: Dictionary, reino_id: String, forcado: bool) -> void:

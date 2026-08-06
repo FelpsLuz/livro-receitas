@@ -89,6 +89,15 @@ const VOZES := {
 	},
 }
 
+## Queda de relação por insulto, por personalidade (documento "Era do Aço",
+## Parte 6). Quem não está aqui usa o padrão de sempre (-15 leve / -30
+## grave) — só honrado e orgulhoso têm reação NUMERICAMENTE diferente; cruel
+## e calculista só mudam de TOM, que já vem de VOZES.
+const INSULTO_DELTA := {
+	"honrado":   {"leve": -30, "grave": -30},  # não acumula: a primeira já é definitiva
+	"orgulhoso": {"leve": -25, "grave": -45},  # "explode"/"gelo, cai muito"
+}
+
 ## ---------- DOSSIÊS DE PERSONAGEM (documento "Era do Aço" — Parte 4) ----------
 ## Camada 2 do prompt de LLM: identidade FIXA de cada rei — obsessão, voz,
 ## o que sabe e o que finge não saber, e frases de referência para o tom.
@@ -268,8 +277,17 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 	match principal:
 		"insulto":
 			tags["flags"]["insultou"] = int(tags["flags"].get("insultou", 0)) + 1
-			var grave: bool = tags["flags"]["insultou"] >= 2 or sent <= -6
-			efeitos.append(mudar_relacao(state, npc["id"], -30 if grave else -15, "insulto"))
+			# Matriz de reação por personalidade (documento "Era do Aço", Parte 6):
+			# o honrado (Ignis) não acumula duas ofensas pra levar a sério — a
+			# primeira já é definitiva. O orgulhoso (Frederico, Bjorne) cai mais
+			# fundo mesmo sem ser "grave" pelo critério padrão. Cruel e
+			# calculista mantêm os números de sempre — só o TOM muda, e o tom já
+			# vem de VOZES.
+			var pers_ins: String = npc.get("personalidade", "")
+			var sempre_grave: bool = pers_ins == "honrado"
+			var grave: bool = sempre_grave or tags["flags"]["insultou"] >= 2 or sent <= -6
+			var deltas_ins: Dictionary = INSULTO_DELTA.get(pers_ins, {"leve": -15, "grave": -30})
+			efeitos.append(mudar_relacao(state, npc["id"], deltas_ins["grave"] if grave else deltas_ins["leve"], "insulto"))
 			var chave := "insulto_grave" if grave and voz.has("insulto_grave") else "insulto"
 			resposta = Dados.rnd(voz[chave])
 			if tags["relacao"] <= -50 and (npc["id"] as String).begins_with("rei_"):
@@ -285,8 +303,14 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			resposta = Dados.rnd(voz["elogio"])
 		"ameaca":
 			tags["flags"]["ameacou"] = int(tags["flags"].get("ameacou", 0)) + 1
-			efeitos.append(mudar_relacao(state, npc["id"], -25, "ameaça"))
+			_reagir_ameaca(state, npc, tags, efeitos)
 			resposta = Dados.rnd(voz["ameaca"])
+		"chantagear":
+			var Intriga = load("res://scripts/intriga.gd")
+			var rch: Dictionary = Intriga.chantagear(state, npc)
+			resposta = rch["resposta"]
+			for ef in rch.get("efeitos", []):
+				efeitos.append(ef)
 		"saudacao":
 			resposta = Dados.rnd(voz["saudacao"])
 			if tags["relacao"] > -10:
@@ -303,16 +327,27 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			resposta = "Trabalho, é? Veja o mural de contratos na taverna." if tags["relacao"] > -40 \
 				else "Trabalho? Para VOCÊ? Prefiro contratar os corvos."
 		"subornar":
+			# Honrado (Ignis) falha por integridade; Frederico falha por orgulho
+			# — dois motivos, mesmo resultado mecânico. Bjorne é o caso ímpar da
+			# Parte 6: aceita por necessidade (ele não tem luxo de recusar ouro),
+			# mas o suborno ainda CUSTA relação — ele guarda rancor de precisar.
 			var honesto: bool = npc["personalidade"] == "honrado"
+			var orgulho_recusa: bool = npc["id"] == "rei_aguias"
+			var aceita_com_rancor: bool = npc["id"] == "rei_touros"
 			var custo: int = 50 + maxi(0, -int(tags["relacao"])) * 2
-			if honesto:
+			if honesto or orgulho_recusa:
 				efeitos.append(mudar_relacao(state, npc["id"], -20, "tentativa de suborno"))
-				resposta = "Você tentou me COMPRAR? Saia. Agora."
+				resposta = "Você tentou me COMPRAR? Saia. Agora." if honesto \
+					else "Ouro não me impressiona. Impressione-me de outro jeito, ou saia."
 			elif state["jogador"]["ouro"] >= custo:
 				state["jogador"]["ouro"] -= custo
 				efeitos.append("[−%d ouro]" % custo)
-				efeitos.append(mudar_relacao(state, npc["id"], 15, "suborno"))
-				resposta = "*faz as moedas desaparecerem* Um investimento sensato. Prossiga."
+				if aceita_com_rancor:
+					efeitos.append(mudar_relacao(state, npc["id"], -10, "suborno aceito com rancor"))
+					resposta = "*pega o ouro sem te olhar* Precisamos. Não pense que isso nos torna amigos."
+				else:
+					efeitos.append(mudar_relacao(state, npc["id"], 15, "suborno"))
+					resposta = "*faz as moedas desaparecerem* Um investimento sensato. Prossiga."
 			else:
 				resposta = "Pouco. Muito pouco. (Você precisaria de %d de ouro.)" % custo
 		"pedir_paz":
@@ -323,6 +358,45 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 
 	tags["flags"]["ultimo_topico"] = principal
 	return {"resposta": resposta, "efeitos": efeitos, "acoes": acoes, "intencao": principal}
+
+## Reação à ameaça, por personalidade (documento "Era do Aço", Parte 4/6).
+## O honrado (Ignis) leva a palavra a sério — vira guerra de verdade, não só
+## uma queda de relação. O orgulhoso (Frederico, Bjorne) marca para morte na
+## hora, sem esperar a relação afundar sozinha. O cruel (Felippe) arrisca
+## prisão de verdade, mas respeita coragem — só na primeira vez que você sai
+## vivo da ameaça. Calculista e o resto seguem a régua de sempre; só o TOM
+## muda, e o tom já vem de VOZES.
+static func _reagir_ameaca(state: Dictionary, npc: Dictionary, tags: Dictionary, efeitos: Array) -> void:
+	var pers := String(npc.get("personalidade", ""))
+	var id_npc := String(npc["id"])
+	if pers == "honrado":
+		efeitos.append(mudar_relacao(state, id_npc, -25, "ameaça"))
+		var reino_id := id_npc.replace("rei_", "")
+		var ja_em_guerra := false
+		for g in state["guerras"]:
+			if (g["a"] == reino_id and g["b"] == "jogador") or (g["b"] == reino_id and g["a"] == "jogador"):
+				ja_em_guerra = true
+		if not ja_em_guerra:
+			state["guerras"].append({"a": reino_id, "b": "jogador", "meses": 0})
+			efeitos.append("[GUERRA declarada — ele leva sua palavra a sério]")
+		return
+	if pers == "orgulhoso":
+		efeitos.append(mudar_relacao(state, id_npc, -35, "ameaça"))
+		tags["flags"]["marcado_para_morte"] = true
+		efeitos.append("[Marcado: ofensa mortal para ele]")
+		return
+	if id_npc == "rei_imperio":
+		efeitos.append(mudar_relacao(state, id_npc, -25, "ameaça"))
+		if randf() < 0.35:
+			var Jogo = load("res://scripts/jogo.gd")
+			Jogo.prender(state, 1, Jogo.log_para(state))
+			efeitos.append("[Capturado por um mês — ele não gosta de blefes]")
+		elif not bool(tags["flags"].get("desafiou_felippe", false)):
+			tags["flags"]["desafiou_felippe"] = true
+			state["jogador"]["renome"] = int(state["jogador"]["renome"]) + 10
+			efeitos.append("[+10 Renome — a coragem de encará-lo, uma vez só]")
+		return
+	efeitos.append(mudar_relacao(state, id_npc, -25, "ameaça"))
 
 static func _resposta_guerra(state: Dictionary, npc: Dictionary) -> String:
 	var guerras: Array = state["guerras"]

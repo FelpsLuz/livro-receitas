@@ -55,6 +55,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"marchas": [],             # exércitos na estrada (marchas.gd)
 		"minuto": 0,               # relógio único do mundo (relogio.gd)
 		"intel": {},               # o que o espião revelou (intel.gd)
+		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
 	}
 	Economia.inicializar_mercados(state)
 	Geopolitica.inicializar(state)
@@ -362,7 +363,7 @@ static func _migrar(state: Dictionary) -> Dictionary:
 		if item.has("restante_seg") and not item.has("restante"):
 			item["restante"] = item["restante_seg"]
 			item.erase("restante_seg")
-	for campo in ["relacoes_npc", "flagras", "intel"]:
+	for campo in ["relacoes_npc", "flagras", "intel", "chantagens_ano"]:
 		if not state.has(campo):
 			state[campo] = {}
 	if not state["jogador"].has("moral"):

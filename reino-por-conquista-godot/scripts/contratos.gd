@@ -18,11 +18,22 @@ const TIPOS := [
 	 "desc": "Guerra na fronteira. Reforce a linha por um mês.", "ouro": [250, 400], "renome": 18},
 ]
 
+## Reis que juraram nunca mais te contratar (documento "Era do Aço", Parte 5
+## — a reação de Frederico Silver a uma chantagem falhada) somem do sorteio
+## de contratante. Sem isso a flag existiria só no papel.
+static func _contratantes_elegiveis(state: Dictionary) -> Array:
+	return state["reinos"].filter(func(r):
+		return not bool(state.get("tags", {}).get("rei_" + r["id"], {})
+			.get("flags", {}).get("nunca_mais_contrata", false)))
+
 static func gerar(state: Dictionary) -> Array:
 	var contratos: Array = []
+	var elegiveis := _contratantes_elegiveis(state)
+	if elegiveis.is_empty():
+		return contratos
 	for i in Dados.ri(2, 3):
 		var t: Dictionary = Dados.rnd(TIPOS)
-		var contratante: Dictionary = Dados.rnd(state["reinos"])
+		var contratante: Dictionary = Dados.rnd(elegiveis)
 		var alvo := ""
 		if t["id"] == "incursao" or t["id"] == "patrulha":
 			for g in state["guerras"]:
@@ -41,10 +52,21 @@ static func gerar(state: Dictionary) -> Array:
 		contratos.append(c)
 	return contratos
 
+## O que cada rei paga por contrato (documento "Era do Aço", Parte 4): "Frederico
+## paga o melhor do mapa" (Garças de Prata, maior contratante) e "Ignis é
+## raro, mas paga o dobro e cumpre à letra" (Cervos Escarlates).
+static func _pagamento_de(contratante: String, base: int) -> int:
+	if contratante == "aguias":
+		return roundi(base * 1.3)
+	if contratante == "leoes":
+		return base * 2
+	return base
+
 static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> Dictionary:
 	var inimigo := Combate.exercito_inimigo(int(contrato["forca"]))
 	var rel := Combate.batalhar(state, inimigo, contrato["nome"])
 	if rel["vitoria"]:
+		contrato["pagamento"] = _pagamento_de(contrato["contratante"], int(contrato["pagamento"]))
 		state["jogador"]["ouro"] += int(contrato["pagamento"])
 		state["jogador"]["renome"] += int(contrato["renome"])
 		Dialogo.mudar_relacao(state, "rei_" + contrato["contratante"], 8, "contrato cumprido")
