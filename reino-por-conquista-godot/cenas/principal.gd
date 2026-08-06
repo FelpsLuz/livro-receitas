@@ -7,6 +7,7 @@
 extends Control
 
 const Dados = preload("res://scripts/dados.gd")
+const Kit = preload("res://scripts/kit.gd")
 const UIv2 = preload("res://scripts/ui_v2.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Economia = preload("res://scripts/economia.gd")
@@ -76,16 +77,32 @@ var conversa_hist: RichTextLabel
 var conversa_input: LineEdit
 var conversa_retrato: TextureRect
 var conversa_titulo: Label
+var conversa_relacao: HBoxContainer
 var overlay_modal: Control
 var modal_centro: CenterContainer
 var input_nome: LineEdit
+var b_som: Button
 
 func _ready() -> void:
 	theme = Tema.criar()
-	var fundo := ColorRect.new()
-	fundo.color = Tema.MADEIRA
+	# O fundo era um ColorRect chapado. Um retângulo de 960×540 numa cor só é
+	# a diferença entre "escuro" e "vazio": o gradiente (3% de luminância do
+	# topo à base) e a vinheta nos cantos não são percebidos como efeito, são
+	# percebidos como profundidade — e é o que faz a tela parar de parecer um
+	# documento e passar a parecer um espaço. As duas texturas nascem em
+	# `tema.gd`, somam 4 KB e não custam um quadro.
+	var fundo := TextureRect.new()
+	fundo.texture = Tema.textura_fundo()
+	fundo.stretch_mode = TextureRect.STRETCH_SCALE
 	fundo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fundo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(fundo)
+	var vinheta := TextureRect.new()
+	vinheta.texture = Tema.textura_vinheta()
+	vinheta.stretch_mode = TextureRect.STRETCH_SCALE
+	vinheta.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vinheta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vinheta)
 	_montar_titulo()
 	_montar_jogo()
 	_montar_conversa()
@@ -99,48 +116,104 @@ func _montar_titulo() -> void:
 	tela_titulo = CenterContainer.new()
 	tela_titulo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(tela_titulo)
+	# ---- a composição ----
+	#
+	# A tela anterior era um painel com cinco filhos empilhados e a mesma
+	# separação de 10px entre todos: a vitrine, o título, o subtítulo, o
+	# campo e o botão liam como cinco itens de um formulário, e o botão
+	# esticado na largura inteira fechava o assunto — parecia a página de
+	# cadastro de um site.
+	#
+	# O que muda aqui é AGRUPAMENTO. A vitrine encosta no topo, sem moldura
+	# própria (ela já é uma imagem emoldurada); título e subtítulo formam um
+	# bloco colado; o campo e os botões formam outro, separados do primeiro
+	# por um respiro de verdade. Três grupos, não cinco itens.
 	var caixa := PanelContainer.new()
-	# fundo opaco: a moldura de madeira é vazada e o subtítulo em tinta escura
-	# desaparecia contra o fundo de madeira da janela
 	caixa.add_theme_stylebox_override("panel", Tema.estilo_modal())
-	caixa.custom_minimum_size = Vector2(520, 0)
+	caixa.custom_minimum_size = Vector2(560, 0)
 	tela_titulo.add_child(caixa)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", Tema.E4)
 	caixa.add_child(v)
+
 	# a tela de título mostra um reino no auge — a mesma vila do jogo, nível 5
+	var quadro := PanelContainer.new()
+	var sb_q := StyleBoxFlat.new()
+	sb_q.bg_color = Color("100d0b")
+	sb_q.border_color = Tema.BORDA
+	sb_q.set_border_width_all(1)
+	sb_q.set_corner_radius_all(0)
+	sb_q.set_content_margin_all(1)
+	quadro.add_theme_stylebox_override("panel", sb_q)
+	quadro.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(quadro)
 	var vitrine: SubViewportContainer = _nova_cena()
 	vitrine.custom_minimum_size = Vector2(CenarioV3View.NATIVO * CenarioV3View.ESCALA)
-	v.add_child(vitrine)
+	quadro.add_child(vitrine)
 	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
+
+	# ---- título + subtítulo: um bloco só ----
+	var bloco := VBoxContainer.new()
+	bloco.add_theme_constant_override("separation", Tema.E1)
+	v.add_child(bloco)
+	# a linha de cima do título: caixa alta pequena e apagada, o que um
+	# frontispício de livro faz antes de dizer o nome da obra
+	var supra := Label.new()
+	supra.text = " ".join("ESTRATÉGIA MEDIEVAL".split(""))
+	supra.add_theme_font_size_override("font_size", Tema.MINI)
+	supra.add_theme_color_override("font_color", Tema.TEXTO_3)
+	supra.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bloco.add_child(supra)
 	var titulo := Label.new()
 	titulo.text = "REINO POR CONQUISTA"
-	# blackletter em pixel, no tamanho da grade nativa dela (21 × 2)
 	var f_titulo := Tema.fonte_titulo()
 	if f_titulo != null:
 		titulo.add_theme_font_override("font", f_titulo)
 	titulo.add_theme_font_size_override("font_size", Tema.TITULO_JOGO)
 	titulo.add_theme_color_override("font_color", Tema.ACENTO)
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(titulo)
+	bloco.add_child(titulo)
+	# régua curta e centrada sob o título: o ornamento mais barato que existe.
+	# A altura de 15px é o que dá ar em volta dela — num CenterContainer de
+	# altura mínima a régua encostava nos ascendentes do subtítulo e lia como
+	# um risco em cima do texto, não como ornamento.
+	var orn := CenterContainer.new()
+	orn.custom_minimum_size = Vector2(0, 15)
+	bloco.add_child(orn)
+	var risco := PanelContainer.new()
+	var sb_r := StyleBoxFlat.new()
+	sb_r.bg_color = Tema.ACENTO_FUNDO
+	sb_r.set_corner_radius_all(0)
+	risco.add_theme_stylebox_override("panel", sb_r)
+	risco.custom_minimum_size = Vector2(120, 1)
+	orn.add_child(risco)
 	var sub := Label.new()
 	sub.text = "De mercenário sem nome a rei — se as intrigas, a fome e as adagas deixarem."
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(sub)
+	sub.add_theme_color_override("font_color", Tema.TEXTO_2)
+	sub.add_theme_font_size_override("font_size", Tema.MICRO)
+	bloco.add_child(sub)
+
+	# ---- o que se faz aqui ----
+	Kit.respiro(v, Tema.E2)
 	input_nome = LineEdit.new()
 	input_nome.placeholder_text = "Nome do seu mercenário (opcional)"
 	input_nome.max_length = 24
+	input_nome.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(input_nome)
-	var b_novo := Button.new()
-	b_novo.text = "Nova Saga"
-	b_novo.pressed.connect(func(): iniciar_jogo(input_nome.text.strip_edges()))
-	v.add_child(b_novo)
+	var acoes := HBoxContainer.new()
+	acoes.add_theme_constant_override("separation", Tema.E3)
+	acoes.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(acoes)
+	# UM primário na tela, e é o verbo pelo qual a tela existe. "Continuar"
+	# fica fantasma ao lado: quem tem save sabe procurá-lo, e quem não tem
+	# não deve ver dois botões do mesmo peso.
+	var b_novo := Kit.botao(acoes, "Nova Saga",
+		func(): iniciar_jogo(input_nome.text.strip_edges()), "primario", 180)
+	b_novo.add_theme_font_size_override("font_size", Tema.CORPO)
 	if Jogo.tem_save():
-		var b_cont := Button.new()
-		b_cont.text = "Continuar Saga"
-		b_cont.pressed.connect(continuar_jogo)
-		v.add_child(b_cont)
+		Kit.botao(acoes, "Continuar Saga", continuar_jogo, "fantasma", 160)
 
 func iniciar_jogo(nome: String) -> void:
 	state = Jogo.novo_jogo(nome)
@@ -169,28 +242,45 @@ func _entrar_no_jogo() -> void:
 func _montar_jogo() -> void:
 	tela_jogo = MarginContainer.new()
 	tela_jogo.set_anchors_preset(Control.PRESET_FULL_RECT)
-	tela_jogo.add_theme_constant_override("margin_left", 8)
-	tela_jogo.add_theme_constant_override("margin_right", 8)
-	tela_jogo.add_theme_constant_override("margin_top", 8)
-	tela_jogo.add_theme_constant_override("margin_bottom", 8)
+	for lado in ["left", "right", "top", "bottom"]:
+		tela_jogo.add_theme_constant_override("margin_" + lado, Tema.E3)
 	add_child(tela_jogo)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 6)
+	v.add_theme_constant_override("separation", Tema.E3)
 	tela_jogo.add_child(v)
 
 	# ---- HUD com hierarquia ----
 	# A barra antiga era uma frase só: nome, título, idade, ouro, renome,
 	# homens, moral, guardas e data, tudo no mesmo tamanho e peso, separado por
 	# ponto médio. Num jogo de gestão, ouro e homens têm que ser lidos em 200ms;
-	# o resto é contexto. Agora são duas linhas: os NÚMEROS grandes com ícone
-	# em cima, a identidade pequena embaixo.
+	# o resto é contexto.
+	#
+	# Faltava ainda o TERRENO: os números flutuavam direto sobre o fundo da
+	# janela, e por isso liam como legenda de debug em vez de painel de
+	# instrumentos. Agora a barra tem superfície própria, os recursos viram
+	# chips, e a identidade do jogador fica na MESMA barra, à direita — o que
+	# recupera uma linha inteira de altura para o conteúdo.
+	var barra := PanelContainer.new()
+	barra.add_theme_stylebox_override("panel", Tema.estilo_barra_hud())
+	v.add_child(barra)
+	var linha_hud := HBoxContainer.new()
+	linha_hud.add_theme_constant_override("separation", Tema.E4)
+	barra.add_child(linha_hud)
 	hud = HBoxContainer.new()
-	hud.add_theme_constant_override("separation", 4)
-	v.add_child(hud)
+	hud.add_theme_constant_override("separation", Tema.E2)
+	hud.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	linha_hud.add_child(hud)
 	status_label = Label.new()
-	status_label.add_theme_color_override("font_color", Color("c9b894"))
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(status_label)
+	status_label.add_theme_color_override("font_color", Tema.TEXTO_2)
+	status_label.add_theme_font_size_override("font_size", Tema.MICRO)
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# a identidade é CONTEXTO: ela cede a largura quando os chips crescem, e
+	# corta com reticências em vez de empurrar o HUD para fora da tela
+	status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	linha_hud.add_child(status_label)
 
 	tabs = TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -217,27 +307,51 @@ func _montar_jogo() -> void:
 			tabs.set_tab_icon_max_width(i, 16)
 	tabs.tab_changed.connect(func(_i): atualizar())
 
+	# ---- rodapé ----
+	# "Passar o mês" é o verbo do jogo inteiro: é o único botão que faz o
+	# tempo andar, e por isso é o primário. Ele deixa de esticar na largura
+	# toda — um botão de 900px não parece um botão, parece uma divisória — e
+	# passa a ter tamanho próprio, ancorado à direita junto do controle de som,
+	# com a dica de atalho à esquerda ocupando a sobra.
 	var rodape := HBoxContainer.new()
+	rodape.add_theme_constant_override("separation", Tema.E3)
 	v.add_child(rodape)
-	var b_mes := Button.new()
-	b_mes.text = "Passar o mês"
-	b_mes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b_mes.pressed.connect(_passar_mes)
-	rodape.add_child(b_mes)
-	var b_mudo := Button.new()
-	b_mudo.icon = Icones.textura_tingida("som")
-	b_mudo.expand_icon = true
-	b_mudo.custom_minimum_size = Vector2(46, 0)
-	b_mudo.tooltip_text = "Som"
-	b_mudo.pressed.connect(func():
-		Sfx.mudo = not Sfx.mudo
-		b_mudo.icon = Icones.textura_tingida("mudo" if Sfx.mudo else "som"))
-	rodape.add_child(b_mudo)
+	var dica := Label.new()
+	dica.text = "Enter passa o mês"
+	dica.add_theme_font_size_override("font_size", Tema.MINI)
+	dica.add_theme_color_override("font_color", Tema.TEXTO_3)
+	dica.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dica.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rodape.add_child(dica)
+	b_som = Kit.botao_icone(rodape, "som", "Som", _alternar_som, "fantasma", 34)
+	var b_mes := Kit.botao(rodape, "Passar o mês", _passar_mes, "primario", 210)
+	b_mes.add_theme_font_size_override("font_size", Tema.CORPO)
 
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
 	# procedural de sempre. As duas cenas têm a mesma API (.estado, semear_npcs).
 	cidade_view = _nova_cena()
 	_montar_quartel()
+
+func _alternar_som() -> void:
+	Sfx.mudo = not Sfx.mudo
+	b_som.icon = Icones.textura_tingida("mudo" if Sfx.mudo else "som")
+	b_som.tooltip_text = "Som desligado" if Sfx.mudo else "Som"
+
+## Enter passa o mês. O rodapé anuncia o atalho, então ele tem que existir.
+##
+## `_unhandled_input` e não `_input`: um LineEdit com foco (o nome na tela de
+## título, a fala na conversa, a oferta ao clã) consome o Enter antes de
+## chegar aqui, que é exatamente o que se quer — o atalho não pode disparar
+## no meio de uma frase digitada.
+func _unhandled_input(evento: InputEvent) -> void:
+	if not evento.is_action_pressed("ui_accept"):
+		return
+	if state.is_empty() or tela_jogo == null or not tela_jogo.visible:
+		return
+	if overlay_modal.visible or overlay_conversa.visible:
+		return
+	get_viewport().set_input_as_handled()
+	_passar_mes()
 
 ## A cidade_view sai da árvore quando outra aba está ativa (atualizar() a
 ## remove do pai). Node não é ref-counted: sem isto, fechar o jogo em qualquer
@@ -335,53 +449,45 @@ func _passar_mes() -> void:
 	Jogo.salvar(state)
 	atualizar()
 
-## Uma célula do HUD: ícone + número grande. O número é o que o olho procura,
-## então ele é o elemento maior da tela inteira depois do título.
-func _celula_hud(icone: String, valor: String, cor: Color, dica: String) -> void:
-	var caixa := HBoxContainer.new()
-	caixa.add_theme_constant_override("separation", 3)
-	caixa.tooltip_text = dica
-	var ic := Icones.imagem(icone, 24)
-	if ic != null:
-		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		caixa.add_child(ic)
-	var l := Label.new()
-	l.text = valor
-	# número SEMPRE na fonte de dígito: a serifada tem 8/9 a 92% de identidade
-	var f := Tema.fonte_numero()
-	if f != null:
-		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", Tema.NUMERO)
-	l.add_theme_color_override("font_color", cor)
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	caixa.add_child(l)
-	var espaco := Control.new()
-	espaco.custom_minimum_size = Vector2(14, 0)
-	caixa.add_child(espaco)
-	hud.add_child(caixa)
+## Uma célula do HUD, agora como CHIP: ícone + número sobre terreno próprio.
+##
+## `alarme` é o que decide se o chip fica neutro ou pega o fundo de perigo. A
+## regra é a mesma de antes e continua sendo a certa: recurso saudável NÃO
+## se colore. Se o ouro fosse sempre dourado, o trigo sempre trigo e a moral
+## sempre verde, o HUD seria um arco-íris permanente e nenhum deles saltaria
+## no dia em que virasse problema — que é o único dia em que precisa saltar.
+func _celula_hud(icone: String, valor: String, dica: String,
+		alarme: bool = false, destaque: bool = false) -> void:
+	var cor: Color = Tema.TEXTO_2
+	var fundo: Color = Tema.ELEVADO
+	if alarme:
+		cor = Tema.PERIGO
+		fundo = Tema.PERIGO_FUNDO
+	elif destaque:
+		cor = Tema.ACENTO
+	Kit.chip(hud, icone, valor, cor, fundo, dica)
 
 func _montar_hud(j: Dictionary) -> void:
 	for filho in hud.get_children():
 		filho.queue_free()
 	var moral: int = Economia.moral(state)
-	_celula_hud("moedas", str(int(j["ouro"])), Tema.OURO, "Ouro no cofre")
-	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])),
-		Tema.TEXTO, "Homens em armas")
-	# a moral só ganha destaque quando vira problema: acima de 60 é ruído
+	# o ouro é o único chip com destaque permanente: é o recurso que toda
+	# decisão do jogo consulta, e o HUD tem que ter uma âncora
+	_celula_hud("moedas", str(int(j["ouro"])), "Ouro no cofre", false, true)
+	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])), "Homens em armas")
 	_celula_hud("moral", "%d" % moral,
-		Tema.SANGUE if moral <= 35 else Tema.TEXTO_2,
-		"Moral do exército — abaixo de 35 os homens desertam")
-	_celula_hud("renome", str(int(j["renome"])), Tema.TEXTO_2, "Renome")
+		"Moral do exército — abaixo de 35 os homens desertam", moral <= 35)
+	_celula_hud("renome", str(int(j["renome"])), "Renome")
 	if int(j["guardas"]) > 0:
-		_celula_hud("escudo", str(int(j["guardas"])), Tema.TEXTO_2,
+		_celula_hud("escudo", str(int(j["guardas"])),
 			"Guardas de elite na sua casa")
 	var t = state.get("terra")
 	if t != null:
-		_celula_hud("trigo", str(int(t["alimento"])),
-			Tema.SANGUE if int(t["alimento"]) <= 0 else Tema.TEXTO_2, "Celeiro")
-	# a estação pinta o ícone do calendário: a UI muda de temperatura com o mundo
-	_celula_hud("calendario", Estacoes.nome(state), Estacoes.cor(state),
-		Estacoes.nota(state))
+		_celula_hud("trigo", str(int(t["alimento"])), "Celeiro",
+			int(t["alimento"]) <= 0)
+	# a estação pinta o próprio chip: a UI muda de temperatura com o mundo
+	Kit.chip(hud, "calendario", Estacoes.nome(state), Estacoes.cor(state),
+		Tema.ELEVADO, Estacoes.nota(state))
 
 func _conteudo_aba() -> VBoxContainer:
 	return tabs.get_current_tab_control().get_node("Conteudo")
@@ -395,13 +501,16 @@ func atualizar() -> void:
 	if bool(vs.get("vassalo", false)):
 		selo = " · vassalo de %s" % vs["nome"]
 	_montar_hud(j)
-	status_label.text = "%s · %s%s · %d anos · %s de %s, Ano %d" % [
+	# A estação saiu daqui: ela já é um chip do HUD, e escrever "Março de
+	# Primavera" ao lado de um chip que diz "Primavera" era a mesma
+	# informação duas vezes na mesma barra. Sobra a IDENTIDADE, que é o que
+	# esta linha sempre quis ser.
+	status_label.text = "%s · %s%s · %d anos · %s, Ano %d" % [
 		j["nome"], Contratos.titulo(state), selo, j["idade"],
-		MESES[state["mes"] - 1], Estacoes.nome(state), state["ano"]]
-	# a UI muda de temperatura junto com o mundo: azul-gelo no inverno
+		MESES[state["mes"] - 1], state["ano"]]
 	# a linha de identidade é creme e fica creme: ela é contexto, não estado.
-	# Quem muda de temperatura com a estação é o ícone do calendário no HUD.
-	status_label.add_theme_color_override("font_color", Color("c9b894"))
+	# Quem muda de temperatura com a estação é o chip do calendário no HUD.
+	status_label.add_theme_color_override("font_color", Tema.TEXTO_2)
 
 	if state["fim"] != null:
 		_modal_fim()
@@ -429,51 +538,32 @@ func atualizar() -> void:
 		9: _aba_cronica(c)
 
 # ---------------- utilitários de UI ----------------
-## Texto de aba: TINTA sobre pergaminho.
-##
-## Antes o título saía em PERGAMINHO e o corpo num tom claro — cores herdadas
-## de quando o fundo era madeira escura. Com o painel Pro do PixelLab (fundo
-## claro, tanto na aba quanto dentro do card) isso virou pergaminho sobre
-## pergaminho: metade da interface estava sendo desenhada invisível.
-func _titulo_secao(c: Container, texto: String) -> void:
-	var l := Label.new()
-	l.text = texto
-	var f := Tema.fonte_forte()
-	if f != null:
-		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
-	l.add_theme_color_override("font_color", Tema.ACENTO)
-	c.add_child(l)
+## Estes quatro sobrevivem como ATALHOS para o kit. Eles são chamados em ~120
+## pontos deste arquivo, e trocar cada chamada por `Kit.` não melhoraria uma
+## linha de tela — o que melhora a tela é o que eles passaram a desenhar.
+func _titulo_secao(c: Container, texto: String, apoio: String = "") -> void:
+	Kit.secao(c, texto, apoio)
 
 func _par(c: Container, texto: String) -> Label:
-	var l := Label.new()
-	l.text = texto
-	# quebrar linha numa COLUNA é o certo; numa LINHA é desastre. Num HBox o
-	# label com autowrap encolhe até a largura da maior palavra e desce em
-	# coluna de letras, esticando o card inteiro junto ("Você está aqui"
-	# virava uma torre de 350px que empurrava os botões do reino para baixo).
-	l.autowrap_mode = TextServer.AUTOWRAP_OFF if c is HBoxContainer \
-		else TextServer.AUTOWRAP_WORD_SMART
-	l.add_theme_color_override("font_color", Tema.TINTA)
-	c.add_child(l)
-	return l
+	return Kit.texto(c, texto)
 
-func _botao(c: Container, texto: String, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = texto
-	b.pressed.connect(cb)
-	c.add_child(b)
-	return b
+func _botao(c: Container, texto: String, cb: Callable,
+		variante: String = "") -> Button:
+	return Kit.botao(c, texto, cb, variante)
 
-func _card(c: Container) -> HBoxContainer:
+## O card em linha. A altura mínima de 56px saiu daqui: ela foi escrita para
+## uma moldura 9-slice que não existe mais, e o que ela fazia era garantir
+## 56px de altura a uma linha de 15px de texto. Medido na imagem renderizada,
+## era o que fazia caber quatro itens numa tela de mercado com dez.
+func _card(c: Container, marca: Variant = null) -> HBoxContainer:
 	var painel := PanelContainer.new()
-	painel.add_theme_stylebox_override("panel", Tema.estilo_card())
+	if marca is Color:
+		painel.add_theme_stylebox_override("panel", Tema.estilo_card_marcado(marca))
+	else:
+		painel.add_theme_stylebox_override("panel", Tema.estilo_card())
 	c.add_child(painel)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
-	# a moldura de madeira do 9-slice só mostra o miolo com altura suficiente:
-	# num card raso os cantos escuros se atropelam e o texto some no contorno
-	h.custom_minimum_size = Vector2(0, 56)
+	h.add_theme_constant_override("separation", Tema.E4)
 	painel.add_child(h)
 	return h
 
@@ -492,44 +582,25 @@ func _card(c: Container) -> HBoxContainer:
 ## dimensionamento.
 ##
 ## A moldura só volta onde há espaço para ela: no retrato grande da conversa.
-func _retrato(c: Container, id: String, tamanho: int = 52) -> void:
-	var tr := TextureRect.new()
-	tr.texture = Retratos.textura(id, Retratos.humor_de(state, id))
-	tr.custom_minimum_size = Vector2(tamanho, tamanho)
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if tamanho < UIv2.MARGENS.get("moldura_retrato", 32) * 2:
-		c.add_child(tr)
-		return
-	var caixa := Control.new()
-	caixa.custom_minimum_size = Vector2(tamanho, tamanho)
-	caixa.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var moldura := UIv2.criar_painel("moldura_retrato")
-	if moldura == null:
-		c.add_child(tr)
-		return
-	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
-	moldura.set_anchors_preset(Control.PRESET_FULL_RECT)
-	caixa.add_child(tr)
-	caixa.add_child(moldura)
-	c.add_child(caixa)
+## Retrato de um personagem fixo (rei, chefe de clã, freguês da taverna).
+##
+## O tamanho é 32 ou 64, e nunca 52, que era o valor anterior. A razão é
+## aritmética: o retrato nasce 64×64, e mostrá-lo em 52 é uma redução de
+## 0,81 — com filtro NEAREST isso descarta uma linha de pixels a cada cinco,
+## e as linhas descartadas são justamente as de 1px (olho, boca, contorno)
+## que carregam a cara. Em 32 a redução é exata (o próprio `Retratos` faz a
+## média 2×2), e em 64 não há redução nenhuma.
+func _retrato(c: Container, id: String, tamanho: int = 32) -> void:
+	var humor := Retratos.humor_de(state, id)
+	var tex := Retratos.textura_pequena(id, humor) if tamanho <= 32 \
+		else Retratos.textura(id, humor)
+	Kit.retrato(c, tex, tamanho)
 
 ## Coloca uma arte gerada num container. Aceita null de propósito: toda arte
 ## do PixelLab é opcional, e a UI tem que continuar legível sem ela — é o
 ## mesmo contrato dos ícones do mercado.
-func _arte(c: Container, tex: Texture2D, tamanho: int = 48) -> TextureRect:
-	if tex == null:
-		return null
-	var tr := TextureRect.new()
-	tr.texture = tex
-	tr.custom_minimum_size = Vector2(tamanho, tamanho)
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	c.add_child(tr)
-	return tr
+func _arte(c: Container, tex: Texture2D, tamanho: int = 48) -> Control:
+	return Kit.retrato(c, tex, tamanho)
 
 ## Ilustração grande de um momento (cerco, emboscada, inverno, coroação).
 ##
@@ -537,103 +608,158 @@ func _arte(c: Container, tex: Texture2D, tamanho: int = 48) -> TextureRect:
 ## cortava três quartos do desenho — a vila na neve virava um pedaço de telhado.
 ## Aqui a arte aparece inteira, ampliada e centrada na largura disponível.
 func _faixa(c: Container, tex: Texture2D, altura: int = 120) -> void:
-	if tex == null:
-		return
-	var tr := TextureRect.new()
-	tr.texture = tex
-	tr.custom_minimum_size = Vector2(0, altura)
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.add_child(tr)
+	Kit.ilustracao(c, tex, altura)
 
+## O aviso de resultado ("ouro insuficiente", "recrutados 5 lanceiros").
+##
+## Era um Label solto acrescentado ao FIM do conteúdo da aba — ou seja, numa
+## aba rolada, a resposta ao clique aparecia fora da tela, e o jogador
+## clicava sem retorno nenhum. Agora é uma faixa fixada no TOPO da aba, com
+## terreno e barra de acento, que é onde ela é vista sem rolar.
 func _aviso(msg: String) -> void:
 	if msg == "":
 		return
-	var linha := Label.new()
-	linha.text = "- " + msg
-	linha.add_theme_color_override("font_color", Tema.ACENTO)
-	_conteudo_aba().add_child(linha)
+	var c := _conteudo_aba()
+	var faixa := PanelContainer.new()
+	faixa.add_theme_stylebox_override("panel",
+		Tema.estilo_card_marcado(Tema.ACENTO))
+	c.add_child(faixa)
+	c.move_child(faixa, 0)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", Tema.E3)
+	faixa.add_child(h)
+	var l := Label.new()
+	l.text = msg
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", Tema.ACENTO_FORTE)
+	l.add_theme_font_size_override("font_size", Tema.MICRO)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(l)
 	var timer := get_tree().create_timer(3.5)
 	timer.timeout.connect(func():
-		if is_instance_valid(linha):
-			linha.queue_free())
+		if is_instance_valid(faixa):
+			faixa.queue_free())
 
 # ---------------- ABAS ----------------
 func _aba_terra(c: Container) -> void:
 	var t = state["terra"]
 	_titulo_secao(c, ("%s — %s" % [t["nome"], Dados.NIVEIS_TERRA[t["nivel"]]["nome"]]) if t != null else "Acampamento Mercenário")
+
+	# duas colunas: a estampa da vila à esquerda, o estado dela à direita. A
+	# imagem tem 400px de largura nativa e a tela tem 930 úteis — em coluna
+	# única sobravam 350px de nada ao lado dela, e o estado da vila descia
+	# para baixo da dobra.
+	var colunas := Kit.duas_colunas(c, 0.52)
+	var col_esq: VBoxContainer = colunas[0]
+	var col_dir: VBoxContainer = colunas[1]
+
 	cidade_view.estado = state
 	# SHRINK_CENTER (o padrão do nó), não EXPAND_FILL: o cartão tem tamanho
 	# próprio e esticá-lo não aumenta a imagem — o SubViewportContainer com
 	# `stretch = false` desenha a textura no tamanho nativo e o resto do
-	# retângulo fica vazio. Centrado, ele lê como estampa; esticado, lia como
-	# imagem encostada na margem esquerda.
-	c.add_child(cidade_view)
+	# retângulo fica vazio.
+	var quadro_vila := PanelContainer.new()
+	var sb_v := StyleBoxFlat.new()
+	sb_v.bg_color = Color("100d0b")
+	sb_v.border_color = Tema.BORDA
+	sb_v.set_border_width_all(1)
+	sb_v.set_corner_radius_all(0)
+	sb_v.set_content_margin_all(1)
+	quadro_vila.add_theme_stylebox_override("panel", sb_v)
+	quadro_vila.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col_esq.add_child(quadro_vila)
+	quadro_vila.add_child(cidade_view)
+
 	if t == null:
-		_par(c, "Sem terras, sem raízes. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.")
-		_botao(c, "Comprar terra (300 , requer 25)", func():
+		_par(col_dir, "Sem terras, sem raízes. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.")
+		_botao(col_dir, "Comprar terra  ·  300 ouro", func():
 			var r: Dictionary = Jogo.comprar_terra(state)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
 				cidade_view.semear_npcs()
 			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar())
+			atualizar(), "primario").tooltip_text = "Requer 25 de renome"
 	else:
-		# linha de recursos com ícone: o que a vila TEM, lido de relance
-		var hr := HBoxContainer.new()
-		hr.add_theme_constant_override("separation", 6)
-		c.add_child(hr)
-		for par_r in [["populacao", "%d" % int(t["populacao"])],
-				["trigo", "%d" % int(t["alimento"])],
-				["madeira", "%d" % int(t["madeira"])]]:
-			var ic_r := Icones.imagem(str(par_r[0]), 26)
-			if ic_r != null:
-				hr.add_child(ic_r)
-			var l_r := Label.new()
-			l_r.text = "%s · " % str(par_r[1])
-			l_r.add_theme_color_override("font_color", Tema.TINTA)
-			hr.add_child(l_r)
-		var l_fel := Label.new()
-		l_fel.text = "Felicidade %d" % int(t["felicidade"])
-		l_fel.add_theme_color_override("font_color", Tema.TINTA)
-		hr.add_child(l_fel)
-		# celeiro vazio é o começo do fim: deserção, infelicidade e rebelião
-		if int(t["alimento"]) <= 0:
-			_par(c, "O celeiro está vazio. Os homens comem o que a vila não tem.")
-			_faixa(c, Retratos.ilustracao("fome"), 110)
-		# O DILEMA: quem pega em armas some da base de imposto. Mostrar os dois
-		# números lado a lado é o que transforma recrutar numa decisão.
+		# ---- a coluna da direita: o ESTADO da vila ----
+		# A ilustração ficava sozinha no meio da tela com 350px de vazio à
+		# direita e o estado da vila descia embaixo dela em sete linhas de
+		# texto corrido. Aqui a imagem fica à esquerda e o estado à direita,
+		# na altura dela: a largura da tela passa a ser usada, e o jogador vê
+		# a vila e os números dela no mesmo golpe de vista.
+		var alim: int = int(t["alimento"])
+		var fel: int = int(t["felicidade"])
 		var ativa: int = Economia.populacao_ativa(state)
 		var armas: int = Economia.pop_em_armas(state)
-		_par(c, "Trabalhando: %d · Em armas: %d · Imposto: %d por mês" %
-			[ativa, armas, Economia.imposto_mensal(state)])
-		if armas > 0:
-			_par(c, " · (cada homem em armas é um pagador de imposto a menos)")
 		var nivel_cap: int = clampi(int(t["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
-		_par(c, "%s sustenta até %d de tropa · imposto %.2f por habitante" % [
-			Dados.NIVEIS_TERRA[nivel_cap]["nome"], Recrutamento.pop_maxima(state),
-			float(Dados.NIVEIS_TERRA[nivel_cap]["imposto"])])
+
+		var res := Kit.fila(col_dir, Tema.E4)
+		Kit.icone_valor(res, "populacao", "%d" % int(t["populacao"]), Tema.TEXTO)
+		Kit.icone_valor(res, "trigo", "%d" % alim,
+			Tema.PERIGO if alim <= 0 else Tema.TEXTO)
+		Kit.icone_valor(res, "madeira", "%d" % int(t["madeira"]), Tema.TEXTO)
+
+		# os dois medidores que dizem se a vila vai bem, sem obrigar a ler
+		Kit.medidor_rotulado(col_dir, "Felicidade do povo", fel, 100, "/100")
+		Kit.medidor_rotulado(col_dir, "População comprometida em armas",
+			armas, maxf(1, ativa + armas), " de %d" % (ativa + armas),
+			Tema.ATENCAO if armas > ativa else Tema.TEXTO_2)
+
+		# O DILEMA: quem pega em armas some da base de imposto. A tabela de
+		# duas colunas é o que põe os dois números um sobre o outro — em
+		# texto corrido eles eram uma frase, e frase não se compara.
+		var tab := Kit.tabela(col_dir, [{"t": "", "w": 0}, {"t": "", "w": 96, "a": Kit.DIR}])
+		for par_l in [["Trabalhando nos campos", "%d" % ativa],
+				["Em armas", "%d" % armas],
+				["Imposto por mês", "%d" % Economia.imposto_mensal(state)],
+				["Tropa que a terra sustenta", "%d" % Recrutamento.pop_maxima(state)]]:
+			var cel := Kit.linha(tab)
+			Kit.texto(cel[0], str(par_l[0]), Tema.TEXTO_2, Tema.MICRO)
+			Kit.numero(cel[1], str(par_l[1]))
+		if armas > 0:
+			Kit.nota(col_dir, "Cada homem em armas é um pagador de imposto a menos.")
+
+		# ---- avisos: o que exige uma decisão AGORA ----
+		if alim <= 0:
+			# texto e ilustração LADO A LADO. Empilhados, a imagem centrava
+			# sozinha debaixo de um texto alinhado à esquerda e o card ficava
+			# com 120px de altura para dizer uma frase.
+			var av := Kit.fila(Kit.card(c, Tema.PERIGO), Tema.E4)
+			Kit.ilustracao(av, Retratos.ilustracao("fome"), 72)
+			var v_fome := Kit.coluna(av, Tema.E2)
+			v_fome.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			Kit.texto(v_fome, "O celeiro está vazio.", Tema.PERIGO, Tema.CORPO_G)
+			Kit.nota(v_fome, "Os homens comem o que a vila não tem. Moral cai, e o povo com fome pega em foices.")
+		if fel <= 30:
+			Kit.texto(Kit.card(c, Tema.PERIGO),
+				"O povo murmura. Felicidade baixa termina em foices e tochas.",
+				Tema.PERIGO)
 		# a estação, e o aviso de que o inverno vem aí
-		var aviso_est: String = "%s — %s" % [Estacoes.nome(state), Estacoes.nota(state)]
+		var aviso_est: String = Estacoes.nota(state)
 		if Estacoes.proxima(state) == "inverno" and Estacoes.meses_ate_virar(state) <= 2:
 			aviso_est += " O inverno chega em %d mês(es)." % Estacoes.meses_ate_virar(state)
-		_par(c, aviso_est)
-		# no inverno a vila aparece coberta de neve: a estação que zera a colheita
-		# tem que ser vista, não lida numa linha de texto entre outras cinco
+		var card_est := Kit.card(c, Estacoes.cor(state))
+		var h_est := Kit.fila(card_est, Tema.E3)
+		# no inverno a vila aparece coberta de neve: a estação que zera a
+		# colheita tem que ser vista, não lida numa linha entre outras cinco.
+		# A ilustração vai à ESQUERDA da frase, e não empilhada embaixo dela:
+		# centrada sob um texto alinhado à esquerda ela ficava solta no meio
+		# de um card que dobrava de altura para acomodá-la.
 		if Estacoes.e_inverno(state):
-			_faixa(c, Retratos.ilustracao("inverno"), 110)
-		if int(t["felicidade"]) <= 30:
-			_par(c, "O povo murmura. Felicidade baixa termina em foices e tochas.")
+			Kit.ilustracao(h_est, Retratos.ilustracao("inverno"), 72)
+		Kit.selo(h_est, Estacoes.nome(state), Estacoes.cor(state), Tema.ELEVADO)
+		Kit.texto(h_est, aviso_est, Tema.TEXTO_2, Tema.MICRO)
+
+		# ---- o que se faz com a terra ----
+		var acoes := Kit.fila(c, Tema.E3)
 		# o topo vem da TABELA. Era um 5 escrito à mão, irmão do que estava em
 		# `melhorar_terra`: com a escada em nove degraus, o botão de evoluir
 		# simplesmente SUMIA na Vila de Pedra e o jogador ficava sem caminho,
 		# sem mensagem nenhuma explicando por quê.
 		if int(t["nivel"]) < Dados.NIVEIS_TERRA.size() - 1:
 			var prox: Dictionary = Dados.NIVEIS_TERRA[int(t["nivel"]) + 1]
-			_botao(c, "Evoluir para %s (%d + %d)" % [prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
+			_botao(acoes, "Evoluir para %s  ·  %d ouro + %d madeira" % [
+				prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
 				var r: Dictionary = Jogo.melhorar_terra(state)
 				if r["ok"]:
 					Sfx.tocar(self, "vitoria")
@@ -641,13 +767,15 @@ func _aba_terra(c: Container) -> void:
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
-		_botao(c, "Exportar 30 de alimento (ouro rápido, povo reclama)", func():
+		_botao(acoes, "Exportar 30 de alimento", func():
 			var r: Dictionary = Jogo.exportar_comida(state, 30)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar())
+			atualizar(), "fantasma").tooltip_text = \
+				"Ouro rápido — e o povo reclama da despensa vazia"
+		var _fim := nivel_cap
 
 func _aba_mapa(c: Container) -> void:
 	_titulo_secao(c, "Os Seis Reinos")
@@ -668,17 +796,43 @@ func _aba_mapa(c: Container) -> void:
 	if state["guerras"].is_empty():
 		_par(c, "Os reinos estão em paz. Por enquanto.")
 	for reino in state["reinos"]:
-		var h := _card(c)
-		_retrato(h, reino["rei"]["id"])
+		var aqui: bool = state["local"] == reino["id"]
+		var meu: bool = state["jogador"]["rei_de"] == reino["id"]
+		# a barra de acento diz de relance ONDE você está e o que é seu, sem
+		# gastar uma palavra da linha de texto para isso
+		var h := _card(c, Tema.ACENTO if meu else (Tema.ACENTO_FUNDO if aqui else null))
+		_retrato(h, reino["rei"]["id"], 32)
 		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", Tema.E2)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(v)
 		var rel: int = state["tags"].get("rei_" + reino["id"], {"relacao": 0})["relacao"]
-		var extras := ""
+
+		# ---- linha 1: nome do reino, capital e os SELOS de estado ----
+		# "Casus Belli" e "SEU TRONO" eram palavras soltas no fim de uma
+		# frase de três linhas, e estado escrito no meio de prosa não é lido.
+		var l1 := Kit.fila(v, Tema.E3)
+		var nome_r := Kit.texto(l1, str(reino["nome"]), Tema.TEXTO, Tema.CORPO_G)
+		var f_r := Tema.fonte_forte()
+		if f_r != null:
+			nome_r.add_theme_font_override("font", f_r)
+		Kit.texto(l1, str(reino["capital"]), Tema.TEXTO_3, Tema.MICRO)
+		if aqui:
+			Kit.selo(l1, "você está aqui", Tema.TEXTO, Tema.ELEVADO)
+		if meu:
+			Kit.selo(l1, "seu trono", Tema.ACENTO_FORTE, Tema.ACENTO_FUNDO)
 		if state["casus_belli"].has(reino["id"]):
-			extras += " Casus Belli"
-		if state["jogador"]["rei_de"] == reino["id"]:
-			extras += " SEU TRONO"
+			Kit.selo(l1, "casus belli", Color("e8917a"), Tema.PERIGO_FUNDO)
+
+		# ---- linha 2: o rei, a relação como MEDIDOR, e a força ----
+		var l2 := Kit.fila(v, Tema.E4)
+		Kit.texto(l2, str(reino["rei"]["nome"]), Tema.TEXTO_2, Tema.MICRO)
+		# a relação vai de −100 a +100; o medidor mostra os dois lados
+		var barra_rel := Kit.medidor(l2, float(rel + 100), 200.0, 90, 5,
+			Tema.PERIGO if rel <= -25 else (Tema.GANHO if rel >= 25 else Tema.TEXTO_3))
+		barra_rel.tooltip_text = "Relação: %d" % rel
+		Kit.texto(l2, "%s (%d)" % [Dialogo.nome_relacao(rel), rel],
+			Tema.TEXTO_3, Tema.MICRO)
 		# NEBLINA: a força do inimigo NÃO aparece de graça. Sem um espião
 		# recente, o jogador vê "???" — e marchar às cegas é decisão dele.
 		var vis: Dictionary = Intel.sobre(state, reino["id"])
@@ -689,21 +843,20 @@ func _aba_mapa(c: Container) -> void:
 			for l in det.slice(0, 3):
 				partes.append("%d %s" % [int(l["n"]), str(l["nome"]).to_lower()])
 			if not partes.is_empty():
-				forca_txt += "("+ ", ".join(partes) + ")"
-		var info := Label.new()
-		info.text = "%s — %s\n%s · %s (%d)%s\n%s" % [reino["nome"], reino["capital"],
-			reino["rei"]["nome"], Dialogo.nome_relacao(rel), rel, extras, forca_txt]
-		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		v.add_child(info)
-		var lb := HBoxContainer.new()
-		v.add_child(lb)
-		if state["local"] != reino["id"]:
+				forca_txt += " (" + ", ".join(partes) + ")"
+		var l_forca := Kit.texto(l2, forca_txt,
+			Tema.TEXTO_3 if not bool(vis.get("conhecido", false)) else Tema.TEXTO_2,
+			Tema.MICRO)
+		l_forca.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if not bool(vis.get("conhecido", false)):
+			l_forca.tooltip_text = "Sem espião recente: a força deste reino está sob neblina."
+
+		var lb := Kit.fila(v, Tema.E2)
+		if not aqui:
 			_botao(lb, "Viajar", func():
 				state["local"] = reino["id"]
 				Jogo.salvar(state)
-				atualizar())
-		else:
-			_par(lb, "Você está aqui")
+				atualizar(), "fantasma")
 		var alvo_id: String = reino["id"]
 		# JURAR LEALDADE: a saída para quem começa pobre diante de reinos ricos
 		if not Vassalagem.e_vassalo(state) and Vassalagem.pode_jurar(state, alvo_id)["ok"]:
@@ -721,170 +874,224 @@ func _aba_mapa(c: Container) -> void:
 				Jogo.salvar(state)
 				atualizar())
 		if not Intel.tem(state, alvo_id):
-			# a neblina só levanta com gente na estrada: os dois ícones ao lado
-			# do botão dizem de onde vem o número que hoje está "???"
-			var ic_neb := Icones.imagem("neblina", 30)
-			if ic_neb != null:
-				lb.add_child(ic_neb)
-			var ic_esp := Icones.imagem("espiao", 30)
-			if ic_esp != null:
-				lb.add_child(ic_esp)
-			_botao(lb, "Espionar (80 ouro)", func():
+			# Aqui havia dois ícones soltos — a neblina e o espião — plantados
+			# entre dois botões, em 30px, sem rótulo e sem moldura. Na imagem
+			# renderizada eles liam como sujeira: duas manchas de 30px no meio
+			# de uma fila de botões. A informação que eles queriam dar ("o
+			# ??? sai daqui") está na DICA do botão, que é onde ela é lida.
+			_botao(lb, "Espionar  ·  80 ouro", func():
 				var r: Dictionary = Intriga.espionar(state, alvo_id)
 				if int(r.get("prender", 0)) > 0:
 					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
 				Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
-				atualizar())
+				atualizar(), "fantasma").tooltip_text = \
+					"Um espião na estrada levanta a neblina sobre a força deste reino"
 		if state["jogador"]["rei_de"] == "":
 			var tem_cb: bool = state["casus_belli"].has(reino["id"])
-			_botao(lb, "Conquistar" if tem_cb else "Atacar SEM casus belli", func():
+			# atacar sem casus belli é a decisão irreversível da tela: ela
+			# ganha a variante de perigo, e é a única aqui que a tem
+			_botao(lb, "Conquistar" if tem_cb else "Atacar sem casus belli", func():
 				var rel_batalha: Dictionary = Intriga.declarar_guerra(state, reino["id"], Jogo.log_para(state))
 				Jogo.salvar(state)
-				_modal_batalha(rel_batalha))
+				_modal_batalha(rel_batalha), "" if tem_cb else "perigo")
 
+## O MERCADO — a tela que mais precisava de uma tabela e não tinha nenhuma.
+##
+## Cada linha era a string "Trigo — 10 · carga: 0" jogada num Label que
+## expandia até empurrar os botões para a direita: 481px contíguos de vazio
+## no meio de uma linha de 910, e o preço de cada mercadoria começando num x
+## diferente, porque o nome da mercadoria tem comprimento diferente. Um
+## livro-razão em que a coluna de preço não é uma coluna.
+##
+## Agora é uma tabela de verdade: ícone, nome, PREÇO alinhado à direita na
+## monoespaçada, carga, valor da carga, e as duas ações. Em 34px de altura
+## por linha as dez mercadorias cabem na tela — antes cabiam quatro.
 func _aba_mercado(c: Container) -> void:
 	var reino := _reino_local()
-	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"])
 	var em_guerra := false
 	for g in state["guerras"]:
 		if g["a"] == state["local"] or g["b"] == state["local"]:
 			em_guerra = true
+	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"],
+		"Compre onde há fartura, venda onde há guerra e fome.")
 	if em_guerra:
-		_par(c, "Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.")
+		var av := Kit.card(c, Tema.ATENCAO)
+		Kit.texto(av, "Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.",
+			Tema.ATENCAO, Tema.MICRO)
+
+	var tab := Kit.tabela(c, [
+		{"t": "", "w": 26, "a": Kit.CENTRO},
+		{"t": "Mercadoria", "w": 0},
+		{"t": "Preço", "w": 76, "a": Kit.DIR},
+		{"t": "Carga", "w": 64, "a": Kit.DIR},
+		{"t": "Valor", "w": 76, "a": Kit.DIR},
+		{"t": "", "w": 190, "a": Kit.DIR},
+	])
 	for g_id in Dados.MERCADORIAS:
-		var h := _card(c)
 		var preco := Economia.preco_de(state, state["local"], g_id)
 		var carga: int = int(state["carga"].get(g_id, 0))
-		# ícone Pro da mercadoria — sem o PNG, o card segue só com texto
-		var ic := Icones.imagem(g_id, 28)
+		# a linha só se marca quando há algo em carga: é o que faz o jogador
+		# achar as suas mercadorias no meio das dez sem ler a coluna inteira
+		var cel := Kit.linha(tab, Tema.ACENTO_FUNDO if carga > 0 else null)
+		var ic := Icones.imagem(g_id, 20)
 		if ic != null:
-			h.add_child(ic)
-		var l := Label.new()
-		l.text = "%s — %d · carga: %d" % [Dados.MERCADORIAS[g_id]["nome"], preco, carga]
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(l)
-		_botao(h, "Comprar 5", func():
+			ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			cel[0].add_child(ic)
+		Kit.texto(cel[1], str(Dados.MERCADORIAS[g_id]["nome"]))
+		Kit.numero(cel[2], str(preco), Tema.ACENTO)
+		Kit.numero(cel[3], str(carga), Tema.TEXTO if carga > 0 else Tema.TEXTO_3)
+		Kit.numero(cel[4], str(carga * preco),
+			Tema.TEXTO_2 if carga > 0 else Tema.TEXTO_3)
+		Kit.botao_mini(cel[5], "Comprar 5", func():
 			var r: Dictionary = Economia.comprar(state, state["local"], g_id, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar())
-		var b_vender := _botao(h, "Vender 5", func():
+			atualizar(), "fantasma", 88)
+		var b_vender := Kit.botao_mini(cel[5], "Vender 5", func():
 			var r: Dictionary = Economia.vender(state, state["local"], g_id, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar())
+			atualizar(), "fantasma", 88)
 		b_vender.disabled = carga < 5
-	_par(c, "Compre onde há fartura, venda onde há guerra e fome.")
 
 func _aba_taverna(c: Container) -> void:
-	_titulo_secao(c, "Taverna do Javali Manco — Mural de Contratos")
+	_titulo_secao(c, "Taverna do Javali Manco", "Mural de contratos")
+	# O pagamento e o renome eram dois números no fim de uma frase de três
+	# linhas, e a "dificuldade" era uma string repetida que saía VAZIA na
+	# tela (`"".repeat(n)` repete nada n vezes). Aqui o pagamento é coluna, o
+	# renome é coluna, e a dificuldade é um medidor — que era o que aquela
+	# repetição queria ser.
+	var tab := Kit.tabela(c, [
+		{"t": "Contrato", "w": 0},
+		{"t": "Dificuldade", "w": 96, "a": Kit.CENTRO},
+		{"t": "Paga", "w": 76, "a": Kit.DIR},
+		{"t": "Renome", "w": 76, "a": Kit.DIR},
+		{"t": "", "w": 140, "a": Kit.DIR},
+	])
 	for ct in state["contratos"]:
-		var h := _card(c)
-		var v := VBoxContainer.new()
-		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(v)
-		_par(v, "%s — para %s%s\n%s\n%d · +%d · dificuldade %s" % [
-			ct["nome"], ct["contratante"],
-			("(alvo: %s)" % ct["alvo"]) if ct["alvo"] != "" else "",
-			ct["desc"], ct["pagamento"], ct["renome"], "".repeat(int(ct["forca"]))])
-		_botao(v, "Aceitar e executar", func():
+		var cel := Kit.linha(tab)
+		var v := Kit.coluna(cel[0], 0)
+		var l1 := Kit.fila(v, Tema.E3)
+		Kit.texto(l1, str(ct["nome"]))
+		Kit.texto(l1, "para %s" % str(ct["contratante"]), Tema.TEXTO_3, Tema.MICRO)
+		if str(ct["alvo"]) != "":
+			Kit.selo(l1, "alvo: %s" % str(ct["alvo"]), Tema.TEXTO_2, Tema.ELEVADO)
+		Kit.nota(v, str(ct["desc"]))
+		var forca: int = int(ct["forca"])
+		Kit.medidor(cel[1], float(forca), 10.0, 80, 5,
+			Tema.PERIGO if forca >= 7 else (Tema.ATENCAO if forca >= 4 else Tema.GANHO))
+		Kit.numero(cel[2], str(ct["pagamento"]), Tema.ACENTO)
+		Kit.numero(cel[3], "+%d" % int(ct["renome"]), Tema.GANHO)
+		Kit.botao_mini(cel[4], "Aceitar e executar", func():
 			if Combate.total_homens(state["jogador"]["tropas"]) == 0:
 				_aviso("Você não tem tropas! Recrute no quartel.")
 				return
 			var rel_batalha: Dictionary = Contratos.executar(state, ct, Jogo.log_para(state))
 			state["contratos"] = state["contratos"].filter(func(x): return x["uid"] != ct["uid"])
 			Jogo.salvar(state)
-			_modal_batalha(rel_batalha))
+			_modal_batalha(rel_batalha), "fantasma", 136)
 	# ---- serviços: informação vira dinheiro ----
 	# taverna.gd já resolvia rumor, rota e informante; faltava a porta de
 	# entrada. Cada serviço tem o rosto de quem o vende — é o que separa
 	# "clicar num botão" de "pagar um homem por uma informação".
-	_titulo_secao(c, "Serviços do balcão")
-	var h_rumor := _card(c)
-	_arte(h_rumor, Retratos.textura("taverneiro"), 48)
-	var l_rumor := Label.new()
-	l_rumor.text = "Rumor de mercado (%d) — um choque de preço antes de ele acontecer.\nNem todo boato é verdade." % Taverna.PRECO_RUMOR
-	l_rumor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l_rumor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h_rumor.add_child(l_rumor)
-	_botao(h_rumor, "Ouvir", func():
-		var r: Dictionary = Taverna.comprar_rumor(state)
-		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
-		_aviso(r["msg"])
-		Jogo.salvar(state)
-		atualizar())
-
-	var h_rota := _card(c)
-	_arte(h_rota, Retratos.sprite_gerado("cartografo"), 48)
-	var l_rota := Label.new()
-	l_rota.text = "Rota comercial (%d) — onde comprar barato e onde vender caro, hoje." % Taverna.PRECO_ROTA
-	l_rota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l_rota.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h_rota.add_child(l_rota)
-	_botao(h_rota, "Comprar mapa", func():
-		var r: Dictionary = Taverna.comprar_rota(state)
-		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
-		_aviso(r["msg"])
-		Jogo.salvar(state)
-		atualizar())
-
-	var h_inf := _card(c)
-	_arte(h_inf, Retratos.sprite_gerado("informante"), 48)
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Serviços do balcão")
 	var ouvidos: Array = state.get("informantes", [])
-	var l_inf := Label.new()
-	l_inf.text = "Informante em %s (%d + 25/mês) — notícia da corte todo mês.%s" % [
-		_reino_local()["nome"], Taverna.PRECO_INFORMANTE,
-		("\nOuvidos ativos: %d" % ouvidos.size()) if not ouvidos.is_empty() else ""]
-	l_inf.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l_inf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h_inf.add_child(l_inf)
-	if ouvidos.has(state["local"]):
-		_par(h_inf, "já contratado")
-	else:
-		_botao(h_inf, "Contratar", func():
+	# os três serviços têm a MESMA forma — rosto, o que é, quanto custa,
+	# botão — então são três chamadas do mesmo molde em vez de três blocos
+	# escritos à mão com larguras diferentes, que era o estado anterior
+	_servico(c, Retratos.textura("taverneiro"), "Rumor de mercado",
+		"Um choque de preço antes de ele acontecer. Nem todo boato é verdade.",
+		Taverna.PRECO_RUMOR, "Ouvir", func():
+			var r: Dictionary = Taverna.comprar_rumor(state)
+			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+			_aviso(r["msg"])
+			Jogo.salvar(state)
+			atualizar())
+	_servico(c, Retratos.sprite_gerado("cartografo"), "Rota comercial",
+		"Onde comprar barato e onde vender caro, hoje.",
+		Taverna.PRECO_ROTA, "Comprar mapa", func():
+			var r: Dictionary = Taverna.comprar_rota(state)
+			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+			_aviso(r["msg"])
+			Jogo.salvar(state)
+			atualizar())
+	_servico(c, Retratos.sprite_gerado("informante"),
+		"Informante em %s" % _reino_local()["nome"],
+		"Notícia da corte todo mês, por mais 25 de soldo.%s" % (
+			(" Ouvidos ativos: %d." % ouvidos.size()) if not ouvidos.is_empty() else ""),
+		Taverna.PRECO_INFORMANTE,
+		"" if ouvidos.has(state["local"]) else "Contratar", func():
 			var r: Dictionary = Taverna.contratar_informante(state, str(state["local"]))
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
 			atualizar())
 
-	_titulo_secao(c, "Fregueses")
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Fregueses")
 	for npc in NPCS_TAVERNA:
-		_card_npc(c, npc)
+		_card_npc(c, npc, false)
+
+## Um serviço do balcão: rosto de quem vende, o que é, o preço e o botão.
+## `rotulo_botao` vazio significa "já contratado" — o card fica, o botão não.
+func _servico(c: Container, rosto: Texture2D, titulo: String, desc: String,
+		preco: int, rotulo_botao: String, cb: Callable) -> void:
+	var h := _card(c)
+	Kit.retrato(h, rosto, 32)
+	var v := Kit.coluna(h, 0)
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Kit.texto(v, titulo)
+	Kit.nota(v, desc)
+	var acao := Kit.fila(h, Tema.E4)
+	acao.size_flags_horizontal = Control.SIZE_SHRINK_END
+	acao.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Kit.icone_valor(acao, "moedas", str(preco), Tema.ACENTO)
+	if rotulo_botao == "":
+		Kit.selo(acao, "já contratado", Tema.GANHO, Tema.GANHO_FUNDO)
+	else:
+		Kit.botao_mini(acao, rotulo_botao, cb, "fantasma", 118)
 
 func _aba_corte(c: Container) -> void:
 	var reino := _reino_local()
-	_titulo_secao(c, "Corte de %s" % reino["capital"])
+	_titulo_secao(c, "Corte de %s" % reino["capital"],
+		"Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
 	# escada de acesso (Parte 2): o guarda do portão é sempre o primeiro
 	# contato — o rei só atende em pessoa quando a relação (e, no Neutro, o
 	# título) já foi conquistada. quem_atende() devolve o card certo pronto.
 	_card_npc(c, Dialogo.quem_atende(state, reino["id"]))
-	_par(c, "Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
 
 	# ---- a SUA corte: gente que nasceu durante a partida ----
-	# Nenhum destes tem PNG próprio — cada retrato sai da base genérica de
-	# nobre recolorida na cor do ofício. É aqui que o retrato dinâmico prova
-	# que serve: a lista muda a cada saga e nunca fica com buraco.
+	# Cada retrato é gerado a partir do NOME do notável, então a lista muda a
+	# cada saga e nunca fica com buraco — e nunca fica com sete cópias do
+	# mesmo rosto, que era o efeito do caixote cinza.
 	var res_cid: Dictionary = Cidadaos.resumo(state)
 	if int(res_cid["total"]) > 0:
-		_titulo_secao(c, "Sua Corte — %d notáveis, %d jurados" % [
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Sua Corte — %d notáveis, %d jurados" % [
 			int(res_cid["total"]), int(res_cid["lordes"])])
+		var tab := Kit.tabela(c, [
+			{"t": "", "w": 34, "a": Kit.CENTRO},
+			{"t": "", "w": 0},
+			{"t": "", "w": 130, "a": Kit.DIR},
+			{"t": "", "w": 150, "a": Kit.DIR},
+		])
 		for n in Cidadaos.lista(state):
-			var hn := _card(c)
-			_arte(hn, Retratos.textura_cidadao(n), 56)
-			var vn := VBoxContainer.new()
-			vn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			hn.add_child(vn)
-			var selo_n := ""
+			var preso: bool = bool(n.get("capturado", false))
+			var cel := Kit.linha(tab, Tema.PERIGO if preso else null)
+			Kit.retrato(cel[0], Retratos.textura_cidadao(n, true), 32)
+			var vn := Kit.coluna(cel[1], 0)
+			var l_nome := Kit.fila(vn, Tema.E3)
+			Kit.texto(l_nome, str(n["nome"]))
+			Kit.texto(l_nome, str(n["oficio"]), Tema.TEXTO_3, Tema.MICRO)
 			if bool(n.get("lorde", false)):
-				selo_n = " seu lorde"
-			if bool(n.get("capturado", false)):
-				selo_n += " a ferros em terra inimiga"
-			_par(vn, "%s, %s%s" % [n["nome"], str(n["oficio"]), selo_n])
+				Kit.selo(l_nome, "seu lorde", Tema.ACENTO, Tema.ACENTO_FUNDO)
+			if preso:
+				Kit.selo(l_nome, "a ferros", Color("e8917a"), Tema.PERIGO_FUNDO)
 			# riqueza e lealdade são status OCULTOS: o jogador lê a impressão,
 			# não o número, exatamente como leria um vassalo de verdade
 			var lealdade: int = int(n.get("lealdade", 50))
@@ -893,168 +1100,256 @@ func _aba_corte(c: Container) -> void:
 				leitura = "evita o seu olhar nas assembleias"
 			elif lealdade < 60:
 				leitura = "cumpre o que deve, nada além"
-			var abastado := "· casa próspera" if int(n.get("riqueza", 0)) >= 280 else ""
-			_par(vn, " · %s%s" % [leitura, abastado])
-			if bool(n.get("capturado", false)):
+			Kit.nota(vn, leitura)
+			if int(n.get("riqueza", 0)) >= 280:
+				Kit.texto(cel[2], "casa próspera", Tema.TEXTO_3, Tema.MICRO)
+			if preso:
 				var nome_preso: String = str(n["nome"])
-				_botao(vn, "Pagar resgate (300)", func():
+				Kit.botao_mini(cel[3], "Pagar resgate · 300", func():
 					var r: Dictionary = Comandantes.resgatar(state, nome_preso)
 					Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 					_aviso(r["msg"])
 					Jogo.salvar(state)
-					atualizar())
+					atualizar(), "fantasma", 146)
 
-	var h := HBoxContainer.new()
-	c.add_child(h)
-	_botao(h, "IA Local (llama.cpp): " + ("configurada" if Llm.url() != "" else "desligada"), _modal_llm)
+	Kit.respiro(c, Tema.E2)
+	var h := Kit.fila(c, Tema.E3)
+	_botao(h, "IA Local (llama.cpp): " + ("configurada" if Llm.url() != "" else "desligada"),
+		_modal_llm, "fantasma")
 
-func _card_npc(c: Container, npc: Dictionary) -> void:
+## O card de um NPC com quem se pode CONVERSAR.
+##
+## O botão "Conversar" ficava numa VBox que expandia na largura toda: 830px
+## de botão. Aqui ele volta ao tamanho do seu texto e vai para a direita do
+## card, onde uma ação de linha pertence — e a relação, que era um número
+## entre parênteses, vira medidor.
+## `destaque` decide se o "Conversar" é o botão primário do card.
+##
+## A Corte tem UM interlocutor — quem atende no portão, ou o rei — e ali o
+## primário é o certo: é o verbo pelo qual a aba existe. A Taverna tem TRÊS
+## fregueses em lista, e três botões de latão empilhados não hierarquizam
+## nada: eles só gastam o latão, que é o recurso mais escasso da paleta.
+func _card_npc(c: Container, npc: Dictionary, destaque: bool = true) -> void:
 	var h := _card(c)
-	_retrato(h, npc["id"])
-	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h.add_child(v)
+	_retrato(h, npc["id"], 64)
+	var v := Kit.coluna(h, Tema.E2)
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var nome := Kit.texto(v, str(npc["nome"]), Tema.TEXTO, Tema.CORPO_G)
+	var f := Tema.fonte_forte()
+	if f != null:
+		nome.add_theme_font_override("font", f)
 	var rel: int = state["tags"].get(npc["id"], {"relacao": 0})["relacao"]
-	_par(v, "%s · (%s %d)" % [npc["nome"], Dialogo.nome_relacao(rel), rel])
-	_botao(v, "Conversar", func(): abrir_conversa(npc))
+	var lr := Kit.fila(v, Tema.E3)
+	Kit.medidor(lr, float(rel + 100), 200.0, 110, 5,
+		Tema.PERIGO if rel <= -25 else (Tema.GANHO if rel >= 25 else Tema.TEXTO_3))
+	Kit.texto(lr, "%s (%d)" % [Dialogo.nome_relacao(rel), rel], Tema.TEXTO_2, Tema.MICRO)
+	var acao := Kit.fila(h, Tema.E3)
+	acao.size_flags_horizontal = Control.SIZE_SHRINK_END
+	acao.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_botao(acao, "Conversar", func(): abrir_conversa(npc),
+		"primario" if destaque else "")
 
 func _aba_exercito(c: Container) -> void:
 	var j: Dictionary = state["jogador"]
-	_titulo_secao(c, "Quartel")
 	var p := Combate.poder(j["tropas"], j["equip"])
+	var moral: int = Economia.moral(state)
 	# "Manutenção —" sem número acontece no primeiro mês, antes de a economia
 	# rodar uma vez. Melhor dizer isso do que mostrar um travessão solto.
 	var manut = j.get("ultima_manut", null)
-	_par(c, "Ataque %d · Defesa %d · %d homens · Equipamento %d/3 · %s" % [
-		roundi(p["atq"]), roundi(p["def"]), p["homens"], j["equip"],
-		("último soldo pago: %d ouro" % int(manut)) if manut != null
-			else "nenhum soldo pago ainda"])
-	_par(c, "População comprometida: %d de %d" %
-		[Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state)])
-	# ---- manutenção com ícones de economia ----
-	# O upkeep é a mecânica que mais mata exército, e um número no meio de texto
-	# passa batido. Os três ícones dão a leitura instantânea de EM QUE recurso
-	# o exército está sangrando.
-	# desconto do ferreiro entra aqui também: sem isto, o número mostrado na
-	# tela nunca bateria com o que Economia.tick_exercito realmente cobra
-	# no fim do mês — a Corte teria efeito invisível até o soldo cair
-	var up: Dictionary = Economia.upkeep_de(j["tropas"], 1.0, Cidadaos.oficio_ativo(state, "ferreiro"))
-	var hu := _card(c)
+	_titulo_secao(c, "Quartel",
+		("Último soldo pago: %d de ouro." % int(manut)) if manut != null
+			else "Nenhum soldo pago ainda.")
+
+	# ---- o painel de estado do exército ----
+	# Era uma frase de sete números ("Ataque 3050 · Defesa 5300 · 98 homens
+	# · Equipamento 0/3 · nenhum soldo pago ainda") seguida de outra frase e
+	# de um card com quatro ícones. Ataque e Defesa são os dois números pelos
+	# quais o jogador decide marchar ou não, e liam com o mesmo peso do resto.
+	#
+	# desconto do ferreiro entra no upkeep: sem isto, o número mostrado na
+	# tela nunca bateria com o que Economia.tick_exercito realmente cobra no
+	# fim do mês — a Corte teria efeito invisível até o soldo cair.
+	var up: Dictionary = Economia.upkeep_de(j["tropas"], 1.0,
+		Cidadaos.oficio_ativo(state, "ferreiro"))
+	var painel := Kit.card(c)
+	var topo := Kit.fila(painel, Tema.E6)
+	for par_p in [["Ataque", roundi(p["atq"])], ["Defesa", roundi(p["def"])],
+			["Homens", p["homens"]], ["Equipamento", j["equip"]]]:
+		var bloco := VBoxContainer.new()
+		bloco.add_theme_constant_override("separation", 0)
+		topo.add_child(bloco)
+		var rot := Label.new()
+		rot.text = str(par_p[0]).to_upper()
+		rot.add_theme_font_size_override("font_size", Tema.MINI)
+		rot.add_theme_color_override("font_color", Tema.TEXTO_3)
+		bloco.add_child(rot)
+		Kit.numero(bloco, ("%d/3" % int(par_p[1])) if par_p[0] == "Equipamento"
+			else str(par_p[1]), Tema.TEXTO, Tema.CORPO_G)
+	# a manutenção do mês, à direita: é o que o exército CUSTA, e custo fica
+	# separado de força para as duas leituras não se misturarem
+	var custo := Kit.fila(topo, Tema.E4)
+	custo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	custo.alignment = BoxContainer.ALIGNMENT_END
+	custo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	for par_up in [["moedas", int(up["ouro"])], ["trigo", int(up["comida"])],
 			["madeira", int(up["madeira"])]]:
-		var ic_up := Icones.imagem(str(par_up[0]), 26)
-		if ic_up != null:
-			hu.add_child(ic_up)
-		var l_up := Label.new()
-		l_up.text = "%d/mês" % int(par_up[1])
-		hu.add_child(l_up)
-	var ic_moral := Icones.imagem("moral", 26)
-	if ic_moral != null:
-		hu.add_child(ic_moral)
-	var l_moral := Label.new()
-	l_moral.text = "Moral %d/100" % Economia.moral(state)
-	l_moral.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hu.add_child(l_moral)
-	if Economia.moral(state) <= 35:
-		_par(c, "Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.")
+		Kit.icone_valor(custo, str(par_up[0]), "%d" % int(par_up[1]), Tema.TEXTO_2)
+	Kit.nota(custo, "por mês")
+
+	var medidores := Kit.fila(painel, Tema.E6)
+	Kit.medidor_rotulado(medidores, "Moral do exército", moral, 100, "/100")
+	Kit.medidor_rotulado(medidores, "População comprometida",
+		Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state),
+		" de %d" % Recrutamento.pop_maxima(state), Tema.TEXTO_2)
+	if moral <= 35:
+		Kit.texto(Kit.card(c, Tema.PERIGO),
+			"Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.",
+			Tema.PERIGO)
+
+	# ---- as unidades, em tabela ----
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Recrutamento")
+	var tab := Kit.tabela(c, [
+		{"t": "", "w": 34, "a": Kit.CENTRO},
+		{"t": "Unidade", "w": 0},
+		{"t": "Tem", "w": 60, "a": Kit.DIR},
+		{"t": "Custo", "w": 64, "a": Kit.DIR},
+		{"t": "Manut.", "w": 64, "a": Kit.DIR},
+		{"t": "Treino", "w": 70, "a": Kit.DIR},
+		{"t": "", "w": 96, "a": Kit.DIR},
+	])
 	for tipo in Dados.TROPAS:
-		var h := _card(c)
+		var n_tem: int = int(j["tropas"].get(tipo, 0))
+		var cel := Kit.linha(tab, Tema.ACENTO_FUNDO if n_tem > 0 else null)
 		# a arte da unidade vem por cálculo: "tropa_" + a chave de Dados.TROPAS.
 		# Unidade nova no catálogo já nasce com retrato assim que o PNG existir,
 		# sem tocar nesta linha.
-		_arte(h, Retratos.textura_tropa(tipo), 52)
-		var l := Label.new()
-		l.text = "%s — %d · custo %d · manut. %d · treino %ds" % [
-			Dados.TROPAS[tipo]["nome"], j["tropas"].get(tipo, 0),
-			Dados.TROPAS[tipo]["custo"], Dados.TROPAS[tipo]["manut"],
-			Recrutamento.tempo_de(state, tipo)]
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(l)
-		_botao(h, "Recrutar 5", func():
+		Kit.retrato(cel[0], Retratos.textura_tropa(tipo), 32)
+		Kit.texto(cel[1], str(Dados.TROPAS[tipo]["nome"]))
+		Kit.numero(cel[2], str(n_tem), Tema.TEXTO if n_tem > 0 else Tema.TEXTO_3)
+		Kit.numero(cel[3], str(Dados.TROPAS[tipo]["custo"]), Tema.ACENTO)
+		Kit.numero(cel[4], str(Dados.TROPAS[tipo]["manut"]), Tema.TEXTO_2)
+		Kit.numero(cel[5], "%ds" % Recrutamento.tempo_de(state, tipo), Tema.TEXTO_2)
+		Kit.botao_mini(cel[6], "Recrutar 5", func():
 			var r: Dictionary = Jogo.recrutar(state, tipo, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar())
+			atualizar(), "fantasma", 92)
 
 	# ---- fila do quartel ----
 	# Sem isto o jogador clica em "Recrutar" e não vê nada mudar, porque a
 	# tropa agora leva tempo. A fila É o feedback.
 	var fila: Array = Recrutamento.fila(state)
 	if not fila.is_empty():
-		_titulo_secao(c, "Quartel — %s até o último recruta"
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Na fila do quartel — %s até o último recruta"
 			% _mmss(Recrutamento.minutos_restantes(state)))
+		var tab_f := Kit.tabela(c, [
+			{"t": "", "w": 24, "a": Kit.CENTRO},
+			{"t": "", "w": 0},
+			{"t": "", "w": 90, "a": Kit.DIR},
+			{"t": "", "w": 86, "a": Kit.DIR},
+		])
 		for i in fila.size():
 			var item: Dictionary = fila[i]
-			var hf2 := _card(c)
-			var ic_amp := Icones.imagem("ampulheta", 32)
+			var cel_f := Kit.linha(tab_f)
+			var ic_amp := Icones.imagem("ampulheta", 18)
 			if ic_amp != null:
-				hf2.add_child(ic_amp)
-			var lf := Label.new()
-			lf.text = "%s ×%d — próximo em %s" % [
-				Dados.TROPAS[item["tipo"]]["nome"], item["restantes"],
-				_mmss(int(item["restante"]))]
-			lf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			hf2.add_child(lf)
+				ic_amp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				cel_f[0].add_child(ic_amp)
+			Kit.texto(cel_f[1], "%s ×%d" % [
+				Dados.TROPAS[item["tipo"]]["nome"], item["restantes"]])
+			Kit.numero(cel_f[2], _mmss(int(item["restante"])), Tema.ATENCAO)
 			var idx := i
-			_botao(hf2, "Cancelar", func():
+			Kit.botao_mini(cel_f[3], "Cancelar", func():
 				var r: Dictionary = Recrutamento.cancelar(state, idx)
 				Sfx.tocar(self, "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
-				atualizar())
+				atualizar(), "perigo", 80)
 	# ---- exércitos na estrada ----
 	# O jogador precisa VER que mandou gente e quanto falta para o impacto,
 	# senão o exército some do inventário e parece bug.
 	var transito: Array = Marchas.em_transito(state)
 	if not transito.is_empty():
-		_titulo_secao(c, "Exércitos em marcha")
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Exércitos em marcha")
 		for mt in transito:
-			var hm := _card(c)
+			# a coluna em marcha é o único item da aba que muda sozinho com o
+			# relógio; a barra de acento na esquerda é o que a separa das
+			# listas estáticas acima sem gastar um cabeçalho por item
+			var sitiando: bool = mt["fase"] == "cerco"
+			var hm := _card(c, Tema.ATENCAO if sitiando else Tema.ACENTO_FUNDO)
 			# acampamento de cerco na linha do exército sitiando: o cerco dura
 			# meses fora da tela, e a arte é o que faz ele existir para o jogador
-			if mt["fase"] == "cerco":
+			if sitiando:
 				_arte(hm, Retratos.ilustracao("cerco"), 64)
-			var lm := Label.new()
+			var vm := Kit.coluna(hm, Tema.E2)
+			vm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			var rumo: String = ""
 			match mt["fase"]:
 				"ida": rumo = "→ %s" % Rotas.nome_do(state, mt["alvo"])
 				"cerco": rumo = "sitiando %s" % Rotas.nome_do(state, mt["alvo"])
 				_: rumo = "← voltando de %s" % Rotas.nome_do(state, mt["alvo"])
-			var carga := ""
-			for g in mt["carga"]:
-				carga += "· %s %d" % [g, int(mt["carga"][g])]
-			if mt["fase"] == "cerco":
-				# o cerco tem que ser VISÍVEL fase a fase: é meio jogo acontecendo
-				# fora da tela, e sem isso o jogador só vê recursos sumindo
+
+			var l1 := Kit.fila(vm, Tema.E3)
+			Kit.icone_valor(l1, "tropa", "%d" % int(mt["homens"]), Tema.TEXTO)
+			Kit.texto(l1, rumo, Tema.TEXTO, Tema.CORPO)
+			if sitiando:
 				var pg: Dictionary = mt.get("cerco", {})
-				lm.text = "%d homens %s — fase %d de %d · moral %d/100 · gasto %d%d%d%s" % [
-					mt["homens"], rumo, int(pg.get("fase", 0)), int(pg.get("de", 6)),
-					int(pg.get("moral", 0)), int(pg.get("gasto", {}).get("ouro", 0)),
-					int(pg.get("gasto", {}).get("comida", 0)),
-					int(pg.get("gasto", {}).get("madeira", 0)),
-					" · %d intervenções" % int(pg.get("reforcos", 0))
-						if int(pg.get("reforcos", 0)) > 0 else ""]
+				Kit.selo(l1, "fase %d de %d" % [
+					int(pg.get("fase", 0)), int(pg.get("de", 6))],
+					Tema.ATENCAO, Tema.ATENCAO_FUNDO)
+				var reforcos: int = int(pg.get("reforcos", 0))
+				if reforcos > 0:
+					Kit.selo(l1, "%d intervenção%s" % [reforcos,
+						"" if reforcos == 1 else "ões"], Tema.TEXTO_2, Tema.ELEVADO)
+				# O CUSTO DO CERCO, em três valores separados.
+				#
+				# Aqui morava um defeito de leitura que parecia um número: o
+				# formato era "gasto %d%d%d", e os três gastos saíam
+				# CONCATENADOS — ouro 128, comida 56 e madeira 56 apareciam na
+				# tela como "gasto 1285656". Não era um número grande: eram
+				# três números sem separador, e nenhum jogador teria como
+				# adivinhar isso. Cada um agora tem o seu ícone.
+				var l2 := Kit.fila(vm, Tema.E4)
+				var gasto: Dictionary = pg.get("gasto", {})
+				Kit.icone_valor(l2, "moedas", "%d" % int(gasto.get("ouro", 0)), Tema.ACENTO)
+				Kit.icone_valor(l2, "trigo", "%d" % int(gasto.get("comida", 0)), Tema.TEXTO_2)
+				Kit.icone_valor(l2, "madeira", "%d" % int(gasto.get("madeira", 0)), Tema.TEXTO_2)
+				Kit.nota(l2, "gasto no cerco")
+				var moral_c: int = int(pg.get("moral", 0))
+				Kit.medidor(l2, float(moral_c), 100.0, 90, 5)
+				Kit.texto(l2, "moral %d/100" % moral_c, Tema.TEXTO_3, Tema.MICRO)
 			else:
-				lm.text = "%d homens %s (%s) — chega em %s%s" % [
-					mt["homens"], rumo, mt["intencao"], mt["texto_faltam"], carga]
-			lm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			lm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			hm.add_child(lm)
+				Kit.selo(l1, str(mt["intencao"]), Tema.TEXTO_2, Tema.ELEVADO)
+				Kit.texto(l1, "chega em %s" % str(mt["texto_faltam"]),
+					Tema.TEXTO_2, Tema.MICRO)
+				if not mt["carga"].is_empty():
+					var l_carga := Kit.fila(vm, Tema.E4)
+					Kit.nota(l_carga, "carga:")
+					for g in mt["carga"]:
+						Kit.icone_valor(l_carga, str(g),
+							"%d" % int(mt["carga"][g]), Tema.TEXTO_2)
 			if mt["fase"] == "ida":
 				var mid: String = mt["id"]
-				_botao(hm, "Recuar", func():
+				var acao_m := Kit.fila(hm, Tema.E3)
+				acao_m.size_flags_horizontal = Control.SIZE_SHRINK_END
+				acao_m.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				Kit.botao_mini(acao_m, "Recuar", func():
 					var r: Dictionary = Marchas.recolher(state, mid)
 					_aviso(r["msg"])
 					Jogo.salvar(state)
-					atualizar())
+					atualizar(), "perigo", 84)
 
 	# ---- enviar exército ----
 	# A estimativa de marcha aparece ANTES de decidir: é a informação que
 	# transforma "atacar" numa escolha de logística, não num clique.
 	if Combate.total_homens(j["tropas"]) > 0:
-		_titulo_secao(c, "Enviar exército")
-		_par(c, "Metade das suas tropas parte. Saque volta rápido com carga; cerco quebra o inimigo.")
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Enviar exército")
+		Kit.nota(c, "Metade das suas tropas parte. Saque volta rápido com carga; cerco quebra o inimigo.")
 		# COMANDANTE: quem lidera muda o que a marcha faz — e é capturado se
 		# o exército for obliterado, então escolher é apostar duas coisas
 		var escolhido: String = str(j.get("comandante_escolhido", "senhor"))
@@ -1062,24 +1357,30 @@ func _aba_exercito(c: Container) -> void:
 		var atual_cmd: Dictionary = Comandantes.por_id(state, escolhido)
 		# o comandante tem CARA: se for um lorde que subiu de cidadão, é o mesmo
 		# retrato da Corte; se for contratado, é a arte do mercenário
-		_arte(hc, Retratos.textura_comandante(state, atual_cmd), 52)
-		var lc := Label.new()
+		_arte(hc, Retratos.textura_comandante(state, atual_cmd), 32)
 		var perfil: Dictionary = Comandantes.PERFIS.get(atual_cmd.get("perfil", "senhor"), {})
-		lc.text = "Comandante: %s — %s" % [
-			str(atual_cmd.get("nome", "—")), str(perfil.get("desc", ""))]
-		lc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		lc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		hc.add_child(lc)
+		var vc := Kit.coluna(hc, 0)
+		Kit.texto(vc, str(atual_cmd.get("nome", "—")), Tema.TEXTO)
+		Kit.nota(vc, str(perfil.get("desc", "")))
 		var opcoes: Array = Comandantes.disponiveis(state)
 		if opcoes.size() > 1:
-			_botao(hc, "Trocar", func():
+			Kit.botao_mini(hc, "Trocar comandante", func():
 				var i := 0
 				for k in opcoes.size():
 					if str(opcoes[k]["id"]) == escolhido:
 						i = k
 				state["jogador"]["comandante_escolhido"] = str(opcoes[(i + 1) % opcoes.size()]["id"])
 				Jogo.salvar(state)
-				atualizar())
+				atualizar(), "fantasma", 140)
+		# a estimativa de marcha aparece ANTES de decidir, e agora em COLUNA:
+		# dias e risco são o que se compara entre destinos, e comparar exige
+		# que os dois estejam no mesmo x de linha para linha
+		var tab_m := Kit.tabela(c, [
+			{"t": "Destino", "w": 0},
+			{"t": "Marcha", "w": 96, "a": Kit.DIR},
+			{"t": "Risco", "w": 80, "a": Kit.DIR},
+			{"t": "", "w": 150, "a": Kit.DIR},
+		])
 		for alvo in Rotas.todos_os_nos():
 			if alvo == "jogador":
 				continue
@@ -1091,158 +1392,289 @@ func _aba_exercito(c: Container) -> void:
 			if metade.is_empty():
 				break
 			var est: Dictionary = Marchas.estimar(state, alvo, metade)
-			var ha := _card(c)
-			var la := Label.new()
-			la.text = "%s — %s de marcha · risco %s\n%s" % [
-				Rotas.nome_do(state, alvo), Relogio.texto_dias(int(est["minutos"])),
-				est["risco"], est["trajeto"]]
-			la.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			la.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			ha.add_child(la)
+			var cel_m := Kit.linha(tab_m)
+			var v_alvo := Kit.coluna(cel_m[0], 0)
+			Kit.texto(v_alvo, Rotas.nome_do(state, alvo))
+			Kit.nota(v_alvo, str(est["trajeto"]))
+			Kit.numero(cel_m[1], Relogio.texto_dias(int(est["minutos"])), Tema.TEXTO_2)
+			Kit.texto(cel_m[2], str(est["risco"]),
+				Tema.PERIGO if str(est["risco"]).begins_with("alt") else Tema.TEXTO_2,
+				Tema.MICRO)
 			var destino: String = alvo
 			var envio: Dictionary = metade
 			var cmd_id: String = str(state["jogador"].get("comandante_escolhido", "senhor"))
-			_botao(ha, "Saque", func():
+			Kit.botao_mini(cel_m[3], "Saque", func():
 				var r: Dictionary = Marchas.despachar(state, destino, envio, "saque", cmd_id)
 				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
-				atualizar())
-			_botao(ha, "Cerco", func():
+				atualizar(), "fantasma", 68)
+			Kit.botao_mini(cel_m[3], "Cerco", func():
 				var r: Dictionary = Marchas.despachar(state, destino, envio, "cerco", cmd_id)
 				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
-				atualizar())
+				atualizar(), "fantasma", 68)
 
-	_titulo_secao(c, "Formação de batalha")
-	var hf := HBoxContainer.new()
-	c.add_child(hf)
+	# ---- formação e melhorias ----
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Formação de batalha")
+	Kit.nota(c, "Linha vence Cunha, Cunha vence Envolvimento, Envolvimento vence Linha.")
+	var hf := Kit.fila(c, Tema.E3)
 	for f_id in Dados.FORMACOES:
-		var b := _botao(hf, Dados.FORMACOES[f_id]["nome"] + ("*" if j["formacao"] == f_id else ""), func():
+		# a formação ATIVA é um botão primário e as outras são fantasma. O
+		# asterisco que marcava a escolhida ("Cunha*") é uma convenção de
+		# terminal: num jogo, o estado de um botão é o preenchimento dele.
+		Kit.botao(hf, str(Dados.FORMACOES[f_id]["nome"]), func():
 			j["formacao"] = f_id
 			Jogo.salvar(state)
-			atualizar())
-	_par(c, "Linha > Cunha > Envolvimento > Linha.")
-	_botao(c, "Melhorar equipamento (%d)" % (200 * (int(j["equip"]) + 1)), func():
+			atualizar(), "primario" if j["formacao"] == f_id else "fantasma", 130)
+	var melhorias := Kit.fila(c, Tema.E3)
+	_botao(melhorias, "Melhorar equipamento  ·  %d ouro"
+			% (200 * (int(j["equip"]) + 1)), func():
 		var r: Dictionary = Jogo.melhorar_equip(state)
 		_aviso(r["msg"])
 		Jogo.salvar(state)
 		atualizar())
-	_botao(c, "Contratar 2 guardas de elite (120)", func():
+	_botao(melhorias, "Contratar 2 guardas de elite  ·  120 ouro", func():
 		var r: Dictionary = Jogo.contratar_guardas(state, 2)
 		_aviso(r["msg"])
 		Jogo.salvar(state)
 		atualizar())
 
 func _aba_clas(c: Container) -> void:
-	_titulo_secao(c, "Clãs Mercenários")
-	_par(c, "Envie um mensageiro com sua oferta; a resposta chega na virada do mês. Oferta generosa convence.")
+	_titulo_secao(c, "Clãs Mercenários",
+		"Envie um mensageiro com sua oferta; a resposta chega na virada do mês. Oferta generosa convence.")
 	for cla in Clas.CLAS:
-		var h := _card(c)
-		_retrato(h, cla["id"])
-		var v := VBoxContainer.new()
-		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(v)
-		var rel: int = state["tags"].get(cla["id"], {"relacao": 0})["relacao"]
-		_par(v, "%s — %s (%s %d)\n%s · pede ~%d + %d/mês · exige %d" % [
-			cla["nome"], cla["lider"], Dialogo.nome_relacao(rel), rel,
-			_texto_contingente(cla["contingente"]), cla["preco_base"], cla["soldo"], cla["renome_min"]])
 		var contrato := Clas.ativo(state, cla["id"])
 		var pendente := false
 		for m in state["mensageiros"]:
 			if m["cla"] == cla["id"]:
 				pendente = true
+		var h := _card(c, Tema.GANHO if not contrato.is_empty() else null)
+		_retrato(h, cla["id"], 32)
+		var v := Kit.coluna(h, Tema.E2)
+		var rel: int = state["tags"].get(cla["id"], {"relacao": 0})["relacao"]
+
+		var l1 := Kit.fila(v, Tema.E3)
+		var nome_c := Kit.texto(l1, str(cla["nome"]), Tema.TEXTO, Tema.CORPO_G)
+		var f_c := Tema.fonte_forte()
+		if f_c != null:
+			nome_c.add_theme_font_override("font", f_c)
+		Kit.texto(l1, str(cla["lider"]), Tema.TEXTO_3, Tema.MICRO)
+		Kit.medidor(l1, float(rel + 100), 200.0, 70, 5,
+			Tema.PERIGO if rel <= -25 else (Tema.GANHO if rel >= 25 else Tema.TEXTO_3))
+		Kit.texto(l1, Dialogo.nome_relacao(rel), Tema.TEXTO_3, Tema.MICRO)
 		if not contrato.is_empty():
-			_par(v, "Sob contrato: restam %d meses." % contrato["meses"])
+			Kit.selo(l1, "sob contrato · %d meses" % int(contrato["meses"]),
+				Tema.GANHO, Tema.GANHO_FUNDO)
 		elif pendente:
-			_par(v, "Mensageiro na estrada...")
-		else:
-			var linha := HBoxContainer.new()
-			v.add_child(linha)
+			Kit.selo(l1, "mensageiro na estrada", Tema.ATENCAO, Tema.ATENCAO_FUNDO)
+
+		# o que o clã TRAZ e o que ele PEDE, separados: era tudo uma frase só
+		var l2 := Kit.fila(v, Tema.E4)
+		Kit.texto(l2, _texto_contingente(cla["contingente"]), Tema.TEXTO_2, Tema.MICRO)
+		Kit.icone_valor(l2, "moedas", "~%d" % int(cla["preco_base"]), Tema.ACENTO)
+		Kit.texto(l2, "+%d/mês" % int(cla["soldo"]), Tema.TEXTO_2, Tema.MICRO)
+		Kit.icone_valor(l2, "renome", "%d" % int(cla["renome_min"]),
+			Tema.PERIGO if int(state["jogador"]["renome"]) < int(cla["renome_min"])
+				else Tema.TEXTO_2)
+
+		if contrato.is_empty() and not pendente:
+			var linha := Kit.fila(h, Tema.E3)
+			linha.size_flags_horizontal = Control.SIZE_SHRINK_END
+			linha.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			var oferta := SpinBox.new()
 			oferta.min_value = 50
 			oferta.max_value = 5000
 			oferta.step = 50
 			oferta.value = cla["preco_base"]
+			oferta.custom_minimum_size = Vector2(96, 0)
 			linha.add_child(oferta)
-			_botao(linha, "Enviar mensageiro (10)", func():
+			Kit.botao_mini(linha, "Enviar mensageiro · 10", func():
 				var r: Dictionary = Clas.enviar_mensageiro(state, cla["id"], int(oferta.value))
 				Sfx.tocar(self, "pagina" if r["ok"] else "alerta")
 				_aviso(r["msg"])
 				Jogo.salvar(state)
-				atualizar())
-	_titulo_secao(c, "Cartas recebidas")
+				atualizar(), "fantasma", 168)
+
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Cartas recebidas")
 	if state["cartas"].is_empty():
-		_par(c, "Nenhuma carta sobre a mesa.")
+		Kit.nota(c, "Nenhuma carta sobre a mesa.")
 	for carta in state["cartas"].slice(0, 6):
-		_par(c, "— %s" % str(carta))
+		var hc := Kit.fila(_card(c), Tema.E3)
+		var ic_carta := Icones.imagem("carta", 18)
+		if ic_carta != null:
+			ic_carta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hc.add_child(ic_carta)
+		Kit.texto(hc, str(carta), Tema.TEXTO_2, Tema.MICRO)
 
 func _aba_intrigas(c: Container) -> void:
-	_titulo_secao(c, "Mesa de Intrigas")
+	_titulo_secao(c, "Mesa de Intrigas",
+		"Segredo é moeda: o que se sabe de um rei vale mais que o que se toma dele.")
 	if state["chantagem_pendente"] != null:
-		_par(c, "Chantagem em curso — escolha sua exigência:")
-		var hb := HBoxContainer.new()
-		c.add_child(hb)
-		for par in [["ouro", "Ouro"], ["casamento", "Casamento forçado"], ["casusbelli", "Casus Belli"]]:
+		var cb_card := Kit.card(c, Tema.ATENCAO)
+		Kit.texto(cb_card, "Chantagem em curso — escolha sua exigência:", Tema.ATENCAO)
+		var hb := Kit.fila(cb_card, Tema.E3)
+		for par in [["ouro", "Ouro"], ["casamento", "Casamento forçado"],
+				["casusbelli", "Casus Belli"]]:
 			_botao(hb, par[1], func():
 				Intriga.resolver_chantagem(state, par[0])
 				Jogo.salvar(state)
 				atualizar())
-	_titulo_secao(c, "Segredos que você guarda")
+
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Segredos que você guarda")
 	if state["segredos"].is_empty():
-		_par(c, "Nenhum. Mande espiões às cortes.")
+		Kit.nota(c, "Nenhum. Mande espiões às cortes.")
 	for seg in state["segredos"]:
-		_par(c, "%s%s" % [seg["reino"], " (usado)" if seg["usado"] else " — chantageie o rei em conversa"])
-	_titulo_secao(c, "Operações")
+		var hs := Kit.fila(_card(c, null if seg["usado"] else Tema.ACENTO_FUNDO), Tema.E3)
+		var ic_s := Icones.imagem("pergaminho", 18)
+		if ic_s != null:
+			ic_s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hs.add_child(ic_s)
+		Kit.texto(hs, str(seg["reino"]))
+		if seg["usado"]:
+			Kit.selo(hs, "usado", Tema.TEXTO_3, Tema.ELEVADO)
+		else:
+			Kit.texto(hs, "chantageie o rei em conversa", Tema.TEXTO_3, Tema.MICRO)
+
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Operações")
+	var tab := Kit.tabela(c, [
+		{"t": "", "w": 24, "a": Kit.CENTRO},
+		{"t": "", "w": 0},
+		{"t": "", "w": 260, "a": Kit.DIR},
+	])
 	for reino in state["reinos"]:
 		if state["jogador"]["rei_de"] == reino["id"]:
 			continue
-		var h := _card(c)
-		var ic_op := Icones.imagem("espiao", 34)
+		var tem_cb: bool = state["casus_belli"].has(reino["id"])
+		var cel := Kit.linha(tab)
+		var ic_op := Icones.imagem("espiao", 18)
 		if ic_op != null:
-			h.add_child(ic_op)
-		var l := Label.new()
-		l.text = reino["nome"] + ("CB" if state["casus_belli"].has(reino["id"]) else "")
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(l)
-		_botao(h, "Espionar (80 ouro)", func():
+			ic_op.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			cel[0].add_child(ic_op)
+		var l_nome := Kit.fila(cel[1], Tema.E3)
+		Kit.texto(l_nome, str(reino["nome"]))
+		if tem_cb:
+			# "CB" colado no nome do reino ("Império CentralCB") era uma
+			# abreviação que só quem escreveu o código entendia
+			Kit.selo(l_nome, "casus belli", Color("e8917a"), Tema.PERIGO_FUNDO)
+		Kit.botao_mini(cel[2], "Espionar · 80", func():
 			_aviso(Intriga.espionar(state, reino["id"])["msg"])
 			Jogo.salvar(state)
-			atualizar())
-		if not state["casus_belli"].has(reino["id"]):
-			_botao(h, "Forjar doc. (150)", func():
+			atualizar(), "fantasma", 104)
+		if not tem_cb:
+			Kit.botao_mini(cel[2], "Forjar documento · 150", func():
 				_aviso(Intriga.forjar_documento(state, reino["id"])["msg"])
 				Jogo.salvar(state)
-				atualizar())
+				atualizar(), "fantasma", 150)
+
+## Os quatro atributos, com ícone e medidor.
+##
+## Eram quatro números crus separados por espaço ("8 5 6 4"), sem rótulo
+## nenhum: o jogador tinha que saber de cor que o terceiro é gestão. Com
+## ícone e barra, a ficha do herdeiro é lida sem legenda.
+const ATRIBUTOS := [["forca", "Força"], ["carisma", "Carisma"],
+	["gestao", "Gestão"], ["intriga", "Intriga"]]
+
+func _ficha_atributos(c: Container, a: Dictionary) -> void:
+	var h := Kit.fila(c, Tema.E5)
+	for par in ATRIBUTOS:
+		var bloco := VBoxContainer.new()
+		bloco.add_theme_constant_override("separation", Tema.E1)
+		bloco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(bloco)
+		var topo := Kit.fila(bloco, Tema.E2)
+		var ic := Icones.imagem(str(par[0]), 16)
+		if ic != null:
+			ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			topo.add_child(ic)
+		var rot := Kit.texto(topo, str(par[1]), Tema.TEXTO_3, Tema.MINI)
+		rot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Kit.numero(topo, str(int(a[par[0]])), Tema.TEXTO, Tema.MICRO + 1)
+		Kit.medidor(bloco, float(int(a[par[0]])), 10.0, 0, 4, Tema.TEXTO_2)
 
 func _aba_familia(c: Container) -> void:
 	var f: Dictionary = state["familia"]
 	var j: Dictionary = state["jogador"]
 	_titulo_secao(c, "Sua Casa")
-	var a: Dictionary = j["atributos"]
-	_par(c, "%s, %d anos — %d %d %d %d%s" % [j["nome"], j["idade"],
-		a["forca"], a["carisma"], a["gestao"], a["intriga"],
-		" · · reputação de crueldade" if int(j.get("crueldade", 0)) >= 3 else ""])
-	if f["conjuge"] != null:
-		_par(c, "Casado com %s%s" % [f["conjuge"]["nome"],
-			" (união sob pressão)" if f["conjuge"]["forcado"] else ""])
-	else:
-		_par(c, "Solteiro. Casamento real exige 40+ de renome e boa relação — peça a mão em conversa na corte.")
-	_titulo_secao(c, "Herdeiros")
-	if f["filhos"].is_empty():
-		_par(c, "Nenhum filho. Sem herdeiro, sua morte é o fim da linhagem — e do jogo.")
-	for filho in f["filhos"]:
-		var fa: Dictionary = filho["atributos"]
-		_par(c, "%s, %d anos — %d %d %d %d%s%s" % [filho["nome"], filho["idade"],
-			fa["forca"], fa["carisma"], fa["gestao"], fa["intriga"],
-			" · · mimado (vassalos conspirarão!)" if filho.get("mimado", false) else "",
-			" · · herdeiro apto" if int(filho["idade"]) >= 16 else ""])
+	var colunas := Kit.duas_colunas(c, 0.5)
+	var esq: VBoxContainer = colunas[0]
+	var dir: VBoxContainer = colunas[1]
 
+	var meu := Kit.card(esq)
+	var l_eu := Kit.fila(meu, Tema.E3)
+	Kit.retrato(l_eu, Retratos.textura_cidadao(
+		{"nome": str(j["nome"]), "oficio": "senhor", "riqueza": 500,
+		"genero": "m", "lealdade": 60, "lorde": true}, true), 32)
+	var v_eu := Kit.coluna(l_eu, 0)
+	Kit.texto(v_eu, str(j["nome"]), Tema.TEXTO, Tema.CORPO_G)
+	Kit.nota(v_eu, "%d anos · %s" % [int(j["idade"]), Contratos.titulo(state)])
+	if int(j.get("crueldade", 0)) >= 3:
+		Kit.selo(l_eu, "reputação de crueldade", Color("e8917a"), Tema.PERIGO_FUNDO)
+	_ficha_atributos(meu, j["atributos"])
+
+	var casa := Kit.card(dir)
+	Kit.subsecao(casa, "Casamento")
+	if f["conjuge"] != null:
+		var lc := Kit.fila(casa, Tema.E3)
+		Kit.texto(lc, "Casado com %s" % str(f["conjuge"]["nome"]))
+		if f["conjuge"]["forcado"]:
+			Kit.selo(lc, "união sob pressão", Tema.ATENCAO, Tema.ATENCAO_FUNDO)
+	else:
+		Kit.texto(casa, "Solteiro.", Tema.TEXTO)
+		Kit.nota(casa, "Casamento real exige 40+ de renome e boa relação — peça a mão em conversa na corte.")
+
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Herdeiros")
+	if f["filhos"].is_empty():
+		Kit.texto(Kit.card(c, Tema.PERIGO),
+			"Nenhum filho. Sem herdeiro, sua morte é o fim da linhagem — e do jogo.",
+			Tema.PERIGO)
+	for filho in f["filhos"]:
+		var apto: bool = int(filho["idade"]) >= 16
+		var card := Kit.card(c, Tema.GANHO if apto else null)
+		var lf := Kit.fila(card, Tema.E3)
+		Kit.retrato(lf, Retratos.textura_cidadao(
+			{"nome": str(filho["nome"]), "oficio": "herdeiro", "riqueza": 400,
+			"genero": str(filho.get("genero", "m")), "lealdade": 60}, true), 32)
+		var vf := Kit.coluna(lf, 0)
+		Kit.texto(vf, str(filho["nome"]))
+		Kit.nota(vf, "%d anos" % int(filho["idade"]))
+		if apto:
+			Kit.selo(lf, "herdeiro apto", Tema.GANHO, Tema.GANHO_FUNDO)
+		if filho.get("mimado", false):
+			Kit.selo(lf, "mimado · vassalos conspirarão", Color("e8917a"),
+				Tema.PERIGO_FUNDO)
+		_ficha_atributos(card, filho["atributos"])
+
+## A CRÔNICA — o diário da casa.
+##
+## Era uma pilha de linhas idênticas ("Mar/A1 — texto"), sem separação entre
+## meses e sem nada que distinguisse "nasceu um herdeiro" de "o preço do
+## trigo subiu". Aqui a data vira uma coluna própria na monoespaçada — o que
+## faz as entradas do mesmo mês se agruparem sozinhas aos olhos — e a mais
+## recente vem PRIMEIRO, que é a que o jogador abriu a aba para ler.
 func _aba_cronica(c: Container) -> void:
-	_titulo_secao(c, "Crônica da Casa")
-	for entrada in state["cronica"]:
-		_par(c, "%s/A%d — %s" % [MESES[entrada["mes"] - 1].substr(0, 3), entrada["ano"], entrada["msg"]])
+	_titulo_secao(c, "Crônica da Casa", "A mais recente no alto.")
+	if state["cronica"].is_empty():
+		Kit.nota(c, "Nada digno de registro. Ainda.")
+		return
+	var tab := Kit.tabela(c, [
+		{"t": "", "w": 76},
+		{"t": "", "w": 0},
+	])
+	var entradas: Array = state["cronica"].duplicate()
+	entradas.reverse()
+	for entrada in entradas:
+		var cel := Kit.linha(tab)
+		Kit.numero(cel[0], "%s/A%d" % [
+			MESES[entrada["mes"] - 1].substr(0, 3), entrada["ano"]],
+			Tema.TEXTO_3, Tema.MICRO)
+		Kit.texto(cel[1], str(entrada["msg"]), Tema.TEXTO_2, Tema.MICRO)
 
 func _reino_local() -> Dictionary:
 	for r in state["reinos"]:
@@ -1251,54 +1683,133 @@ func _reino_local() -> Dictionary:
 	return state["reinos"][0]
 
 # ---------------- CONVERSA (ponderar + máquina de escrever) ----------------
+# ---------------- CONVERSA ----------------
+#
+# Esta é a peça central do jogo — o NPC entende texto livre e LEMBRA — e era
+# a tela mais vazia dele: um quadrado cinza de 96px, uma linha de texto, 380
+# pixels de nada, e um campo colado no rodapé. Medido na imagem renderizada:
+# 70% da altura era vazio.
+#
+# O que ela ganha aqui:
+#   · o RETRATO existe (é o mesmo gerador da Corte, em 128 = 2× o nativo,
+#     sem redução fracionária), com moldura;
+#   · a relação vira MEDIDOR, ao lado do nome, em vez de "(Neutro 0)";
+#   · o histórico ganha painel próprio, margem interna e espaçamento de
+#     parágrafo — é onde a conversa acontece, e ele passa a parecer uma
+#     página em vez de um Label solto;
+#   · a coluna do meio fica ESTREITA (620px) e centrada. Linha de dez
+#     palavras se lê; linha de trinta, não. Era o vício que fazia a tela
+#     parecer terminal.
 func _montar_conversa() -> void:
 	overlay_conversa = PanelContainer.new()
 	overlay_conversa.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# a moldura do PixelLab é vazada: sem um fundo sólido, a aba continuaria
-	# aparecendo por trás da conversa inteira
-	overlay_conversa.add_theme_stylebox_override("panel", Tema.estilo_modal())
+	# fundo sólido: sem ele a aba continuaria aparecendo por trás da conversa
+	var sb_fundo := StyleBoxFlat.new()
+	sb_fundo.bg_color = Tema.FUNDO
+	sb_fundo.set_corner_radius_all(0)
+	sb_fundo.set_content_margin_all(Tema.E5)
+	overlay_conversa.add_theme_stylebox_override("panel", sb_fundo)
 	add_child(overlay_conversa)
+
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
+	v.add_theme_constant_override("separation", Tema.E4)
 	overlay_conversa.add_child(v)
+
+	# ---- cabeça: retrato, nome, medidor de relação, saída ----
 	var cab := HBoxContainer.new()
-	cab.add_theme_constant_override("separation", 10)
+	cab.add_theme_constant_override("separation", Tema.E5)
 	v.add_child(cab)
+	var moldura := PanelContainer.new()
+	var sb_m := StyleBoxFlat.new()
+	sb_m.bg_color = Color("100d0b")
+	sb_m.border_color = Tema.BORDA
+	sb_m.set_border_width_all(1)
+	sb_m.set_corner_radius_all(0)
+	moldura.add_theme_stylebox_override("panel", sb_m)
+	moldura.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cab.add_child(moldura)
 	conversa_retrato = TextureRect.new()
-	conversa_retrato.custom_minimum_size = Vector2(96, 96)
-	conversa_retrato.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	# 128 = 2× o nativo de 64. Fator inteiro: nenhum pixel do retrato é
+	# interpolado nem descartado.
+	conversa_retrato.custom_minimum_size = Vector2(128, 128)
+	conversa_retrato.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	conversa_retrato.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	conversa_retrato.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	cab.add_child(conversa_retrato)
+	moldura.add_child(conversa_retrato)
+
+	var v_cab := VBoxContainer.new()
+	v_cab.add_theme_constant_override("separation", Tema.E3)
+	v_cab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v_cab.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cab.add_child(v_cab)
 	conversa_titulo = Label.new()
-	conversa_titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cab.add_child(conversa_titulo)
-	var b_sair := Button.new()
-	b_sair.text = "← Sair da conversa"
-	b_sair.pressed.connect(fechar_conversa)
-	cab.add_child(b_sair)
+	conversa_titulo.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
+	conversa_titulo.add_theme_color_override("font_color", Tema.ACENTO)
+	var f_conv := Tema.fonte_forte()
+	if f_conv != null:
+		conversa_titulo.add_theme_font_override("font", f_conv)
+	v_cab.add_child(conversa_titulo)
+	conversa_relacao = HBoxContainer.new()
+	conversa_relacao.add_theme_constant_override("separation", Tema.E3)
+	v_cab.add_child(conversa_relacao)
+	var l_dica := Label.new()
+	l_dica.text = "Elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. Ele lembra."
+	l_dica.add_theme_font_size_override("font_size", Tema.MINI)
+	l_dica.add_theme_color_override("font_color", Tema.TEXTO_3)
+	l_dica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v_cab.add_child(l_dica)
+	var v_sair := VBoxContainer.new()
+	v_sair.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cab.add_child(v_sair)
+	Kit.botao(v_sair, "← Sair da conversa", fechar_conversa, "fantasma")
+
+	v.add_child(Kit.regua(Tema.BORDA))
+
+	# ---- o histórico, na coluna estreita ----
+	var centro := HBoxContainer.new()
+	centro.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	centro.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(centro)
+	var pagina := PanelContainer.new()
+	var sb_p := StyleBoxFlat.new()
+	sb_p.bg_color = Tema.SUPERFICIE
+	sb_p.border_color = Tema.HAIRLINE
+	sb_p.set_border_width_all(1)
+	sb_p.set_corner_radius_all(0)
+	sb_p.set_content_margin_all(Tema.E5)
+	pagina.add_theme_stylebox_override("panel", sb_p)
+	pagina.custom_minimum_size = Vector2(620, 0)
+	pagina.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	centro.add_child(pagina)
 	conversa_hist = RichTextLabel.new()
 	conversa_hist.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	conversa_hist.scroll_following = true
 	conversa_hist.bbcode_enabled = true
-	v.add_child(conversa_hist)
+	conversa_hist.add_theme_constant_override("line_separation", 3)
+	conversa_hist.add_theme_color_override("default_color", Tema.TEXTO)
+	pagina.add_child(conversa_hist)
+
+	# ---- a fala, alinhada com a coluna do histórico ----
+	var centro_form := HBoxContainer.new()
+	centro_form.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(centro_form)
 	var form := HBoxContainer.new()
-	v.add_child(form)
+	form.add_theme_constant_override("separation", Tema.E3)
+	form.custom_minimum_size = Vector2(620, 0)
+	centro_form.add_child(form)
 	conversa_input = LineEdit.new()
 	conversa_input.placeholder_text = "Diga o que quiser..."
 	conversa_input.max_length = 200
 	conversa_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conversa_input.text_submitted.connect(func(_t): enviar_texto(conversa_input.text))
 	form.add_child(conversa_input)
-	var b_falar := Button.new()
-	b_falar.text = "Falar"
-	b_falar.pressed.connect(func(): enviar_texto(conversa_input.text))
-	form.add_child(b_falar)
+	Kit.botao(form, "Falar", func(): enviar_texto(conversa_input.text),
+		"primario", 100)
 
 func abrir_conversa(npc: Dictionary) -> void:
 	npc_atual = npc
 	overlay_conversa.visible = true
-	conversa_texto = "[i]%s aguarda você falar...[/i]\n" % npc["nome"]
+	conversa_texto = "[color=#7a6b58][i]%s aguarda você falar...[/i][/color]\n\n" % npc["nome"]
 	conversa_hist.text = conversa_texto
 	_atualizar_cab_conversa()
 	conversa_input.grab_focus()
@@ -1312,8 +1823,20 @@ func _atualizar_cab_conversa() -> void:
 	if npc_atual.is_empty():
 		return
 	var rel: int = state["tags"].get(npc_atual["id"], {"relacao": 0})["relacao"]
-	conversa_titulo.text = "%s\nrelação: %s (%d)" % [npc_atual["nome"], Dialogo.nome_relacao(rel), rel]
-	conversa_retrato.texture = Retratos.textura(npc_atual["id"], Retratos.humor_de(state, npc_atual["id"]))
+	conversa_titulo.text = str(npc_atual["nome"])
+	# a relação como MEDIDOR: "(Neutro 0)" obriga a saber que a escala vai de
+	# −100 a +100 e onde ficam os limiares. A barra mostra os dois lados e a
+	# cor muda onde a mecânica muda.
+	for filho in conversa_relacao.get_children():
+		filho.queue_free()
+	var cor := Tema.PERIGO if rel <= -25 else (Tema.GANHO if rel >= 25 else Tema.TEXTO_3)
+	Kit.medidor(conversa_relacao, float(rel + 100), 200.0, 140, 6, cor)
+	Kit.texto(conversa_relacao, "%s (%d)" % [Dialogo.nome_relacao(rel), rel],
+		cor, Tema.MICRO)
+	# o retrato muda de expressão com a relação: é o mesmo `humor` que a
+	# Corte usa, e é o único traço que muda para o mesmo personagem
+	conversa_retrato.texture = Retratos.textura(npc_atual["id"],
+		Retratos.humor_de(state, npc_atual["id"]))
 
 func enviar_texto(texto: String) -> void:
 	texto = texto.strip_edges()
@@ -1322,9 +1845,14 @@ func enviar_texto(texto: String) -> void:
 	digitando = true
 	conversa_input.text = ""
 	conversa_input.placeholder_text = "%s está ouvindo..." % npc_atual["nome"]
-	conversa_texto += "[b]Você:[/b] %s\n" % texto
+	# Quem fala é marcado por COR, não só por negrito: numa página de vinte
+	# turnos, "Você:" e "Touro Bill:" em negrito idêntico obrigam a ler o
+	# nome para saber de quem é a fala. O jogador fica em creme apagado (é o
+	# lado que ele já conhece) e o NPC em latão.
+	conversa_texto += "[color=#b5a48c][b]Você[/b] · %s[/color]\n" % texto
 	var resultado := Dialogo.falar(state, npc_atual, texto)
-	conversa_hist.text = conversa_texto + "[i]%s pondera...[/i]" % npc_atual["nome"]
+	conversa_hist.text = conversa_texto \
+		+ "[color=#7a6b58][i]%s pondera...[/i][/color]" % npc_atual["nome"]
 	_responder(resultado)
 
 func _responder(resultado: Dictionary) -> void:
@@ -1339,12 +1867,17 @@ func _responder(resultado: Dictionary) -> void:
 	await get_tree().create_timer(clampf(0.5 + texto_final.length() * 0.009, 0.6, 2.4)).timeout
 	Sfx.tocar(self, "pagina")
 	# substitui a linha "pondera..." e digita letra a letra
+	var cabeca := "[color=#e8b04b][b]%s[/b][/color] · " % npc_atual["nome"]
 	for i in range(0, texto_final.length(), 2):
-		conversa_hist.text = conversa_texto + "[b]%s:[/b] %s" % [npc_atual["nome"], texto_final.substr(0, i + 2)]
+		conversa_hist.text = conversa_texto + cabeca + texto_final.substr(0, i + 2)
 		await get_tree().create_timer(0.024).timeout
-	conversa_texto += "[b]%s:[/b] %s\n" % [npc_atual["nome"], texto_final]
+	conversa_texto += cabeca + texto_final + "\n"
+	# os EFEITOS da fala (relação caiu, segredo usado, guerra declarada) são
+	# consequência mecânica, não diálogo: entram apagados e recuados, para
+	# não serem lidos como mais uma frase do personagem
 	if not resultado["efeitos"].is_empty():
-		conversa_texto += "[color=#8b2635]%s[/color]\n" % " ".join(resultado["efeitos"])
+		conversa_texto += "[color=#d9603f]    %s[/color]\n" % " ".join(resultado["efeitos"])
+	conversa_texto += "\n"
 	conversa_hist.text = conversa_texto
 	digitando = false
 	conversa_input.placeholder_text = "Diga o que quiser..."
@@ -1365,8 +1898,11 @@ func _montar_modal() -> void:
 	add_child(overlay_modal)
 	# véu escuro: separa o modal do jogo e deixa claro que nada mais responde
 	var veu := ColorRect.new()
-	veu.color = Color(0, 0, 0, 0.6)
+	veu.color = Color(0, 0, 0, 0.68)
 	veu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# o véu ENGOLE o clique: sem isto, um botão da aba por baixo continuava
+	# clicável através do modal, e "nada mais responde" era só uma aparência
+	veu.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay_modal.add_child(veu)
 	modal_centro = CenterContainer.new()
 	modal_centro.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1379,10 +1915,10 @@ func _painel_modal() -> VBoxContainer:
 	overlay_modal.visible = true
 	var painel := PanelContainer.new()
 	painel.add_theme_stylebox_override("panel", Tema.estilo_modal())
-	painel.custom_minimum_size = Vector2(460, 0)
+	painel.custom_minimum_size = Vector2(480, 0)
 	modal_centro.add_child(painel)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", Tema.E4)
 	painel.add_child(v)
 	return v
 
@@ -1391,24 +1927,42 @@ func _painel_modal() -> VBoxContainer:
 ## sem o PNG, é o mesmo modal de texto de sempre.
 func _modal(titulo: String, corpo: String, botoes: Array, arte: Texture2D = null) -> void:
 	var v := _painel_modal()
-	_faixa(v, arte, 150)
+	# a ilustração é CENTRADA e o título também: o modal anterior tinha a
+	# arte centrada e o título alinhado à esquerda logo abaixo dela, e o
+	# desalinhamento entre os dois era a coisa que fazia o modal parecer
+	# montado às pressas
+	if arte != null:
+		var centro_arte := CenterContainer.new()
+		v.add_child(centro_arte)
+		Kit.ilustracao(centro_arte, arte, 150)
 	var l_titulo := Label.new()
 	l_titulo.text = titulo
-	l_titulo.add_theme_font_size_override("font_size", 22)
+	var f := Tema.fonte_forte()
+	if f != null:
+		l_titulo.add_theme_font_override("font", f)
+	l_titulo.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
 	l_titulo.add_theme_color_override("font_color", Tema.ACENTO)
+	l_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l_titulo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(l_titulo)
 	var l_corpo := Label.new()
 	l_corpo.text = corpo
 	l_corpo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l_corpo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l_corpo.add_theme_color_override("font_color", Tema.TEXTO_2)
 	v.add_child(l_corpo)
-	for par in botoes:
-		var b := Button.new()
-		b.text = par[0]
+	Kit.respiro(v, Tema.E2)
+	# A PRIMEIRA escolha é a primária. Num modal de evento as opções não são
+	# equivalentes — "Reprimir pela força" e "Abrir os celeiros" custam
+	# coisas diferentes — e dar o mesmo peso às duas não é neutralidade, é
+	# ausência de desenho. A ordem em que o código as lista já era a ordem
+	# de intenção; agora ela aparece.
+	for i in botoes.size():
+		var par: Array = botoes[i]
 		var cb: Callable = par[1]
-		b.pressed.connect(func():
+		Kit.botao(v, str(par[0]), func():
 			overlay_modal.visible = false
-			cb.call())
-		v.add_child(b)
+			cb.call(), "primario" if i == 0 else "fantasma")
 
 func _modal_evento() -> void:
 	var ev: Dictionary = state["evento_pendente"]

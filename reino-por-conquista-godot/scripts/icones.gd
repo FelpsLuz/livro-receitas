@@ -16,7 +16,6 @@
 extends RefCounted
 
 const UIv2 = preload("res://scripts/ui_v2.gd")
-const Arte = preload("res://scripts/arte.gd")
 const Tema = preload("res://scripts/tema.gd")
 
 const PASTA := "res://assets/sprites/"
@@ -105,12 +104,43 @@ static func _id(nome: String) -> String:
 static func tem(nome: String) -> bool:
 	return ResourceLoader.exists(PASTA + _id(nome) + ".png")
 
+## O SUBSTITUTO de um ícone que não existe.
+##
+## Dois dos 43 nomes de `TODOS` nunca ganharam arquivo — `pedra` e `prata` —
+## e o que aparecia no lugar era `Arte.caixa`: o caixote cinza do visual
+## strip. Numa coluna de tabela em que as outras oito linhas têm um símbolo
+## desenhado, um retângulo cinza não lê como "falta arte", lê como DEFEITO,
+## e era o pior pixel da aba do mercado.
+##
+## O substituto é um losango na cor própria do item (tabela COR). Ele não
+## finge ser o ícone que falta, mas cumpre o trabalho que o ícone tinha na
+## tabela: dar à linha uma marca colorida que o olho acha antes de ler a
+## palavra. E, ao contrário do caixote, parece escolhido.
+static var _losangos: Dictionary = {}
+
+static func _losango(cor: Color) -> Texture2D:
+	var chave := cor.to_html()
+	if _losangos.has(chave):
+		return _losangos[chave]
+	var lado := 64
+	var img := Image.create(lado, lado, false, Image.FORMAT_RGBA8)
+	var c := (lado - 1) * 0.5
+	for y in lado:
+		for x in lado:
+			# |dx| + |dy| <= r é o losango; a casca de 6px fica mais clara
+			var d: float = absf(x - c) + absf(y - c)
+			if d <= c * 0.92:
+				img.set_pixel(x, y, cor if d > c * 0.62 else cor.darkened(0.35))
+	var tex := ImageTexture.create_from_image(img)
+	_losangos[chave] = tex
+	return tex
+
 ## A silhueta. Quem tinge é `imagem()` ou o chamador, via `modulate`.
 static func textura(nome: String) -> Texture2D:
 	if not tem(nome):
-		return Arte.caixa(64)
+		return _losango(Color.WHITE)
 	var t = load(PASTA + _id(nome) + ".png")
-	return t if t is Texture2D else Arte.caixa(64)
+	return t if t is Texture2D else _losango(Color.WHITE)
 
 static var _tingidas: Dictionary = {}
 
@@ -129,10 +159,10 @@ static func textura_tingida(nome: String, cor: Variant = null) -> Texture2D:
 	if _tingidas.has(chave):
 		return _tingidas[chave]
 	if not tem(nome):
-		return Arte.caixa(64)
+		return _losango(c)
 	var base: Texture2D = load(PASTA + _id(nome) + ".png")
 	if base == null:
-		return Arte.caixa(64)
+		return _losango(c)
 	var img := base.get_image()
 	img.convert(Image.FORMAT_RGBA8)
 	for y in img.get_height():

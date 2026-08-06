@@ -70,6 +70,10 @@ func _initialize() -> void:
 	await _tirar(jogo, 4, "corte")         # lordes gerados em partida
 	await _tirar(jogo, 3, "taverna")
 	await _tirar(jogo, 3, "taverna_servicos", 900)
+	# as duas abas que ficavam de fora deste harness — e que por isso eram as
+	# duas em que ninguém tinha olhado: a ficha da casa e a crônica
+	await _tirar(jogo, 8, "familia")
+	await _tirar(jogo, 9, "cronica")
 
 	st["terra"]["alimento"] = 0            # celeiro vazio: a cena da fome
 	await _tirar(jogo, 0, "terra_fome", 300)

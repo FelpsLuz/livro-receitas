@@ -87,13 +87,31 @@ godot --headless --path . --script res://tests/teste_nucleo.gd
    - Android: requer o Android SDK configurado no editor (Editor Settings → Export → Android).
    - Web: hospede a pasta `dist/web` em qualquer servidor estático (itch.io funciona).
 
-## Fase 3 — ideias de polimento
+## Fase 3 — auditoria visual, concluída
 
-- [ ] Fonte pixel medieval e ornamentos no tema
+A tela era funcional e parecia protótipo. A auditoria foi feita sobre as
+imagens renderizadas por `tests/render_ui.gd`, e o que ela mediu:
+
+| defeito | medida |
+|---|---|
+| linha de mercado sem coluna: nome, preço e carga numa string só | **481px contíguos de vazio** numa linha de 910 — 53% |
+| card com altura mínima de 56px + 10 de padding | **4 itens por tela** num mercado de 10 |
+| retrato de toda pessoa do jogo | **caixote cinza** — reis, clãs, corte, conversa |
+| gasto do cerco com formato `%d%d%d` | os três valores saíam colados: **"gasto 1285656"** |
+| HUD sem terreno próprio | os números flutuavam sobre o fundo da janela |
+| botão de ação esticado | "Conversar" com **830px** de largura |
+| barra de abas | as duas últimas abas escondidas atrás de setas |
+
+O que entrou: `tema.gd` reescrito como sistema, `kit.gd` novo, retratos
+gerados, e as onze telas remontadas sobre os dois.
+
+Ideias que continuam abertas:
+
 - [ ] Animações de transição entre abas e nos modais
 - [ ] Trilha sonora procedural (harpa/alaúde)
 - [ ] Educação de herdeiros e eventos de assassino na UI
 - [ ] Controles de toque dedicados no Android (gestos, haptics)
+- [ ] Os dois ícones que faltam: `icone_pedra` e `icone_prata`
 
 ## Por que Godot (e não Unity)
 
@@ -103,28 +121,56 @@ godot --headless --path . --script res://tests/teste_nucleo.gd
 - A versão web original (`../reino-por-conquista`) continua sendo a referência jogável
   enquanto a fase 2 avança.
 
-## Visual strip — o projeto roda sem arte
+## Sistema de design — `tema.gd` + `kit.gd`
 
-Toda a arte foi removida do projeto. Nenhum PNG é carregado em lugar nenhum;
-todo `Texture2D` nasce em `scripts/arte.gd` como um **caixote cinza** do
-tamanho que aquela entidade ocupava. A mecânica é 100% a de antes.
+A interface é construída inteiramente em código. Duas peças a sustentam:
 
-O que ficou de propósito:
-
-| fica | por quê |
+| peça | o que é |
 |---|---|
-| `assets/fontes/` | tipografia não é arte de cena. Um jogo de economia em que não se lê "custo 80" é um jogo quebrado, e as duas fontes foram escolhidas por medida (`ferramentas/FONTES.md`) |
-| `assets_v2/characters/animacoes.json` | metadados de animação — quantos quadros tem cada caminhada, em que direções. É o que mantém `mover()` e as 8 direções funcionando |
-| o tema de pergaminho (`scripts/tema.gd`) | é `StyleBoxFlat` desenhado em código, zero arquivo. É o contraste que torna a interface legível |
+| `scripts/tema.gd` | o SISTEMA: paleta (umbra quente + latão), escala de espaço `E1..E6`, escala tipográfica, e as variantes de `StyleBox` (painel, card, linha de tabela, cabeçalho, chip, medidor, botão primário/fantasma/perigo) |
+| `scripts/kit.gd` | os COMPONENTES: `tabela()`/`linha()` com colunas medidas, `medidor()`, `chip()`, `selo()`, `secao()`/`subsecao()`, `duas_colunas()`, `retrato()`, `ilustracao()` |
 
-As dimensões da arte antiga viraram constantes, porque são elas que seguram
-o layout: `VilaCena.TAMANHO_OBJ` (a altura de cada objeto ancora o Y-Sort),
-`UIv2.MARGENS` (9-slice), `Icones.LADO`, `Retratos.LADO_RETRATO`. A próxima
-leva de arte tem que respeitar esses números, ou a cena se mexe.
+Regra da casa: **nenhum arquivo fora de `tema.gd` inventa um valor de espaço
+ou uma cor.** Espaçamento vem de `Tema.E1..E6`; cor vem das constantes da
+paleta. Foi a ausência dessa regra que produziu uma tela em que cada função
+escolhia a sua própria margem.
+
+Três decisões que valem para toda tela nova:
+
+- **Número vive em COLUNA.** A monoespaçada (`Tema.fonte_numero()`) só
+  alinha preço se houver coluna para alinhar — use `Kit.tabela()`, não uma
+  string com `·` no meio.
+- **Um primário por região.** `Kit.botao(..., "primario")` é latão
+  preenchido e marca o verbo pelo qual aquela região existe. Os demais são
+  `"fantasma"`; o irreversível é `"perigo"`.
+- **Estado é medidor ou selo, não prosa.** Moral, felicidade, relação e
+  fase de cerco são `Kit.medidor()`; "casus belli" e "a ferros" são
+  `Kit.selo()`.
+
+### Arte
+
+Os PNG de ícone (`icone_*`), tropa (`tropa_*`), evento (`evento_*`) e
+cenário (`estagio_*`) estão em `assets/sprites/` e são carregados
+normalmente. Duas coisas nascem **geradas em código**, porque são
+combinatórias e nunca poderiam ser arquivos:
+
+- **Retratos de gente** (`scripts/retratos.gd`) — 64×64 desenhados pixel a
+  pixel a partir de uma semente derivada do id (ou do nome, para os notáveis
+  criados durante a partida). Pele, cabelo, barba, toucado e roupa saem da
+  semente; a expressão sai da RELAÇÃO. `textura_pequena()` devolve a
+  redução 2× por média de blocos, para lista e linha de tabela.
+- **Ícone ausente** (`scripts/icones.gd`) — um losango na cor própria do
+  item, em vez do caixote cinza. Dois dos 43 nomes de `TODOS` (`pedra` e
+  `prata`) ainda não têm arquivo.
+
+As dimensões da arte são constantes porque são elas que seguram o layout:
+`UIv2.MARGENS` (9-slice), `Icones.LADO`, `Retratos.LADO_RETRATO`. Arte nova
+tem que respeitar esses números, ou a cena se mexe.
 
 ```bash
-# a guarda: falha se um PNG voltar ou se um script carregar imagem
-godot --path reino-por-conquista-godot --script res://tests/teste_strip.gd
+# a verificação VISUAL: renderiza as 21 telas em PNG
+xvfb-run godot --path reino-por-conquista-godot --rendering-driver opengl3 \
+  --script res://tests/render_ui.gd
 ```
 
 ## Pipeline Hi-Bit
