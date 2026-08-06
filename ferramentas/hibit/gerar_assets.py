@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 """Gera a arte Hi-Bit do jogo pela API do PixelLab (v2).
 
+    AVISO — `--estagios` NÃO reproduz a arte que está no jogo.
+
+    Os nove quadros em assets/sprites/estagio_*.png vieram de uma leva
+    anterior (âncora em vale + degraus interpolados) e chegam a cidade
+    murada e castelo. Este script hoje carrega a direção de FAIXAS, que
+    acerta os degraus 1–4 e desaba do 5 em diante — ver a nota longa em
+    FORCA_POR_ESTAGIO.
+
+    Rodar --estagios e depois tratar_assets.py SUBSTITUI a arte boa. Se for
+    mexer nisso, leia antes o bloco "ATÉ ONDE ESTA CADEIA CHEGA" e a
+    conclusão sobre o limite do img2img.
+
     export PIXELLAB_SECRET="..."
     python3 ferramentas/hibit/gerar_assets.py --listar      # plano e custo
     python3 ferramentas/hibit/gerar_assets.py --saldo
@@ -55,8 +67,29 @@ GASTO = Path(__file__).resolve().parent / "gasto.json"
 IDS = Path(__file__).resolve().parent / "ids.json"
 
 MAGENTA = "solid magenta #FF00FF background"
-ESTILO = ("Stardew Valley aesthetic, hi-bit pixel art, vibrant earthy "
-          "colors, flat lighting, clean readable silhouette")
+# ---------------------------------------------------------------
+# ESTILO — a cláusula que entra em TODA chamada, e por isso a mais perigosa
+# ---------------------------------------------------------------
+# Era "Stardew Valley aesthetic, vibrant earthy colors". Stardew Valley é
+# jogo de FAZENDA ACONCHEGANTE, e foi essa palavra que produziu prado de
+# flores coloridas, barraca de toldo listrado e paleta pastel numa escada
+# que devia ir de acampamento mercenário a castelo. Pior: "medieval" não
+# aparecia aqui — vivia só nas descrições de cada degrau, e a cadeia diluía
+# a cada passo enquanto o estilo, repetido em todos, ia acumulando.
+#
+# A regra que fica: o que precisa sobreviver a nove chamadas encadeadas tem
+# que estar NA CLÁUSULA DE ESTILO, não na descrição do degrau. Descrição se
+# dilui; estilo se acumula.
+#
+# A paleta agora é nomeada por MATERIAL, não por adjetivo. "Vibrante" e
+# "terroso" são opinião e o modelo resolve como quiser; "madeira
+# envelhecida, colmo, pedra cinza, verde de musgo" são coisas, e coisas têm
+# cor.
+ESTILO = ("medieval European setting, hi-bit pixel art, muted natural "
+          "palette of weathered wood brown, straw thatch, grey stone, iron "
+          "and deep moss green, restrained saturation, no bright pastel "
+          "colors, no flower fields, flat natural daylight, clean readable "
+          "silhouette")
 
 # ---------------------------------------------------------------
 # O PLANO
