@@ -23,6 +23,7 @@ const Economia = preload("res://scripts/economia.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
+const Cidadaos = preload("res://scripts/cidadaos.gd")
 
 ## Seis fases, uma a cada 30 do relógio unificado.
 const FASES := 6
@@ -56,7 +57,10 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 	# vezes o upkeep normal, e é isso que mata cerco de dezembro
 	var fator := MULTIPLICADOR_UPKEEP * Estacoes.fator_cerco(state)
 	var cmd: Dictionary = Comandantes.por_id(state, str(m.get("comandante", "")))
-	var custo := Economia.upkeep_de(m["tropas"], fator)
+	# marcha é sempre exército do JOGADOR (só despachar() alimenta state.marchas),
+	# então o ferreiro leal na Corte continua baixando o soldo da cavalaria
+	# mesmo longe de casa — ele aparelhou os cavaleiros antes de partirem.
+	var custo := Economia.upkeep_de(m["tropas"], fator, Cidadaos.oficio_ativo(state, "ferreiro"))
 	# um quartel-mestre competente é a diferença entre campanha e fome
 	custo["comida"] = roundi(int(custo["comida"]) * Comandantes.fator_comida_cerco(cmd))
 	var pagou := _cobrar(state, custo, c)

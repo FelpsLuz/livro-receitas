@@ -932,7 +932,10 @@ func _aba_exercito(c: Container) -> void:
 	# O upkeep é a mecânica que mais mata exército, e um número no meio de texto
 	# passa batido. Os três ícones dão a leitura instantânea de EM QUE recurso
 	# o exército está sangrando.
-	var up: Dictionary = Economia.upkeep_de(j["tropas"])
+	# desconto do ferreiro entra aqui também: sem isto, o número mostrado na
+	# tela nunca bateria com o que Economia.tick_exercito realmente cobra
+	# no fim do mês — a Corte teria efeito invisível até o soldo cair
+	var up: Dictionary = Economia.upkeep_de(j["tropas"], 1.0, Cidadaos.oficio_ativo(state, "ferreiro"))
 	var hu := _card(c)
 	for par_up in [["moedas", int(up["ouro"])], ["trigo", int(up["comida"])],
 			["madeira", int(up["madeira"])]]:

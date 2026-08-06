@@ -264,23 +264,52 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 	var resultado := {}
 	match ev["tipo"]:
 		"rebeliao":
+			# um capataz LIDERANDO é uma revolta maior, e "abrir os celeiros"
+			# sozinho não resolve — ele continua vivo, continua ambicioso, e
+			# continua no cargo até ser comprado, exilado ou esmagado com a turba
+			var lider: String = str(ev.get("lider", ""))
 			if escolha == "reprimir":
-				var rebeldes := {"tropas": {"campones": Dados.ri(15, 30), "lanceiro": Dados.ri(2, 5)},
-					"equip": 0, "formacao": "cerco"}
-				resultado = Combate.batalhar(state, rebeldes, "Rebelião camponesa")
+				var mult: int = 2 if lider != "" else 1
+				var rebeldes := {"tropas": {"campones": Dados.ri(15, 30) * mult,
+					"lanceiro": Dados.ri(2, 5) * mult}, "equip": 0, "formacao": "cerco"}
+				# Capataz LEAL na Corte rende +10% de defesa à guarnição — mas só
+				# ajuda a defender a PRÓPRIA terra, não a esmagar o povo dela: se
+				# é ele mesmo quem lidera a revolta, o cargo está comprometido e
+				# o bônus não existe.
+				var bonus_capataz: float = 1.0
+				if lider == "" and Cidadaos.oficio_ativo(state, "capataz"):
+					bonus_capataz = 1.10
+				resultado = Combate.batalhar(state, rebeldes, "Rebelião camponesa", "cerco", bonus_capataz)
 				if resultado["vitoria"]:
 					state["terra"]["felicidade"] = 35
-					state["terra"]["populacao"] = maxi(5, int(state["terra"]["populacao"]) - Dados.ri(4, 8))
-					state["jogador"]["crueldade"] = int(state["jogador"].get("crueldade", 0)) + 1
-					log.call("Você afogou a rebelião em sangue. A vila obedece — e odeia.")
+					state["terra"]["populacao"] = maxi(5, int(state["terra"]["populacao"]) - Dados.ri(4, 8) * mult)
+					state["jogador"]["crueldade"] = int(state["jogador"].get("crueldade", 0)) + (2 if lider != "" else 1)
+					if lider != "":
+						for n in Cidadaos.lista(state):
+							if str(n.get("nome", "")) == lider:
+								Cidadaos.lista(state).erase(n)
+								break
+						log.call("Você afogou a rebelião em sangue — e %s morreu com a turba que liderou." % lider)
+					else:
+						log.call("Você afogou a rebelião em sangue. A vila obedece — e odeia.")
 				else:
 					morrer(state, "rebeliao", log)
 			else:
 				var custo: int = mini(int(state["jogador"]["ouro"]), 200)
 				state["jogador"]["ouro"] -= custo
 				state["terra"]["alimento"] = int(state["terra"]["alimento"]) + 60
-				state["terra"]["felicidade"] = 55
-				log.call("Você abriu os celeiros (-%d ouro). O povo abaixa as foices." % custo)
+				if lider == "":
+					state["terra"]["felicidade"] = 55
+					log.call("Você abriu os celeiros (-%d ouro). O povo abaixa as foices." % custo)
+				else:
+					# o povo se acalma, mas o capataz que armou a revolta segue
+					# no cargo — a ambição dele só cresceu com o gosto do poder
+					state["terra"]["felicidade"] = 45
+					for n in Cidadaos.lista(state):
+						if str(n.get("nome", "")) == lider:
+							n["ambicao"] = mini(10, int(n.get("ambicao", 5)) + 2)
+							break
+					log.call("Você abriu os celeiros (-%d ouro). O povo abaixa as foices — mas %s, o capataz, continua no cargo, e não esqueceu." % [custo, lider])
 		"notavel_ambicioso":
 			# escolha: "comprar" (lealdade por ouro), "exilar" ou ignorar
 			resultado = {"msg": Cidadaos.resolver_ambicioso(state, ev["nome"], escolha, log)}

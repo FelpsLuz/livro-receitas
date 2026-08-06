@@ -27,6 +27,31 @@ static func lista(state: Dictionary) -> Array:
 		state["terra"]["notaveis"] = []
 	return state["terra"]["notaveis"]
 
+## CORTE OPERACIONAL — o ofício de um notável LEAL rende um efeito de verdade.
+##
+## Binário, não cumulativo: um ferreiro leal já é O ferreiro da vila. Dois
+## ferreiros leais não fabricam ferro em dobro — a vila só tem uma forja.
+## `oficio_ativo` responde "existe alguém competente nesse posto agora?",
+## e é essa pergunta que economia.gd e taverna.gd fazem antes de aplicar
+## qualquer bônus de corte.
+static func oficio_ativo(state: Dictionary, oficio: String) -> bool:
+	for n in lista(state):
+		if str(n.get("oficio", "")) == oficio and int(n.get("lealdade", 0)) >= LEALDADE_MINIMA:
+			return true
+	return false
+
+## O Capataz rico e desleal que estaria pronto para virar ameaça (mesmo
+## limiar que `resumo()` chama de "quase rico" e "desleal") NÃO precisa
+## esperar cruzar LIMIAR_ASCENSAO para ser perigoso quando a vila já está
+## em felicidade crítica — ele lidera. Devolve {} se não há candidato.
+static func capataz_lider(state: Dictionary) -> Dictionary:
+	for n in lista(state):
+		if str(n.get("oficio", "")) != "capataz" or bool(n.get("lorde", false)):
+			continue
+		if int(n.get("riqueza", 0)) >= LIMIAR_ASCENSAO * 0.7 and int(n.get("lealdade", 100)) < 40:
+			return n
+	return {}
+
 ## Lordes já jurados: é o que a UI mostra na Corte e o que rende por mês.
 static func lordes(state: Dictionary) -> Array:
 	var saida: Array = []

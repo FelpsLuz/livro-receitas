@@ -358,6 +358,145 @@ func _init() -> void:
 		fb != null and str(fb["jogador"].get("suserano", "")) == str(full["jogador"].get("suserano", "")))
 	Jogo.apagar_save()
 
+	# ============ 7. CORTE OPERACIONAL (Patch 3) ============
+	# Cada ofício rende um efeito de verdade quando o notável está LEAL — e
+	# só quando está. Fora do limiar (60), o cargo continua mudo.
+	print("--- corte operacional ---")
+
+	var corte := com_terra(4, 300)
+	corte["terra"]["notaveis"] = [
+		{"nome": "Ferro Leal", "oficio": "ferreiro", "lealdade": 80, "riqueza": 50, "ambicao": 3, "lorde": false},
+	]
+	ok("ofício mudo sem notável leal daquele ofício",
+		not Cidadaos.oficio_ativo(corte, "moleiro"))
+	ok("ofício ativo com o notável leal certo",
+		Cidadaos.oficio_ativo(corte, "ferreiro"))
+	corte["terra"]["notaveis"][0]["lealdade"] = 40
+	ok("ofício desliga se a lealdade cai abaixo do limiar",
+		not Cidadaos.oficio_ativo(corte, "ferreiro"))
+
+	# Ferreiro: -15% no soldo (manut) da CAVALARIA. Infantaria não muda —
+	# o desconto é só na tropa de choque, como o design pediu.
+	var tropas_cav := {"cav_pesada": 10}
+	var sem_ferreiro := Economia.upkeep_de(tropas_cav, 1.0, false)
+	var com_ferreiro := Economia.upkeep_de(tropas_cav, 1.0, true)
+	ok("ferreiro leal baixa o soldo da cavalaria",
+		int(com_ferreiro["ouro"]) < int(sem_ferreiro["ouro"]),
+		"%d → %d" % [int(sem_ferreiro["ouro"]), int(com_ferreiro["ouro"])])
+	var tropas_inf := {"lanceiro": 10}
+	ok("ferreiro NÃO desconta soldo de infantaria",
+		int(Economia.upkeep_de(tropas_inf, 1.0, true)["ouro"])
+			== int(Economia.upkeep_de(tropas_inf, 1.0, false)["ouro"]))
+
+	# Moleiro: +20% na produção de alimento (substitui "capacidade do
+	# celeiro" do documento original — o jogo nunca teve teto de celeiro).
+	var sem_moleiro := com_terra(3, 200)
+	var com_moleiro := com_terra(3, 200)
+	com_moleiro["terra"]["notaveis"] = [
+		{"nome": "Farinha Leal", "oficio": "moleiro", "lealdade": 90, "riqueza": 50, "ambicao": 3, "lorde": false}]
+	Economia.tick_terra(sem_moleiro, Jogo.log_para(sem_moleiro))
+	Economia.tick_terra(com_moleiro, Jogo.log_para(com_moleiro))
+	ok("moleiro leal rende mais alimento no mesmo mês",
+		int(com_moleiro["terra"]["alimento"]) > int(sem_moleiro["terra"]["alimento"]),
+		"%d vs %d" % [int(sem_moleiro["terra"]["alimento"]), int(com_moleiro["terra"]["alimento"])])
+
+	# Taverneiro: +20% de chance do rumor ser verdadeiro. Medido em massa,
+	# não em uma tirada — sorte de uma rodada só não prova nada.
+	var Taverna = load("res://scripts/taverna.gd")
+	var tv_sem := com_terra(2, 200)
+	tv_sem["jogador"]["ouro"] = 100000
+	var tv_com := com_terra(2, 200)
+	tv_com["jogador"]["ouro"] = 100000
+	tv_com["terra"]["notaveis"] = [
+		{"nome": "Copo Leal", "oficio": "taverneiro", "lealdade": 90, "riqueza": 50, "ambicao": 3, "lorde": false}]
+	var v_sem := 0
+	var v_com := 0
+	for i in 200:
+		if Taverna.comprar_rumor(tv_sem)["verdadeiro"]:
+			v_sem += 1
+		if Taverna.comprar_rumor(tv_com)["verdadeiro"]:
+			v_com += 1
+	ok("taverneiro leal aumenta a taxa de rumor verdadeiro (200 tiradas)",
+		v_com > v_sem, "%d/200 vs %d/200" % [v_sem, v_com])
+
+	# Mercador: entrega a rota de graça, todo mês, sem cobrar ouro.
+	var merc := com_terra(2, 200)
+	merc["terra"]["notaveis"] = [
+		{"nome": "Rota Leal", "oficio": "mercador", "lealdade": 90, "riqueza": 50, "ambicao": 3, "lorde": false}]
+	var ouro_antes := int(merc["jogador"]["ouro"])
+	# array, não bool: lambda do GDScript captura variável local por VALOR,
+	# não por referência — um bool "avisou = true" dentro do callable nunca
+	# se propagaria para fora. Array é tipo referência; mutar por dentro funciona.
+	var msgs_merc: Array[String] = []
+	Taverna.tick(merc, func(msg): msgs_merc.append(msg))
+	var avisou_rota := false
+	for m in msgs_merc:
+		if m.contains("mercador"):
+			avisou_rota = true
+	ok("mercador leal avisa rota sem cobrar ouro",
+		avisou_rota and int(merc["jogador"]["ouro"]) == ouro_antes)
+
+	# Capataz: líder de rebelião dobra o custo, e o bônus de defesa da Corte
+	# não se aplica quando é o próprio capataz que está do lado de fora do muro.
+	var terra_cap := com_terra(3, 200)
+	terra_cap["terra"]["felicidade"] = 15
+	terra_cap["terra"]["notaveis"] = [{"nome": "Grao Punho", "oficio": "capataz",
+		"lealdade": 10, "riqueza": 400, "ambicao": 8, "lorde": false}]
+	var lider := Cidadaos.capataz_lider(terra_cap)
+	ok("capataz rico e desleal é identificado como líder em potencial",
+		not lider.is_empty() and str(lider.get("nome", "")) == "Grao Punho")
+	terra_cap["terra"]["notaveis"][0]["lealdade"] = 90
+	ok("capataz LEAL não é líder de rebelião nenhuma",
+		Cidadaos.capataz_lider(terra_cap).is_empty())
+
+	# Combate.batalhar: o parâmetro novo `bonus_defesa_extra` precisa
+	# realmente mudar o resultado — sem isso, o "+10% de defesa" do
+	# capataz seria só um comentário sem efeito.
+	var Combate2 = load("res://scripts/combate.gd")
+	var defesa_normal := com_terra(0, 200)
+	defesa_normal["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 20})
+	var defesa_bonus := com_terra(0, 200)
+	defesa_bonus["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 20})
+	var atacante := {"tropas": {"campones": 30, "lanceiro": 5}, "equip": 0, "formacao": "cerco"}
+	seed(555)
+	var r_normal: Dictionary = Combate2.batalhar(defesa_normal, atacante.duplicate(true), "teste", "cerco", 1.0)
+	seed(555)
+	var r_bonus: Dictionary = Combate2.batalhar(defesa_bonus, atacante.duplicate(true), "teste", "cerco", 1.10)
+	ok("bonus_defesa_extra reduz as baixas do defensor com a mesma sorte",
+		int(r_bonus["baixas_jogador"]) <= int(r_normal["baixas_jogador"]),
+		"%d baixas sem bônus, %d com" % [int(r_normal["baixas_jogador"]), int(r_bonus["baixas_jogador"])])
+
+	# ---- integração completa: capataz LIDERANDO a rebelião, via resolver_evento ----
+	var reprime := com_terra(3, 200)
+	reprime["terra"]["felicidade"] = 15
+	reprime["terra"]["notaveis"] = [{"nome": "Grao Punho", "oficio": "capataz",
+		"lealdade": 10, "riqueza": 400, "ambicao": 8, "lorde": false}]
+	# guarnição esmagadora: o teste é sobre a CONSEQUÊNCIA da vitória, não
+	# sobre se ela acontece — 400 lanceiros não perdem para 60 camponeses
+	reprime["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 400})
+	reprime["evento_pendente"] = {"tipo": "rebeliao", "lider": "Grao Punho"}
+	var crueldade_antes := int(reprime["jogador"].get("crueldade", 0))
+	Jogo.resolver_evento(reprime, "reprimir")
+	ok("reprimir rebelião LIDERADA soma +2 de crueldade, não +1",
+		int(reprime["jogador"]["crueldade"]) == crueldade_antes + 2)
+	ok("o capataz que liderou a rebelião não sobrevive à repressão",
+		Cidadaos.capataz_lider(reprime).is_empty() and reprime["terra"]["notaveis"].is_empty())
+
+	# ---- o mesmo evento, mas apaziguado: o capataz sobrevive e fica mais ambicioso ----
+	var apazigua := com_terra(3, 200)
+	apazigua["terra"]["felicidade"] = 15
+	apazigua["terra"]["alimento"] = 0
+	apazigua["terra"]["notaveis"] = [{"nome": "Grao Punho", "oficio": "capataz",
+		"lealdade": 10, "riqueza": 400, "ambicao": 5, "lorde": false}]
+	apazigua["evento_pendente"] = {"tipo": "rebeliao", "lider": "Grao Punho"}
+	Jogo.resolver_evento(apazigua, "apaziguar")
+	ok("abrir os celeiros NÃO remove o capataz que liderou a revolta",
+		not apazigua["terra"]["notaveis"].is_empty())
+	ok("e a ambição dele cresce — ele não esqueceu",
+		int(apazigua["terra"]["notaveis"][0]["ambicao"]) > 5)
+	ok("felicidade recupera MENOS que uma rebelião comum apaziguada (45, não 55)",
+		int(apazigua["terra"]["felicidade"]) == 45)
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)

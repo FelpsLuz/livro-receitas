@@ -162,8 +162,13 @@ static func _ceifar(tropas: Dictionary, frac: float, classe: String = "") -> int
 # ------------------------------------------------------------
 ## Os dois lados atacam. Para não dar vantagem a quem "vai primeiro", as duas
 ## direções são calculadas contra o exército como ele estava ANTES do choque.
+##
+## `bonus_defesa_extra` só entra na fatia de DEFESA — o Capataz leal (Corte)
+## rende +10% na defesa da própria terra quando a guarnição enfrenta uma
+## rebelião, e isso não deve inflar o ataque do jogador de brinde: quem
+## segura o muro não é quem golpeia primeiro.
 static func batalhar(state: Dictionary, inimigo: Dictionary, contexto: String,
-		intencao: String = "cerco") -> Dictionary:
+		intencao: String = "cerco", bonus_defesa_extra: float = 1.0) -> Dictionary:
 	var j: Dictionary = state["jogador"]
 	var meu: Dictionary = j["tropas"]
 	var dele: Dictionary = inimigo["tropas"]
@@ -178,7 +183,7 @@ static func batalhar(state: Dictionary, inimigo: Dictionary, contexto: String,
 	var foto_dele: Dictionary = dele.duplicate(true)
 
 	var ida := resolver_assalto(foto_meu, dele, b_meu, b_dele, intencao)
-	var volta := resolver_assalto(foto_dele, meu, b_dele, b_meu, intencao)
+	var volta := resolver_assalto(foto_dele, meu, b_dele, b_meu * bonus_defesa_extra, intencao)
 
 	var vivos_meu := total_homens(meu)
 	var vivos_dele := total_homens(dele)

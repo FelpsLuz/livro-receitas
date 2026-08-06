@@ -8,6 +8,7 @@ extends RefCounted
 const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
+const Cidadaos = preload("res://scripts/cidadaos.gd")
 
 static func inicializar_mercados(state: Dictionary) -> void:
 	state["mercados"] = {}
@@ -171,6 +172,13 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	# ---- colheita, dobrada à estação ----
 	var fator := Estacoes.fator_comida(state)
 	var producao: int = roundi(trabalhando * 1.5 * (1.0 + t["nivel"] * 0.15) * fator)
+	# Moleiro leal: o design original pedia "+20% na capacidade do celeiro",
+	# mas o celeiro nunca teve teto — alimento acumula livre. Um moleiro
+	# competente rende mais farinha do MESMO trigo, então o bônus vira +20%
+	# na PRODUÇÃO, que é o número que de fato existe. No inverno a produção
+	# já é zero e continua zero: farinha não nasce de campo que não colheu.
+	if Cidadaos.oficio_ativo(state, "moleiro"):
+		producao = roundi(producao * 1.2)
 	t["alimento"] = maxi(0, int(t["alimento"]) + producao - int(t["populacao"]))
 	t["madeira"] = int(t["madeira"]) + 2 + int(t["nivel"]) * 2 + int(trabalhando / 12.0)
 
@@ -191,14 +199,31 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	elif int(t["felicidade"]) < 70:
 		t["felicidade"] = clampi(int(t["felicidade"]) + 5, 0, 100)
 	if int(t["felicidade"]) <= 20 and randf() < 0.5:
-		log.call("REBELIÃO em %s!" % t["nome"])
-		state["evento_pendente"] = {"tipo": "rebeliao"}
+		# um capataz rico e desleal não espera cruzar o limiar de ascensão
+		# quando a vila já está pronta para pegar em foices — ele lidera
+		var lider := Cidadaos.capataz_lider(state)
+		if lider.is_empty():
+			log.call("REBELIÃO em %s!" % t["nome"])
+			state["evento_pendente"] = {"tipo": "rebeliao"}
+		else:
+			log.call("REBELIÃO em %s — e %s, o capataz, está à frente dela!"
+				% [t["nome"], str(lider["nome"])])
+			state["evento_pendente"] = {"tipo": "rebeliao", "lider": str(lider["nome"])}
 
 ## ---------- UPKEEP ----------
 ## O que um exército consome por mês: ouro (soldo), comida e madeira.
 ## Vale para o jogador e para os reinos NPC — a mesma função, os mesmos
 ## números. É isto que impede um exército de existir de graça.
-static func upkeep_de(tropas: Dictionary, multiplicador: float = 1.0) -> Dictionary:
+##
+## `desconto_ferreiro`: o ofício de Ferreiro, quando LEAL na Corte (ver
+## Cidadaos.oficio_ativo), aparelha melhor a cavalaria — -15% no soldo
+## (`manut`) das tropas de CHOQUE. O documento de design original pedia
+## desconto no "upkeep de ferro das tropas de choque", mas o jogo nunca
+## rastreou ferro como custo de manutenção — só ouro, comida e madeira.
+## Dar ao Ferreiro o desconto sobre o soldo da cavalaria preserva a
+## intenção (ele é quem arma os cavaleiros) sem inventar um recurso novo.
+static func upkeep_de(tropas: Dictionary, multiplicador: float = 1.0,
+		desconto_ferreiro: bool = false) -> Dictionary:
 	var ouro := 0.0
 	var comida := 0.0
 	var madeira := 0.0
@@ -207,7 +232,10 @@ static func upkeep_de(tropas: Dictionary, multiplicador: float = 1.0) -> Diction
 		if d == null:
 			continue
 		var n: int = int(tropas[tipo])
-		ouro += float(d.get("manut", 0)) * n
+		var soldo: float = float(d.get("manut", 0))
+		if desconto_ferreiro and str(d.get("classe", "")) == "cav":
+			soldo *= 0.85
+		ouro += soldo * n
 		comida += float(d.get("comida", 0)) * n
 		madeira += float(d.get("madeira", 0)) * n
 	return {"ouro": roundi(ouro * multiplicador),
@@ -227,7 +255,8 @@ static func mudar_moral(state: Dictionary, delta: int) -> int:
 static func tick_exercito(state: Dictionary, log: Callable) -> void:
 	# tropas em marcha também comem — só que do que carregam, e o Cerco
 	# cobra em dobro. Aqui paga-se pelo que está EM CASA.
-	var custo := upkeep_de(state["jogador"]["tropas"])
+	var custo := upkeep_de(state["jogador"]["tropas"], 1.0,
+		Cidadaos.oficio_ativo(state, "ferreiro"))
 	state["jogador"]["ultima_manut"] = int(custo["ouro"])
 	state["jogador"]["ultimo_upkeep"] = custo
 
