@@ -55,15 +55,16 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 	# ---- 1. o custo de ficar parado no campo inimigo ----
 	# o dobro por estar acampado, vezes a estação: no inverno são QUATRO
 	# vezes o upkeep normal, e é isso que mata cerco de dezembro
+	var origem: String = str(m.get("origem", "jogador"))
 	var fator := MULTIPLICADOR_UPKEEP * Estacoes.fator_cerco(state)
-	var cmd: Dictionary = Comandantes.por_id(state, str(m.get("comandante", "")))
-	# marcha é sempre exército do JOGADOR (só despachar() alimenta state.marchas),
-	# então o ferreiro leal na Corte continua baixando o soldo da cavalaria
-	# mesmo longe de casa — ele aparelhou os cavaleiros antes de partirem.
-	var custo := Economia.upkeep_de(m["tropas"], fator, Cidadaos.oficio_ativo(state, "ferreiro"))
+	var cmd: Dictionary = Comandantes.por_id(state, str(m.get("comandante", ""))) if origem == "jogador" else {}
+	# o ferreiro leal na Corte só arma A CAVALARIA DO JOGADOR — um reino
+	# sitiando o jogador (Parte VII) paga o próprio soldo, sem esse desconto
+	var custo := Economia.upkeep_de(m["tropas"], fator,
+		origem == "jogador" and Cidadaos.oficio_ativo(state, "ferreiro"))
 	# um quartel-mestre competente é a diferença entre campanha e fome
 	custo["comida"] = roundi(int(custo["comida"]) * Comandantes.fator_comida_cerco(cmd))
-	var pagou := _cobrar(state, custo, c)
+	var pagou := _cobrar(state, custo, c, origem)
 	ev["inverno"] = Estacoes.e_inverno(state)
 	if not pagou.is_empty():
 		c["moral"] = int(c["moral"]) - 18 * pagou.size()
@@ -113,10 +114,33 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 		Sinais.emitir(&"cerco_efetivado", {"marcha": m["id"]})
 	return ev
 
-## Cobra do jogador o que o acampamento consumiu. Devolve o que FALTOU.
-static func _cobrar(state: Dictionary, custo: Dictionary, c: Dictionary) -> Array:
+## Cobra da ORIGEM o que o acampamento consumiu. Devolve o que FALTOU.
+##
+## `origem` "jogador" cobra de state.jogador + state.terra (como sempre).
+## Qualquer outro valor é um reino sitiando o JOGADOR (Parte VII): cobra de
+## reino.tesouro/celeiro/madeireira — os três cofres que
+## Geopolitica.inicializar já mantém, sem inventar estoque novo.
+static func _cobrar(state: Dictionary, custo: Dictionary, c: Dictionary,
+		origem: String = "jogador") -> Array:
 	var faltou: Array = []
 	var g: Dictionary = c["gasto"]
+	if origem != "jogador":
+		var Geopolitica = load("res://scripts/geopolitica.gd")
+		var reino: Dictionary = Geopolitica.reino_por_id(state, origem)
+		if reino.is_empty():
+			return faltou
+		for par in [["tesouro", "ouro"], ["celeiro", "comida"], ["madeireira", "madeira"]]:
+			var cofre_r: String = par[0]
+			var chave_r: String = par[1]
+			if int(custo[chave_r]) <= 0:
+				continue
+			if int(reino.get(cofre_r, 0)) >= int(custo[chave_r]):
+				reino[cofre_r] = int(reino[cofre_r]) - int(custo[chave_r])
+				g[chave_r] = int(g[chave_r]) + int(custo[chave_r])
+			else:
+				reino[cofre_r] = 0
+				faltou.append(chave_r if chave_r != "ouro" else "soldo")
+		return faltou
 	if int(state["jogador"]["ouro"]) >= int(custo["ouro"]):
 		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - int(custo["ouro"])
 		g["ouro"] = int(g["ouro"]) + int(custo["ouro"])

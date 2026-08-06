@@ -10,9 +10,11 @@ const Dados = preload("res://scripts/dados.gd")
 const Combate = preload("res://scripts/combate.gd")
 const Rotas = preload("res://scripts/rotas.gd")
 const Marchas = preload("res://scripts/marchas.gd")
+const Cerco = preload("res://scripts/cerco.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
+const Dialogo = preload("res://scripts/dialogo.gd")
 
 var passou := 0
 var falhou := 0
@@ -311,6 +313,197 @@ func _init() -> void:
 		full["marchas"].is_empty(), "%d" % full["marchas"].size())
 	ok("o relógio andou 24 meses",
 		int(full["minuto"]) >= 24 * Relogio.MINUTOS_POR_MES)
+
+	# ---------------- 14. MARCHA NPC → JOGADOR (Estágio 6, Parte VII) ----------------
+	# "O jogador pode ser atacado. O jogador não pode ser absorvido."
+
+	# -- cerco vencido derruba um degrau da terra; NUNCA "dominado_por" --
+	var sa := base()
+	sa["terra"]["nivel"] = 3
+	Geopolitica.inicializar(sa)
+	var touros_a: Dictionary = Geopolitica.reino_por_id(sa, "touros")
+	touros_a["tropas"] = {"cav_leve": 500}
+	touros_a["tesouro"] = 999999
+	touros_a["celeiro"] = 999999
+	touros_a["madeireira"] = 999999
+	touros_a["equip"] = 3
+	var nivel_antes: int = int(sa["terra"]["nivel"])
+	var dominados_antes := {}
+	for reino in sa["reinos"]:
+		dominados_antes[reino["id"]] = str(reino.get("dominado_por", ""))
+	var desp := Marchas.despachar(sa, "jogador", {"cav_leve": 500}, "cerco", "", "touros")
+	ok("um reino consegue despachar uma marcha contra o jogador", desp["ok"], str(desp["msg"]))
+	ok("a marcha guarda o reino como origem, não o jogador",
+		str(Marchas.lista(sa)[0]["origem"]) == "touros")
+	Marchas.lista(sa)[0]["perigo"] = 0.0
+	Relogio.avancar(sa, int(Marchas.lista(sa)[0]["duracao"]) + Cerco.MINUTOS_POR_FASE * Cerco.FASES + 20,
+		Jogo.log_para(sa))
+	ok("o cerco venceu e a terra caiu um degrau",
+		int(sa["terra"]["nivel"]) < nivel_antes, "%d → %d" % [nivel_antes, int(sa["terra"]["nivel"])])
+	var absorveu := false
+	for reino in sa["reinos"]:
+		if str(reino.get("dominado_por", "")) != str(dominados_antes[reino["id"]]):
+			absorveu = true
+	ok("nenhum reino ganhou 'dominado_por' por atacar o jogador", not absorveu)
+
+	# -- vassalagem forçada (40% na vitória) limpa a guerra que a trouxe --
+	var vassalagem_ocorreu := false
+	for tentativa in 20:
+		var sv := base()
+		sv["terra"]["nivel"] = 3
+		Geopolitica.inicializar(sv)
+		var touros_v: Dictionary = Geopolitica.reino_por_id(sv, "touros")
+		touros_v["tropas"] = {"cav_leve": 500}
+		touros_v["tesouro"] = 999999
+		touros_v["celeiro"] = 999999
+		touros_v["madeireira"] = 999999
+		touros_v["equip"] = 3
+		sv["guerras"].append({"a": "touros", "b": "jogador", "meses": 5})
+		Marchas.despachar(sv, "jogador", {"cav_leve": 500}, "cerco", "", "touros")
+		Marchas.lista(sv)[0]["perigo"] = 0.0
+		Relogio.avancar(sv, int(Marchas.lista(sv)[0]["duracao"]) + Cerco.MINUTOS_POR_FASE * Cerco.FASES + 20,
+			Jogo.log_para(sv))
+		if str(sv["jogador"].get("suserano", "")) == "touros":
+			vassalagem_ocorreu = true
+			var ainda_em_guerra := false
+			for g in sv["guerras"]:
+				if (g["a"] == "touros" and g["b"] == "jogador") \
+						or (g["b"] == "touros" and g["a"] == "jogador"):
+					ainda_em_guerra = true
+			ok("vassalagem forçada encerra a guerra que a trouxe", not ainda_em_guerra)
+			break
+	ok("cerco vencido pode impor vassalagem forçada", vassalagem_ocorreu,
+		"%d tentativas" % 20)
+
+	# -- guarnição do jogador: terra alta + lordes leais reforça a defesa de verdade --
+	var fraca := Jogo.novo_jogo("Fraco")
+	fraca["terra"] = {"nome": "Vale", "nivel": 0, "populacao": 50,
+		"alimento": 500, "madeira": 100, "felicidade": 60, "pressao": 0.0}
+	fraca["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 5})
+	Geopolitica.inicializar(fraca)
+	Geopolitica.reino_por_id(fraca, "touros")["tropas"] = {"lanceiro": 60, "espadachim": 20}
+	Marchas.despachar(fraca, "jogador", {"lanceiro": 60, "espadachim": 20}, "saque", "", "touros")
+	Marchas.lista(fraca)[0]["perigo"] = 0.0
+	var evs_fraca: Array = Relogio.avancar(fraca, int(Marchas.lista(fraca)[0]["duracao"]),
+		Jogo.log_para(fraca))["marchas"]
+
+	var forte := Jogo.novo_jogo("Forte")
+	forte["terra"] = {"nome": "Vale", "nivel": 8, "populacao": 500,
+		"alimento": 5000, "madeira": 2000, "felicidade": 70, "pressao": 0.0}
+	forte["jogador"]["tropas"] = Jogo._tropas_zeradas({"lanceiro": 5})
+	forte["terra"]["notaveis"] = []
+	for i in 10:
+		forte["terra"]["notaveis"].append({"nome": "Lorde %d" % i, "oficio": "", "lealdade": 80,
+			"riqueza": 10, "ambicao": 1, "lorde": true, "capturado": false})
+	Geopolitica.inicializar(forte)
+	Geopolitica.reino_por_id(forte, "touros")["tropas"] = {"lanceiro": 60, "espadachim": 20}
+	Marchas.despachar(forte, "jogador", {"lanceiro": 60, "espadachim": 20}, "saque", "", "touros")
+	Marchas.lista(forte)[0]["perigo"] = 0.0
+	var evs_forte: Array = Relogio.avancar(forte, int(Marchas.lista(forte)[0]["duracao"]),
+		Jogo.log_para(forte))["marchas"]
+
+	var batalha_fraca := {}
+	for e in evs_fraca:
+		if e.get("tipo", "") == "batalha":
+			batalha_fraca = e
+	var batalha_forte := {}
+	for e in evs_forte:
+		if e.get("tipo", "") == "batalha":
+			batalha_forte = e
+	ok("sem terra e sem lordes, a mesma investida derruba a guarnição",
+		not batalha_fraca.is_empty() and bool(batalha_fraca["vitoria"]))
+	ok("terra em nível alto + lordes leais reforça a guarnição o bastante para repelir",
+		not batalha_forte.is_empty() and not bool(batalha_forte["vitoria"]))
+
+	# -- saque de reino contra o jogador drena ouro e carga, via _colher_do_jogador --
+	var sg := base()
+	Geopolitica.inicializar(sg)
+	sg["jogador"]["ouro"] = 1000
+	sg["carga"] = {"trigo": 200}
+	Geopolitica.reino_por_id(sg, "touros")["tropas"] = {"cav_leve": 200}
+	var ouro_antes_sg: int = int(sg["jogador"]["ouro"])
+	var carga_antes_sg: int = int(sg["carga"]["trigo"])
+	Marchas.despachar(sg, "jogador", {"cav_leve": 200}, "saque", "", "touros")
+	Marchas.lista(sg)[0]["perigo"] = 0.0
+	Relogio.avancar(sg, int(Marchas.lista(sg)[0]["duracao"]), Jogo.log_para(sg))
+	ok("saque de reino contra o jogador drena ouro",
+		int(sg["jogador"]["ouro"]) < ouro_antes_sg,
+		"%d → %d" % [ouro_antes_sg, int(sg["jogador"]["ouro"])])
+	ok("e drena a carga genérica também",
+		int(sg["carga"]["trigo"]) < carga_antes_sg,
+		"%d → %d" % [carga_antes_sg, int(sg["carga"]["trigo"])])
+
+	# -- upkeep do cerco contra o jogador sai do cofre do RESINO atacante, não do bolso dele --
+	var sh := base()
+	sh["jogador"]["ouro"] = 5000
+	Geopolitica.inicializar(sh)
+	var touros_h: Dictionary = Geopolitica.reino_por_id(sh, "touros")
+	touros_h["tropas"] = {"cav_leve": 300}
+	touros_h["tesouro"] = 50000
+	touros_h["celeiro"] = 50000
+	touros_h["madeireira"] = 50000
+	var tesouro_antes: int = int(touros_h["tesouro"])
+	var celeiro_antes: int = int(touros_h["celeiro"])
+	var madeireira_antes: int = int(touros_h["madeireira"])
+	var ouro_jogador_antes: int = int(sh["jogador"]["ouro"])
+	Marchas.despachar(sh, "jogador", {"cav_leve": 300}, "cerco", "", "touros")
+	Marchas.lista(sh)[0]["perigo"] = 0.0
+	Relogio.avancar(sh, int(Marchas.lista(sh)[0]["duracao"]) + Cerco.MINUTOS_POR_FASE * Cerco.FASES + 20,
+		Jogo.log_para(sh))
+	ok("o cerco de um reino contra o jogador não cobra do bolso dele",
+		int(sh["jogador"]["ouro"]) == ouro_jogador_antes)
+	ok("quem paga o upkeep é o cofre do PRÓPRIO reino sitiante",
+		int(touros_h["tesouro"]) < tesouro_antes or int(touros_h["celeiro"]) < celeiro_antes
+		or int(touros_h["madeireira"]) < madeireira_antes,
+		"tesouro %d→%d, celeiro %d→%d, madeireira %d→%d" % [tesouro_antes, int(touros_h["tesouro"]),
+			celeiro_antes, int(touros_h["celeiro"]), madeireira_antes, int(touros_h["madeireira"])])
+
+	# ---------------- 15. RAMPA DE ELEGIBILIDADE (Parte VII, 6.4) ----------------
+	# sem terra, ou terra nível < 2, o jogador nunca é alvo — mesmo se um rei o odeia.
+	var sd := Jogo.novo_jogo("Elegibilidade")
+	Dialogo.mudar_relacao(sd, "rei_touros", -100, "teste")
+	for i in 24:
+		Geopolitica.tick(sd, Jogo.log_para(sd))
+	var guerra_sem_terra := false
+	for g in sd["guerras"]:
+		if g["a"] == "jogador" or g["b"] == "jogador":
+			guerra_sem_terra = true
+	ok("sem terra, nenhum reino declara guerra ao jogador mesmo o odiando",
+		not guerra_sem_terra)
+
+	var sd2 := Jogo.novo_jogo("Elegibilidade2")
+	sd2["terra"] = {"nome": "Acampamento", "nivel": 1, "populacao": 20,
+		"alimento": 200, "madeira": 50, "felicidade": 60, "pressao": 0.0}
+	Dialogo.mudar_relacao(sd2, "rei_touros", -100, "teste")
+	for i in 24:
+		Geopolitica.tick(sd2, Jogo.log_para(sd2))
+	var guerra_nivel1 := false
+	for g in sd2["guerras"]:
+		if g["a"] == "jogador" or g["b"] == "jogador":
+			guerra_nivel1 = true
+	ok("terra em nível 1 ainda não habilita o jogador como alvo",
+		not guerra_nivel1)
+
+	var sd3 := Jogo.novo_jogo("Elegibilidade3")
+	sd3["terra"] = {"nome": "Vila", "nivel": 2, "populacao": 100,
+		"alimento": 600, "madeira": 200, "felicidade": 60, "pressao": 0.0}
+	Dialogo.mudar_relacao(sd3, "rei_touros", -100, "teste")
+	var guerra_apareceu := false
+	var marcha_apareceu := false
+	for i in 80:
+		Geopolitica.tick(sd3, Jogo.log_para(sd3))
+		for g in sd3["guerras"]:
+			if (g["a"] == "touros" and g["b"] == "jogador") or (g["b"] == "touros" and g["a"] == "jogador"):
+				guerra_apareceu = true
+		for marcha in sd3["marchas"]:
+			if str(marcha.get("origem", "")) == "touros" and str(marcha.get("alvo", "")) == "jogador":
+				marcha_apareceu = true
+		if marcha_apareceu:
+			break
+	ok("com terra nível ≥2 e relação péssima, o reino acaba declarando guerra ao jogador",
+		guerra_apareceu)
+	ok("e eventualmente despacha uma marcha de verdade contra ele",
+		marcha_apareceu)
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

@@ -79,6 +79,11 @@ static func tick_guerras(state: Dictionary, log: Callable) -> void:
 	for g in state["guerras"]:
 		g["meses"] += 1
 		for id in [g["a"], g["b"]]:
+			# o jogador não tem mercado próprio em state["mercados"] (só os
+			# seis reinos têm) — Parte VII (Estágio 6) passou a permitir
+			# guerra com "jogador", e sem este guard o índice quebraria aqui
+			if id == "jogador":
+				continue
 			var m: Dictionary = state["mercados"][id]
 			m["trigo"]["oferta"] = maxf(0.25, m["trigo"]["oferta"] * 0.82)
 			m["ferro"]["demanda"] = minf(3.0, m["ferro"]["demanda"] * 1.08)

@@ -143,6 +143,8 @@ static func tick(state: Dictionary, log: Callable) -> void:
 	_tick_pactos(state, log)
 	_tick_opiniao(state)
 	_tick_declaracoes(state, log)
+	_tick_declaracao_jogador(state, log)
+	_tick_ataques_jogador(state, log)
 	_tick_conquistas(state, log)
 
 ## Tesouro, celeiro e madeireira rendem; o EXÉRCITO consome. Um rei NPC
@@ -349,6 +351,87 @@ static func _tick_declaracoes(state: Dictionary, log: Callable) -> void:
 				log.call("%s honra a aliança e volta-se contra %s."
 					% [reino_por_id(state, aliado_id)["nome"], forte["nome"]])
 			return              # uma declaração por mês, para o mapa respirar
+
+## Rampa de elegibilidade (Parte VII, 6.4): sem terra, ou terra ainda de
+## acampamento (nível < 2), o jogador não é um alvo válido. Sem isto, um
+## reino hostil já no Ano 1 — antes do jogador ter chão para perder —
+## poderia abrir uma guerra e a campanha morreria antes de começar.
+static func _jogador_elegivel(state: Dictionary) -> bool:
+	var t = state.get("terra")
+	return t != null and int(t.get("nivel", 0)) >= 2
+
+## Guerra do reino CONTRA o jogador: usa a relação do REI com o jogador
+## (Dialogo.tags_de, "rei_<id>"), não `relacoes_npc` — essa nunca guarda
+## "jogador" (Geopolitica.inicializar só semeia pares entre state["reinos"]).
+## É a relação que o próprio jogador constrói em diálogo (insultos, ameaças,
+## suborno) que decide se um rei chega a odiá-lo o bastante para marchar.
+static func _tick_declaracao_jogador(state: Dictionary, log: Callable) -> void:
+	if not _jogador_elegivel(state):
+		return
+	if state["guerras"].size() >= 3:
+		return
+	var Dialogo = load("res://scripts/dialogo.gd")
+	for r in state["reinos"]:
+		if not vivo(r):
+			continue
+		if _em_guerra_entre(state, r["id"], "jogador"):
+			continue
+		var rel: int = int(Dialogo.tags_de(state, "rei_" + r["id"])["relacao"])
+		if rel > LIMIAR_GUERRA:
+			continue
+		if randf() > 0.15:
+			continue
+		state["guerras"].append({"a": r["id"], "b": "jogador", "meses": 0})
+		Sinais.emitir(&"guerra_npc", {"a": r["id"], "b": "jogador"})
+		log.call("GUERRA! %s declara guerra contra você." % r["nome"])
+		return                       # uma declaração por mês, igual às demais
+
+## Já em guerra, o reino tenta de fato marchar — sem isto a guerra fica só
+## no papel. "O JOGADOR PODE SER ATACADO. O JOGADOR NÃO PODE SER ABSORVIDO":
+## quem resolve a chegada é `Marchas._resolver_chegada_contra_jogador`, que
+## nunca escreve em `state["reinos"]` — só em terra/relação/vassalagem do
+## jogador. Esta função só decide QUANDO a marcha parte.
+const CHANCE_MARCHA_JOGADOR := 0.25
+
+static func _tick_ataques_jogador(state: Dictionary, log: Callable) -> void:
+	if not _jogador_elegivel(state):
+		return
+	var Marchas = load("res://scripts/marchas.gd")
+	for g in state["guerras"]:
+		if g["a"] != "jogador" and g["b"] != "jogador":
+			continue
+		var reino_id: String = g["b"] if g["a"] == "jogador" else g["a"]
+		var r := reino_por_id(state, reino_id)
+		if r.is_empty() or not vivo(r):
+			continue
+		if _marchando_contra_jogador(state, reino_id):
+			continue                 # um reino não manda duas marchas de uma vez
+		if randf() > CHANCE_MARCHA_JOGADOR:
+			continue
+		var tropas := _fatia_expedicionaria(r)
+		if tropas.is_empty():
+			continue
+		var intencao := "cerco" if randf() < 0.5 else "saque"
+		var res: Dictionary = Marchas.despachar(state, "jogador", tropas, intencao, "", reino_id)
+		if bool(res.get("ok", false)) and log.is_valid():
+			log.call("%s reúne tropas e marcha contra suas terras." % r["nome"])
+
+static func _marchando_contra_jogador(state: Dictionary, reino_id: String) -> bool:
+	for m in state.get("marchas", []):
+		if str(m.get("origem", "")) == reino_id and str(m.get("alvo", "")) == "jogador":
+			return true
+	return false
+
+## O reino não manda o exército inteiro atrás do jogador — mantém o resto em
+## casa, senão um vizinho oportunista aproveita a ausência (mesma lógica de
+## destacamento que `Cerco._lorde_aliado` já usa para o socorro do defensor).
+static func _fatia_expedicionaria(r: Dictionary) -> Dictionary:
+	var fatia := {}
+	for tipo in r.get("tropas", {}):
+		var n: int = int(int(r["tropas"][tipo]) * 0.4)
+		if n > 0:
+			fatia[tipo] = n
+	return fatia
 
 ## Guerra longa decide território. Quem tem mais força e mais tesouro vence.
 static func _tick_conquistas(state: Dictionary, log: Callable) -> void:

@@ -21,6 +21,7 @@ const Combate = preload("res://scripts/combate.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Cerco = preload("res://scripts/cerco.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
+const Cidadaos = preload("res://scripts/cidadaos.gd")
 
 ## Enquanto marcha, o exército testa a sorte uma vez por dia de estrada.
 const MINUTOS_POR_DIA := 20
@@ -48,10 +49,23 @@ static func duracao(tropas: Dictionary, distancia: int) -> int:
 		return 0
 	return maxi(1, distancia * mpc)
 
+## O dict de tropas REAL por trás de uma origem — jogador ou um reino NPC.
+## Referência, não cópia: despachar() precisa DEDUZIR dali de verdade.
+static func _tropas_de(state: Dictionary, origem: String) -> Dictionary:
+	if origem == "jogador":
+		return state["jogador"]["tropas"]
+	var Geopolitica = load("res://scripts/geopolitica.gd")
+	var reino: Dictionary = Geopolitica.reino_por_id(state, origem)
+	if reino.is_empty():
+		return {}
+	if not reino.has("tropas"):
+		reino["tropas"] = {}
+	return reino["tropas"]
+
 ## Estimativa para a UI ANTES de despachar — é o que o jogador vê ao escolher
 ## o alvo: "Império · 3 dias de marcha · risco alto".
-static func estimar(state: Dictionary, alvo: String, tropas: Dictionary) -> Dictionary:
-	var origem: String = "jogador"
+static func estimar(state: Dictionary, alvo: String, tropas: Dictionary,
+		origem: String = "jogador") -> Dictionary:
 	var rota := Rotas.caminho(origem, alvo)
 	var dur := duracao(tropas, int(rota["distancia"]))
 	return {
@@ -78,20 +92,26 @@ static func lista(state: Dictionary) -> Array:
 # ------------------------------------------------------------
 # Despacho
 # ------------------------------------------------------------
-## Manda o exército à estrada. As tropas saem do bolso do jogador AGORA —
+## Manda o exército à estrada. As tropas saem do bolso da ORIGEM AGORA —
 ## exército em marcha não defende a própria casa, e é isso que torna atacar
 ## uma decisão e não um clique de graça.
+##
+## `origem` por padrão é "jogador" — todo chamador existente (a UI, os
+## testes) continua funcionando sem tocar numa linha. É a Parte VII do
+## patch consolidado (Estágio 6, "marcha NPC → terra do jogador"): agora um
+## reino também pode ser a origem, mirando "jogador" como alvo.
 static func despachar(state: Dictionary, alvo: String, tropas: Dictionary,
-		intencao: String, comandante: String = "") -> Dictionary:
+		intencao: String, comandante: String = "", origem: String = "jogador") -> Dictionary:
 	if intencao != "saque" and intencao != "cerco":
 		return {"ok": false, "msg": "Intenção inválida."}
+	var fonte := _tropas_de(state, origem)
 	var soma := 0
 	for tipo in tropas:
 		var q: int = int(tropas[tipo])
 		if q <= 0:
 			continue
 		soma += q
-		if q > int(state["jogador"]["tropas"].get(tipo, 0)):
+		if q > int(fonte.get(tipo, 0)):
 			return {"ok": false, "msg": "Você não tem tantos %s."
 				% Dados.TROPAS.get(tipo, {}).get("nome", tipo)}
 	if soma <= 0:
@@ -101,21 +121,22 @@ static func despachar(state: Dictionary, alvo: String, tropas: Dictionary,
 	for tipo in tropas:
 		if int(tropas[tipo]) > 0:
 			limpo[tipo] = int(tropas[tipo])
-			state["jogador"]["tropas"][tipo] = int(state["jogador"]["tropas"][tipo]) - int(tropas[tipo])
+			fonte[tipo] = int(fonte[tipo]) - int(tropas[tipo])
 
-	var est := estimar(state, alvo, limpo)
+	var est := estimar(state, alvo, limpo, origem)
 	var agora: int = int(state.get("minuto", 0))
 	var m := {
 		"id": "m%d_%d" % [agora, lista(state).size()],
-		"alvo": alvo, "tropas": limpo, "intencao": intencao, "fase": "ida",
+		"alvo": alvo, "origem": origem, "tropas": limpo, "intencao": intencao, "fase": "ida",
 		"distancia": int(est["distancia"]), "perigo": float(est["perigo"]),
 		"duracao": int(est["minutos"]), "chega_em": agora + int(est["minutos"]),
 		"proximo_teste": agora + MINUTOS_POR_DIA,
 		"saque": {}, "trajeto": str(est["trajeto"]),
 		"comandante": comandante,
 	}
-	# batedor experiente enxerga a emboscada antes dela acontecer
-	var cmd := Comandantes.por_id(state, comandante)
+	# batedor experiente enxerga a emboscada antes dela acontecer — só existe
+	# para o jogador: Comandantes.disponiveis() só lista gente do lado dele
+	var cmd := Comandantes.por_id(state, comandante) if origem == "jogador" else {}
 	if not cmd.is_empty():
 		m["perigo"] = float(m["perigo"]) * Comandantes.fator_perigo(cmd)
 	lista(state).append(m)
@@ -188,6 +209,7 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 			vivas.append(m)
 			continue
 
+		var minha: bool = str(m.get("origem", "jogador")) == "jogador"
 		match m["fase"]:
 			"ida":
 				# CERCO não resolve na chegada: vira atrito de seis fases.
@@ -199,14 +221,18 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 					# que gastar o resto do mês nos muros, e não parado
 					Cerco.iniciar(m, int(m["chega_em"]))
 					if log.is_valid():
-						log.call("Seu exército acampou diante de %s. O cerco começou."
-							% Rotas.nome_do(state, m["alvo"]))
+						if minha:
+							log.call("Seu exército acampou diante de %s. O cerco começou."
+								% Rotas.nome_do(state, m["alvo"]))
+						else:
+							log.call("Um exército de %s acampou diante de suas terras. O cerco começou."
+								% Rotas.nome_do(state, m["origem"]))
 					eventos.append({"tipo": "cerco_iniciado", "marcha": m["id"]})
 					# e as fases que já couberam nesse salto rodam JÁ
 					if _rodar_cerco(state, m, agora, eventos, log):
 						vivas.append(m)
 					continue
-				var rel := _resolver_chegada(state, m, log)
+				var rel := _resolver_qualquer_chegada(state, m, log)
 				eventos.append(rel)
 				if Combate.total_homens(m["tropas"]) > 0:
 					m["fase"] = "volta"
@@ -217,15 +243,20 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 					vivas.append(m)
 				else:
 					# morreu diante dos muros: o comandante é CAPTURADO,
-					# igual a quando o exército some na estrada
+					# igual a quando o exército some na estrada (só existe
+					# para o jogador — marcha de reino não tem comandante seu)
 					var cap2 := Comandantes.capturar(state,
 						Comandantes.por_id(state, str(m.get("comandante", ""))), log)
 					if int(cap2.get("preso", 0)) > 0:
 						var Jogo2 = load("res://scripts/jogo.gd")
 						Jogo2.prender(state, int(cap2["preso"]), log)
 					if log.is_valid():
-						log.call("O exército enviado a %s foi destruído."
-							% Rotas.nome_do(state, m["alvo"]))
+						if minha:
+							log.call("O exército enviado a %s foi destruído."
+								% Rotas.nome_do(state, m["alvo"]))
+						else:
+							log.call("O exército de %s foi destruído diante de suas terras."
+								% Rotas.nome_do(state, m["origem"]))
 			"volta":
 				eventos.append(_resolver_retorno(state, m, log))
 	state["marchas"] = vivas
@@ -247,7 +278,7 @@ static func _rodar_cerco(state: Dictionary, m: Dictionary, agora: int,
 			return false                          # exército acabou nos muros
 		if bool(evf["efetivado"]):
 			# os muros caem com METADE dos status: a recompensa do atrito
-			eventos.append(_resolver_chegada(state, m, log, Cerco.DEBUFF_DEFENSOR))
+			eventos.append(_resolver_qualquer_chegada(state, m, log, Cerco.DEBUFF_DEFENSOR))
 			if Combate.total_homens(m["tropas"]) > 0:
 				_virar_para_casa(m, agora)
 				return true
@@ -284,6 +315,113 @@ static func _emboscada(state: Dictionary, m: Dictionary, log: Callable) -> Dicti
 		"roubado": roubado, "fases": rel["fases"]}
 	Sinais.emitir(&"marcha_emboscada", ev)
 	return ev
+
+## Despacha para o resolvedor certo conforme a ORIGEM da marcha — jogador
+## atacando (caminho de sempre, intocado) ou reino atacando o jogador
+## (Parte VII do patch consolidado, Estágio 6).
+static func _resolver_qualquer_chegada(state: Dictionary, m: Dictionary, log: Callable,
+		debuff_defensor: float = 1.0) -> Dictionary:
+	if str(m.get("origem", "jogador")) == "jogador":
+		return _resolver_chegada(state, m, log, debuff_defensor)
+	return _resolver_chegada_contra_jogador(state, m, log, debuff_defensor)
+
+## O que um reino invasor consegue carregar das terras do jogador — MESMA
+## função de saque que _colher usa para reinos-alvo, só que a fonte é o
+## bolso do jogador. 40% do ouro disponível, como um reino só arrisca 40%
+## do próprio tesouro por visita (_colher espelha o mesmo número).
+static func _colher_do_jogador(state: Dictionary, sobreviventes: Dictionary) -> Dictionary:
+	var cofre := {"ouro": int(int(state["jogador"]["ouro"]) * 0.4)}
+	for g in state.get("carga", {}):
+		if int(state["carga"][g]) > 0:
+			cofre[g] = int(state["carga"][g])
+	var levado := Combate.colher_saque(sobreviventes, cofre)
+	if levado.has("ouro"):
+		state["jogador"]["ouro"] = maxi(0, int(state["jogador"]["ouro"]) - int(levado["ouro"]))
+	for g in levado:
+		if g != "ouro":
+			state["carga"][g] = maxi(0, int(state["carga"].get(g, 0)) - int(levado[g]))
+	return levado
+
+## Chegada de uma marcha de RETALIAÇÃO NPC contra o jogador — Parte VII do
+## patch consolidado. A regra que resolve os dois furos da Q5 (nenhuma NPC
+## podia marchar, e geopolitica.gd pulava de propósito qualquer guerra do
+## jogador para não deletá-lo pela rotina de conquista):
+##
+##   O JOGADOR PODE SER ATACADO. O JOGADOR NÃO PODE SER ABSORVIDO.
+##
+## Cerco vencido pelo atacante derruba UM degrau da terra — nunca
+## `dominado_por`, que continua reservado para conquista entre reinos. É
+## essa distinção que faz o skip de geopolitica.gd:357 continuar certo: ele
+## protege contra ABSORÇÃO, não contra guerra — e esta função nunca toca em
+## `state["reinos"]`, então não há como violar isso por acidente.
+static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, log: Callable,
+		debuff_defensor: float = 1.0) -> Dictionary:
+	var Geopolitica = load("res://scripts/geopolitica.gd")
+	var Dialogo = load("res://scripts/dialogo.gd")
+	var reino_id: String = str(m["origem"])
+	var reino: Dictionary = Geopolitica.reino_por_id(state, reino_id)
+	var nome_reino: String = str(reino.get("nome", reino_id))
+	var guarnicao := _guarnicao_do_jogador(state)
+	var bonus_atacante := 1.0 + int(reino.get("equip", 0)) * 0.15
+	var rel := Combate.resolver_assalto(m["tropas"], guarnicao, bonus_atacante, debuff_defensor, m["intencao"])
+	rel["tipo"] = "batalha"
+	rel["marcha"] = m["id"]
+	rel["contexto"] = "%s de %s contra suas terras" % [
+		"Saque" if m["intencao"] == "saque" else "Cerco", nome_reino]
+
+	if m["intencao"] == "saque":
+		m["saque"] = _colher_do_jogador(state, m["tropas"])
+		rel["saque"] = m["saque"].duplicate()
+		if log.is_valid():
+			log.call("%s saqueou suas terras." % nome_reino)
+	elif rel["vitoria"]:
+		# `rel["vitoria"]` aqui é do ATACANTE (o reino) — resolver_assalto
+		# chama de "vitória" quando o DEFENSOR (a guarnição do jogador) é
+		# zerada. É o reino que venceu, e é isso que os dois ramos abaixo tratam.
+		if state["terra"] != null and int(state["terra"]["nivel"]) > 0:
+			var nivel_antigo: int = int(state["terra"]["nivel"])
+			state["terra"]["nivel"] = nivel_antigo - 1
+			if log.is_valid():
+				log.call("%s derrubou os muros — sua terra caiu para %s."
+					% [nome_reino, Dados.NIVEIS_TERRA[nivel_antigo - 1]["nome"]])
+		# vitória esmagadora pode impor vassalagem — sem custo de renome,
+		# porque não foi o jogador quem escolheu se ajoelhar
+		if str(state["jogador"].get("suserano", "")) == "" and randf() < 0.4:
+			state["jogador"]["suserano"] = reino_id
+			state["jogador"]["meses_vassalo"] = 0
+			# a guerra que trouxe essa marcha até aqui se encerra — um vassalo
+			# não continua em guerra com o próprio suserano
+			var vivas: Array = []
+			for g in state["guerras"]:
+				if (g["a"] == reino_id and g["b"] == "jogador") \
+						or (g["b"] == reino_id and g["a"] == "jogador"):
+					continue
+				vivas.append(g)
+			state["guerras"] = vivas
+			Dialogo.mudar_relacao(state, "rei_" + reino_id, 10, "vassalagem imposta")
+			if log.is_valid():
+				log.call("Derrotado, você jura lealdade a %s." % nome_reino)
+		Dialogo.mudar_relacao(state, "rei_" + reino_id, -20, "invasão")
+	else:
+		# o jogador REPELIU a invasão: o invasor recua enfraquecido, e
+		# defender a própria casa rende tanto renome quanto atacar fora
+		reino["forca"] = maxi(5, int(int(reino.get("forca", 40)) * 0.75))
+		state["jogador"]["renome"] = int(state["jogador"]["renome"]) + 15
+		if state["terra"] != null:
+			state["terra"]["felicidade"] = clampi(int(state["terra"]["felicidade"]) + 10, 0, 100)
+		if log.is_valid():
+			log.call("Suas terras resistiram ao ataque de %s." % nome_reino)
+
+	rel["resumo"] = Combate.montar_relatorio({
+		"contexto": rel["contexto"], "intencao": m["intencao"], "fases": rel["fases"],
+		"baixas_jogador": rel["baixas_defensor"], "baixas_inimigo": rel["baixas_atacante"],
+		"vivos_jogador": Combate.total_homens(guarnicao),
+		"vivos_inimigo": Combate.total_homens(m["tropas"]),
+		"vitoria": not rel["vitoria"], "debandada": ""})
+	if log.is_valid():
+		log.call(rel["resumo"].split("\n")[0] + (" Repelido." if not rel["vitoria"] else " Suas terras sofreram."))
+	Sinais.emitir(&"marcha_chegou", rel)
+	return rel
 
 ## Chegada ao alvo: o combate de três fases que já existe roda aqui.
 static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
@@ -333,30 +471,45 @@ static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
 
 ## Volta para casa: tropas ao bolso, saque ao cofre.
 static func _resolver_retorno(state: Dictionary, m: Dictionary, log: Callable) -> Dictionary:
+	var origem: String = str(m.get("origem", "jogador"))
 	var voltaram := 0
+	var fonte := _tropas_de(state, origem)
 	for tipo in m["tropas"]:
 		var q: int = int(m["tropas"][tipo])
 		if q <= 0:
 			continue
-		state["jogador"]["tropas"][tipo] = int(state["jogador"]["tropas"].get(tipo, 0)) + q
+		fonte[tipo] = int(fonte.get(tipo, 0)) + q
 		voltaram += q
 	var trouxe := {}
 	for g in m["saque"]:
 		var q2: int = int(m["saque"][g])
 		if q2 <= 0:
 			continue
-		if g == "ouro":
-			state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + q2
+		if origem == "jogador":
+			if g == "ouro":
+				state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + q2
+			else:
+				state["carga"][g] = int(state["carga"].get(g, 0)) + q2
 		else:
-			state["carga"][g] = int(state["carga"].get(g, 0)) + q2
+			# a economia de reino NPC não guarda bens genericamente — só
+			# tesouro, celeiro e madeireira (Geopolitica.inicializar). O
+			# saque vira valor de tesouro qualquer que seja o bem, que é a
+			# mesma simplificação que o reino já faz da própria renda.
+			var Geopolitica = load("res://scripts/geopolitica.gd")
+			var reino: Dictionary = Geopolitica.reino_por_id(state, origem)
+			if not reino.is_empty():
+				reino["tesouro"] = int(reino.get("tesouro", 0)) + q2
 		trouxe[g] = q2
 	if log.is_valid():
-		if trouxe.is_empty():
-			log.call("%d homens voltaram de %s de mãos vazias."
-				% [voltaram, Rotas.nome_do(state, m["alvo"])])
+		if origem == "jogador":
+			if trouxe.is_empty():
+				log.call("%d homens voltaram de %s de mãos vazias."
+					% [voltaram, Rotas.nome_do(state, m["alvo"])])
+			else:
+				log.call("%d homens voltaram de %s com a carga."
+					% [voltaram, Rotas.nome_do(state, m["alvo"])])
 		else:
-			log.call("%d homens voltaram de %s com a carga."
-				% [voltaram, Rotas.nome_do(state, m["alvo"])])
+			log.call("O exército de %s voltou de suas terras." % Rotas.nome_do(state, origem))
 	var ev := {"tipo": "retorno", "marcha": m["id"], "homens": voltaram, "carga": trouxe}
 	Sinais.emitir(&"marcha_voltou", ev)
 	return ev
@@ -364,9 +517,30 @@ static func _resolver_retorno(state: Dictionary, m: Dictionary, log: Callable) -
 # ------------------------------------------------------------
 # Alvo
 # ------------------------------------------------------------
+## Guarnição do PRÓPRIO JOGADOR — a Parte VII do patch consolidado (6.2).
+## Até aqui a escada de fortificação (Seção 4) só valia número num painel,
+## porque nenhum exército marchava contra a casa do jogador para ela
+## defender. Agora vale: cada degrau de terra soma milícia de muralha — não
+## sai do bolso, não pesa upkeep, é o que os moradores pegam em armas quando
+## os portões se fecham. E os lordes jurados somam alguns lanceiros da
+## própria casa (a mesma ideia de Cidadaos.tick, aqui como presença
+## permanente e não como evento raro).
+static func _guarnicao_do_jogador(state: Dictionary) -> Dictionary:
+	var g: Dictionary = state["jogador"]["tropas"].duplicate(true)
+	if state.get("terra") != null:
+		var extra: int = int(state["terra"]["nivel"]) * 8
+		if extra > 0:
+			g["campones"] = int(g.get("campones", 0)) + extra
+	for lorde in Cidadaos.lordes(state):
+		if not bool(lorde.get("capturado", false)):
+			g["lanceiro"] = int(g.get("lanceiro", 0)) + 4
+	return g
+
 ## Guarnição de um alvo, derivada da força que a geopolítica já mantém.
 ## Um reino forte tem muro de espadachins e lanças; um reino quebrado, quase nada.
 static func _guarnicao_de(state: Dictionary, alvo: String) -> Dictionary:
+	if alvo == "jogador":
+		return _guarnicao_do_jogador(state)
 	var Geopolitica = load("res://scripts/geopolitica.gd")
 	var reino: Dictionary = Geopolitica.reino_por_id(state, alvo)
 	if reino.is_empty():
