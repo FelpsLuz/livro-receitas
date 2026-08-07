@@ -82,6 +82,7 @@ var overlay_modal: Control
 var modal_centro: CenterContainer
 var input_nome: LineEdit
 var b_som: Button
+var musica_titulo: AudioStreamPlayer
 
 func _ready() -> void:
 	theme = Tema.criar()
@@ -234,7 +235,22 @@ func _montar_titulo() -> void:
 	if Jogo.tem_save():
 		Kit.botao(acoes, "Continuar Saga", continuar_jogo, "fantasma", 160)
 
+	# ---- a trilha ----
+	# A praça do mercado à noite, em loop (acabou, recomeça — é o próprio
+	# stream que dá a volta). O player mora na CENA, não na tela de título:
+	# quando o jogo começa a tela morre na hora, e é o fade de 1.4s abaixo,
+	# não um corte seco, que faz a transição soar intencional.
+	var trilha := Sfx.musica_titulo()
+	if trilha != null:
+		musica_titulo = AudioStreamPlayer.new()
+		musica_titulo.stream = trilha
+		musica_titulo.volume_db = -6.0
+		add_child(musica_titulo)
+		if not Sfx.mudo:
+			musica_titulo.play()
+
 func iniciar_jogo(nome: String) -> void:
+	Sfx.tocar(self, "tique")
 	state = Jogo.novo_jogo(nome)
 	_entrar_no_jogo()
 
@@ -242,6 +258,7 @@ func continuar_jogo() -> void:
 	var salvo = Jogo.carregar()
 	if salvo == null:
 		return
+	Sfx.tocar(self, "tique")
 	state = salvo
 	_entrar_no_jogo()
 
@@ -252,6 +269,11 @@ func _entrar_no_jogo() -> void:
 	if is_instance_valid(tela_titulo):
 		tela_titulo.queue_free()
 		tela_titulo = null
+	if is_instance_valid(musica_titulo):
+		var tw := create_tween()
+		tw.tween_property(musica_titulo, "volume_db", -40.0, 1.4)
+		tw.tween_callback(musica_titulo.queue_free)
+		musica_titulo = null
 	tela_jogo.visible = true
 	cidade_view.estado = state
 	cidade_view.semear_npcs()
@@ -328,6 +350,10 @@ func _montar_jogo() -> void:
 			tabs.set_tab_icon(i, ic)
 			tabs.set_tab_icon_max_width(i, 16)
 	tabs.tab_changed.connect(func(_i): atualizar())
+	# o som de aba fica no CLIQUE, não no tab_changed: o código troca de aba
+	# sozinho (voltar da conversa, abrir evento) e essas trocas não são um
+	# gesto do jogador — soar nelas viraria ruído de máquina
+	tabs.get_tab_bar().tab_clicked.connect(func(_i): Sfx.tocar(self, "aba"))
 
 	# ---- rodapé ----
 	# "Passar o mês" é o verbo do jogo inteiro: é o único botão que faz o
@@ -1152,7 +1178,11 @@ func _aba_corte(c: Container) -> void:
 		for n in Cidadaos.lista(state):
 			var preso: bool = bool(n.get("capturado", false))
 			var cel := Kit.linha(tab, Tema.PERIGO if preso else null)
-			Kit.retrato(cel[0], Retratos.textura_cidadao(n, true), 32)
+			# lorde jurado carrega o fundo da casa — a mesma marca de facção
+			# dos reis. Cidadão comum fica neutro: o fundo é heráldica, e
+			# heráldica em ferreiro leria como erro.
+			Kit.retrato(cel[0], Retratos.textura_cidadao(n, true,
+				Retratos.fundo_da_casa(state) if bool(n.get("lorde", false)) else ""), 32)
 			var vn := Kit.coluna(cel[1], 0)
 			var l_nome := Kit.fila(vn, Tema.E3)
 			Kit.texto(l_nome, str(n["nome"]))
@@ -1678,7 +1708,8 @@ func _aba_familia(c: Container) -> void:
 	var l_eu := Kit.fila(meu, Tema.E3)
 	Kit.retrato(l_eu, Retratos.textura_cidadao(
 		{"nome": str(j["nome"]), "oficio": "senhor", "riqueza": 500,
-		"genero": "m", "lealdade": 60, "lorde": true}, true), 32)
+		"genero": "m", "lealdade": 60, "lorde": true}, true,
+		Retratos.fundo_da_casa(state)), 32)
 	var v_eu := Kit.coluna(l_eu, 0)
 	Kit.texto(v_eu, str(j["nome"]), Tema.TEXTO, Tema.CORPO_G)
 	Kit.nota(v_eu, "%d anos · %s" % [int(j["idade"]), Contratos.titulo(state)])
@@ -1709,7 +1740,8 @@ func _aba_familia(c: Container) -> void:
 		var lf := Kit.fila(card, Tema.E3)
 		Kit.retrato(lf, Retratos.textura_cidadao(
 			{"nome": str(filho["nome"]), "oficio": "herdeiro", "riqueza": 400,
-			"genero": str(filho.get("genero", "m")), "lealdade": 60}, true), 32)
+			"genero": str(filho.get("genero", "m")), "lealdade": 60}, true,
+			Retratos.fundo_da_casa(state)), 32)
 		var vf := Kit.coluna(lf, 0)
 		Kit.texto(vf, str(filho["nome"]))
 		Kit.nota(vf, "%d anos" % int(filho["idade"]))
@@ -1982,6 +2014,7 @@ func _painel_modal() -> VBoxContainer:
 	for filho in modal_centro.get_children():
 		filho.queue_free()
 	overlay_modal.visible = true
+	Sfx.tocar(self, "abrir")
 	var painel := PanelContainer.new()
 	painel.add_theme_stylebox_override("panel", Tema.estilo_modal())
 	painel.custom_minimum_size = Vector2(480, 0)
@@ -2143,6 +2176,7 @@ func _modal_llm() -> void:
 	b.text = "Salvar"
 	b.pressed.connect(func():
 		Llm.definir_url(campo.text)
+		Sfx.tocar(self, "fechar")
 		overlay_modal.visible = false
 		atualizar())
 	v.add_child(b)

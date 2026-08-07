@@ -16,7 +16,11 @@ Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
 - **10 abas de gestão**: Terra, Mapa, Mercado, Taverna, Corte, Exército, Clãs, Intrigas,
   Família e Crônica — todas funcionais
 - **Modais**: rebelião, traição da guarda, relatório de batalha por rodadas, fim de jogo
-- **Sons** (`scripts/sfx.gd`): moedas, tambor, fanfarras — WAV gerado em código, zero assets
+- **Sons** (`scripts/sfx.gd`): pacote RPG Essentials em `assets/audio/sfx/` (moedas,
+  alerta, batalha, abas e modais) com fallback para o WAV gerado em código — apagar a
+  pasta de áudio devolve os bipes, nunca quebra. Trilha da tela de título em loop
+  (`assets/audio/musica_titulo.mp3`, fade ao entrar no jogo); créditos em
+  `assets/audio/CREDITOS.md`
 - **🧠 IA Local** (`scripts/llm.gd`): botão na Corte configura a URL do llama.cpp rodando
   no SEU processador; as falas dos NPCs passam a ser geradas pelo modelo GGUF, com
   fallback automático para o motor interno

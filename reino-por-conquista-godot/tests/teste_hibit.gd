@@ -47,6 +47,8 @@ func ok(cond: bool, nome: String, obs: String = "") -> void:
 func _initialize() -> void:
 	print("\n=== RENDERIZAÇÃO E TIPOGRAFIA ===")
 	_frente1()
+	print("\n=== SOM DO PACOTE E HERÁLDICA ===")
+	_frente_som_e_heraldica()
 	print("\n=== A TERRA NA TELA ===")
 	await _frente_terra()
 	print("\n=====================================")
@@ -411,3 +413,72 @@ func _frente1() -> void:
 
 	vp.free()
 	amb.free()
+
+
+# ------------------------------------------------------------
+## O CONTRATO DO ÁUDIO é o da arte hi-bit: arquivo do pacote presente
+## toca o arquivo, ausente devolve o tom gerado — e nunca um crash.
+## E a PLAQUETA nova tem a borda lisa POR CONSTRUÇÃO: as quatro faixas
+## esticáveis do 9-slice são uniformes ao longo do eixo de estico. Era a
+## serrilha das abas — pedra segmentada esticada — e se alguém regenerar
+## a arte com segmentos, isto acusa antes de qualquer olho.
+func _frente_som_e_heraldica() -> void:
+	var Sfx = load("res://scripts/sfx.gd")
+	var Retratos = load("res://scripts/retratos.gd")
+	var Tema = load("res://scripts/tema.gd")
+
+	# os onze nomes servidos pelo pacote: o stream tem que vir do WAV de
+	# 44.1 kHz mono — sair a 22050 seria o tom gerado, ou seja, parse falhou
+	var nomes := ["tique", "moeda", "alerta", "tambor", "vitoria", "derrota",
+		"pagina", "espada", "abrir", "fechar", "aba"]
+	var pacote_ok := true
+	var falha := ""
+	for nome in nomes:
+		var s: AudioStreamWAV = Sfx._stream(nome)
+		if s == null or s.mix_rate != 44100 or s.stereo or s.data.is_empty():
+			pacote_ok = false
+			falha = str(nome)
+	ok(pacote_ok, "os 11 sons vêm do pacote (44.1 kHz mono, com dados)",
+		"falhou em '%s'" % falha if not pacote_ok else "")
+	var generico: AudioStreamWAV = Sfx._stream("nome_que_nao_existe")
+	ok(generico != null and generico.mix_rate == 22050,
+		"nome desconhecido cai no tom gerado (22 kHz)")
+
+	var trilha: AudioStreamMP3 = Sfx.musica_titulo()
+	ok(trilha != null and trilha.loop and trilha.data.size() > 1_000_000,
+		"a trilha do título existe e está em loop",
+		"" if trilha == null else "%d bytes" % trilha.data.size())
+
+	# ---- plaqueta: faixas esticáveis uniformes ----
+	var placa: Texture2D = Tema.tex_hibit("ui_placa_pedra")
+	ok(placa != null, "ui_placa_pedra carrega")
+	if placa != null:
+		var img: Image = placa.get_image()
+		var w := img.get_width()
+		var h := img.get_height()
+		var lisa := true
+		for x in range(11, w - 11):
+			for y in [1, 3, h - 4, h - 2]:
+				if img.get_pixel(x, int(y)) != img.get_pixel(11, int(y)):
+					lisa = false
+		for y in range(11, h - 11):
+			for x in [1, 3, w - 4, w - 2]:
+				if img.get_pixel(int(x), y) != img.get_pixel(int(x), 11):
+					lisa = false
+		ok(lisa, "faixas esticáveis da plaqueta são uniformes (borda lisa)",
+			"%dx%d" % [w, h])
+
+	# ---- heráldica da casa ----
+	ok(Retratos.fundo_da_casa({}) == "5e4420",
+		"casa sem coroa usa o latão-úmbria próprio")
+	ok(Retratos.fundo_da_casa({"jogador": {"rei_de": "imperio"}}) == "1a4a2a",
+		"casa coroada herda o fundo do reino tomado")
+	var ficha := {"nome": "Teobaldo de Teste", "oficio": "senhor",
+		"riqueza": 400, "genero": "m", "lealdade": 60, "lorde": true}
+	var neutro: Texture2D = Retratos.textura_cidadao(ficha)
+	var com_casa: Texture2D = Retratos.textura_cidadao(ficha, false, "5e4420")
+	var pn: Color = neutro.get_image().get_pixel(2, 2)
+	var pc: Color = com_casa.get_image().get_pixel(2, 2)
+	ok(not pn.is_equal_approx(pc),
+		"o fundo de facção muda de fato o retrato do lorde",
+		"%s → %s" % [pn.to_html(false), pc.to_html(false)])

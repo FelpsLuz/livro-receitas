@@ -709,6 +709,18 @@ static func humor_de(state: Dictionary, id: String) -> String:
 		return "feliz"
 	return "neutro"
 
+## A cor que agrupa um retrato à CASA DO JOGADOR — o mesmo traço que agrupa
+## cada rei ao seu reino no painel de referência. Sem coroa, a casa usa o
+## latão-úmbria do próprio jogo (nenhum dos seis reinos é dono dele);
+## coroado, o jogador herda o fundo do reino que tomou, e a corte inteira
+## troca de estandarte junto.
+static func fundo_da_casa(state: Dictionary) -> String:
+	var j: Dictionary = state.get("jogador", {})
+	var rei_de := str(j.get("rei_de", ""))
+	if rei_de != "" and REIS.has("rei_" + rei_de):
+		return str(REIS["rei_" + rei_de]["fundo"])
+	return "5e4420"
+
 ## Retrato de um cidadão/lorde criado durante a partida.
 ## `n` é o dicionário de cidadaos.gd (nome, genero, oficio, riqueza…).
 ##
@@ -716,11 +728,15 @@ static func humor_de(state: Dictionary, id: String) -> String:
 ## ofício escolhe o toucado e a cor da roupa, e a riqueza escolhe se a roupa
 ## é a boa ou a surrada. É o que faz a lista da Corte parecer um elenco em
 ## vez de sete variações do mesmo homem.
-static func textura_cidadao(n: Dictionary, pequena: bool = false) -> Texture2D:
+##
+## `fundo` é a cor de facção (fundo_da_casa): o chamador decide QUEM a
+## carrega — lordes jurados, a família, comandantes — porque é ele quem
+## sabe o que a linha significa. Cidadão comum fica na vinheta neutra.
+static func textura_cidadao(n: Dictionary, pequena: bool = false, fundo: String = "") -> Texture2D:
 	var nome := str(n.get("nome", "?"))
 	var oficio := str(n.get("oficio", ""))
 	var rico: bool = int(n.get("riqueza", 0)) >= 280
-	var chave := "cid|%s|%s|%s" % [nome, oficio, "p" if pequena else "g"]
+	var chave := "cid|%s|%s|%s|%s" % [nome, oficio, "p" if pequena else "g", fundo]
 	if _cache.has(chave):
 		return _cache[chave]
 	var op := {
@@ -744,6 +760,8 @@ static func textura_cidadao(n: Dictionary, pequena: bool = false) -> Texture2D:
 		op["humor"] = "raiva"
 	if not rico:
 		op["roupa"] = (int(op["roupa"]) + 5) % ROUPA.size()
+	if fundo != "":
+		op["fundo"] = fundo
 	var img := _pintar(Semente.new(_hash(nome)), op)
 	if pequena:
 		img = _reduzir(img)
@@ -784,14 +802,16 @@ static func ilustracao(evento: String) -> Texture2D:
 ##
 ## O CONTRATO de "comandante vazio não tem retrato" é do chamador, não da
 ## arte: o card do comandante esconde o slot quando isto devolve null.
-static func textura_comandante(_state: Dictionary, cmd: Dictionary) -> Texture2D:
+static func textura_comandante(state: Dictionary, cmd: Dictionary) -> Texture2D:
 	if cmd.is_empty():
 		return null
 	var nome := str(cmd.get("nome", ""))
 	if nome == "":
 		return textura(str(cmd.get("id", "senhor")))
+	# quem marcha, marcha SOB A SUA BANDEIRA: o comandante leva o fundo da
+	# casa, como os lordes da Corte
 	return textura_cidadao({"nome": nome, "oficio": str(cmd.get("perfil", "senhor")),
-		"riqueza": 400, "genero": "m", "lealdade": 60})
+		"riqueza": 400, "genero": "m", "lealdade": 60}, false, fundo_da_casa(state))
 
 ## Um sprite qualquer pedido pelo id (cartógrafo, informante). Sem PNG, o id
 ## vira semente e a pessoa ganha uma cara — é o mesmo caminho de todo mundo.
