@@ -514,13 +514,11 @@ func atualizar() -> void:
 	# Quem muda de temperatura com a estação é o chip do calendário no HUD.
 	status_label.add_theme_color_override("font_color", Tema.TEXTO_2)
 
-	if state["fim"] != null:
-		_modal_fim()
-		return
-	if state["evento_pendente"] != null:
-		_modal_evento()
-		return
-
+	# A ABA REMONTA SEMPRE — inclusive com um modal por vir. A versão
+	# anterior retornava antes de remontar quando havia evento pendente, e o
+	# resultado era um quadro esquizofrênico: o HUD (montado acima) já dizia
+	# "Primavera, Março" enquanto a página visível POR BAIXO do véu ainda
+	# era o inverno do mês anterior. O jogador lia dois meses na mesma tela.
 	var c := _conteudo_aba()
 	for filho in c.get_children():
 		if filho != cidade_view:
@@ -538,6 +536,12 @@ func atualizar() -> void:
 		7: _aba_intrigas(c)
 		8: _aba_familia(c)
 		9: _aba_cronica(c)
+
+	# o modal entra por cima da aba JÁ COERENTE com o estado
+	if state["fim"] != null:
+		_modal_fim()
+	elif state["evento_pendente"] != null:
+		_modal_evento()
 
 # ---------------- utilitários de UI ----------------
 ## Estes quatro sobrevivem como ATALHOS para o kit. Eles são chamados em ~120
@@ -803,7 +807,11 @@ func _aba_mapa(c: Container) -> void:
 		# a barra de acento diz de relance ONDE você está e o que é seu, sem
 		# gastar uma palavra da linha de texto para isso
 		var h := _card(c, Tema.ACENTO if meu else (Tema.ACENTO_FUNDO if aqui else null))
-		_retrato(h, reino["rei"]["id"], 32)
+		# 64, não 32: os seis reis têm identidade fixa (coroa de ferro, elmo
+		# de chifres, galhada, tiara…) e a 32px a silhueta do toucado — que é
+		# o traço que os distingue — perdia metade dos pixels. O card do
+		# reino tem duas linhas + botões, então os 64 cabem sem esticar nada.
+		_retrato(h, reino["rei"]["id"], 64)
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", Tema.E2)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -979,9 +987,15 @@ func _aba_taverna(c: Container) -> void:
 		var v := Kit.coluna(cel[0], 0)
 		var l1 := Kit.fila(v, Tema.E3)
 		Kit.texto(l1, str(ct["nome"]))
-		Kit.texto(l1, "para %s" % str(ct["contratante"]), Tema.TEXTO_3, Tema.MICRO)
+		# NOME DE EXIBIÇÃO, nunca o id: o contrato guarda "leoes" e "aguias",
+		# e era isso que o mural imprimia — id cru, sem acento, minúsculo, e
+		# que não bate com nenhum dos seis reinos que o Mapa anuncia. O
+		# jogador não tem como saber que "leoes" são os Cervos Escarlates.
+		Kit.texto(l1, "para %s" % Rotas.nome_do(state, str(ct["contratante"])),
+			Tema.TEXTO_3, Tema.MICRO)
 		if str(ct["alvo"]) != "":
-			Kit.selo(l1, "alvo: %s" % str(ct["alvo"]), Tema.TEXTO_2, Tema.ELEVADO)
+			Kit.selo(l1, "alvo: %s" % Rotas.nome_do(state, str(ct["alvo"])),
+				Tema.TEXTO_2, Tema.ELEVADO)
 		Kit.nota(v, str(ct["desc"]))
 		var forca: int = int(ct["forca"])
 		Kit.medidor(cel[1], float(forca), 10.0, 80, 5,

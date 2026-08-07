@@ -55,7 +55,12 @@ const ESTACAO := {
 	"primavera": Color(1.00, 1.00, 0.98),
 	"verao": Color(1.04, 1.00, 0.92),
 	"outono": Color(1.02, 0.94, 0.86),
-	"inverno": Color(0.90, 0.94, 1.06),
+	# O inverno esfria MAIS que as outras estações mudam, de propósito: a
+	# arte da vila é de verão (grama verde, telhado seco), e a tinta é o
+	# único agente que a leva para o frio — 0.90 no vermelho lavava tão
+	# pouco que a neve caía sobre um gramado de julho. 0.82 dessatura o
+	# verde de verdade sem afogar a leitura.
+	"inverno": Color(0.82, 0.90, 1.08),
 }
 
 ## Meses de cada estação — espelha Dados.ESTACOES, mas sem depender dele:

@@ -77,7 +77,7 @@ const DADOS_ESTAGIO: Dictionary = {
 		"y_horizonte": 88,
 		"chamines": [[107, 143], [163, 135], [340, 168]],
 		"fogueiras": [],
-		"janelas": [[58, 190], [74, 190], [84, 161], [104, 161], [134, 154], [158, 154], [276, 165], [302, 165], [316, 155], [334, 155], [315, 191], [336, 191]],
+		"janelas": [[58, 190], [74, 190], [84, 161], [104, 161], [134, 154], [158, 154], [276, 165], [302, 165], [316, 155], [334, 155], [328, 191], [345, 191]],
 	},
 	4: {
 		"agua_presente": true,
@@ -260,6 +260,13 @@ static func _shader() -> Shader:
 	if _shader_agua != null:
 		return _shader_agua
 	var s := Shader.new()
+	# REGRA DO MOTOR que custou uma tarde: em canvas_item, LER `COLOR` no
+	# fragment já devolve `texture(TEXTURE, UV) × cor de vértice` — a base
+	# pronta. A primeira versão fazia `COLOR = tex * COLOR`, multiplicando a
+	# textura DE NOVO: imagem ao quadrado, céu a 80% do brilho e sombras a
+	# 3%. Parecia um entardecer misterioso que nenhum CanvasModulate
+	# explicava — porque não era luz, era álgebra. Aqui o shader NÃO
+	# reatribui a base: só ajusta COLOR dentro da máscara d'água.
 	s.code = """
 shader_type canvas_item;
 uniform sampler2D mascara : filter_nearest;
@@ -267,23 +274,23 @@ uniform float forca : hint_range(0.0, 1.0) = 1.0;
 uniform float sol : hint_range(0.0, 1.0) = 1.0;
 
 void fragment() {
-	vec4 tex = texture(TEXTURE, UV);
 	float agua = texture(mascara, UV).r;
 	if (agua > 0.5) {
 		vec2 px = floor(UV * vec2(400.0, 224.0));
 		// duas ondas cruzadas, período longo: a água RESPIRA, não ferve
 		float fase = sin(px.y * 0.85 + TIME * 1.5)
 			* sin(px.x * 0.21 - TIME * 0.65);
-		tex.rgb *= 1.0 + fase * 0.055 * forca;
+		COLOR.rgb *= 1.0 + fase * 0.055 * forca;
 		// cintilação: ~1,5% dos pixels da água, cada um piscando na sua
-		// própria fase — é o sol nas cristas, e some junto com ele à noite
+		// própria fase — o sol nas cristas, e some junto com ele à noite.
+		// O alvo é multiplicado por COLOR.a para a cintilação respeitar o
+		// alfa do crossfade de evolução.
 		float r = fract(sin(dot(px, vec2(12.9898, 78.233))) * 43758.5453);
 		float crista = step(0.985, r)
 			* max(0.0, sin(TIME * 1.8 + r * 6.2831));
-		tex.rgb = mix(tex.rgb, vec3(0.98, 0.96, 0.88),
+		COLOR.rgb = mix(COLOR.rgb, vec3(0.95, 0.93, 0.86) * COLOR.a,
 			crista * 0.7 * forca * sol);
 	}
-	COLOR = tex * COLOR;
 }
 """
 	_shader_agua = s
@@ -489,6 +496,12 @@ func _ajustar_nuvens() -> void:
 		var alt := 4 + i * maxi(6, (horizonte - 26) / 4)
 		s.position.y = clampf(alt, 2, maxf(2, horizonte - 14))
 		s.modulate.a = 0.85 - 0.1 * i
+	# o haze ANCORA NO HORIZONTE do estágio — nasceu pendurado em y=0, um
+	# véu no topo do céu, onde profundidade atmosférica não existe. O pico
+	# do gradiente (base da textura de 40px) assenta 8px DENTRO das
+	# montanhas; o resto esvanece céu acima.
+	if _haze != null:
+		_haze.position.y = maxf(0.0, float(horizonte) - 32.0)
 
 ## O haze: um véu da cor do céu que engrossa perto do horizonte — é a
 ## profundidade atmosférica que separa a montanha distante da próxima.

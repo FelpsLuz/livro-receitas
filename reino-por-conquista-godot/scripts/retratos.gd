@@ -248,14 +248,29 @@ static func _pintar(sem: Semente, op: Dictionary) -> Image:
 
 	# ---- fundo: vinheta radial, escura nos cantos ----
 	# um fundo chapado atrás de um rosto faz o rosto parecer recortado e
-	# colado; a vinheta o assenta no card, e custa 4096 lerps uma vez só
+	# colado; a vinheta o assenta no card, e custa 4096 lerps uma vez só.
+	# Um rei traz o FUNDO na cor do seu reino (op["fundo"]) — é o traço do
+	# painel de referência que agrupa o retrato à facção.
 	var c := (LADO_RETRATO - 1) * 0.5
+	var f_a := FUNDO_A
+	var f_b := FUNDO_B
+	if op.has("fundo"):
+		var base_f := Color(str(op["fundo"]))
+		f_a = base_f.darkened(0.30)
+		f_b = base_f.darkened(0.62)
 	for y in LADO_RETRATO:
 		for x in LADO_RETRATO:
 			var d: float = Vector2(x - c, y - c).length() / (c * 1.42)
-			t.img.set_pixel(x, y, FUNDO_A.lerp(FUNDO_B, clampf(d * 1.15, 0.0, 1.0)))
+			t.img.set_pixel(x, y, f_a.lerp(f_b, clampf(d * 1.15, 0.0, 1.0)))
 
-	var pele: Array = PELE[sem.proximo(PELE.size())]
+	# ---- os traços: da FICHA quando há (reis), da semente quando não ----
+	var pele: Array
+	if op.has("pele"):
+		pele = [Color(str(op["pele"][0])), Color(str(op["pele"][1]))]
+	elif op.has("pele_idx"):
+		pele = PELE[int(op["pele_idx"])]
+	else:
+		pele = PELE[sem.proximo(PELE.size())]
 	var idoso: bool = bool(op.get("idoso", false))
 	# grisalho e branco (índices 5 e 6) só entram no elenco velho: um rei de
 	# 22 anos de cabelo branco é o tipo de detalhe que faz o gerador parecer
@@ -263,8 +278,24 @@ static func _pintar(sem: Semente, op: Dictionary) -> Image:
 	var i_cab: int = sem.proximo(CABELO.size() - 2)
 	if idoso and sem.chance(70):
 		i_cab = 5 + sem.proximo(2)
-	var cabelo: Array = CABELO[i_cab]
-	var roupa: Array = ROUPA[int(op.get("roupa", sem.proximo(ROUPA.size())))]
+	if op.has("cabelo_idx"):
+		i_cab = int(op["cabelo_idx"])
+	var cabelo: Array
+	if op.has("cabelo"):
+		cabelo = [Color(str(op["cabelo"][0])), Color(str(op["cabelo"][1]))]
+	else:
+		cabelo = CABELO[i_cab]
+	var roupa: Array
+	if op.has("roupa_cor"):
+		roupa = [Color(str(op["roupa_cor"][0])), Color(str(op["roupa_cor"][1]))]
+	else:
+		roupa = ROUPA[int(op.get("roupa", sem.proximo(ROUPA.size())))]
+
+	# ---- capa, ATRÁS dos ombros ----
+	# uma meia-elipse maior por trás do busto: só as bordas externas
+	# aparecem, que é como uma capa lê num busto de 64px
+	if op.has("capa"):
+		t.meia_elipse(32, 80, 34, 42, Color(str(op["capa"])), false)
 
 	# ---- ombros ----
 	# a meia-elipse baixa é o busto. Ela nasce fora do quadro (cy = 78) para
@@ -297,8 +328,8 @@ static func _pintar(sem: Semente, op: Dictionary) -> Image:
 	# exatamente o defeito da primeira versão deste gerador.
 	var cy := 26.0
 	_rosto(t, pele, cy)
-	var estilo: int = sem.proximo(4)
-	var calvo: bool = idoso and sem.chance(35)
+	var estilo: int = int(op["estilo"]) if op.has("estilo") else sem.proximo(4)
+	var calvo: bool = idoso and sem.chance(35) and not op.has("estilo")
 	# a linha do cabelo é o que diferencia os penteados de verdade; a forma
 	# da massa muda pouco a 32px, a altura da testa muda tudo
 	var y_cabelo: int = 18
@@ -378,6 +409,62 @@ static func _pintar(sem: Semente, op: Dictionary) -> Image:
 			# metal virar um elmo, e ele só cabe porque os olhos estão em
 			# x 26–29 e 35–38, com a coluna central livre
 			t.retangulo(31, 12, 2, 19, Color("aab4bd"))
+		# ---- os toucados dos SEIS REIS (ver a tabela REIS) ----
+		"coroa_ferro":
+			# a coroa do Sangrento: ferro escuro, pontas largas, dois rubis
+			t.retangulo(19, 11, 26, 5, Color("5a5a64"))
+			t.retangulo(19, 15, 26, 1, Color("3a3a42"))
+			for px3 in [20, 30, 40]:
+				t.retangulo(px3, 6, 4, 5, Color("5a5a64"))
+				t.ponto(px3 + 1, 5, Color("74747e"))
+			for px4 in [24, 37]:
+				t.retangulo(px4, 12, 2, 2, Color("c23030"))
+		"elmo_chifres":
+			# o elmo do norte: domo escuro, banda, e os chifres curvos
+			t.meia_elipse(32, 20, 14, 13, Color("6f767d"), false)
+			t.retangulo(18, 17, 28, 3, Color("565c62"))
+			for lado3 in [-1, 1]:
+				var bx3: int = 32 + int(lado3) * 15
+				# o chifre sobe em três segmentos, curvando para fora
+				t.retangulo(bx3 - 1, 10, 3, 5, Color("e8e0d0"))
+				t.retangulo(bx3 + int(lado3) - 1, 6, 3, 5, Color("e8e0d0"))
+				t.retangulo(bx3 + int(lado3) * 2 - 1, 3, 3, 4, Color("d4c8b0"))
+		"coroa_bronze":
+			# o aro fino do Sol de Bronze, três pontas baixas e a pedra
+			t.retangulo(20, 13, 24, 3, Color("a5722c"))
+			t.retangulo(20, 13, 24, 1, Color("c9964a"))
+			for px5 in [22, 31, 40]:
+				t.retangulo(px5, 10, 2, 3, Color("a5722c"))
+			t.retangulo(31, 13, 2, 2, Color("3a3a42"))
+		"coroa_cervo":
+			# o aro prata com a GALHADA escarlate: duas hastes com ramos
+			t.retangulo(20, 12, 24, 3, Color("aab4bd"))
+			t.retangulo(20, 12, 24, 1, Color("d0d8de"))
+			for lado4 in [-1, 1]:
+				var hx: int = 32 + int(lado4) * 9
+				t.retangulo(hx, 3, 2, 9, Color("b03030"))
+				t.retangulo(hx + int(lado4) * 3, 1, 2, 4, Color("b03030"))
+				t.retangulo(hx - int(lado4) * 2, 5, 2, 3, Color("8b2020"))
+		"coroa_alada":
+			# o aro das Garças: prata, ponta central e asas nas têmporas
+			t.retangulo(20, 12, 24, 3, Color("aab4bd"))
+			t.retangulo(20, 12, 24, 1, Color("e0e6ea"))
+			t.retangulo(30, 7, 4, 5, Color("d0d8de"))
+			for lado5 in [-1, 1]:
+				var ax: int = 32 + int(lado5) * 13
+				# três penas em leque, subindo para fora
+				t.retangulo(ax, 8, 2, 6, Color("d8dee4"))
+				t.retangulo(ax + int(lado5) * 2, 6, 2, 7, Color("e8ecf0"))
+				t.retangulo(ax + int(lado5) * 4, 5, 2, 7, Color("c4ccd4"))
+		"tiara":
+			# a tiara da Víbora: arco fino que desce nas pontas, safiras
+			t.retangulo(22, 13, 20, 2, Color("aab4bd"))
+			t.retangulo(20, 14, 2, 3, Color("aab4bd"))
+			t.retangulo(42, 14, 2, 3, Color("aab4bd"))
+			t.retangulo(31, 11, 2, 3, Color("d0d8de"))
+			for px6 in [26, 31, 37]:
+				t.ponto(px6, 13, Color("3a6ac8"))
+			t.ponto(31, 12, Color("5a8ae8"))
 
 	# ---- olhos ----
 	var humor: String = str(op.get("humor", "neutro"))
@@ -427,8 +514,20 @@ static func _pintar(sem: Semente, op: Dictionary) -> Image:
 			t.retangulo(29, 36, 6, 1, Color("7a4034"))
 
 	# ---- barba ----
-	if bool(op.get("barba", false)):
-		var comprida: bool = sem.chance(45)
+	# `barba_estilo` (ficha de rei) manda; sem ele, vale o sorteio antigo.
+	var tem_barba: bool = bool(op.get("barba", false))
+	var barba_estilo: String = str(op.get("barba_estilo", ""))
+	if barba_estilo == "nenhuma":
+		tem_barba = false
+	elif barba_estilo != "":
+		tem_barba = true
+	if barba_estilo == "cavanhaque":
+		# só o queixo, estreito, mais o bigode fino: a barba de corte
+		t.meia_elipse(32, 38, 5, 6, cabelo[0], true)
+		t.retangulo(28, 34, 8, 2, cabelo[1])
+		t.retangulo(29, 36, 6, 1, Color("7a4034"))
+	elif tem_barba:
+		var comprida: bool = barba_estilo == "cheia" or sem.chance(45)
 		# a barba segue o queixo, então é meia-elipse baixa — retângulo aqui
 		# dava aquele "queixo de caixa" que denuncia gerador
 		t.meia_elipse(32, 34, 11, 10 if comprida else 7, cabelo[0], true)
@@ -448,11 +547,68 @@ static func _pintar(sem: Semente, op: Dictionary) -> Image:
 	t.contornar(CONTORNO)
 	return t.img
 
+# ============================================================
+# OS SEIS REIS — identidade FIXA, da referência de arte.
+#
+# Todo o resto do elenco sai da semente; os reis não. A referência visual
+# do projeto define cada um por três traços que sobrevivem a 32px — o
+# TOUCADO, a CABELEIRA e a COR do reino no fundo — e é isso que esta
+# tabela fixa. Sorteio aqui seria jogar fora a única direção de arte
+# explícita que o elenco tem:
+#
+#   Felippe, o Sangrento   coroa de FERRO, barba cheia escura, capa rubra
+#   Bjorne, o Orgulhoso    ELMO DE CHIFRES, ruivo, barba enorme, peles
+#   Enzo Tenebris          coroa de BRONZE fina, cavanhaque, traje escuro
+#   Ignis, o Escarlate     coroa com GALHADA de cervo, jovem, prata
+#   Frederico Silver       coroa ALADA, loiro longo, capa clara
+#   Eva, a Víbora          TIARA de safiras, pálida, cabelo negro
+#
+# O FUNDO do retrato leva a cor do reino (igual ao painel de lordes da
+# referência): é o traço que agrupa qualquer vassalo futuro ao seu senhor.
+# ============================================================
+const REIS := {
+	"rei_imperio": {
+		"toucado": "coroa_ferro", "barba_estilo": "cheia", "cabelo_idx": 1,
+		"estilo": 0, "pele_idx": 1, "roupa_cor": ["3a3a42", "26262c"],
+		"capa": "8b2030", "fundo": "1a4a2a",
+	},
+	"rei_touros": {
+		"toucado": "elmo_chifres", "barba_estilo": "cheia", "cabelo_idx": 3,
+		"estilo": 1, "pele_idx": 0, "roupa_cor": ["7a5a3a", "584028"],
+		"fundo": "1c1c22",
+	},
+	"rei_alvorecer": {
+		"toucado": "coroa_bronze", "barba_estilo": "cavanhaque", "cabelo_idx": 1,
+		"estilo": 3, "pele_idx": 1, "roupa_cor": ["4a3a2c", "33291e"],
+		"fundo": "6b5314",
+	},
+	"rei_leoes": {
+		"toucado": "coroa_cervo", "barba_estilo": "nenhuma", "cabelo_idx": 2,
+		"estilo": 0, "pele_idx": 1, "roupa_cor": ["b8c2cc", "8a95a0"],
+		"fundo": "8b1a1a",
+	},
+	"rei_aguias": {
+		"toucado": "coroa_alada", "barba_estilo": "nenhuma",
+		"cabelo": ["d4b358", "a08238"], "estilo": 1, "pele_idx": 0,
+		"roupa_cor": ["aab4bd", "7e8890"], "capa": "d8dee4", "fundo": "4a545e",
+	},
+	"rei_rosa": {
+		"toucado": "tiara", "barba_estilo": "nenhuma", "cabelo_idx": 0,
+		"estilo": 1, "pele": ["ece0da", "c8b4ac"],
+		"roupa_cor": ["2c3a5e", "1e2a44"], "fundo": "2d4a8a",
+	},
+}
+
 ## Traços que vêm do ID em vez do acaso: um rei usa coroa, um espião usa
 ## capuz. O gerador não adivinha papel — quem chama sabe, e o id carrega.
 static func _opcoes_de(id: String, humor: String) -> Dictionary:
 	var s := id.to_lower()
 	var op := {"humor": humor}
+	# os seis reis têm ficha própria; qualquer outro "rei_" cai na coroa
+	# genérica de sempre
+	if REIS.has(s):
+		op.merge(REIS[s])
+		return op
 	if s.begins_with("rei_") or s == "lorde" or s.contains("rainha"):
 		op["toucado"] = "coroa"
 		op["idoso"] = true
