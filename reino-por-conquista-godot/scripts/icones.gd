@@ -112,35 +112,81 @@ static func tem(nome: String) -> bool:
 ## desenhado, um retângulo cinza não lê como "falta arte", lê como DEFEITO,
 ## e era o pior pixel da aba do mercado.
 ##
-## O substituto é um losango na cor própria do item (tabela COR). Ele não
-## finge ser o ícone que falta, mas cumpre o trabalho que o ícone tinha na
-## tabela: dar à linha uma marca colorida que o olho acha antes de ler a
-## palavra. E, ao contrário do caixote, parece escolhido.
-static var _losangos: Dictionary = {}
+## Para `pedra` e `prata` o substituto virou SILHUETA DESENHADA — uma rocha
+## facetada e três barras empilhadas — no mesmo contrato dos 41 arquivos:
+## branco com alfa, 192×192, cor aplicada em runtime. Qualquer OUTRO nome
+## sem arquivo cai no losango genérico, que não finge ser o ícone que falta
+## mas cumpre o trabalho dele na tabela: uma marca colorida que o olho acha
+## antes de ler a palavra.
+static var _gerados: Dictionary = {}
 
-static func _losango(cor: Color) -> Texture2D:
-	var chave := cor.to_html()
-	if _losangos.has(chave):
-		return _losangos[chave]
-	var lado := 64
+static func _silhueta_gerada(nome: String) -> Texture2D:
+	if _gerados.has(nome):
+		return _gerados[nome]
+	var lado := 192
 	var img := Image.create(lado, lado, false, Image.FORMAT_RGBA8)
-	var c := (lado - 1) * 0.5
-	for y in lado:
-		for x in lado:
-			# |dx| + |dy| <= r é o losango; a casca de 6px fica mais clara
-			var d: float = absf(x - c) + absf(y - c)
-			if d <= c * 0.92:
-				img.set_pixel(x, y, cor if d > c * 0.62 else cor.darkened(0.35))
+	var b := Color(1, 1, 1, 1)
+	var meio := Color(1, 1, 1, 0.55)   # meio-tom: a faceta, como nos demais
+	match nome:
+		"pedra":
+			# uma rocha: hexágono irregular cheio, com duas arestas de
+			# faceta em meio-tom — o mesmo vocabulário do icone_ferro
+			var pontos := PackedVector2Array([Vector2(96, 22), Vector2(164, 58),
+				Vector2(172, 128), Vector2(112, 172), Vector2(38, 148),
+				Vector2(24, 72)])
+			for y in lado:
+				for x in lado:
+					if Geometry2D.is_point_in_polygon(Vector2(x, y), pontos):
+						img.set_pixel(x, y, b)
+			# arestas internas da faceta
+			for t in 300:
+				var f := t / 299.0
+				var p1 := Vector2(96, 22).lerp(Vector2(112, 172), f)
+				var p2 := Vector2(24, 72).lerp(Vector2(172, 128), f)
+				for p in [p1, p2]:
+					for dy in range(-2, 3):
+						for dx in range(-2, 3):
+							var px := int(p.x) + dx
+							var py := int(p.y) + dy
+							if px >= 0 and py >= 0 and px < lado and py < lado \
+									and img.get_pixel(px, py).a > 0.9:
+								img.set_pixel(px, py, meio)
+		"prata":
+			# três barras trapezoidais empilhadas em pirâmide
+			for barra in [[36, 128, 84], [76, 128, 84], [56, 84, 40]]:
+				var bx: int = barra[0]
+				var by: int = barra[2]
+				for y in range(by, by + 40):
+					var recuo: int = int((y - by) * 0.35)
+					for x in range(bx + 14 - recuo, bx + 66 + recuo):
+						if x >= 0 and x < lado:
+							img.set_pixel(x, y, b)
+				# topo da barra em meio-tom: o brilho do lingote
+				for y in range(by, by + 8):
+					var recuo2: int = int((y - by) * 0.35)
+					for x in range(bx + 14 - recuo2, bx + 66 + recuo2):
+						if x >= 0 and x < lado:
+							img.set_pixel(x, y, meio)
+		_:
+			# o losango genérico de sempre
+			var c := (lado - 1) * 0.5
+			for y in lado:
+				for x in lado:
+					var d: float = absf(x - c) + absf(y - c)
+					if d <= c * 0.92:
+						img.set_pixel(x, y, b if d > c * 0.62 else meio)
 	var tex := ImageTexture.create_from_image(img)
-	_losangos[chave] = tex
+	_gerados[nome] = tex
 	return tex
+
 
 ## A silhueta. Quem tinge é `imagem()` ou o chamador, via `modulate`.
 static func textura(nome: String) -> Texture2D:
+	var chave := nome.trim_prefix("icone_")
 	if not tem(nome):
-		return _losango(Color.WHITE)
+		return _silhueta_gerada(chave)
 	var t = load(PASTA + _id(nome) + ".png")
-	return t if t is Texture2D else _losango(Color.WHITE)
+	return t if t is Texture2D else _silhueta_gerada(chave)
 
 static var _tingidas: Dictionary = {}
 
@@ -158,12 +204,14 @@ static func textura_tingida(nome: String, cor: Variant = null) -> Texture2D:
 	var chave := "%s|%s" % [_id(nome), c.to_html()]
 	if _tingidas.has(chave):
 		return _tingidas[chave]
-	if not tem(nome):
-		return _losango(c)
-	var base: Texture2D = load(PASTA + _id(nome) + ".png")
+	var base: Texture2D
+	if tem(nome):
+		base = load(PASTA + _id(nome) + ".png")
 	if base == null:
-		return _losango(c)
-	var img := base.get_image()
+		# sem arquivo: a silhueta GERADA (pedra, prata, losango) entra no
+		# mesmo caminho de tingimento dos PNG — um fluxo só, sem atalho
+		base = _silhueta_gerada(nome.trim_prefix("icone_"))
+	var img: Image = base.get_image().duplicate()
 	img.convert(Image.FORMAT_RGBA8)
 	for y in img.get_height():
 		for x in img.get_width():

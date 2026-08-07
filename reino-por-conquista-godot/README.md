@@ -23,23 +23,25 @@ Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
 - **Save/load** automático em JSON (`user://save.json`)
 - **Presets de exportação** prontos: Windows .exe, Android .apk e Web (PWA)
 
-### Sistema de luz e água (novo)
+### Sistema de luz e água — `scripts/atmosfera.gd` + `environment_manager.gd`
 
-- **Engine configurada contra mixels**: `default_texture_filter = Nearest`,
-  stretch `canvas_items` com aspect `keep` (pixels nítidos em qualquer janela).
-- **`scripts/luz_do_sol.gd`** — `DirectionalLight2D` com ciclo dia/tarde/noite:
-  hue-shifting automático de cor (quente → laranja → azul-noite), energia e
-  ângulo do sol; sombras suavizadas com `SHADOW_FILTER_PCF5`. Pode rodar em
-  ciclo automático (`velocidade_ciclo`) ou amarrado ao mês do jogo
-  (`definir_pelo_mes` — sol alto no verão, baixo no inverno).
-- **`scripts/cidade_cena.gd`** — empacota a cidade num `SubViewport` para a
-  luz banhar SÓ o cenário (a UI de pergaminho fica fora do alcance), e gera
-  **`LightOccluder2D` nas bases de cada construção** (casas, moinho,
-  estrebaria, muralha, castelo) para sombras projetadas dinâmicas.
-- **`shaders/agua.gdshader`** — água orgânica: distorce o que está desenhado
-  atrás (`hint_screen_texture`), tinge, acrescenta brilhos de sol pelo ruído
-  e desvanece nas bordas para casar com as margens. O `NoiseTexture2D` +
-  `FastNoiseLite` são criados em código — nenhum passo manual no Inspector.
+A vila é uma cena de referência estática; a vida em cima dela é 100% código:
+
+- **`scripts/environment_manager.gd`** (autoload) — a HORA e a ESTAÇÃO do
+  mundo viram cor de ambiente por `CanvasModulate`, POR VIEWPORT: a vila
+  escurece à noite e esfria no inverno, a interface nunca. A hora vem do MÊS
+  do jogo (inverno = dia curto), não do relógio de parede.
+- **`scripts/atmosfera.gd`** — consome o gerente e acrescenta o que a arte
+  não tem: **água viva** (shader por máscara — ondulação de brilho e
+  cintilação de sol, sem nunca distorcer UV), **janelas que acendem** ao
+  anoitecer (com compensação da tinta ambiente, para a luz EMITIR em vez de
+  refletir), **fumaça de chaminé** em partículas (mais fumaça no inverno),
+  **nuvens em parallax** geradas por semente, **haze** no horizonte, e
+  **neve/folhas** por estação. A máscara de água nasce da própria arte em
+  runtime: cor da paleta medida ∩ bbox medida — porque azul também mora em
+  telhado, e cor sozinha não identifica água.
+- **Engine configurada contra mixels**: `default_texture_filter = Nearest`
+  e snapping 2D (ver `project.godot`).
 
 Rodar os testes de cena:
 ```
@@ -175,22 +177,19 @@ xvfb-run godot --path reino-por-conquista-godot --rendering-driver opengl3 \
 
 ## Pipeline Hi-Bit
 
-Como a arte volta a entrar: `docs/PIPELINE_HIBIT.md`.
+O que existe DE VERDADE no repositório (a versão anterior deste README
+listava seis arquivos que nunca chegaram a entrar — `camera_mundo.gd`,
+`ai_visual_bridge.gd`, `agente_movel.gd`, `visual_controller.gd`,
+`shaders/`, `docs/PIPELINE_HIBIT.md` — e prometia uma ponte PixelLab que
+não faz parte do projeto):
 
 | peça | onde |
 |---|---|
-| ciclo de luz por `CanvasModulate` | `scripts/environment_manager.gd` (autoload) |
-| câmera top-down com limites e enquadramento inteiro | `scripts/camera_mundo.gd` |
-| geração de textura em runtime (PixelLab) | `scripts/ai_visual_bridge.gd` |
-| vento · contorno · paleta dinâmica | `shaders/` |
-| mecânica que só emite sinal | `scripts/agente_movel.gd` |
-| visual que só escuta | `scripts/visual_controller.gd` |
+| ciclo de luz por `CanvasModulate`, hora × estação | `scripts/environment_manager.gd` (autoload) |
+| água viva, janelas, fumaça, nuvens, haze, neve | `scripts/atmosfera.gd` |
+| a vila em seis cenas de referência + escada de nível | `scripts/cenario_v3_cena.gd` / `_view.gd` |
 
 ```bash
 godot --path reino-por-conquista-godot --script res://tests/teste_hibit.gd
 ```
-
-⚠️ A chave do PixelLab **nunca** entra no código nem no build. Ela vem de
-`PIXELLAB_SECRET` ou de `user://pixellab.key`, e a ponte se declara
-indisponível em build exportada. Ver a seção "A chave não pode ir no jogo".
 

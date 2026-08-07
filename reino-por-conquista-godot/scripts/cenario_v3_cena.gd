@@ -20,16 +20,21 @@ extends Node2D
 
 const Arte = preload("res://scripts/arte.gd")
 
-## Nomes posicionais: são a ordem narrativa dos seis estágios, e é essa
-## ordem — não a arte — que casa com Dados.NIVEIS_TERRA.
+## Nomes posicionais: a ordem NARRATIVA das seis cenas de referência —
+## campo virgem, acampamento, aldeia, vila com paliçada, castelo em obras,
+## castelo pronto. São a MESMA terra em seis momentos (a leva de arte veio
+## em cadeia, cada cena evoluindo a anterior), e é isso que faz o crossfade
+## de `evoluir()` ler como construção em vez de troca de cenário.
+##
+## Seis cenas para NOVE níveis de terra: quem traduz é a ESCADA no
+## cenario_v3_view — dois marcos de nível podem dividir a mesma cena, mas a
+## cena nunca anda para trás.
 const NOMES := ["estagio_01", "estagio_02", "estagio_03",
-		"estagio_04", "estagio_05", "estagio_06",
-		"estagio_07", "estagio_08", "estagio_09"]
-## 400×224, e não os 480×270 de antes. O endpoint do gerador recusa acima de
-## 400 e exige lado múltiplo de 4, então a arte NASCE em 400×224. A saída era
-## gerar menor e ampliar — mas ×1,2 não é fator inteiro e borraria a grade
-## inteira, que é justamente o que uma arte pixel não perdoa. A grade nativa
-## desce até a arte; nada é reamostrado em lugar nenhum.
+		"estagio_04", "estagio_05", "estagio_06"]
+## 400×224: as referências chegam em 1370×784 e são REDUZIDAS uma vez, na
+## importação (com júri visual por imagem entre três métodos de downscale) —
+## nunca em runtime. A grade que sai dessa redução é a grade final; daqui em
+## diante nada é reamostrado em lugar nenhum.
 const NATIVO := Vector2i(400, 224)
 
 # ---- transição de evolução ----

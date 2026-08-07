@@ -26,6 +26,7 @@ extends SubViewportContainer
 
 const CenarioV3Cena = preload("res://scripts/cenario_v3_cena.gd")
 const Ambiente = preload("res://scripts/environment_manager.gd")
+const AtmosferaCena = preload("res://scripts/atmosfera.gd")
 
 const NATIVO := CenarioV3Cena.NATIVO
 ## ESCALA 1, e não 2.
@@ -44,6 +45,7 @@ const ESCALA := 1
 
 var viewport: SubViewport
 var cena: CenarioV3Cena
+var atmosfera: Node2D
 
 var _nivel_montado := -99
 
@@ -96,21 +98,39 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	_aplicar()
-	# Atmosfera Hi-Bit NESTE viewport. É esta a cena que o jogo mostra na aba
-	# "Sua Terra" (ver principal.gd `_nova_cena`), então é aqui que o ciclo
-	# de luz aparece para o jogador. Na raiz, o mesmo CanvasModulate deixaria
-	# a interface de pergaminho azul à noite e ilegível.
+	# A ATMOSFERA — luz de hora×estação, água viva, janelas que acendem,
+	# fumaça, nuvens. Ela é quem registra o viewport no EnvironmentManager
+	# (um CanvasModulate SÓ, o dela: registrar aqui de novo empilharia um
+	# segundo multiply e a noite escureceria em dobro). Na raiz da árvore, o
+	# mesmo CanvasModulate deixaria a interface azul à noite e ilegível — é
+	# por isso que a vila mora num SubViewport.
+	atmosfera = AtmosferaCena.new()
+	viewport.add_child(atmosfera)
+	atmosfera.montar(cena, viewport)
 	var amb := Ambiente.gerente()
-	if amb != null:
-		amb.registrar(cena)
-		if not estado.is_empty():
-			amb.definir_mes(int(estado.get("mes", 6)))
+	if amb != null and not estado.is_empty():
+		amb.definir_mes(int(estado.get("mes", 6)))
+	_aplicar_estagio_atmosfera()
 
 
-func _exit_tree() -> void:
-	var amb := Ambiente.gerente()
-	if amb != null and cena != null:
-		amb.esquecer(cena)
+## A ESCADA nível→cena. Nove níveis de terra (Acampamento…Castelo), seis
+## cenas de referência. Os marcos visíveis ficam onde a narrativa muda:
+##
+##   sem terra        → 0 campo virgem (você ainda não tem nada)
+##   0 Acampamento    → 1 tenda e fogueira
+##   1 Paliçada       → 1 (upgrade barato; a cena pouco mudaria)
+##   2 Aldeia         → 2 moinho e primeiras casas
+##   3 Vila · 4 Burgo → 3 mercado, curral, paliçada
+##   5–7 Pedra…Cidadela → 4 muralha de pedra e castelo em obras
+##   8 Castelo        → 5 castelo pronto, estandarte no alto
+const ESCADA_NIVEL := [1, 1, 2, 3, 3, 4, 4, 4, 5]
+
+static func estagio_de(estado_jogo: Dictionary) -> int:
+	if estado_jogo.get("terra") == null:
+		return 0
+	var nivel := clampi(int(estado_jogo["terra"].get("nivel", 0)),
+		0, ESCADA_NIVEL.size() - 1)
+	return ESCADA_NIVEL[nivel]
 
 
 func _aplicar() -> void:
@@ -122,21 +142,29 @@ func _aplicar() -> void:
 	# recompensa na abertura, como se o jogador tivesse acabado de subir.
 	if estado.is_empty():
 		return
-	var nivel := 0
-	if estado.get("terra") != null:
-		nivel = int(estado["terra"].get("nivel", 0))
-	nivel = clampi(nivel, 0, CenarioV3Cena.NOMES.size() - 1)
-	if nivel == _nivel_montado:
+	var alvo := estagio_de(estado)
+	# a luz acompanha o mês a cada mudança de estado, não só na montagem —
+	# era este o fio solto que deixava o inverno com cara de verão
+	var amb := Ambiente.gerente()
+	if amb != null:
+		amb.transitar_para_mes(int(estado.get("mes", 6)))
+	if alvo == _nivel_montado:
 		return
 	# Só é recompensa quando a terra SOBE com o jogo já rodando. A primeira
 	# montagem entra direto, e uma segunda subida durante o crossfade também:
 	# `evoluir` RECUSA pedido em transição, e registrar como montado um
 	# pedido recusado dessincroniza a vista do estado para sempre.
-	if _nivel_montado >= 0 and nivel > _nivel_montado and not cena.em_transicao():
-		cena.evoluir(nivel)
+	if _nivel_montado >= 0 and alvo > _nivel_montado and not cena.em_transicao():
+		cena.evoluir(alvo)
 	else:
-		cena.estagio = nivel
-	_nivel_montado = nivel
+		cena.estagio = alvo
+	_nivel_montado = alvo
+	_aplicar_estagio_atmosfera()
+
+
+func _aplicar_estagio_atmosfera() -> void:
+	if atmosfera != null and _nivel_montado >= 0:
+		atmosfera.definir_estagio(_nivel_montado)
 
 
 ## Contrato do `_nova_cena`. Não há NPC para semear: eles estão na imagem.

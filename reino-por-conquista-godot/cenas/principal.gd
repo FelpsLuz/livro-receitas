@@ -150,7 +150,9 @@ func _montar_titulo() -> void:
 	var vitrine: SubViewportContainer = _nova_cena()
 	vitrine.custom_minimum_size = Vector2(CenarioV3View.NATIVO * CenarioV3View.ESCALA)
 	quadro.add_child(vitrine)
-	vitrine.estado = {"terra": {"nivel": 5}, "mes": 6}
+	# nível 8 — o CASTELO pronto: a tela de título é a promessa do jogo, e a
+	# promessa é o último degrau da escada, não o meio dela
+	vitrine.estado = {"terra": {"nivel": 8}, "mes": 6}
 
 	# ---- título + subtítulo: um bloco só ----
 	var bloco := VBoxContainer.new()

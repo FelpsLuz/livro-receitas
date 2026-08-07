@@ -73,7 +73,10 @@ func _frente_terra() -> void:
 	vista.estado = {"mes": 6, "terra": {"nivel": 0}}
 	for i in 4:
 		await process_frame
-	ok(vista.cena.estagio == 0, "a vista monta no estágio do save",
+	# nível 0 (Acampamento) mostra a CENA do acampamento — que na leva de
+	# seis é o estágio 1; o estágio 0 é o campo virgem de quem não tem terra
+	ok(vista.cena.estagio == Vista.ESCADA_NIVEL[0],
+		"a vista monta no estágio do save",
 		"estágio %d para terra nível 0" % vista.cena.estagio)
 
 	# ---- a sequência do _aba_terra, na ordem em que ela acontece ----
@@ -85,7 +88,7 @@ func _frente_terra() -> void:
 	# `evoluir` faz crossfade; o estágio troca na hora, o alfa é que demora
 	await create_timer(1.2).timeout
 	await process_frame
-	ok(vista.cena.estagio == 4,
+	ok(vista.cena.estagio == Vista.ESCADA_NIVEL[4],
 		"subir de nível FORA da árvore ainda muda a imagem",
 		"estágio %d para terra nível 4" % vista.cena.estagio)
 	ok(not vista.cena.em_transicao(), "o crossfade termina e solta o estado")
@@ -104,16 +107,28 @@ func _frente_terra() -> void:
 	ok(faltam.is_empty(), "todo estágio existe em disco",
 		"faltando: %s" % ("nenhum" if faltam.is_empty() else ", ".join(faltam)))
 
-	# ---- as duas escadas têm que ter o mesmo número de degraus ----
-	# `_aplicar` traduz nível de terra em índice de estágio direto, e com
-	# `clampi` no meio. Se a tabela de níveis crescer e a arte não, os níveis
-	# de cima passam a mostrar todos o MESMO último quadro — e em silêncio,
-	# porque o clamp é justamente o que impede o erro de aparecer.
+	# ---- a ESCADA nível→cena tem que ser coerente com as duas tabelas ----
+	# Nove níveis dividem seis cenas, e quem traduz é ESCADA_NIVEL. O que não
+	# pode acontecer, e acontecia em silêncio quando a tradução era um clamp:
+	# a escada ficar mais curta que a tabela de níveis (níveis de cima caindo
+	# todos no mesmo quadro sem ninguém decidir isso), a cena andar para TRÁS
+	# ao subir de nível, ou o último nível não mostrar a última cena.
 	var Dados = load("res://scripts/dados.gd")
-	ok(Dados.NIVEIS_TERRA.size() == vista.cena.NOMES.size(),
-		"um quadro para cada degrau da terra",
-		"%d níveis · %d estágios"
-		% [Dados.NIVEIS_TERRA.size(), vista.cena.NOMES.size()])
+	ok(Vista.ESCADA_NIVEL.size() == Dados.NIVEIS_TERRA.size(),
+		"a escada cobre todos os níveis de terra",
+		"%d níveis · %d degraus na escada"
+		% [Dados.NIVEIS_TERRA.size(), Vista.ESCADA_NIVEL.size()])
+	var monotonica := true
+	for i in range(1, Vista.ESCADA_NIVEL.size()):
+		if Vista.ESCADA_NIVEL[i] < Vista.ESCADA_NIVEL[i - 1]:
+			monotonica = false
+	ok(monotonica, "a cena nunca anda para trás ao subir de nível")
+	ok(int(Vista.ESCADA_NIVEL[-1]) == vista.cena.NOMES.size() - 1,
+		"o último nível mostra a última cena",
+		"nível máximo → estágio %d de %d"
+		% [int(Vista.ESCADA_NIVEL[-1]), vista.cena.NOMES.size() - 1])
+	ok(vista.estagio_de({}) == 0 and vista.estagio_de({"terra": null}) == 0,
+		"sem terra, a vista mostra o campo virgem")
 	vista.queue_free()
 
 	# ---- retratos de tropa ----

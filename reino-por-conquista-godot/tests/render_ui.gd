@@ -78,6 +78,29 @@ func _initialize() -> void:
 	st["terra"]["alimento"] = 0            # celeiro vazio: a cena da fome
 	await _tirar(jogo, 0, "terra_fome", 300)
 	st["terra"]["alimento"] = 300
+
+	# ---- a NOITE, com a aba da terra aberta ----
+	# A hora é forçada direto no gerente, SEM atualizar() no meio: atualizar
+	# chamaria transitar_para_mes e desfaria a noite antes do quadro. É o
+	# único jeito de ver as janelas acesas e a compensação de tinta — os dois
+	# efeitos que só existem com luminância baixa.
+	#
+	# ANTES do quadro de inverno, de propósito: flocos têm 13s de vida, e a
+	# neve do inverno anterior ainda estaria no ar sobre uma noite de
+	# primavera — foi flagrado no render, nevando fora de estação.
+	jogo.tabs.current_tab = 0
+	jogo.atualizar()
+	for i in 12:
+		await process_frame
+	var gerente := root.get_node_or_null("EnvironmentManager")
+	if gerente != null:
+		gerente.hora = 0.93            # noite fechada
+	for i in 30:
+		await process_frame
+	await _quadro(jogo, "terra_noite")
+	if gerente != null:
+		gerente.definir_mes(3)
+
 	st["mes"] = 1                          # inverno: a vila coberta de neve
 	await _tirar(jogo, 0, "terra_inverno", 380)
 	st["mes"] = 3
