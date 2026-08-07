@@ -11,6 +11,7 @@ extends RefCounted
 const TAXA := 22050
 const PASTA := "res://assets/audio/sfx/"
 const MUSICA_TITULO := "res://assets/audio/musica_titulo.mp3"
+const PASTA_MUSICAS := "res://assets/audio/musica_jogo/"
 
 ## Ajuste de saída por nome. Os WAVs chegam normalizados no mesmo pico;
 ## os toques de pura interface (aba, abrir/fechar de modal) ficam um
@@ -68,6 +69,30 @@ static func musica_titulo() -> AudioStreamMP3:
 	var mp3 := AudioStreamMP3.new()
 	mp3.data = FileAccess.get_file_as_bytes(MUSICA_TITULO)
 	mp3.loop = true
+	return mp3
+
+## As faixas de fundo do jogo, por caminho. A PASTA é a playlist: soltar
+## um MP3 novo em musica_jogo/ (a "pasta 2") entra na roda sem tocar em
+## código. Ordenada para a lista ser estável; quem embaralha é a fila.
+static func musicas_jogo() -> Array[String]:
+	var saida: Array[String] = []
+	var dir := DirAccess.open(PASTA_MUSICAS)
+	if dir == null:
+		return saida
+	for f in dir.get_files():
+		if f.ends_with(".mp3"):
+			saida.append(PASTA_MUSICAS + f)
+	saida.sort()
+	return saida
+
+## Uma faixa da playlist, sem cache — 4 a 7 MB por faixa ficariam na
+## memória a sessão toda para poupar uma leitura de disco por música.
+## loop DESLIGADO: quem dá a volta é a fila embaralhada do jogo.
+static func stream_musica(caminho: String) -> AudioStreamMP3:
+	if not FileAccess.file_exists(caminho):
+		return null
+	var mp3 := AudioStreamMP3.new()
+	mp3.data = FileAccess.get_file_as_bytes(caminho)
 	return mp3
 
 # ---------------- tons gerados (reserva) ----------------

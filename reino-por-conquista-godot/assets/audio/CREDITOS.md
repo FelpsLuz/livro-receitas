@@ -6,6 +6,18 @@
   loop de 2:24). Toca na tela de título em loop e faz fade de 1.4s ao
   entrar no jogo.
 
+### Fundo do jogo (`musica_jogo/`)
+
+Fila embaralhada a −16 dB durante a partida; a pasta é a playlist —
+qualquer MP3 solto aqui entra na roda. Todas do Pixabay:
+
+- `delosound-medieval-background.mp3` (Delosound)
+- `deuslower-medieval-ambient.mp3` (Deuslower)
+- `emmraan-a-long-long-way-to-home.mp3` (Emmraan)
+- `emmraan-medieval-opener.mp3` (Emmraan)
+- `kaazoom-along-the-wayside-medieval-folk-music.mp3` (kaazoom)
+- `music_for_creators-medieval-celtic-violin.mp3` (Music for Creators)
+
 ## Efeitos (`sfx/`)
 
 Do pacote **RPG Essentials Free** (Leohpaz). Convertidos de 24-bit

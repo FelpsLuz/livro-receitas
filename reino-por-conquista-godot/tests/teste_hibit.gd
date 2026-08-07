@@ -449,6 +449,23 @@ func _frente_som_e_heraldica() -> void:
 		"a trilha do título existe e está em loop",
 		"" if trilha == null else "%d bytes" % trilha.data.size())
 
+	# ---- playlist de fundo do jogo ----
+	# a pasta É a playlist: cada faixa carrega SEM loop próprio (quem dá a
+	# volta é a fila embaralhada do principal, senão a primeira faixa
+	# tocaria para sempre e as outras nunca)
+	var faixas: Array[String] = Sfx.musicas_jogo()
+	ok(faixas.size() >= 6, "a playlist do jogo tem as faixas da pasta",
+		"%d faixas" % faixas.size())
+	var todas_ok := true
+	var faixa_ruim := ""
+	for c in faixas:
+		var st: AudioStreamMP3 = Sfx.stream_musica(str(c))
+		if st == null or st.loop or st.data.size() < 100_000:
+			todas_ok = false
+			faixa_ruim = str(c)
+	ok(todas_ok, "toda faixa carrega, com dados e sem loop próprio",
+		"falhou em '%s'" % faixa_ruim if not todas_ok else "")
+
 	# ---- plaqueta: faixas esticáveis uniformes ----
 	var placa: Texture2D = Tema.tex_hibit("ui_placa_pedra")
 	ok(placa != null, "ui_placa_pedra carrega")

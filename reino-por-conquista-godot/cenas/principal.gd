@@ -83,6 +83,9 @@ var modal_centro: CenterContainer
 var input_nome: LineEdit
 var b_som: Button
 var musica_titulo: AudioStreamPlayer
+var musica_jogo: AudioStreamPlayer
+var fila_musicas: Array[String] = []
+var _musica_atual := ""
 
 func _ready() -> void:
 	theme = Tema.criar()
@@ -274,6 +277,7 @@ func _entrar_no_jogo() -> void:
 		tw.tween_property(musica_titulo, "volume_db", -40.0, 1.4)
 		tw.tween_callback(musica_titulo.queue_free)
 		musica_titulo = null
+	_iniciar_musica_jogo()
 	tela_jogo.visible = true
 	cidade_view.estado = state
 	cidade_view.semear_npcs()
@@ -394,6 +398,44 @@ func _alternar_som() -> void:
 	Sfx.mudo = not Sfx.mudo
 	b_som.icon = Icones.textura_tingida("mudo" if Sfx.mudo else "som")
 	b_som.tooltip_text = "Som desligado" if Sfx.mudo else "Som"
+	# a música de fundo PAUSA em vez de parar: religar o som retoma a faixa
+	# de onde ela estava, não recomeça a playlist
+	if is_instance_valid(musica_jogo):
+		musica_jogo.stream_paused = Sfx.mudo
+
+# ---------------- MÚSICA DE FUNDO DO JOGO ----------------
+## Fila embaralhada de tudo que estiver em assets/audio/musica_jogo,
+## tocando BAIXO (-16 dB) — é assoalho da cena, não fanfarra. Acabou a
+## faixa, entra a próxima; esvaziou a fila, reembaralha sem devolver de
+## primeira a que acabou de tocar. Nasce a -30 dB subindo em 1.5s: é a
+## metade de entrada do crossfade com o fade da trilha do título.
+func _iniciar_musica_jogo() -> void:
+	if Sfx.musicas_jogo().is_empty():
+		return
+	musica_jogo = AudioStreamPlayer.new()
+	musica_jogo.volume_db = -30.0
+	add_child(musica_jogo)
+	musica_jogo.finished.connect(_proxima_musica)
+	musica_jogo.stream_paused = Sfx.mudo
+	_proxima_musica()
+	create_tween().tween_property(musica_jogo, "volume_db", -16.0, 1.5)
+
+func _proxima_musica() -> void:
+	if not is_instance_valid(musica_jogo):
+		return
+	if fila_musicas.is_empty():
+		fila_musicas = Sfx.musicas_jogo()
+		fila_musicas.shuffle()
+		if fila_musicas.size() > 1 and fila_musicas[0] == _musica_atual:
+			fila_musicas.append(fila_musicas.pop_front())
+	if fila_musicas.is_empty():
+		return
+	_musica_atual = str(fila_musicas.pop_front())
+	var faixa := Sfx.stream_musica(_musica_atual)
+	if faixa == null:
+		return
+	musica_jogo.stream = faixa
+	musica_jogo.play()
 
 ## Enter passa o mês. O rodapé anuncia o atalho, então ele tem que existir.
 ##
