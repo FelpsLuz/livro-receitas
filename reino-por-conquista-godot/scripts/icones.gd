@@ -104,6 +104,38 @@ static func _id(nome: String) -> String:
 static func tem(nome: String) -> bool:
 	return ResourceLoader.exists(PASTA + _id(nome) + ".png")
 
+# ============================================================
+# A LEVA ILUSTRADA (hi-bit, PixelLab)
+#
+# Os 43 ícones de silhueta continuam sendo o esqueleto — são eles que os
+# testes conferem e é deles que vem o fallback. Mas quando existe a versão
+# ILUSTRADA em assets/sprites/hibit/, ela vence: colorida, com luz própria,
+# e por isso NUNCA tingida — tingir uma ilustração colorida a transforma
+# numa mancha monocromática, que é pior que a silhueta.
+#
+# `Image.load_from_file`, não `load()`: a leva chega sem passar pelo
+# editor, e o PNG cru carrega em qualquer modo (headless incluso).
+# ============================================================
+const PASTA_HIBIT := "res://assets/sprites/hibit/"
+static var _ilustrados: Dictionary = {}
+
+static func ilustrado(nome: String) -> Texture2D:
+	var chave := nome.trim_prefix("icone_")
+	if _ilustrados.has(chave):
+		return _ilustrados[chave]
+	var caminho := ProjectSettings.globalize_path(
+		PASTA_HIBIT + "icone_" + chave + ".png")
+	if not FileAccess.file_exists(caminho):
+		_ilustrados[chave] = null
+		return null
+	var img := Image.load_from_file(caminho)
+	if img == null:
+		_ilustrados[chave] = null
+		return null
+	var tex := ImageTexture.create_from_image(img)
+	_ilustrados[chave] = tex
+	return tex
+
 ## O SUBSTITUTO de um ícone que não existe.
 ##
 ## Dois dos 43 nomes de `TODOS` nunca ganharam arquivo — `pedra` e `prata` —
@@ -200,6 +232,11 @@ static var _tingidas: Dictionary = {}
 ## Cacheado por nome+cor: dez abas pedem dez texturas uma vez, não a cada
 ## `atualizar()`.
 static func textura_tingida(nome: String, cor: Variant = null) -> Texture2D:
+	# ilustrado NÃO se tinge: onde a aba/botão pedia a silhueta assada na
+	# cor, a versão colorida entra como está
+	var ilus := ilustrado(nome)
+	if ilus != null:
+		return ilus
 	var c: Color = cor if cor is Color else cor_de(nome)
 	var chave := "%s|%s" % [_id(nome), c.to_html()]
 	if _tingidas.has(chave):
@@ -233,6 +270,18 @@ static func de_mercadoria(g_id: String) -> Texture2D:
 ## terracota quando o celeiro está vazio — e essa cor ganha da tabela.
 static func imagem(nome: String, tamanho: int = 32,
 		cor: Variant = null) -> TextureRect:
+	# a leva ILUSTRADA vence, e entra crua: colorida, NEAREST (é pixel art
+	# de 32, mostrada em 18–34 — quase sempre 1:1) e sem modulate
+	var ilus := ilustrado(nome)
+	if ilus != null:
+		var tri := TextureRect.new()
+		tri.name = "Icone_" + _id(nome)
+		tri.texture = ilus
+		tri.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tri.custom_minimum_size = Vector2(tamanho, tamanho)
+		tri.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tri.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		return tri
 	var tex := textura(nome)
 	if tex == null:
 		return null

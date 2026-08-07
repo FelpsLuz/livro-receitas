@@ -110,6 +110,22 @@ func _ready() -> void:
 	tela_jogo.visible = false
 	overlay_conversa.visible = false
 	overlay_modal.visible = false
+	# ---- a MOLDURA DE PEDRA da referência, na borda da tela ----
+	# Por cima de tudo (inclusive modais — ela é borda, nada encosta nela) e
+	# com draw_center desligado: só a cantaria desenha, o miolo é o jogo.
+	var tex_moldura := Tema.tex_hibit("ui_moldura_pedra")
+	if tex_moldura != null:
+		var moldura := NinePatchRect.new()
+		moldura.texture = tex_moldura
+		moldura.draw_center = false
+		moldura.patch_margin_left = 24
+		moldura.patch_margin_right = 24
+		moldura.patch_margin_top = 24
+		moldura.patch_margin_bottom = 24
+		moldura.set_anchors_preset(Control.PRESET_FULL_RECT)
+		moldura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		moldura.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		add_child(moldura)
 
 # ---------------- TELA DE TÍTULO ----------------
 func _montar_titulo() -> void:
@@ -328,6 +344,16 @@ func _montar_jogo() -> void:
 	b_som = Kit.botao_icone(rodape, "som", "Som", _alternar_som, "fantasma", 34)
 	var b_mes := Kit.botao(rodape, "Passar o mês", _passar_mes, "primario", 210)
 	b_mes.add_theme_font_size_override("font_size", Tema.CORPO)
+	_com_icone(b_mes, "ampulheta")
+
+## Pendura um ícone ilustrado num botão, quando a leva hi-bit o tiver.
+## `icon_max_width` mantém o ícone de 32 no tamanho de texto do botão.
+func _com_icone(b: Button, nome: String) -> void:
+	var tex := Icones.ilustrado(nome)
+	if tex == null:
+		return
+	b.icon = tex
+	b.add_theme_constant_override("icon_max_width", 22)
 
 	# vila em nós nativos quando os assets v2 estão lá; senão, o cenário
 	# procedural de sempre. As duas cenas têm a mesma API (.estado, semear_npcs).
@@ -487,8 +513,13 @@ func _montar_hud(j: Dictionary) -> void:
 	if t != null:
 		_celula_hud("trigo", str(int(t["alimento"])), "Celeiro",
 			int(t["alimento"]) <= 0)
-	# a estação pinta o próprio chip: a UI muda de temperatura com o mundo
-	Kit.chip(hud, "calendario", Estacoes.nome(state), Estacoes.cor(state),
+	# a estação pinta o próprio chip: a UI muda de temperatura com o mundo.
+	# Na leva hi-bit cada estação tem símbolo próprio (flor, sol, folha,
+	# floco — como o floco da referência); sem a arte, o calendário tingido.
+	var ic_estacao := "estacao_" + Estacoes.nome(state).to_lower()
+	if Icones.ilustrado(ic_estacao) == null:
+		ic_estacao = "calendario"
+	Kit.chip(hud, ic_estacao, Estacoes.nome(state), Estacoes.cor(state),
 		Tema.ELEVADO, Estacoes.nota(state))
 
 func _conteudo_aba() -> VBoxContainer:
@@ -714,14 +745,22 @@ func _aba_terra(c: Container) -> void:
 		# O DILEMA: quem pega em armas some da base de imposto. A tabela de
 		# duas colunas é o que põe os dois números um sobre o outro — em
 		# texto corrido eles eram uma frase, e frase não se compara.
-		var tab := Kit.tabela(col_dir, [{"t": "", "w": 0}, {"t": "", "w": 96, "a": Kit.DIR}])
-		for par_l in [["Trabalhando nos campos", "%d" % ativa],
-				["Em armas", "%d" % armas],
-				["Imposto por mês", "%d" % Economia.imposto_mensal(state)],
-				["Tropa que a terra sustenta", "%d" % Recrutamento.pop_maxima(state)]]:
+		# cada linha do dilema com o seu ícone ilustrado, como na referência:
+		# foice para o campo, elmo para as armas, saco para o imposto, tenda
+		# para a capacidade
+		var tab := Kit.tabela(col_dir, [{"t": "", "w": 26, "a": Kit.CENTRO},
+			{"t": "", "w": 0}, {"t": "", "w": 96, "a": Kit.DIR}])
+		for par_l in [["foice", "Trabalhando nos campos", "%d" % ativa],
+				["elmo", "Em armas", "%d" % armas],
+				["saco", "Imposto por mês", "%d" % Economia.imposto_mensal(state)],
+				["tenda", "Tropa que a terra sustenta", "%d" % Recrutamento.pop_maxima(state)]]:
 			var cel := Kit.linha(tab)
-			Kit.texto(cel[0], str(par_l[0]), Tema.TEXTO_2, Tema.MICRO)
-			Kit.numero(cel[1], str(par_l[1]))
+			var ic_l := Icones.imagem(str(par_l[0]), 22)
+			if ic_l != null:
+				ic_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				cel[0].add_child(ic_l)
+			Kit.texto(cel[1], str(par_l[1]), Tema.TEXTO_2, Tema.MICRO)
+			Kit.numero(cel[2], str(par_l[2]))
 		if armas > 0:
 			Kit.nota(col_dir, "Cada homem em armas é um pagador de imposto a menos.")
 
@@ -744,17 +783,25 @@ func _aba_terra(c: Container) -> void:
 		var aviso_est: String = Estacoes.nota(state)
 		if Estacoes.proxima(state) == "inverno" and Estacoes.meses_ate_virar(state) <= 2:
 			aviso_est += " O inverno chega em %d mês(es)." % Estacoes.meses_ate_virar(state)
-		var card_est := Kit.card(c, Estacoes.cor(state))
-		var h_est := Kit.fila(card_est, Tema.E3)
+		# ---- o banner de estação, em PERGAMINHO (como na referência) ----
+		# o único terreno claro da interface: aviso é carta, e carta se lê
+		# em tinta escura sobre papel
+		var perg := PanelContainer.new()
+		perg.add_theme_stylebox_override("panel", Tema.estilo_pergaminho())
+		c.add_child(perg)
+		var h_est := Kit.fila(perg, Tema.E4)
 		# no inverno a vila aparece coberta de neve: a estação que zera a
-		# colheita tem que ser vista, não lida numa linha entre outras cinco.
-		# A ilustração vai à ESQUERDA da frase, e não empilhada embaixo dela:
-		# centrada sob um texto alinhado à esquerda ela ficava solta no meio
-		# de um card que dobrava de altura para acomodá-la.
+		# colheita tem que ser vista, não lida numa linha entre outras cinco
 		if Estacoes.e_inverno(state):
-			Kit.ilustracao(h_est, Retratos.ilustracao("inverno"), 72)
-		Kit.selo(h_est, Estacoes.nome(state), Estacoes.cor(state), Tema.ELEVADO)
-		Kit.texto(h_est, aviso_est, Tema.TEXTO_2, Tema.MICRO)
+			Kit.ilustracao(h_est, Retratos.ilustracao("inverno"), 64)
+		var l_est_nome := Kit.texto(h_est, Estacoes.nome(state).to_upper(),
+			Estacoes.cor(state).darkened(0.25), Tema.MICRO)
+		var f_est := Tema.fonte_forte()
+		if f_est != null:
+			l_est_nome.add_theme_font_override("font", f_est)
+		l_est_nome.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var l_est_txt := Kit.texto(h_est, aviso_est, Tema.TINTA_PERGAMINHO, Tema.CORPO)
+		l_est_txt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 		# ---- o que se faz com a terra ----
 		var acoes := Kit.fila(c, Tema.E3)
@@ -764,7 +811,7 @@ func _aba_terra(c: Container) -> void:
 		# sem mensagem nenhuma explicando por quê.
 		if int(t["nivel"]) < Dados.NIVEIS_TERRA.size() - 1:
 			var prox: Dictionary = Dados.NIVEIS_TERRA[int(t["nivel"]) + 1]
-			_botao(acoes, "Evoluir para %s  ·  %d ouro + %d madeira" % [
+			var b_ev := _botao(acoes, "Evoluir para %s  ·  %d ouro + %d madeira" % [
 				prox["nome"], prox["custo_ouro"], prox["custo_madeira"]], func():
 				var r: Dictionary = Jogo.melhorar_terra(state)
 				if r["ok"]:
@@ -773,14 +820,16 @@ func _aba_terra(c: Container) -> void:
 				_aviso(r["msg"])
 				Jogo.salvar(state)
 				atualizar())
-		_botao(acoes, "Exportar 30 de alimento", func():
+			_com_icone(b_ev, "martelo")
+		var b_ex := _botao(acoes, "Exportar 30 de alimento", func():
 			var r: Dictionary = Jogo.exportar_comida(state, 30)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar(), "fantasma").tooltip_text = \
-				"Ouro rápido — e o povo reclama da despensa vazia"
+			atualizar(), "fantasma")
+		b_ex.tooltip_text = "Ouro rápido — e o povo reclama da despensa vazia"
+		_com_icone(b_ex, "carroca")
 		var _fim := nivel_cap
 
 func _aba_mapa(c: Container) -> void:

@@ -230,6 +230,55 @@ static func fonte_titulo() -> FontFile:
 	return fonte_forte()
 
 # ============================================================
+# ACERVO HI-BIT — as texturas de interface geradas (PixelLab)
+#
+# A leva hi-bit mora em assets/sprites/hibit/ e é OPCIONAL por peça: cada
+# fábrica de estilo tenta a textura e cai no StyleBoxFlat de sempre quando
+# ela não existe. É o mesmo contrato dos ícones — a UI nunca quebra por
+# arte ausente, e a arte entra sem tocar em quem chama.
+#
+# `Image.load_from_file`, e não `load()`: o load() exige o .import gerado
+# pelo editor, e a leva chega por fora dele. Carregar o PNG cru torna a
+# peça visível no mesmo instante em que o arquivo aparece — headless,
+# render de CI e jogo exportado incluídos.
+# ============================================================
+const PASTA_HIBIT := "res://assets/sprites/hibit/"
+
+static var _tex_ui: Dictionary = {}
+
+static func tex_hibit(nome: String) -> Texture2D:
+	if _tex_ui.has(nome):
+		return _tex_ui[nome]
+	var caminho := ProjectSettings.globalize_path(PASTA_HIBIT + nome + ".png")
+	if not FileAccess.file_exists(caminho):
+		_tex_ui[nome] = null
+		return null
+	var img := Image.load_from_file(caminho)
+	if img == null:
+		_tex_ui[nome] = null
+		return null
+	var tex := ImageTexture.create_from_image(img)
+	_tex_ui[nome] = tex
+	return tex
+
+## StyleBoxTexture 9-slice de uma peça hi-bit; null se a arte não chegou.
+static func _sbt(nome: String, margem: int, cont_h: int, cont_v: int) -> StyleBoxTexture:
+	var tex := tex_hibit(nome)
+	if tex == null:
+		return null
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex
+	sb.set_texture_margin(SIDE_LEFT, margem)
+	sb.set_texture_margin(SIDE_RIGHT, margem)
+	sb.set_texture_margin(SIDE_TOP, margem)
+	sb.set_texture_margin(SIDE_BOTTOM, margem)
+	sb.content_margin_left = cont_h
+	sb.content_margin_right = cont_h
+	sb.content_margin_top = cont_v
+	sb.content_margin_bottom = cont_v
+	return sb
+
+# ============================================================
 # FUNDO COM GRADIENTE
 #
 # O fundo era um ColorRect chapado, e um retângulo de 960×540 numa cor só é
@@ -315,11 +364,30 @@ static func criar() -> Theme:
 	# resto foi só recolorido. Aqui o estado vem do PREENCHIMENTO, e o
 	# apertado ainda desce 1px: o deslocamento é a única pista tátil que
 	# sobrevive ao achatamento, e sem ela o clique não confirma nada.
-	t.set_stylebox("normal", "Button", _botao(ELEVADO, BORDA, false))
-	t.set_stylebox("hover", "Button", _botao(SOBRE, ACENTO, false))
-	t.set_stylebox("pressed", "Button", _botao(Color("1c1712"), ACENTO, true))
-	t.set_stylebox("focus", "Button", _botao(ELEVADO, ACENTO, false))
-	t.set_stylebox("disabled", "Button", _botao(Color("201b17"), Color("2e271f"), false))
+	# hi-bit: o botão padrão vira PEDRA lavrada; os estados saem por
+	# modulate da MESMA textura (hover clareia, apertado escurece e desce
+	# 1px — a pista tátil de sempre, agora na pedra)
+	var b_pedra := _sbt("ui_botao_pedra", 10, E4, 5)
+	if b_pedra != null:
+		t.set_stylebox("normal", "Button", b_pedra)
+		var b_hover: StyleBoxTexture = b_pedra.duplicate()
+		b_hover.modulate_color = Color(1.18, 1.16, 1.10)
+		t.set_stylebox("hover", "Button", b_hover)
+		var b_press: StyleBoxTexture = b_pedra.duplicate()
+		b_press.modulate_color = Color(0.78, 0.76, 0.72)
+		b_press.content_margin_top = 6
+		b_press.content_margin_bottom = 4
+		t.set_stylebox("pressed", "Button", b_press)
+		t.set_stylebox("focus", "Button", b_hover)
+		var b_off: StyleBoxTexture = b_pedra.duplicate()
+		b_off.modulate_color = Color(0.55, 0.54, 0.52)
+		t.set_stylebox("disabled", "Button", b_off)
+	else:
+		t.set_stylebox("normal", "Button", _botao(ELEVADO, BORDA, false))
+		t.set_stylebox("hover", "Button", _botao(SOBRE, ACENTO, false))
+		t.set_stylebox("pressed", "Button", _botao(Color("1c1712"), ACENTO, true))
+		t.set_stylebox("focus", "Button", _botao(ELEVADO, ACENTO, false))
+		t.set_stylebox("disabled", "Button", _botao(Color("201b17"), Color("2e271f"), false))
 	t.set_color("font_color", "Button", TEXTO)
 	t.set_color("font_hover_color", "Button", ACENTO_FORTE)
 	t.set_color("font_pressed_color", "Button", ACENTO)
@@ -375,16 +443,37 @@ static func criar() -> Theme:
 	aba_normal.content_margin_bottom = E3
 	var aba_hover := aba_normal.duplicate()
 	aba_hover.bg_color = ELEVADO
-	t.set_stylebox("tab_selected", "TabContainer", aba_sel)
-	t.set_stylebox("tab_unselected", "TabContainer", aba_normal)
-	t.set_stylebox("tab_hovered", "TabContainer", aba_hover)
-	t.set_color("font_selected_color", "TabContainer", TEXTO)
-	t.set_color("font_unselected_color", "TabContainer", TEXTO_2)
-	t.set_color("font_hovered_color", "TabContainer", ACENTO_FORTE)
-	var aba_painel := painel.duplicate()
-	# o conteúdo da aba encosta menos: quem dá a margem interna é o card
-	aba_painel.set_content_margin_all(E4)
-	t.set_stylebox("panel", "TabContainer", aba_painel)
+	# hi-bit: cada aba é uma PLAQUETA de pedra; a ativa clareia (como na
+	# referência, onde "Sua Terra" acende) e o texto dela escurece para
+	# continuar legível sobre a pedra clara
+	var placa := _sbt("ui_placa_pedra", 10, E3, 5)
+	if placa != null:
+		var placa_sel: StyleBoxTexture = placa.duplicate()
+		placa_sel.modulate_color = Color(1.55, 1.48, 1.30)
+		var placa_hover: StyleBoxTexture = placa.duplicate()
+		placa_hover.modulate_color = Color(1.2, 1.18, 1.12)
+		t.set_stylebox("tab_selected", "TabContainer", placa_sel)
+		t.set_stylebox("tab_unselected", "TabContainer", placa)
+		t.set_stylebox("tab_hovered", "TabContainer", placa_hover)
+		t.set_color("font_selected_color", "TabContainer", Color("241c12"))
+		t.set_color("font_unselected_color", "TabContainer", TEXTO_2)
+		t.set_color("font_hovered_color", "TabContainer", TEXTO)
+	else:
+		t.set_stylebox("tab_selected", "TabContainer", aba_sel)
+		t.set_stylebox("tab_unselected", "TabContainer", aba_normal)
+		t.set_stylebox("tab_hovered", "TabContainer", aba_hover)
+		t.set_color("font_selected_color", "TabContainer", TEXTO)
+		t.set_color("font_unselected_color", "TabContainer", TEXTO_2)
+		t.set_color("font_hovered_color", "TabContainer", ACENTO_FORTE)
+	# hi-bit: o painel da aba é MADEIRA escura entalhada
+	var madeira := _sbt("ui_painel_madeira", 16, E4, E4)
+	if madeira != null:
+		t.set_stylebox("panel", "TabContainer", madeira)
+	else:
+		var aba_painel := painel.duplicate()
+		# o conteúdo da aba encosta menos: quem dá a margem interna é o card
+		aba_painel.set_content_margin_all(E4)
+		t.set_stylebox("panel", "TabContainer", aba_painel)
 
 	# barra de rolagem: a padrão da engine tem cantos arredondados e cinza de
 	# sistema — no meio deste terreno ela é a última peça de "site" na tela.
@@ -450,11 +539,46 @@ static func _botao(fundo: Color, borda: Color, apertado: bool) -> StyleBoxFlat:
 #             o que não dá para desfazer.
 # ============================================================
 static func estilos_primario() -> Dictionary:
+	# hi-bit: o primário é o BOTÃO DOURADO da referência
+	var ouro := _sbt("ui_botao_dourado", 10, E4, 5)
+	if ouro != null:
+		var o_hover: StyleBoxTexture = ouro.duplicate()
+		o_hover.modulate_color = Color(1.15, 1.13, 1.05)
+		var o_press: StyleBoxTexture = ouro.duplicate()
+		o_press.modulate_color = Color(0.8, 0.78, 0.72)
+		o_press.content_margin_top = 6
+		o_press.content_margin_bottom = 4
+		var o_off: StyleBoxTexture = ouro.duplicate()
+		o_off.modulate_color = Color(0.55, 0.55, 0.52)
+		return {"normal": ouro, "hover": o_hover, "pressed": o_press,
+			"focus": o_hover, "disabled": o_off}
 	var normal := _botao(ACENTO_FUNDO, ACENTO, false)
 	var hover := _botao(Color("a5792c"), ACENTO_FORTE, false)
 	var press := _botao(Color("6d4f1c"), ACENTO, true)
 	return {"normal": normal, "hover": hover, "pressed": press,
 		"focus": hover, "disabled": _botao(Color("3a2f1c"), Color("4a3d26"), false)}
+
+## O PERGAMINHO CLARO da referência — banner de aviso com texto ESCURO.
+## Quem o usa é responsável por trocar a cor do texto: pergaminho é o único
+## terreno claro da interface, e creme sobre creme não se lê.
+static func estilo_pergaminho() -> StyleBox:
+	var sb := _sbt("ui_pergaminho", 16, E5, E3)
+	if sb != null:
+		return sb
+	var flat := StyleBoxFlat.new()
+	flat.bg_color = Color("e8dcc0")
+	flat.border_color = Color("b8a888")
+	flat.set_border_width_all(1)
+	flat.set_corner_radius_all(0)
+	flat.content_margin_left = E5
+	flat.content_margin_right = E5
+	flat.content_margin_top = E3
+	flat.content_margin_bottom = E3
+	return flat
+
+## A tinta que escreve sobre o pergaminho.
+const TINTA_PERGAMINHO := Color("2e2418")
+const TINTA_PERGAMINHO_2 := Color("5a4a34")
 
 static func estilos_fantasma() -> Dictionary:
 	var normal := _botao(Color(0, 0, 0, 0), HAIRLINE, false)
@@ -472,7 +596,12 @@ static func estilos_perigo() -> Dictionary:
 
 ## Fundo OPACO para modal e tela de conversa. Um degrau ACIMA do painel:
 ## o modal precisa ler como camada nova, não como o mesmo plano.
-static func estilo_modal() -> StyleBoxFlat:
+static func estilo_modal() -> StyleBox:
+	# hi-bit: o modal é um painel de MADEIRA — a moldura que a referência
+	# usa nos painéis internos, com margem generosa de decisão
+	var madeira := _sbt("ui_painel_madeira", 16, E6, E5)
+	if madeira != null:
+		return madeira
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = SUPERFICIE
 	# Moldura de latão de 1px, nos quatro lados. É a única coisa da interface
@@ -576,11 +705,14 @@ static func estilo_barra_hud() -> StyleBoxFlat:
 	sb.content_margin_bottom = 6
 	return sb
 
-## Chip: o retângulo de fundo de um par ícone+número. `cor` é a cor
-## SEMÂNTICA do chip (null = neutro) e entra como fundo rebaixado, não como
-## preenchimento cheio — chip cheio de terracota no HUD grita alarme antes
-## de o jogador ler o que é.
-static func estilo_chip(fundo: Color = SUPERFICIE) -> StyleBoxFlat:
+## Chip: o retângulo de fundo de um par ícone+número. Na leva hi-bit ele é
+## a PLACA DE PEDRA da referência; sem a arte, o retângulo chapado de
+## sempre. `cor` semântica entra como fundo rebaixado só no modo chapado —
+## a placa de pedra alarma pelo NÚMERO terracota, não pelo terreno.
+static func estilo_chip(fundo: Color = SUPERFICIE) -> StyleBox:
+	var pedra := _sbt("ui_placa_pedra", 12, E3, 3)
+	if pedra != null and fundo == ELEVADO:
+		return pedra
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = fundo
 	sb.set_corner_radius_all(0)

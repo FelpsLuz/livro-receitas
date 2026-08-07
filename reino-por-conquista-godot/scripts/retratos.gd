@@ -626,8 +626,38 @@ static func _opcoes_de(id: String, humor: String) -> Dictionary:
 	op["barba"] = (_hash(id + "|barba") % 100) < 55
 	return op
 
+## A leva de retratos HI-BIT (PixelLab): um PNG por id do elenco fixo, em
+## assets/sprites/hibit/retrato_<id>.png. Quando existe, vence o gerador —
+## e carrega SEM depender do .import do editor, para a peça aparecer no
+## instante em que o arquivo chega.
+const PASTA_HIBIT := "res://assets/sprites/hibit/"
+static var _hibit: Dictionary = {}
+
+static func _retrato_hibit(id: String) -> Texture2D:
+	if _hibit.has(id):
+		return _hibit[id]
+	var caminho := ProjectSettings.globalize_path(
+		PASTA_HIBIT + "retrato_" + id + ".png")
+	if not FileAccess.file_exists(caminho):
+		_hibit[id] = null
+		return null
+	var img := Image.load_from_file(caminho)
+	if img == null:
+		_hibit[id] = null
+		return null
+	var tex := ImageTexture.create_from_image(img)
+	_hibit[id] = tex
+	return tex
+
 ## Retrato de um personagem do elenco fixo (reis, NPCs, chefes de clã).
+##
+## O hi-bit não tem variação de humor — a expressão está pintada. É uma
+## troca consciente: a leva ilustrada ganha em riqueza o que perde em
+## reatividade, e a relação continua legível no medidor ao lado.
 static func textura(id: String, humor: String = "neutro") -> Texture2D:
+	var pronto := _retrato_hibit(id)
+	if pronto != null:
+		return pronto
 	var chave := "%s|%s" % [id, humor]
 	if _cache.has(chave):
 		return _cache[chave]
@@ -647,7 +677,13 @@ static func textura_pequena(id: String, humor: String = "neutro") -> Texture2D:
 	var chave := "p|%s|%s" % [id, humor]
 	if _cache.has(chave):
 		return _cache[chave]
-	var grande := _pintar(Semente.new(_hash(id)), _opcoes_de(id, humor))
+	var pronto := _retrato_hibit(id)
+	var grande: Image
+	if pronto != null:
+		grande = pronto.get_image().duplicate()
+		grande.convert(Image.FORMAT_RGBA8)
+	else:
+		grande = _pintar(Semente.new(_hash(id)), _opcoes_de(id, humor))
 	_cache[chave] = ImageTexture.create_from_image(_reduzir(grande))
 	return _cache[chave]
 
