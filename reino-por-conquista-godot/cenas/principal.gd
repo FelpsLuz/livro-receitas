@@ -118,13 +118,14 @@ func _ready() -> void:
 		var moldura := NinePatchRect.new()
 		moldura.texture = tex_moldura
 		moldura.draw_center = false
-		moldura.patch_margin_left = 24
-		moldura.patch_margin_right = 24
-		moldura.patch_margin_top = 24
-		moldura.patch_margin_bottom = 24
+		moldura.patch_margin_left = 20
+		moldura.patch_margin_right = 20
+		moldura.patch_margin_top = 20
+		moldura.patch_margin_bottom = 20
 		moldura.set_anchors_preset(Control.PRESET_FULL_RECT)
 		moldura.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		moldura.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		moldura.self_modulate = Color(1.30, 1.27, 1.18)
 		add_child(moldura)
 
 # ---------------- TELA DE TÍTULO ----------------
@@ -260,8 +261,11 @@ func _entrar_no_jogo() -> void:
 func _montar_jogo() -> void:
 	tela_jogo = MarginContainer.new()
 	tela_jogo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# a moldura de pedra pesa ~20px na borda: o conteúdo recua junto quando
+	# ela existe, e volta aos 8px de sempre quando não
+	var recuo := Tema.E3 if Tema.tex_hibit("ui_moldura_pedra") == null else 22
 	for lado in ["left", "right", "top", "bottom"]:
-		tela_jogo.add_theme_constant_override("margin_" + lado, Tema.E3)
+		tela_jogo.add_theme_constant_override("margin_" + lado, recuo)
 	add_child(tela_jogo)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", Tema.E3)

@@ -367,7 +367,7 @@ static func criar() -> Theme:
 	# hi-bit: o botão padrão vira PEDRA lavrada; os estados saem por
 	# modulate da MESMA textura (hover clareia, apertado escurece e desce
 	# 1px — a pista tátil de sempre, agora na pedra)
-	var b_pedra := _sbt("ui_botao_pedra", 10, E4, 5)
+	var b_pedra := _sbt("ui_botao_pedra", 12, E4, 5)
 	if b_pedra != null:
 		t.set_stylebox("normal", "Button", b_pedra)
 		var b_hover: StyleBoxTexture = b_pedra.duplicate()
@@ -446,16 +446,16 @@ static func criar() -> Theme:
 	# hi-bit: cada aba é uma PLAQUETA de pedra; a ativa clareia (como na
 	# referência, onde "Sua Terra" acende) e o texto dela escurece para
 	# continuar legível sobre a pedra clara
-	var placa := _sbt("ui_placa_pedra", 10, E3, 5)
+	var placa := _sbt("ui_placa_pedra", 10, E3, 4)
 	if placa != null:
 		var placa_sel: StyleBoxTexture = placa.duplicate()
-		placa_sel.modulate_color = Color(1.55, 1.48, 1.30)
+		placa_sel.modulate_color = Color(1.30, 1.24, 1.02)
 		var placa_hover: StyleBoxTexture = placa.duplicate()
 		placa_hover.modulate_color = Color(1.2, 1.18, 1.12)
 		t.set_stylebox("tab_selected", "TabContainer", placa_sel)
 		t.set_stylebox("tab_unselected", "TabContainer", placa)
 		t.set_stylebox("tab_hovered", "TabContainer", placa_hover)
-		t.set_color("font_selected_color", "TabContainer", Color("241c12"))
+		t.set_color("font_selected_color", "TabContainer", TEXTO)
 		t.set_color("font_unselected_color", "TabContainer", TEXTO_2)
 		t.set_color("font_hovered_color", "TabContainer", TEXTO)
 	else:
@@ -465,15 +465,13 @@ static func criar() -> Theme:
 		t.set_color("font_selected_color", "TabContainer", TEXTO)
 		t.set_color("font_unselected_color", "TabContainer", TEXTO_2)
 		t.set_color("font_hovered_color", "TabContainer", ACENTO_FORTE)
-	# hi-bit: o painel da aba é MADEIRA escura entalhada
-	var madeira := _sbt("ui_painel_madeira", 16, E4, E4)
-	if madeira != null:
-		t.set_stylebox("panel", "TabContainer", madeira)
-	else:
-		var aba_painel := painel.duplicate()
-		# o conteúdo da aba encosta menos: quem dá a margem interna é o card
-		aba_painel.set_content_margin_all(E4)
-		t.set_stylebox("panel", "TabContainer", aba_painel)
+	# o painel da aba fica CHAPADO mesmo na leva hi-bit: a moldura de
+	# madeira aqui virava uma faixa clara solta entre as abas e o conteúdo
+	# (só o topo dela aparecia). A madeira tem escala nos MODAIS.
+	var aba_painel := painel.duplicate()
+	# o conteúdo da aba encosta menos: quem dá a margem interna é o card
+	aba_painel.set_content_margin_all(E4)
+	t.set_stylebox("panel", "TabContainer", aba_painel)
 
 	# barra de rolagem: a padrão da engine tem cantos arredondados e cinza de
 	# sistema — no meio deste terreno ela é a última peça de "site" na tela.
@@ -540,7 +538,7 @@ static func _botao(fundo: Color, borda: Color, apertado: bool) -> StyleBoxFlat:
 # ============================================================
 static func estilos_primario() -> Dictionary:
 	# hi-bit: o primário é o BOTÃO DOURADO da referência
-	var ouro := _sbt("ui_botao_dourado", 10, E4, 5)
+	var ouro := _sbt("ui_botao_dourado", 11, E4, 6)
 	if ouro != null:
 		var o_hover: StyleBoxTexture = ouro.duplicate()
 		o_hover.modulate_color = Color(1.15, 1.13, 1.05)
@@ -562,8 +560,12 @@ static func estilos_primario() -> Dictionary:
 ## Quem o usa é responsável por trocar a cor do texto: pergaminho é o único
 ## terreno claro da interface, e creme sobre creme não se lê.
 static func estilo_pergaminho() -> StyleBox:
-	var sb := _sbt("ui_pergaminho", 16, E5, E3)
+	# margens ASSIMÉTRICAS: os rolos laterais do pergaminho têm ~22px e não
+	# podem esticar; as bordas de cima e de baixo são papel e aceitam 12
+	var sb := _sbt("ui_pergaminho", 22, E5 + 8, E3)
 	if sb != null:
+		sb.set_texture_margin(SIDE_TOP, 12)
+		sb.set_texture_margin(SIDE_BOTTOM, 12)
 		return sb
 	var flat := StyleBoxFlat.new()
 	flat.bg_color = Color("e8dcc0")
@@ -599,7 +601,7 @@ static func estilos_perigo() -> Dictionary:
 static func estilo_modal() -> StyleBox:
 	# hi-bit: o modal é um painel de MADEIRA — a moldura que a referência
 	# usa nos painéis internos, com margem generosa de decisão
-	var madeira := _sbt("ui_painel_madeira", 16, E6, E5)
+	var madeira := _sbt("ui_painel_madeira", 20, E6, E5)
 	if madeira != null:
 		return madeira
 	var sb := StyleBoxFlat.new()
@@ -710,7 +712,7 @@ static func estilo_barra_hud() -> StyleBoxFlat:
 ## sempre. `cor` semântica entra como fundo rebaixado só no modo chapado —
 ## a placa de pedra alarma pelo NÚMERO terracota, não pelo terreno.
 static func estilo_chip(fundo: Color = SUPERFICIE) -> StyleBox:
-	var pedra := _sbt("ui_placa_pedra", 12, E3, 3)
+	var pedra := _sbt("ui_placa_pedra", 10, E3, 3)
 	if pedra != null and fundo == ELEVADO:
 		return pedra
 	var sb := StyleBoxFlat.new()

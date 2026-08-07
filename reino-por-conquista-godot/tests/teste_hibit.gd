@@ -300,12 +300,22 @@ func _frente1() -> void:
 			"%d px coloridos" % coloridos)
 		ok(parciais == 0, "alfa do ícone é binário", "%d px parciais" % parciais)
 		var tr: TextureRect = Icones.imagem(nome, 24)
-		ok(tr != null and tr.modulate.is_equal_approx(Icones.cor_de(nome)),
-			"a interface tinge o ícone na COR DELE, o arquivo não",
-			"%s → %s" % [nome, Icones.cor_de(nome).to_html(false)])
-		ok(tr.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR,
-			"ícone usa filtro LINEAR",
-			"Nearest numa redução de 192→24 serrilharia a curva inteira")
+		if Icones.ilustrado(nome) != null:
+			# CONTRATO DA LEVA ILUSTRADA: o ícone hi-bit é colorido com luz
+			# própria — chega CRU (sem modulate) e em NEAREST, porque é
+			# pixel art de 32 mostrada quase sempre 1:1
+			ok(tr != null and tr.modulate.is_equal_approx(Color.WHITE),
+				"ícone ilustrado entra CRU, sem tinta", nome)
+			ok(tr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST,
+				"ícone ilustrado usa NEAREST",
+				"pixel art de 32 em alvo de 18–34")
+		else:
+			ok(tr != null and tr.modulate.is_equal_approx(Icones.cor_de(nome)),
+				"a interface tinge o ícone na COR DELE, o arquivo não",
+				"%s → %s" % [nome, Icones.cor_de(nome).to_html(false)])
+			ok(tr.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR,
+				"ícone usa filtro LINEAR",
+				"Nearest numa redução de 192→24 serrilharia a curva inteira")
 
 	# ---- as cores dos ícones ----
 	# Uma cor bonita no editor que some no painel escuro é pior que o latão
