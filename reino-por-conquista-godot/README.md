@@ -9,8 +9,10 @@ Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
 - **Tela de título** com a cidade-vitrine animada em pixel art
 - **Cidade pixel art** (`scripts/cidade_view.gd`): 480×270 via `_draw()`, estações do ano
   (neve no inverno!), rio animado, moinho girando, muralhas, castelo, fumaça e NPCs passeando
-- **Retratos 64×64** (`scripts/retratos.gd`): gerados pixel a pixel via `Image`, com humor
-  que muda conforme a relação (raiva/neutro/simpatia)
+- **Retratos 64×64** (`scripts/retratos.gd`): elenco fixo (reis, clãs, taverna) e cidadãos
+  em pixel art hi-bit (PixelLab) — os cidadãos são bustos transparentes por arquétipo
+  (ofício+gênero), compostos sobre a vinheta com a cor da facção, e o NOME escolhe a
+  variação. Sem os PNGs, vale o gerador pixel a pixel via `Image` de sempre
 - **Conversa viva**: o NPC "pondera..." (tempo proporcional à resposta) e **digita letra a
   letra**; entrada trava enquanto ele fala
 - **10 abas de gestão**: Terra, Mapa, Mercado, Taverna, Corte, Exército, Clãs, Intrigas,

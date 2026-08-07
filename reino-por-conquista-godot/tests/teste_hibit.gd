@@ -499,3 +499,21 @@ func _frente_som_e_heraldica() -> void:
 	ok(not pn.is_equal_approx(pc),
 		"o fundo de facção muda de fato o retrato do lorde",
 		"%s → %s" % [pn.to_html(false), pc.to_html(false)])
+
+	# ---- elenco ilustrado dos cidadãos ----
+	# POOL_CIDADAO é um CONTRATO: cada contagem promete arquivos no disco.
+	# Contagem maior que a leva = lordes sorteando um busto que não existe
+	# e caindo no gerador só para alguns nomes — o elenco vira loteria.
+	var faltam_bustos: Array[String] = []
+	for arq in Retratos.POOL_CIDADAO:
+		for i in int(Retratos.POOL_CIDADAO[arq]):
+			var f := "cidadao_%s%d.png" % [arq, i + 1]
+			if Retratos._busto_cidadao(f) == null:
+				faltam_bustos.append(f)
+	ok(faltam_bustos.is_empty(), "o pool de bustos dos cidadãos está completo",
+		"faltando: %s" % ("nenhum" if faltam_bustos.is_empty()
+			else ", ".join(faltam_bustos)))
+	ok(Retratos._arquetipo_de({"genero": "f", "lorde": true}) == "lorde_f"
+		and Retratos._arquetipo_de({"oficio": "senhor", "genero": "f"}) == "senhor_m"
+		and Retratos._arquetipo_de({"oficio": "alquimista"}) == "mercador_m",
+		"o arquétipo resolve gênero, senhor e ofício desconhecido")

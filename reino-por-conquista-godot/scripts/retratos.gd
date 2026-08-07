@@ -243,25 +243,34 @@ static func _rosto(t: Tela, pele: Array, cy: float, ymin: int = -9999) -> void:
 
 ## O desenho completo. `op` traz o que a chamada sabe e o gerador não
 ## adivinharia: gênero, ofício, coroa, capuz.
-static func _pintar(sem: Semente, op: Dictionary) -> Image:
-	var t := Tela.new(LADO_RETRATO)
-
-	# ---- fundo: vinheta radial, escura nos cantos ----
-	# um fundo chapado atrás de um rosto faz o rosto parecer recortado e
-	# colado; a vinheta o assenta no card, e custa 4096 lerps uma vez só.
-	# Um rei traz o FUNDO na cor do seu reino (op["fundo"]) — é o traço do
-	# painel de referência que agrupa o retrato à facção.
+## A vinheta radial que assenta qualquer retrato no card — escura nos
+## cantos, na cor da FACÇÃO quando há uma (`fundo` hex). Vive separada do
+## gerador porque os bustos hi-bit também se sentam nela: é o que mantém
+## a heráldica viva sob o rosto ilustrado.
+static func _fundo_vinheta(fundo: String) -> Image:
+	var img := Image.create(LADO_RETRATO, LADO_RETRATO, false, Image.FORMAT_RGBA8)
 	var c := (LADO_RETRATO - 1) * 0.5
 	var f_a := FUNDO_A
 	var f_b := FUNDO_B
-	if op.has("fundo"):
-		var base_f := Color(str(op["fundo"]))
+	if fundo != "":
+		var base_f := Color(fundo)
 		f_a = base_f.darkened(0.30)
 		f_b = base_f.darkened(0.62)
 	for y in LADO_RETRATO:
 		for x in LADO_RETRATO:
 			var d: float = Vector2(x - c, y - c).length() / (c * 1.42)
-			t.img.set_pixel(x, y, f_a.lerp(f_b, clampf(d * 1.15, 0.0, 1.0)))
+			img.set_pixel(x, y, f_a.lerp(f_b, clampf(d * 1.15, 0.0, 1.0)))
+	return img
+
+static func _pintar(sem: Semente, op: Dictionary) -> Image:
+	var t := Tela.new(LADO_RETRATO)
+
+	# ---- fundo: vinheta radial, escura nos cantos ----
+	# um fundo chapado atrás de um rosto faz o rosto parecer recortado e
+	# colado; a vinheta o assenta no card. Um rei traz o FUNDO na cor do
+	# seu reino (op["fundo"]) — o traço que agrupa o retrato à facção.
+	t.img.blit_rect(_fundo_vinheta(str(op.get("fundo", ""))),
+		Rect2i(0, 0, LADO_RETRATO, LADO_RETRATO), Vector2i.ZERO)
 
 	# ---- os traços: da FICHA quando há (reis), da semente quando não ----
 	var pele: Array
@@ -721,13 +730,55 @@ static func fundo_da_casa(state: Dictionary) -> String:
 		return str(REIS["rei_" + rei_de]["fundo"])
 	return "5e4420"
 
+## ---- o ELENCO ILUSTRADO dos cidadãos ----
+## Bustos hi-bit TRANSPARENTES por arquétipo (ofício+gênero), em
+## assets/sprites/hibit/cidadao_<arquetipo><n>.png. O jogo compõe o busto
+## sobre a vinheta em runtime — a heráldica da casa fica viva SOB o rosto
+## ilustrado — e o NOME escolhe a variação, então a pessoa mantém a cara
+## enquanto vive. Contagens casadas com os arquivos gerados; arquivo
+## ausente = gerador procedural de sempre, nunca um buraco.
+const POOL_CIDADAO := {
+	"lorde_m": 3, "lorde_f": 2, "mercador_m": 2, "mercador_f": 2,
+	"ferreiro_m": 2, "ferreiro_f": 1, "moleiro_m": 1, "moleiro_f": 1,
+	"taverneiro_m": 1, "taverneiro_f": 1, "capataz_m": 1, "capataz_f": 1,
+	"senhor_m": 2, "herdeiro_m": 1, "herdeiro_f": 1,
+}
+
+static func _arquetipo_de(n: Dictionary) -> String:
+	var g := "f" if str(n.get("genero", "m")) == "f" else "m"
+	if bool(n.get("lorde", false)):
+		return "lorde_" + g
+	var oficio := str(n.get("oficio", ""))
+	if POOL_CIDADAO.has(oficio + "_" + g):
+		return oficio + "_" + g
+	if POOL_CIDADAO.has(oficio + "_m"):
+		return oficio + "_m"
+	# ofício fora do catálogo cai no rosto de gente comum, não num buraco
+	return "mercador_" + g
+
+static var _bustos: Dictionary = {}
+
+static func _busto_cidadao(arquivo: String) -> Image:
+	if _bustos.has(arquivo):
+		return _bustos[arquivo]
+	var caminho := ProjectSettings.globalize_path(PASTA_HIBIT + arquivo)
+	var img: Image = null
+	if FileAccess.file_exists(caminho):
+		img = Image.load_from_file(caminho)
+		if img != null:
+			img.convert(Image.FORMAT_RGBA8)
+			if img.get_width() != LADO_RETRATO or img.get_height() != LADO_RETRATO:
+				img.resize(LADO_RETRATO, LADO_RETRATO, Image.INTERPOLATE_NEAREST)
+	_bustos[arquivo] = img
+	return img
+
 ## Retrato de um cidadão/lorde criado durante a partida.
 ## `n` é o dicionário de cidadaos.gd (nome, genero, oficio, riqueza…).
 ##
-## A semente é o NOME, então o mesmo notável mantém a cara enquanto vive; o
-## ofício escolhe o toucado e a cor da roupa, e a riqueza escolhe se a roupa
-## é a boa ou a surrada. É o que faz a lista da Corte parecer um elenco em
-## vez de sete variações do mesmo homem.
+## Com a leva ilustrada no lugar, o ARQUÉTIPO (ofício+gênero) escolhe o
+## busto e o NOME escolhe a variação. Sem a leva, vale o gerador: a
+## semente é o nome, o ofício escolhe toucado e roupa, a riqueza escolhe
+## se a roupa é a boa ou a surrada.
 ##
 ## `fundo` é a cor de facção (fundo_da_casa): o chamador decide QUEM a
 ## carrega — lordes jurados, a família, comandantes — porque é ele quem
@@ -736,9 +787,33 @@ static func textura_cidadao(n: Dictionary, pequena: bool = false, fundo: String 
 	var nome := str(n.get("nome", "?"))
 	var oficio := str(n.get("oficio", ""))
 	var rico: bool = int(n.get("riqueza", 0)) >= 280
-	var chave := "cid|%s|%s|%s|%s" % [nome, oficio, "p" if pequena else "g", fundo]
+	var lorde := bool(n.get("lorde", false))
+	var preso := bool(n.get("capturado", false))
+	# lorde e capturado mudam o DESENHO (busto nobre, ferros): fora da
+	# chave, a promoção a lorde devolvia o retrato velho do cache
+	var chave := "cid|%s|%s|%s|%s|%s%s" % [nome, oficio,
+		"p" if pequena else "g", fundo, "l" if lorde else "", "c" if preso else ""]
 	if _cache.has(chave):
 		return _cache[chave]
+
+	# ---- busto ilustrado do arquétipo, composto sobre a vinheta ----
+	var img: Image = null
+	var arq := _arquetipo_de(n)
+	var tam := int(POOL_CIDADAO.get(arq, 0))
+	if tam > 0:
+		var busto := _busto_cidadao("cidadao_%s%d.png"
+			% [arq, 1 + _hash(nome + "|busto") % tam])
+		if busto != null:
+			img = _fundo_vinheta(fundo)
+			img.blend_rect(busto,
+				Rect2i(0, 0, LADO_RETRATO, LADO_RETRATO), Vector2i.ZERO)
+	if img != null:
+		if pequena:
+			img = _reduzir(img)
+		var pronto := ImageTexture.create_from_image(img)
+		_cache[chave] = pronto
+		return pronto
+
 	var op := {
 		"humor": "feliz" if int(n.get("lealdade", 50)) >= 70
 			else ("raiva" if int(n.get("lealdade", 50)) < 40 else "neutro"),
@@ -747,13 +822,13 @@ static func textura_cidadao(n: Dictionary, pequena: bool = false, fundo: String 
 		"idoso": (_hash(nome + "|idade") % 100) < 30,
 		"roupa": _hash(oficio + "|roupa") % ROUPA.size(),
 	}
-	if bool(n.get("lorde", false)):
+	if lorde:
 		op["toucado"] = "touca"
 	elif oficio == "ferreiro":
 		op["toucado"] = "elmo"
 	elif oficio == "mercador" or oficio == "taverneiro" or oficio == "moleiro":
 		op["toucado"] = "touca"
-	if bool(n.get("capturado", false)):
+	if preso:
 		# a ferros: sem toucado, humor de raiva. O estado aparece na CARA,
 		# não só no texto "a ferros em terra inimiga" ao lado
 		op["toucado"] = ""
@@ -762,7 +837,7 @@ static func textura_cidadao(n: Dictionary, pequena: bool = false, fundo: String 
 		op["roupa"] = (int(op["roupa"]) + 5) % ROUPA.size()
 	if fundo != "":
 		op["fundo"] = fundo
-	var img := _pintar(Semente.new(_hash(nome)), op)
+	img = _pintar(Semente.new(_hash(nome)), op)
 	if pequena:
 		img = _reduzir(img)
 	var tex := ImageTexture.create_from_image(img)
@@ -805,13 +880,30 @@ static func ilustracao(evento: String) -> Texture2D:
 static func textura_comandante(state: Dictionary, cmd: Dictionary) -> Texture2D:
 	if cmd.is_empty():
 		return null
+	var id := str(cmd.get("id", ""))
+	# um chefe de clã no comando leva o retrato DO CLÃ — a pessoa já
+	# existe no elenco fixo, inventar um busto seria trocar a cara dela
+	if id.begins_with("cla:"):
+		return textura(id.trim_prefix("cla:"))
 	var nome := str(cmd.get("nome", ""))
 	if nome == "":
-		return textura(str(cmd.get("id", "senhor")))
+		return textura(id if id != "" else "senhor")
+	# um LORDE no comando leva a cara que ele já tem na Corte: mesma flag
+	# de lorde e o gênero DO CENSO — sem isso, a marcha sortearia outro
+	# busto para a mesma pessoa e a identidade quebraria entre abas
+	var lorde := id.begins_with("lorde:")
+	var genero := "m"
+	# terra pode ser NULL no save (sem terra), não só ausente
+	var terra_v: Variant = state.get("terra")
+	if terra_v is Dictionary:
+		for n in terra_v.get("notaveis", []):
+			if str(n.get("nome", "")) == nome:
+				genero = str(n.get("genero", "m"))
 	# quem marcha, marcha SOB A SUA BANDEIRA: o comandante leva o fundo da
 	# casa, como os lordes da Corte
 	return textura_cidadao({"nome": nome, "oficio": str(cmd.get("perfil", "senhor")),
-		"riqueza": 400, "genero": "m", "lealdade": 60}, false, fundo_da_casa(state))
+		"riqueza": 400, "genero": genero, "lealdade": 60, "lorde": lorde},
+		false, fundo_da_casa(state))
 
 ## Um sprite qualquer pedido pelo id (cartógrafo, informante). Sem PNG, o id
 ## vira semente e a pessoa ganha uma cara — é o mesmo caminho de todo mundo.
