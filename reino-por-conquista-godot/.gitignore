@@ -4,3 +4,10 @@
 # código-fonte. Comitar um .exe de 85 MB infla o histórico do repositório
 # para sempre; refazer o export é uma linha de comando.
 dist/
+
+# SEGREDOS DE EXPORTAÇÃO — o Godot 4 guarda aqui a chave de criptografia
+# do PCK e as senhas de keystore do Android. NUNCA entra no repositório:
+# quem tem a chave abre o PCK. (ver SEGURANCA.md)
+export_credentials.cfg
+*.keystore
+*.jks

@@ -90,6 +90,16 @@ godot --headless --path . --script res://tests/teste_nucleo.gd
 2. Abra o Godot → **Import** → selecione a pasta `reino-por-conquista-godot`.
 3. F5 roda a cena atual da fase 1 (demonstração do núcleo no console).
 
+## Segurança do build
+
+Ver **`SEGURANCA.md`** — o runbook completo: por que o jogo passa limpo em
+heurística de antivírus (zero execução de comando/código dinâmico, travado
+por teste; metadados de editora FelpsLuz nos presets), como assinar o
+`.exe` (Azure Trusted Signing / certificado OV), e a criptografia AES-256
+do PCK contra engenharia reversa (já ligada nos presets — falta só a SUA
+chave + templates compilados com ela; a chave fica em
+`export_credentials.cfg`, fora do git).
+
 ## Como exportar (no seu PC, com o editor Godot)
 
 1. **Editor → Export...** → instale os *export templates* quando o Godot pedir (download único).

@@ -543,6 +543,32 @@ func _frente_som_e_heraldica() -> void:
 	ok(Llm._ler_gemini({"candidates": [{"finishReason": "SAFETY", "content": null}]}) == ""
 		and Llm._ler_gemini({"promptFeedback": {"blockReason": "SAFETY"}}) == "",
 		"resposta bloqueada do Gemini devolve vazio (motor interno assume)")
+
+	# ---- higiene de segurança do build (ver SEGURANCA.md) ----
+	# execução de comando e código dinâmico são O gatilho de heurística de
+	# antivírus — este jogo não usa nenhum, e este teste tranca a porta
+	var proibidos := ["OS.execute(", "OS.create_process(", "Expression.new("]
+	var infratores: Array[String] = []
+	for pasta in ["res://scripts", "res://cenas"]:
+		for arq in DirAccess.get_files_at(pasta):
+			if not arq.ends_with(".gd"):
+				continue
+			var texto := FileAccess.get_file_as_string(pasta + "/" + arq)
+			for p in proibidos:
+				if texto.contains(str(p)):
+					infratores.append(arq + " usa " + str(p))
+	ok(infratores.is_empty(), "nenhum script executa comando do sistema ou código dinâmico",
+		"; ".join(infratores) if not infratores.is_empty() else "")
+	var presets := FileAccess.get_file_as_string("res://export_presets.cfg")
+	ok(presets.contains("company_name=\"FelpsLuz\"")
+		and presets.count("encrypt_pck=true") == 3,
+		"presets levam a editora FelpsLuz e criptografia de PCK nos 3 alvos")
+	var gi := FileAccess.get_file_as_string("res://.gitignore")
+	ok(gi.contains("export_credentials.cfg"),
+		"a chave de criptografia (export_credentials.cfg) nunca sobe no git")
+	ok(FileAccess.file_exists("res://icone_jogo.ico")
+		and FileAccess.file_exists("res://icone_jogo.png"),
+		"o ícone próprio do jogo existe (.ico multi-tamanho e .png)")
 	Llm._cfg = {"provedor": "desligado", "url": "", "chave": "", "modelo": ""}
 	ok(not Llm.ativa(), "provedor desligado nunca ativa")
 	Llm._cfg = {"provedor": "anthropic", "url": "https://api.anthropic.com/v1",

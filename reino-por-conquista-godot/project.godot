@@ -8,8 +8,10 @@ config_version=5
 
 config/name="Reino por Conquista"
 config/description="De mercenário sem nome a rei — estratégia medieval offline"
+config/version="1.0.0"
 run/main_scene="res://cenas/principal.tscn"
 config/features=PackedStringArray("4.3")
+config/icon="res://icone_jogo.png"
 
 [autoload]
 
