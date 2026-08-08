@@ -237,10 +237,12 @@ static func fonte_titulo() -> FontFile:
 # ela não existe. É o mesmo contrato dos ícones — a UI nunca quebra por
 # arte ausente, e a arte entra sem tocar em quem chama.
 #
-# `Image.load_from_file`, e não `load()`: o load() exige o .import gerado
-# pelo editor, e a leva chega por fora dele. Carregar o PNG cru torna a
-# peça visível no mesmo instante em que o arquivo aparece — headless,
-# render de CI e jogo exportado incluídos.
+# Bytes do pacote + `load_png_from_buffer`, e não `load()` nem
+# `Image.load_from_file`: o load() exige o .import gerado pelo editor (a
+# leva chega por fora dele), e o load_from_file exige caminho REAL de
+# sistema de arquivos — que deixa de existir quando o jogo é exportado e o
+# res:// vira PCK/APK. Ler pelo filesystem virtual funciona em todos os
+# modos: editor, headless, render de CI e build exportado.
 # ============================================================
 const PASTA_HIBIT := "res://assets/sprites/hibit/"
 
@@ -249,12 +251,9 @@ static var _tex_ui: Dictionary = {}
 static func tex_hibit(nome: String) -> Texture2D:
 	if _tex_ui.has(nome):
 		return _tex_ui[nome]
-	var caminho := ProjectSettings.globalize_path(PASTA_HIBIT + nome + ".png")
-	if not FileAccess.file_exists(caminho):
-		_tex_ui[nome] = null
-		return null
-	var img := Image.load_from_file(caminho)
-	if img == null:
+	var bytes := FileAccess.get_file_as_bytes(PASTA_HIBIT + nome + ".png")
+	var img := Image.new()
+	if bytes.is_empty() or img.load_png_from_buffer(bytes) != OK:
 		_tex_ui[nome] = null
 		return null
 	var tex := ImageTexture.create_from_image(img)

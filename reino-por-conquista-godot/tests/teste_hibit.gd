@@ -546,8 +546,12 @@ func _frente_som_e_heraldica() -> void:
 
 	# ---- higiene de segurança do build (ver SEGURANCA.md) ----
 	# execução de comando e código dinâmico são O gatilho de heurística de
-	# antivírus — este jogo não usa nenhum, e este teste tranca a porta
-	var proibidos := ["OS.execute(", "OS.create_process(", "Expression.new("]
+	# antivírus — este jogo não usa nenhum, e este teste tranca a porta.
+	# Os dois últimos padrões são de PORTABILIDADE: caminho globalizado de
+	# res:// e load_from_file funcionam no editor mas morrem dentro de
+	# PCK/APK exportado — a arte sumiria em silêncio no build final.
+	var proibidos := ["OS.execute(", "OS.create_process(", "Expression.new(",
+		"Image.load_from_file(", "globalize_path(\"res:"]
 	var infratores: Array[String] = []
 	for pasta in ["res://scripts", "res://cenas"]:
 		for arq in DirAccess.get_files_at(pasta):
@@ -557,12 +561,18 @@ func _frente_som_e_heraldica() -> void:
 			for p in proibidos:
 				if texto.contains(str(p)):
 					infratores.append(arq + " usa " + str(p))
-	ok(infratores.is_empty(), "nenhum script executa comando do sistema ou código dinâmico",
+	ok(infratores.is_empty(),
+		"nenhum script usa comando de sistema, código dinâmico ou caminho que morre no export",
 		"; ".join(infratores) if not infratores.is_empty() else "")
 	var presets := FileAccess.get_file_as_string("res://export_presets.cfg")
 	ok(presets.contains("company_name=\"FelpsLuz\"")
-		and presets.count("encrypt_pck=true") == 3,
-		"presets levam a editora FelpsLuz e criptografia de PCK nos 3 alvos")
+		and presets.count("encrypt_pck=true") == 4,
+		"presets levam a editora FelpsLuz e criptografia de PCK nos 4 alvos")
+	ok(presets.contains("permissions/internet=true"),
+		"Android declara a permissão de INTERNET — sem ela a IA morre calada no celular")
+	ok(presets.contains("platform=\"Linux/X11\"")
+		and presets.contains("architectures/arm64-v8a=true"),
+		"preset Linux (Steam Deck nativo) existe e o Android mira arm64")
 	var gi := FileAccess.get_file_as_string("res://.gitignore")
 	ok(gi.contains("export_credentials.cfg"),
 		"a chave de criptografia (export_credentials.cfg) nunca sobe no git")

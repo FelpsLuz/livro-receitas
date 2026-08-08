@@ -642,15 +642,22 @@ static func _opcoes_de(id: String, humor: String) -> Dictionary:
 const PASTA_HIBIT := "res://assets/sprites/hibit/"
 static var _hibit: Dictionary = {}
 
+## Lê um PNG da leva pelo filesystem VIRTUAL (bytes do pacote), nunca por
+## caminho globalizado: dentro de um PCK/APK exportado o res:// não é uma
+## pasta real, e é isso que mantém a arte viva no build final.
+static func _png_hibit(arquivo: String) -> Image:
+	var bytes := FileAccess.get_file_as_bytes(PASTA_HIBIT + arquivo)
+	if bytes.is_empty():
+		return null
+	var img := Image.new()
+	if img.load_png_from_buffer(bytes) != OK:
+		return null
+	return img
+
 static func _retrato_hibit(id: String) -> Texture2D:
 	if _hibit.has(id):
 		return _hibit[id]
-	var caminho := ProjectSettings.globalize_path(
-		PASTA_HIBIT + "retrato_" + id + ".png")
-	if not FileAccess.file_exists(caminho):
-		_hibit[id] = null
-		return null
-	var img := Image.load_from_file(caminho)
+	var img := _png_hibit("retrato_" + id + ".png")
 	if img == null:
 		_hibit[id] = null
 		return null
@@ -761,14 +768,11 @@ static var _bustos: Dictionary = {}
 static func _busto_cidadao(arquivo: String) -> Image:
 	if _bustos.has(arquivo):
 		return _bustos[arquivo]
-	var caminho := ProjectSettings.globalize_path(PASTA_HIBIT + arquivo)
-	var img: Image = null
-	if FileAccess.file_exists(caminho):
-		img = Image.load_from_file(caminho)
-		if img != null:
-			img.convert(Image.FORMAT_RGBA8)
-			if img.get_width() != LADO_RETRATO or img.get_height() != LADO_RETRATO:
-				img.resize(LADO_RETRATO, LADO_RETRATO, Image.INTERPOLATE_NEAREST)
+	var img := _png_hibit(arquivo)
+	if img != null:
+		img.convert(Image.FORMAT_RGBA8)
+		if img.get_width() != LADO_RETRATO or img.get_height() != LADO_RETRATO:
+			img.resize(LADO_RETRATO, LADO_RETRATO, Image.INTERPOLATE_NEAREST)
 	_bustos[arquivo] = img
 	return img
 

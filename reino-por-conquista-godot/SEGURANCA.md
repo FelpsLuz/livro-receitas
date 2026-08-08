@@ -52,7 +52,7 @@ cada proteção cobre e o que não cobre.
 
 Sem proteção, o PCK de qualquer jogo Godot abre com ferramenta pública e
 os scripts voltam quase 1:1. A resposta padrão do motor é a **criptografia
-AES-256 do PCK — já LIGADA nos três presets** deste projeto. Falta só a
+AES-256 do PCK — já LIGADA nos quatro presets** deste projeto. Falta só a
 sua chave:
 
 1. **Gerar a chave** (64 hex): `openssl rand -hex 32`
@@ -99,3 +99,5 @@ Notas:
 - [ ] `signtool` no `.exe` (Windows) / keystore de sempre (Android)
 - [ ] VirusTotal no artefato; falso positivo → formulários acima
 - [ ] Smoke test numa máquina limpa (sem Godot instalado)
+- [ ] Publicação por alvo (Steam depots, keystore/AAB do Android): ver
+      `PLATAFORMAS.md`

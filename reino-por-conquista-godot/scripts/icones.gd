@@ -113,8 +113,9 @@ static func tem(nome: String) -> bool:
 # e por isso NUNCA tingida — tingir uma ilustração colorida a transforma
 # numa mancha monocromática, que é pior que a silhueta.
 #
-# `Image.load_from_file`, não `load()`: a leva chega sem passar pelo
-# editor, e o PNG cru carrega em qualquer modo (headless incluso).
+# Bytes do pacote + `load_png_from_buffer`, não `load()`: a leva chega sem
+# passar pelo editor, e caminho globalizado morre dentro de PCK/APK — o
+# filesystem virtual carrega em qualquer modo (headless e export inclusos).
 # ============================================================
 const PASTA_HIBIT := "res://assets/sprites/hibit/"
 static var _ilustrados: Dictionary = {}
@@ -123,13 +124,10 @@ static func ilustrado(nome: String) -> Texture2D:
 	var chave := nome.trim_prefix("icone_")
 	if _ilustrados.has(chave):
 		return _ilustrados[chave]
-	var caminho := ProjectSettings.globalize_path(
+	var bytes := FileAccess.get_file_as_bytes(
 		PASTA_HIBIT + "icone_" + chave + ".png")
-	if not FileAccess.file_exists(caminho):
-		_ilustrados[chave] = null
-		return null
-	var img := Image.load_from_file(caminho)
-	if img == null:
+	var img := Image.new()
+	if bytes.is_empty() or img.load_png_from_buffer(bytes) != OK:
 		_ilustrados[chave] = null
 		return null
 	var tex := ImageTexture.create_from_image(img)

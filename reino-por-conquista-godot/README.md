@@ -102,11 +102,16 @@ chave + templates compilados com ela; a chave fica em
 
 ## Como exportar (no seu PC, com o editor Godot)
 
+Ver **`PLATAFORMAS.md`** para o caminho completo de loja: Steam
+(Windows + Linux/Deck, depots, overlay, Cloud) e Android (keystore,
+APK/AAB, Play). O resumo:
+
 1. **Editor → Export...** → instale os *export templates* quando o Godot pedir (download único).
-2. Escolha o preset (**Windows**, **Android** ou **Web** — já configurados em `export_presets.cfg`).
+2. Escolha o preset (**Windows**, **Linux**, **Android** ou **Web** — já configurados em `export_presets.cfg`).
 3. **Export Project** → o executável sai em `dist/`.
    - Windows: `ReinoPorConquista.exe` único (pck embutido).
-   - Android: requer o Android SDK configurado no editor (Editor Settings → Export → Android).
+   - Linux: `ReinoPorConquista.x86_64` (Steam Deck roda nativo).
+   - Android: requer o Android SDK configurado no editor (Editor Settings → Export → Android). O preset já declara a permissão de INTERNET que a IA precisa.
    - Web: hospede a pasta `dist/web` em qualquer servidor estático (itch.io funciona).
 
 ## Fase 3 — auditoria visual, concluída
