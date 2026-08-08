@@ -23,11 +23,13 @@ Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
   pasta de áudio devolve os bipes, nunca quebra. Trilha da tela de título em loop
   (`assets/audio/musica_titulo.mp3`, fade ao entrar no jogo); créditos em
   `assets/audio/CREDITOS.md`
-- **🧠 IA dos personagens** (`scripts/llm.gd`): o jogador escolhe o provedor no botão da
-  Corte — llama.cpp local (grátis), Groq/OpenRouter (faixa grátis com conta) ou
-  OpenAI/Anthropic Claude (pagos, com AVISO de cobrança na interface). A chave fica só
-  no `user://` da máquina; qualquer falha ou recusa cai no motor interno — o jogo nunca
-  depende da IA
+- **🧠 IA dos personagens** (`scripts/llm.gd`): a conversa aberta é o coração do jogo,
+  então a PRIMEIRA saga obriga a escolher a IA — com o **Google Gemini pré-selecionado**
+  (a maior faixa grátis sem cartão, ~1.500 falas/dia). Alternativas no mesmo seletor:
+  llama.cpp local (a única ilimitada de verdade), Groq (o mais rápido), OpenRouter, e
+  OpenAI/Anthropic Claude (pagos, com AVISO de cobrança em vermelho). "Sem IA" continua
+  sendo uma escolha consciente: o motor interno responde, mais limitado. A chave fica só
+  no `user://` da máquina; qualquer falha ou recusa cai no motor interno
 - **Save/load** automático em JSON (`user://save.json`)
 - **Presets de exportação** prontos: Windows .exe, Android .apk e Web (PWA)
 

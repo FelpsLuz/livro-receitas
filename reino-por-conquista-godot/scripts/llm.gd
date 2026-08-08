@@ -19,25 +19,42 @@ const ARQUIVO_LEGADO := "user://llm_url.txt"
 ## O catálogo. `custo`: "gratis" (roda na sua máquina), "gratis_conta"
 ## (precisa de conta; tem faixa gratuita com limites), "pago" (usa a SUA
 ## chave e cobra por uso). `protocolo`: como falar com o servidor.
+## `nota` é a linha de força que o seletor mostra — o que cada um faz bem.
+##
+## Não existe nuvem "grátis e ilimitada": TODA tem teto. O Gemini é o
+## RECOMENDADO porque tem a maior faixa grátis sem cartão (~1.500
+## falas/dia — ilimitado na prática para um jogador) e contexto de 1M;
+## a única ilimitada de verdade é a local, que exige instalar o servidor.
+const RECOMENDADO := "gemini"
 const PROVEDORES := {
-	"desligado": {"nome": "Desligado — motor interno do jogo",
-		"protocolo": "", "url": "", "chave": false, "custo": "gratis", "modelo": ""},
-	"local": {"nome": "IA local (llama.cpp) — grátis",
+	"desligado": {"nome": "Sem IA — motor interno do jogo",
+		"protocolo": "", "url": "", "chave": false, "custo": "gratis", "modelo": "",
+		"nota": "Funciona sempre, mas as respostas são limitadas: a conversa aberta perde a graça."},
+	"gemini": {"nome": "Google Gemini — grátis (recomendado)",
+		"protocolo": "gemini", "url": "https://generativelanguage.googleapis.com",
+		"chave": true, "custo": "gratis_conta", "modelo": "gemini-flash-latest",
+		"nota": "A maior faixa grátis sem cartão (~1.500 falas/dia) e memória longa de conversa. Chave em aistudio.google.com."},
+	"local": {"nome": "IA local (llama.cpp) — grátis e ilimitada",
 		"protocolo": "llama", "url": "http://localhost:8080",
-		"chave": false, "custo": "gratis", "modelo": ""},
-	"groq": {"nome": "Groq — nuvem com faixa grátis",
+		"chave": false, "custo": "gratis", "modelo": "",
+		"nota": "A única sem limite nenhum: roda no SEU processador. Exige instalar o llama-server."},
+	"groq": {"nome": "Groq — grátis, o mais rápido",
 		"protocolo": "openai", "url": "https://api.groq.com/openai/v1",
-		"chave": true, "custo": "gratis_conta", "modelo": "llama-3.3-70b-versatile"},
-	"openrouter": {"nome": "OpenRouter — modelos grátis e pagos",
+		"chave": true, "custo": "gratis_conta", "modelo": "llama-3.3-70b-versatile",
+		"nota": "Respostas quase instantâneas; faixa grátis de ~1.000 falas/dia. Chave em console.groq.com."},
+	"openrouter": {"nome": "OpenRouter — vários modelos",
 		"protocolo": "openai", "url": "https://openrouter.ai/api/v1",
 		"chave": true, "custo": "gratis_conta",
-		"modelo": "meta-llama/llama-3.3-70b-instruct:free"},
+		"modelo": "meta-llama/llama-3.3-70b-instruct:free",
+		"nota": "Dezenas de modelos num só lugar; grátis limitado a ~50 falas/dia."},
 	"openai": {"nome": "OpenAI — pago",
 		"protocolo": "openai", "url": "https://api.openai.com/v1",
-		"chave": true, "custo": "pago", "modelo": "gpt-4o-mini"},
+		"chave": true, "custo": "pago", "modelo": "gpt-4o-mini",
+		"nota": "Qualidade alta; cada fala custa da sua chave."},
 	"anthropic": {"nome": "Anthropic Claude — pago",
 		"protocolo": "anthropic", "url": "https://api.anthropic.com/v1",
-		"chave": true, "custo": "pago", "modelo": "claude-opus-5"},
+		"chave": true, "custo": "pago", "modelo": "claude-opus-5",
+		"nota": "Qualidade alta e ótima interpretação de personagem; cada fala custa da sua chave."},
 }
 
 static var _cfg: Dictionary = {}
@@ -94,6 +111,13 @@ static func descricao_estado() -> String:
 static func url() -> String:
 	return str(config()["url"]) if ativa() else ""
 
+## O jogador JÁ fez a escolha alguma vez? A conversa aberta é o coração
+## do jogo, então a primeira saga OBRIGA a escolher — mesmo que a escolha
+## consciente seja "sem IA". Arquivo salvo (ou o legado da IA local)
+## conta como escolha feita.
+static func ja_escolheu() -> bool:
+	return FileAccess.file_exists(ARQUIVO_CFG) or FileAccess.file_exists(ARQUIVO_LEGADO)
+
 # ---------------- geração ----------------
 
 ## Gera a fala do NPC no provedor configurado. "" em QUALQUER falha —
@@ -131,6 +155,14 @@ static func gerar(no_pai: Node, prompt: String, timeout_s: float = 12.0) -> Stri
 				{"model": modelo, "max_tokens": 200,
 					"messages": [{"role": "user", "content": prompt}]},
 				_ler_anthropic)
+		"gemini":
+			return await _post(no_pai, timeout_s,
+				base + "/v1beta/models/" + modelo + ":generateContent",
+				["Content-Type: application/json",
+					"x-goog-api-key: " + str(c["chave"])],
+				{"contents": [{"parts": [{"text": prompt}]}],
+					"generationConfig": {"maxOutputTokens": 200}},
+				_ler_gemini)
 	return ""
 
 static func _post(no_pai: Node, timeout_s: float, url_alvo: String,
@@ -176,4 +208,21 @@ static func _ler_anthropic(json) -> String:
 	for bloco in json.get("content", []):
 		if bloco is Dictionary and str(bloco.get("type", "")) == "text":
 			saida += str(bloco.get("text", ""))
+	return saida
+
+static func _ler_gemini(json) -> String:
+	if not (json is Dictionary) or not (json.get("candidates", []) is Array) \
+			or (json.get("candidates", []) as Array).is_empty():
+		return ""
+	var cand = json["candidates"][0]
+	if not (cand is Dictionary):
+		return ""
+	# resposta bloqueada vem sem content (ou nulo) — vazio, motor interno
+	var conteudo = cand.get("content", {})
+	if not (conteudo is Dictionary):
+		return ""
+	var saida := ""
+	for parte in conteudo.get("parts", []):
+		if parte is Dictionary:
+			saida += str(parte.get("text", ""))
 	return saida

@@ -11,9 +11,13 @@ extends SceneTree
 const Jogo = preload("res://scripts/jogo.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
+const Llm = preload("res://scripts/llm.gd")
 
 func _initialize() -> void:
 	Jogo.apagar_save()
+	# a primeira saga obriga a escolher a IA; o harness escolhe "sem IA"
+	# de antemão para iniciar_jogo não parar no modal
+	Llm.definir({"provedor": "desligado", "url": "", "chave": "", "modelo": ""})
 	var cena := load("res://cenas/principal.tscn")
 	var jogo: Control = cena.instantiate()
 	# NÃO forçar o tamanho aqui: o canvas do projeto é 960×540 e a janela só o
@@ -25,6 +29,14 @@ func _initialize() -> void:
 	for i in 40:
 		await process_frame
 	await _quadro(jogo, "titulo")
+
+	# o modal OBRIGATÓRIO da primeira saga: sem escolha feita, iniciar abre
+	# o seletor com o recomendado (Gemini) pré-selecionado
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(Llm.ARQUIVO_CFG))
+	jogo.iniciar_jogo("Aldric de Vau")
+	await _quadro(jogo, "ia_obrigatoria")
+	jogo.overlay_modal.visible = false
+	Llm.definir({"provedor": "desligado", "url": "", "chave": "", "modelo": ""})
 
 	jogo.iniciar_jogo("Aldric de Vau")
 	var st: Dictionary = jogo.state

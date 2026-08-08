@@ -528,9 +528,21 @@ func _frente_som_e_heraldica() -> void:
 		var p: Dictionary = Llm.PROVEDORES[id]
 		if str(p["custo"]) == "pago" and not bool(p["chave"]):
 			cat_ok = false
-		if not str(p["protocolo"]) in ["", "llama", "openai", "anthropic"]:
+		if not str(p["protocolo"]) in ["", "llama", "openai", "anthropic", "gemini"]:
 			cat_ok = false
 	ok(cat_ok, "catálogo de provedores: pago exige chave, protocolo conhecido")
+	# o RECOMENDADO da primeira saga tem que existir, ser de faixa grátis
+	# e ter nota — é ele que o jogador vê pré-selecionado
+	var rec: Dictionary = Llm.PROVEDORES.get(Llm.RECOMENDADO, {})
+	ok(not rec.is_empty() and str(rec["custo"]) == "gratis_conta"
+		and str(rec.get("nota", "")) != "",
+		"o provedor recomendado existe, é de faixa grátis e explica por quê")
+	ok(Llm._ler_gemini({"candidates": [{"content": {"parts":
+		[{"text": "Salve, "}, {"text": "mercenário."}]}}]}) == "Salve, mercenário.",
+		"resposta do Gemini concatena as partes de texto")
+	ok(Llm._ler_gemini({"candidates": [{"finishReason": "SAFETY", "content": null}]}) == ""
+		and Llm._ler_gemini({"promptFeedback": {"blockReason": "SAFETY"}}) == "",
+		"resposta bloqueada do Gemini devolve vazio (motor interno assume)")
 	Llm._cfg = {"provedor": "desligado", "url": "", "chave": "", "modelo": ""}
 	ok(not Llm.ativa(), "provedor desligado nunca ativa")
 	Llm._cfg = {"provedor": "anthropic", "url": "https://api.anthropic.com/v1",

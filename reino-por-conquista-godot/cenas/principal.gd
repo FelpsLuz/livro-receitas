@@ -254,6 +254,14 @@ func _montar_titulo() -> void:
 
 func iniciar_jogo(nome: String) -> void:
 	Sfx.tocar(self, "tique")
+	# a conversa aberta é o coração do jogo, e ela precisa de uma IA para
+	# interpretar o jogador de verdade: a PRIMEIRA saga obriga a escolher
+	# — mesmo que a escolha consciente seja "sem IA"
+	if not Llm.ja_escolheu():
+		_modal_llm(func():
+			state = Jogo.novo_jogo(nome)
+			_entrar_no_jogo())
+		return
 	state = Jogo.novo_jogo(nome)
 	_entrar_no_jogo()
 
@@ -262,6 +270,11 @@ func continuar_jogo() -> void:
 	if salvo == null:
 		return
 	Sfx.tocar(self, "tique")
+	if not Llm.ja_escolheu():
+		_modal_llm(func():
+			state = salvo
+			_entrar_no_jogo())
+		return
 	state = salvo
 	_entrar_no_jogo()
 
@@ -2215,15 +2228,17 @@ func _modal_fim() -> void:
 			get_tree().reload_current_scene()]],
 		Retratos.ilustracao("coroacao") if vitoria else Retratos.ilustracao("derrota"))
 
-## O seletor de IA. O jogador escolhe QUALQUER provedor — grátis de
-## verdade (llama.cpp local), faixa grátis com conta (Groq, OpenRouter)
-## ou pago com a própria chave (OpenAI, Anthropic) — e o AVISO muda de
-## cor junto: pago é vermelho e diz "cobra por uso" antes de qualquer
-## chamada. Sem IA o jogo continua completo: o motor interno responde.
-func _modal_llm() -> void:
+## O seletor de IA. O jogador escolhe QUALQUER provedor — Gemini com a
+## maior faixa grátis (recomendado), llama.cpp local ilimitado, Groq e
+## OpenRouter grátis com conta, OpenAI e Anthropic pagos — e o AVISO muda
+## de cor junto: pago é vermelho e diz "cobra por uso" antes de qualquer
+## chamada. Com `ao_confirmar` válido é o modo OBRIGATÓRIO da primeira
+## saga: pré-seleciona o recomendado, valida a chave e só então começa.
+func _modal_llm(ao_confirmar := Callable()) -> void:
+	var obrigatorio := ao_confirmar.is_valid()
 	var v := _painel_modal()
 	var l_titulo := Label.new()
-	l_titulo.text = "IA dos Personagens"
+	l_titulo.text = "Escolha a IA dos Personagens" if obrigatorio else "IA dos Personagens"
 	var f := Tema.fonte_forte()
 	if f != null:
 		l_titulo.add_theme_font_override("font", f)
@@ -2232,7 +2247,9 @@ func _modal_llm() -> void:
 	l_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(l_titulo)
 	var l := Label.new()
-	l.text = "As falas dos NPCs podem ser geradas por uma IA à sua escolha. O jogo é completo sem nenhuma — a mecânica decide, a IA só narra."
+	l.text = ("Este jogo se joga CONVERSANDO abertamente com os personagens — e é a IA que interpreta o que você escreve. Há opções grátis; sem IA, valem as respostas curtas do motor interno." \
+		if obrigatorio else \
+		"As falas dos NPCs podem ser geradas por uma IA à sua escolha. A mecânica decide o que acontece; a IA interpreta e narra.")
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_color_override("font_color", Tema.TEXTO_2)
 	v.add_child(l)
@@ -2243,8 +2260,18 @@ func _modal_llm() -> void:
 	var escolha := OptionButton.new()
 	for id in ids:
 		escolha.add_item(str(Llm.PROVEDORES[id]["nome"]))
-	escolha.select(maxi(0, ids.find(str(cfg["provedor"]))))
+	# primeira vez: o RECOMENDADO já vem selecionado — quem só aperta
+	# "Começar" cai na maior faixa grátis, não no silêncio
+	var inicial := ids.find(Llm.RECOMENDADO) if obrigatorio and not Llm.ja_escolheu() \
+		else ids.find(str(cfg["provedor"]))
+	escolha.select(maxi(0, inicial))
 	v.add_child(escolha)
+
+	var nota := Label.new()
+	nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nota.add_theme_font_size_override("font_size", Tema.MICRO)
+	nota.add_theme_color_override("font_color", Tema.TEXTO_3)
+	v.add_child(nota)
 
 	# ---- o aviso de custo, colorido pelo bolso ----
 	var aviso_painel := PanelContainer.new()
@@ -2280,6 +2307,7 @@ func _modal_llm() -> void:
 		var id := str(ids[idx])
 		var p: Dictionary = Llm.PROVEDORES[id]
 		var salvo := id == str(cfg["provedor"])
+		nota.text = str(p.get("nota", ""))
 		campo_url.text = str(cfg["url"]) if salvo else str(p["url"])
 		campo_chave.text = str(cfg["chave"]) if salvo else ""
 		campo_modelo.text = str(cfg["modelo"]) \
@@ -2310,10 +2338,25 @@ func _modal_llm() -> void:
 	escolha.item_selected.connect(func(idx: int): aplicar.call(idx))
 
 	Kit.respiro(v, Tema.E1)
-	Kit.botao(v, "Salvar", func():
-		Llm.definir({"provedor": str(ids[escolha.selected]),
+	Kit.botao(v, "Começar a saga" if obrigatorio else "Salvar", func():
+		var id := str(ids[escolha.selected])
+		var p: Dictionary = Llm.PROVEDORES[id]
+		# quem escolheu um provedor não pode sair sem o que ele exige —
+		# senão a primeira conversa falharia em silêncio
+		if str(p["protocolo"]) != "" and campo_url.text.strip_edges() == "":
+			aviso.text = "⚠ Falta a URL do servidor para este provedor."
+			aviso.add_theme_color_override("font_color", Color("e8917a"))
+			return
+		if bool(p["chave"]) and campo_chave.text.strip_edges() == "":
+			aviso.text = "⚠ Falta a CHAVE: crie a conta no site do provedor (é grátis nos de faixa grátis) e cole a chave aqui."
+			aviso.add_theme_color_override("font_color", Color("e8917a"))
+			return
+		Llm.definir({"provedor": id,
 			"url": campo_url.text, "chave": campo_chave.text,
 			"modelo": campo_modelo.text})
 		Sfx.tocar(self, "fechar")
 		overlay_modal.visible = false
-		atualizar(), "primario")
+		if obrigatorio:
+			ao_confirmar.call()
+		else:
+			atualizar(), "primario")
