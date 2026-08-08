@@ -25,6 +25,16 @@ travado por teste nesta rodada.
   editor e morre dentro de PCK/APK — o build exportado perderia toda a
   arte ilustrada em silêncio. Corrigido, e o padrão antigo agora é
   **proibido por teste de higiene**.
+- **Os arquivos crus viajam no pacote via `importer="keep"`** — segunda
+  camada da mesma armadilha, descoberta num export Android REAL feito
+  deste projeto: o editor cria sidecars `.import` para MP3/WAV/PNG e o
+  exportador então empacota só a versão importada, descartando o
+  arquivo cru que o jogo lê em runtime (o `include_filter` do preset
+  NÃO vence o sidecar). Os 115 assets de runtime levam o sidecar
+  `keep` commitado no repositório, e um teste confere um por um.
+- **ETC2/ASTC declarado** (`import_etc2_astc=true` no projeto) —
+  exigência dura do exportador Android. Custo zero aqui: nenhuma
+  textura do jogo usa compressão de VRAM (tudo é 2D lossless).
 - **Save e config em `user://`** — o Godot resolve o lugar certo em cada
   sistema (AppData no Windows, `~/.local/share` no Linux, sandbox do app
   no Android). Nenhum caminho absoluto no projeto.

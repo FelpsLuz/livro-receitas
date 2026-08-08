@@ -579,6 +579,28 @@ func _frente_som_e_heraldica() -> void:
 	ok(FileAccess.file_exists("res://icone_jogo.ico")
 		and FileAccess.file_exists("res://icone_jogo.png"),
 		"o ícone próprio do jogo existe (.ico multi-tamanho e .png)")
+	# todo asset lido CRU em runtime precisa do sidecar importer="keep":
+	# sem ele o editor importa o arquivo e o exportador empacota SÓ a
+	# versão importada — o APK/PCK final ficaria sem música, sem SFX e sem
+	# a arte hi-bit (descoberto num export Android real; include_filter
+	# NÃO vence o sidecar)
+	var sem_keep: Array[String] = []
+	for par: Array in [["res://assets/audio", "mp3"],
+			["res://assets/audio/musica_jogo", "mp3"],
+			["res://assets/audio/sfx", "wav"],
+			["res://assets/sprites/hibit", "png"]]:
+		for arq in DirAccess.get_files_at(str(par[0])):
+			if not arq.ends_with("." + str(par[1])):
+				continue
+			var side := FileAccess.get_file_as_string(str(par[0]) + "/" + arq + ".import")
+			if not side.contains("importer=\"keep\""):
+				sem_keep.append(arq)
+	ok(sem_keep.is_empty(),
+		"todo asset cru de runtime leva importer=\"keep\" — senão o export perde ele",
+		"; ".join(sem_keep) if not sem_keep.is_empty() else "")
+	ok(bool(ProjectSettings.get_setting(
+		"rendering/textures/vram_compression/import_etc2_astc", false)),
+		"ETC2/ASTC declarado no projeto — o exportador Android exige")
 	Llm._cfg = {"provedor": "desligado", "url": "", "chave": "", "modelo": ""}
 	ok(not Llm.ativa(), "provedor desligado nunca ativa")
 	Llm._cfg = {"provedor": "anthropic", "url": "https://api.anthropic.com/v1",

@@ -52,6 +52,11 @@ window/handheld/orientation=1
 
 [rendering]
 
+; O export Android EXIGE a declaração ETC2/ASTC (aviso duro do exportador).
+; Nenhuma textura do jogo usa compressão de VRAM (tudo lossless 2D), então
+; o custo é zero — mas sem a flag o preset Android nem valida.
+textures/vram_compression/import_etc2_astc=true
+
 ; §G do addendum v3: sem os snaps, skew/scale fracionário nas sombras de
 ; contato gera tremulação de subpixel.
 2d/snap/snap_2d_transforms_to_pixel=true
