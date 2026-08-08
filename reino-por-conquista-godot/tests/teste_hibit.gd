@@ -517,3 +517,37 @@ func _frente_som_e_heraldica() -> void:
 		and Retratos._arquetipo_de({"oficio": "senhor", "genero": "f"}) == "senhor_m"
 		and Retratos._arquetipo_de({"oficio": "alquimista"}) == "mercador_m",
 		"o arquétipo resolve gênero, senhor e ofício desconhecido")
+
+	# ---- IA multi-provedor ----
+	# O catálogo é um CONTRATO com a interface: todo provedor pago exige
+	# chave (senão o aviso de cobrança protegeria ninguém), e o protocolo
+	# é um dos três que gerar() sabe falar.
+	var Llm = load("res://scripts/llm.gd")
+	var cat_ok := true
+	for id in Llm.PROVEDORES:
+		var p: Dictionary = Llm.PROVEDORES[id]
+		if str(p["custo"]) == "pago" and not bool(p["chave"]):
+			cat_ok = false
+		if not str(p["protocolo"]) in ["", "llama", "openai", "anthropic"]:
+			cat_ok = false
+	ok(cat_ok, "catálogo de provedores: pago exige chave, protocolo conhecido")
+	Llm._cfg = {"provedor": "desligado", "url": "", "chave": "", "modelo": ""}
+	ok(not Llm.ativa(), "provedor desligado nunca ativa")
+	Llm._cfg = {"provedor": "anthropic", "url": "https://api.anthropic.com/v1",
+		"chave": "", "modelo": ""}
+	ok(not Llm.ativa(), "provedor pago SEM chave não ativa — sem cobrança surpresa")
+	Llm._cfg["chave"] = "chave-de-teste"
+	ok(Llm.ativa() and Llm.url() != "",
+		"com chave ativa, e o gate antigo (url) continua enxergando")
+	Llm._cfg = {"provedor": "local", "url": "http://localhost:8080",
+		"chave": "", "modelo": ""}
+	ok(Llm.ativa(), "IA local ativa sem chave — grátis é grátis")
+	ok(Llm._ler_anthropic({"stop_reason": "refusal",
+		"content": [{"type": "text", "text": "x"}]}) == "",
+		"recusa de segurança devolve vazio (motor interno assume a fala)")
+	ok(Llm._ler_anthropic({"stop_reason": "end_turn",
+		"content": [{"type": "text", "text": "Salve, mercenário."}]}) == "Salve, mercenário.",
+		"resposta da Anthropic lê os blocos de texto")
+	ok(Llm._ler_openai({"choices": [{"message": {"content": "Oi."}}]}) == "Oi.",
+		"resposta compatível-OpenAI lê choices[0].message")
+	Llm._cfg = {}

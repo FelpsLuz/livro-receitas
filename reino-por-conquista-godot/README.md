@@ -23,9 +23,11 @@ Port oficial do jogo para o motor **Godot 4.3** (gratuito e open-source).
   pasta de áudio devolve os bipes, nunca quebra. Trilha da tela de título em loop
   (`assets/audio/musica_titulo.mp3`, fade ao entrar no jogo); créditos em
   `assets/audio/CREDITOS.md`
-- **🧠 IA Local** (`scripts/llm.gd`): botão na Corte configura a URL do llama.cpp rodando
-  no SEU processador; as falas dos NPCs passam a ser geradas pelo modelo GGUF, com
-  fallback automático para o motor interno
+- **🧠 IA dos personagens** (`scripts/llm.gd`): o jogador escolhe o provedor no botão da
+  Corte — llama.cpp local (grátis), Groq/OpenRouter (faixa grátis com conta) ou
+  OpenAI/Anthropic Claude (pagos, com AVISO de cobrança na interface). A chave fica só
+  no `user://` da máquina; qualquer falha ou recusa cai no motor interno — o jogo nunca
+  depende da IA
 - **Save/load** automático em JSON (`user://save.json`)
 - **Presets de exportação** prontos: Windows .exe, Android .apk e Web (PWA)
 
@@ -199,3 +201,15 @@ não faz parte do projeto):
 godot --path reino-por-conquista-godot --script res://tests/teste_hibit.gd
 ```
 
+
+## Upgrades futuros (anotados, não pendentes)
+
+1. **Expressões nos retratos hi-bit** — o humor (raiva/feliz/neutro) vive no medidor
+   de relação; devolvê-lo ao rosto exige gerar variantes por humor no PixelLab
+   (~3× o acervo de retratos). O mesmo vale para "a ferros" na cara do capturado.
+2. **Aldeões animados na vila** — os panoramas já têm gente pintada; animar
+   caminhantes por cima é a "Fase 5" do roadmap de arte (recortes/overlays sobre
+   as cenas).
+3. **Validar exportação real** — os presets têm `include_filter` para os assets
+   carregados via FileAccess (áudio, hi-bit, fontes); falta exportar .exe/.apk/web
+   numa máquina com os templates instalados e conferir o pacote.

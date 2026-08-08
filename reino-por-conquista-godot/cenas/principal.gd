@@ -1255,7 +1255,7 @@ func _aba_corte(c: Container) -> void:
 
 	Kit.respiro(c, Tema.E2)
 	var h := Kit.fila(c, Tema.E3)
-	_botao(h, "IA Local (llama.cpp): " + ("configurada" if Llm.url() != "" else "desligada"),
+	_botao(h, "IA dos personagens: " + Llm.descricao_estado(),
 		_modal_llm, "fantasma")
 
 ## O card de um NPC com quem se pode CONVERSAR.
@@ -1762,9 +1762,17 @@ func _aba_familia(c: Container) -> void:
 	var casa := Kit.card(dir)
 	Kit.subsecao(casa, "Casamento")
 	if f["conjuge"] != null:
+		var cj: Dictionary = f["conjuge"]
 		var lc := Kit.fila(casa, Tema.E3)
-		Kit.texto(lc, "Casado com %s" % str(f["conjuge"]["nome"]))
-		if f["conjuge"]["forcado"]:
+		# o retrato do cônjuge leva o fundo do reino DE ORIGEM, não o da
+		# sua casa: a aliança de casamento é justamente o que a heráldica
+		# tem que mostrar — quem entrou, e de onde veio
+		Kit.retrato(lc, Retratos.textura_cidadao(
+			{"nome": str(cj["nome"]), "oficio": "senhor", "riqueza": 500,
+			"genero": str(cj.get("genero", "f")), "lealdade": 60, "lorde": true},
+			true, str(Retratos.REIS.get("rei_" + str(cj.get("reino", "")), {}).get("fundo", ""))), 32)
+		Kit.texto(lc, "Casado com %s" % str(cj["nome"]))
+		if cj["forcado"]:
 			Kit.selo(lc, "união sob pressão", Tema.ATENCAO, Tema.ATENCAO_FUNDO)
 	else:
 		Kit.texto(casa, "Solteiro.", Tema.TEXTO)
@@ -1999,11 +2007,14 @@ func enviar_texto(texto: String) -> void:
 	_responder(resultado)
 
 func _responder(resultado: Dictionary) -> void:
-	# IA local (llama.cpp): tenta gerar a superfície do texto no processador do PC
+	# IA do jogador (local ou nuvem): tenta gerar a superfície do texto.
+	# O saneamento corta o modelo continuando o diálogo sozinho; se sobrar
+	# nada, vale a resposta do motor interno — a mecânica já decidiu tudo.
 	var texto_final: String = resultado["resposta"]
-	if Llm.url() != "":
+	if Llm.ativa():
 		var prompt := Dialogo.montar_prompt_llm(state, npc_atual, "", resultado)
 		var gerado: String = await Llm.gerar(self, prompt)
+		gerado = Dialogo.sanear_llm(gerado, str(npc_atual["nome"]))
 		if gerado != "":
 			texto_final = gerado
 	# ponderar proporcional ao peso da resposta
@@ -2204,21 +2215,105 @@ func _modal_fim() -> void:
 			get_tree().reload_current_scene()]],
 		Retratos.ilustracao("coroacao") if vitoria else Retratos.ilustracao("derrota"))
 
+## O seletor de IA. O jogador escolhe QUALQUER provedor — grátis de
+## verdade (llama.cpp local), faixa grátis com conta (Groq, OpenRouter)
+## ou pago com a própria chave (OpenAI, Anthropic) — e o AVISO muda de
+## cor junto: pago é vermelho e diz "cobra por uso" antes de qualquer
+## chamada. Sem IA o jogo continua completo: o motor interno responde.
 func _modal_llm() -> void:
 	var v := _painel_modal()
+	var l_titulo := Label.new()
+	l_titulo.text = "IA dos Personagens"
+	var f := Tema.fonte_forte()
+	if f != null:
+		l_titulo.add_theme_font_override("font", f)
+	l_titulo.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
+	l_titulo.add_theme_color_override("font_color", Tema.ACENTO)
+	l_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(l_titulo)
 	var l := Label.new()
-	l.text = "IA Local — os personagens pensam no SEU processador.\n1. Baixe um modelo GGUF pequeno (ex.: Qwen2.5-1.5B Q4).\n2. Rode: llama-server -m modelo.gguf --port 8080\n3. Informe a URL abaixo (vazio = desligado):"
+	l.text = "As falas dos NPCs podem ser geradas por uma IA à sua escolha. O jogo é completo sem nenhuma — a mecânica decide, a IA só narra."
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", Tema.TEXTO_2)
 	v.add_child(l)
-	var campo := LineEdit.new()
-	campo.text = Llm.url()
-	campo.placeholder_text = "http://localhost:8080"
-	v.add_child(campo)
-	var b := Button.new()
-	b.text = "Salvar"
-	b.pressed.connect(func():
-		Llm.definir_url(campo.text)
+
+	var cfg: Dictionary = Llm.config()
+	var ids: Array = Llm.PROVEDORES.keys()
+
+	var escolha := OptionButton.new()
+	for id in ids:
+		escolha.add_item(str(Llm.PROVEDORES[id]["nome"]))
+	escolha.select(maxi(0, ids.find(str(cfg["provedor"]))))
+	v.add_child(escolha)
+
+	# ---- o aviso de custo, colorido pelo bolso ----
+	var aviso_painel := PanelContainer.new()
+	var aviso := Label.new()
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.add_theme_font_size_override("font_size", Tema.MICRO)
+	aviso_painel.add_child(aviso)
+	v.add_child(aviso_painel)
+
+	var r_url := Kit.fila(v, Tema.E2)
+	Kit.texto(r_url, "Servidor", Tema.TEXTO_3, Tema.MICRO)
+	var campo_url := LineEdit.new()
+	campo_url.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r_url.add_child(campo_url)
+
+	var r_chave := Kit.fila(v, Tema.E2)
+	Kit.texto(r_chave, "Chave", Tema.TEXTO_3, Tema.MICRO)
+	var campo_chave := LineEdit.new()
+	campo_chave.secret = true
+	campo_chave.placeholder_text = "sua chave de API (fica só neste computador)"
+	campo_chave.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r_chave.add_child(campo_chave)
+
+	var r_modelo := Kit.fila(v, Tema.E2)
+	Kit.texto(r_modelo, "Modelo", Tema.TEXTO_3, Tema.MICRO)
+	var campo_modelo := LineEdit.new()
+	campo_modelo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r_modelo.add_child(campo_modelo)
+
+	# preenche os campos para um provedor: o salvo, quando é o dele; o
+	# padrão do catálogo, quando o jogador acabou de trocar
+	var aplicar := func(idx: int) -> void:
+		var id := str(ids[idx])
+		var p: Dictionary = Llm.PROVEDORES[id]
+		var salvo := id == str(cfg["provedor"])
+		campo_url.text = str(cfg["url"]) if salvo else str(p["url"])
+		campo_chave.text = str(cfg["chave"]) if salvo else ""
+		campo_modelo.text = str(cfg["modelo"]) \
+			if salvo and str(cfg["modelo"]) != "" else str(p["modelo"])
+		var liga := str(p["protocolo"]) != ""
+		r_url.visible = liga
+		r_chave.visible = liga and bool(p["chave"])
+		r_modelo.visible = liga and str(p["modelo"]) != ""
+		var sb := StyleBoxFlat.new()
+		sb.set_content_margin_all(Tema.E2)
+		sb.set_corner_radius_all(4)
+		match str(p["custo"]):
+			"pago":
+				aviso.text = "⚠ PROVEDOR PAGO: usa a SUA chave e gera cobrança por uso a cada fala. Confira os preços do provedor antes de ligar."
+				aviso.add_theme_color_override("font_color", Color("e8917a"))
+				sb.bg_color = Tema.PERIGO_FUNDO
+			"gratis_conta":
+				aviso.text = "Requer conta e chave do provedor. Tem faixa GRATUITA com limites de uso; acima dela pode haver cobrança."
+				aviso.add_theme_color_override("font_color", Tema.ATENCAO)
+				sb.bg_color = Tema.ATENCAO_FUNDO
+			_:
+				aviso.text = "Grátis: roda na sua máquina, nada sai do seu computador." if liga \
+					else "O motor interno do jogo responde — grátis e imediato."
+				aviso.add_theme_color_override("font_color", Tema.TEXTO_3)
+				sb.bg_color = Tema.ELEVADO
+		aviso_painel.add_theme_stylebox_override("panel", sb)
+	aplicar.call(escolha.selected)
+	escolha.item_selected.connect(func(idx: int): aplicar.call(idx))
+
+	Kit.respiro(v, Tema.E1)
+	Kit.botao(v, "Salvar", func():
+		Llm.definir({"provedor": str(ids[escolha.selected]),
+			"url": campo_url.text, "chave": campo_chave.text,
+			"modelo": campo_modelo.text})
 		Sfx.tocar(self, "fechar")
 		overlay_modal.visible = false
-		atualizar())
-	v.add_child(b)
+		atualizar(), "primario")

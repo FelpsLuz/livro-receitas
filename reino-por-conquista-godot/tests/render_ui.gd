@@ -118,6 +118,11 @@ func _initialize() -> void:
 	await _quadro(jogo, "modal_cerco")
 	jogo.overlay_modal.visible = false
 
+	# o seletor de IA, com o aviso de custo do provedor pago
+	jogo._modal_llm()
+	await _quadro(jogo, "modal_ia")
+	jogo.overlay_modal.visible = false
+
 	# a tela de conversa, com retrato e máquina de escrever
 	jogo.abrir_conversa({"id": "rei_imperio", "nome": "Touro Bill",
 		"personalidade": "cruel"})
