@@ -266,6 +266,33 @@ func _init() -> void:
 	ok("as tropas novas realmente foram treinadas",
 		int(full["jogador"]["tropas"]["espadachim"]) >= 2)
 
+	# ---------------- ALFA: regressões do teste de campo ----------------
+	# a debandada da guarnição: 2.000 mistos contra 53 dava DERROTA em 10/10
+	# porque o arredondamento por fase deixava meia dúzia de "imortais";
+	# guarnição reduzida a farrapos diante de dominância agora se rende
+	var horda := {"lanceiro": 500, "espadachim": 500, "arqueiro": 500, "cav_leve": 500}
+	var g53 := {"arqueiro": 12, "cav_leve": 3, "espadachim": 14, "lanceiro": 24}
+	var tv_horda := taxa_vitoria(horda, g53, 30)
+	ok("cerco esmagador de exército MISTO vence", tv_horda >= 0.9, "%.2f" % tv_horda)
+	var tv_par := taxa_vitoria({"lanceiro": 30}, {"lanceiro": 28, "arqueiro": 10}, 60)
+	ok("luta pareada continua sem passeio", tv_par <= 0.7, "%.2f" % tv_par)
+	# o CONTRATO do modal de batalha: cada chave que a UI lê existe no
+	# retorno REAL — foi um formato antigo ("rodadas") montado à mão no
+	# harness que escondeu um SCRIPT ERROR em toda batalha da interface
+	var s_rel := Jogo.novo_jogo("Modal")
+	var rel_ui: Dictionary = Combate.batalhar(s_rel, Combate.exercito_inimigo(1), "Teste de contrato")
+	var falta_ui: Array[String] = []
+	for ch in ["contexto", "fases", "baixas_jogador", "baixas_inimigo",
+			"vivos_jogador", "vivos_inimigo", "debandada", "vitoria", "resumo"]:
+		if not rel_ui.has(ch):
+			falta_ui.append(str(ch))
+	for f_ui in rel_ui["fases"]:
+		for ch2 in ["nome", "ataque", "defesa", "mortos_atacante", "mortos_defensor"]:
+			if not (f_ui as Dictionary).has(ch2):
+				falta_ui.append("fase." + str(ch2))
+	ok("batalhar devolve TODAS as chaves que o modal de batalha lê",
+		falta_ui.is_empty(), ", ".join(falta_ui))
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)

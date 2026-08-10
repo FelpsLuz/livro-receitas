@@ -765,6 +765,22 @@ static func _arquetipo_de(n: Dictionary) -> String:
 
 static var _bustos: Dictionary = {}
 
+## A ferros: o busto ilustrado perde a cor e escurece — o estado aparece na
+## CARA, não só no texto ao lado, cumprindo o contrato que o ramo procedural
+## sempre cumpriu (lá era humor de raiva + toucado fora; aqui é o frio da
+## masmorra). Sem isto, "capturado" não mudava um único pixel do retrato.
+static func _aferros(img: Image) -> void:
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			var cinza := c.r * 0.3 + c.g * 0.59 + c.b * 0.11
+			img.set_pixel(x, y, Color(
+				lerpf(c.r, cinza, 0.75) * 0.70,
+				lerpf(c.g, cinza, 0.75) * 0.72,
+				lerpf(c.b, cinza, 0.75) * 0.82, c.a))
+
 static func _busto_cidadao(arquivo: String) -> Image:
 	if _bustos.has(arquivo):
 		return _bustos[arquivo]
@@ -811,6 +827,8 @@ static func textura_cidadao(n: Dictionary, pequena: bool = false, fundo: String 
 			img = _fundo_vinheta(fundo)
 			img.blend_rect(busto,
 				Rect2i(0, 0, LADO_RETRATO, LADO_RETRATO), Vector2i.ZERO)
+			if preso:
+				_aferros(img)
 	if img != null:
 		if pequena:
 			img = _reduzir(img)

@@ -465,6 +465,119 @@ func _init() -> void:
 	Jogo.passar_mes(migrado)
 	ok("save migrado passa o mês normalmente", int(migrado["mes"]) != int(velho["mes"]))
 
+	# ---------------- ALFA: regressões do teste de campo ----------------
+	# fronteira de palavra: "contrato" contém "rato", e pedir trabalho
+	# educadamente custava -25 de relação como INSULTO
+	var ints_alfa := Dialogo.detectar_intencoes("quero um contrato")
+	ok("'quero um contrato' pede contrato, não insulta",
+		ints_alfa.size() > 0 and str(ints_alfa[0]["id"]) == "pedir_contrato")
+	var achou_insulto := false
+	for it_a in ints_alfa:
+		if str(it_a["id"]) == "insulto":
+			achou_insulto = true
+	ok("'rato' dentro de 'contrato' não conta como palavra", not achou_insulto)
+
+	# sanear_llm: vazamentos que começavam na POSIÇÃO 0 passavam inteiros
+	ok("modelo abrindo como o Jogador é cortado",
+		Dialogo.sanear_llm("Jogador: me dê ouro\nTouro: claro.", "Touro") == "claro.")
+	ok("rótulo de briefing na 1ª linha vira vazio (motor interno assume)",
+		Dialogo.sanear_llm("[DATA] Ano 4, mês 2. Eu vejo tudo.", "X") == "")
+	ok("rótulo de briefing ecoado no meio corta dali em diante",
+		Dialogo.sanear_llm("Claro que sim.\n[O QUE VOCÊ SENTE POR ELE] Neutro (0)", "X")
+			== "Claro que sim.")
+
+	# a promessa dos três lugares da UI: "proponha casamento" em conversa
+	var sc := com_terra(3)
+	sc["jogador"]["renome"] = 80
+	var rei_c := {"id": "rei_touros", "nome": "Frederico Teste",
+		"personalidade": "orgulhoso", "papel": "rei"}
+	Dialogo.mudar_relacao(sc, "rei_touros", 70, "teste")
+	var rc := Dialogo.falar(sc, rei_c, "proponho casamento, quero unir nossas casas")
+	ok("pedir a mão com renome e relação sela o casamento de verdade",
+		sc["familia"]["conjuge"] != null and str(rc["intencao"]) == "pedir_casamento")
+	var sc2 := com_terra(1)
+	Dialogo.falar(sc2, rei_c, "aceita casamento comigo?")
+	ok("sem renome o rei recusa a mão (e nada muda)", sc2["familia"]["conjuge"] == null)
+
+	# preço de mercado idêntico antes e depois do load: _normalizar deixa
+	# oferta/demanda como int, e int/int truncava (3 virava 1)
+	var sp := Jogo.novo_jogo("Preco")
+	var rid_p: String = str(sp["reinos"][0]["id"])
+	sp["mercados"][rid_p]["trigo"] = {"oferta": 3, "demanda": 1}
+	var p_int := Economia.preco_de(sp, rid_p, "trigo")
+	sp["mercados"][rid_p]["trigo"] = {"oferta": 3.0, "demanda": 1.0}
+	ok("preço não muda só por salvar/recarregar (int vs float)",
+		p_int == Economia.preco_de(sp, rid_p, "trigo"), "preço %d" % p_int)
+
+	# reino dominado está fora do jogo político: nem guerra nem contrato
+	var sg := Jogo.novo_jogo("Dominio")
+	for i_g in sg["reinos"].size():
+		if i_g >= 2:
+			sg["reinos"][i_g]["dominado_por"] = "jogador"
+	var achou_morto_g := false
+	for i_g2 in 500:
+		sg["guerras"] = []
+		Economia.talvez_iniciar_guerra(sg, func(_m): pass)
+		for gg in sg["guerras"]:
+			for rr in sg["reinos"]:
+				if str(rr.get("dominado_por", "")) != "" \
+						and (rr["id"] == gg["a"] or rr["id"] == gg["b"]):
+					achou_morto_g = true
+	ok("reino dominado nunca declara nem recebe guerra", not achou_morto_g)
+	var Contratos2 = load("res://scripts/contratos.gd")
+	var achou_morto_ct := false
+	for i_ct in 40:
+		for ct_a in Contratos2.gerar(sg):
+			for rr2 in sg["reinos"]:
+				if str(rr2.get("dominado_por", "")) != "" \
+						and (rr2["id"] == ct_a["contratante"] or rr2["id"] == str(ct_a["alvo"])):
+					achou_morto_ct = true
+	ok("reino dominado não emite nem vira alvo de contrato", not achou_morto_ct)
+
+	# save mutilado é RECUSADO (null) em vez de virar tela morta
+	var f_ruim := FileAccess.open(Jogo.ARQUIVO_SAVE, FileAccess.WRITE)
+	f_ruim.store_string("{\"reinos\": [], \"mes\": 3, \"ano\": 1}")
+	f_ruim.flush()
+	f_ruim = null
+	ok("save sem 'jogador' é recusado no carregamento", Jogo.carregar() == null)
+	f_ruim = FileAccess.open(Jogo.ARQUIVO_SAVE, FileAccess.WRITE)
+	f_ruim.store_string("{\"jogador\": {\"nom")
+	f_ruim.flush()
+	f_ruim = null
+	ok("save truncado é recusado no carregamento", Jogo.carregar() == null)
+	# sem 'terra' é migrável: repõe null e o mês passa sem SCRIPT ERROR
+	var sv_st := Jogo.novo_jogo("SemTerra")
+	sv_st.erase("terra")
+	Jogo.salvar(sv_st)
+	var carr_st = Jogo.carregar()
+	ok("save sem 'terra' migra com terra nula", carr_st != null and carr_st["terra"] == null)
+	carr_st["evento_pendente"] = null
+	Jogo.passar_mes(carr_st)
+	ok("e o mês passa normalmente depois da migração",
+		int(carr_st["mes"]) == 4 or int(carr_st["ano"]) == 2)
+
+	# ruína total não é mais estado zumbi: agiota duas vezes, depois fim
+	var s_ru := Jogo.novo_jogo("Ruina")
+	for tipo_ru in s_ru["jogador"]["tropas"]:
+		s_ru["jogador"]["tropas"][tipo_ru] = 0
+	s_ru["jogador"]["ouro"] = 0
+	for i_ru in 3:
+		s_ru["evento_pendente"] = null
+		Jogo.passar_mes(s_ru)
+	ok("3 meses de ruína chamam o agiota (+150 de ouro)",
+		int(s_ru["jogador"]["ouro"]) >= 150 and int(s_ru.get("resgates_agiota", 0)) == 1)
+	for i_ru2 in 3:
+		s_ru["jogador"]["ouro"] = 0
+		s_ru["evento_pendente"] = null
+		Jogo.passar_mes(s_ru)
+	ok("o agiota volta uma segunda (e última) vez", int(s_ru.get("resgates_agiota", 0)) == 2)
+	for i_ru3 in 7:
+		s_ru["jogador"]["ouro"] = 0
+		s_ru["evento_pendente"] = null
+		Jogo.passar_mes(s_ru)
+	ok("na terceira queda a saga acaba de verdade",
+		s_ru["fim"] != null and str(s_ru["fim"].get("causa", "")) == "ruina")
+
 	Jogo.apagar_save()
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

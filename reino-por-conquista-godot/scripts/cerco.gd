@@ -102,7 +102,11 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 		ev["abandonou"] = true
 		c["abandonado"] = true
 		if log.is_valid():
-			log.call("O cerco a %s foi levantado: a tropa não aguentou mais." % m["alvo"])
+			# nome de exibição, nunca o id: "sem_rei" cru na crônica quebrava
+			# a ficção que todas as outras linhas sustentam
+			var Rotas = load("res://scripts/rotas.gd")
+			log.call("O cerco a %s foi levantado: a tropa não aguentou mais."
+				% Rotas.nome_do(state, str(m["alvo"])))
 		Sinais.emitir(&"cerco_abandonado", {"marcha": m["id"], "fase": int(c["fase"])})
 		return ev
 

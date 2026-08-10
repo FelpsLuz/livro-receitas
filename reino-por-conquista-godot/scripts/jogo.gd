@@ -141,6 +141,32 @@ static func passar_mes(state: Dictionary) -> void:
 			state["fim"] = {"tipo": "vitoria"}
 	else:
 		state["jogador"]["meses_imperador"] = 0
+	_tick_ruina(state, log)
+
+## Ruína total: sem ouro, sem homens, sem terra e sem marcha não existe
+## NENHUMA ação que gere renda — sem esta função o jogo virava um estado
+## zumbi infinito (20 anos parado, medido em soak). O agiota compra o resto
+## do nome duas vezes; na terceira queda, a saga acaba.
+static func _tick_ruina(state: Dictionary, log: Callable) -> void:
+	var j: Dictionary = state["jogador"]
+	var arruinado: bool = state["terra"] == null and str(j["rei_de"]) == "" \
+		and int(j["ouro"]) < 20 and Combate.total_homens(j["tropas"]) == 0 \
+		and (state["marchas"] as Array).is_empty() \
+		and (state["fila_recrutamento"] as Array).is_empty() \
+		and int(j.get("preso_ate", 0)) <= _mes_absoluto(state)
+	if not arruinado:
+		state["meses_ruina"] = 0
+		return
+	state["meses_ruina"] = int(state.get("meses_ruina", 0)) + 1
+	if state["meses_ruina"] >= 3 and int(state.get("resgates_agiota", 0)) < 2:
+		state["resgates_agiota"] = int(state.get("resgates_agiota", 0)) + 1
+		state["meses_ruina"] = 0
+		j["ouro"] = int(j["ouro"]) + 150
+		j["renome"] = maxi(0, int(j["renome"]) - 5)
+		log.call("Um agiota compra o que resta do seu nome: +150 de ouro, e menos um naco de orgulho.")
+	elif state["meses_ruina"] >= 6:
+		log.call("Sem ouro, sem homens, sem terra. O mundo esqueceu seu nome.")
+		state["fim"] = {"tipo": "derrota", "causa": "ruina"}
 
 static func _envelhecer(state: Dictionary, log: Callable) -> void:
 	state["jogador"]["idade"] += 1
@@ -344,14 +370,41 @@ static func carregar() -> Variant:
 		return null
 	var f := FileAccess.open(ARQUIVO_SAVE, FileAccess.READ)
 	var dados = JSON.parse_string(f.get_as_text())
-	if dados == null:
+	# um save sem as chaves centrais não é um save: recusar aqui (null) é o
+	# que deixa o título avisar — sem isto, um JSON válido porém mutilado
+	# passava e o jogo entrava numa tela morta
+	if dados == null or not (dados is Dictionary):
 		return null
+	for chave in ["jogador", "reinos", "mes", "ano"]:
+		if not (dados as Dictionary).has(chave):
+			return null
 	return _migrar(_normalizar(dados))
 
 ## Save de antes da Fase 3 não tem os campos novos. Preencher aqui (e não
 ## com `.get()` espalhado por dez arquivos) mantém o resto do código simples
 ## e garante que um save antigo carregue sem quebrar.
 static func _migrar(state: Dictionary) -> Dictionary:
+	# chaves centrais que um save editado à mão (ou de versão futura) pode
+	# não trazer: repor aqui evita SCRIPT ERROR em cascata a cada mês
+	if not state.has("terra"):
+		state["terra"] = null
+	if not state.has("fim"):
+		state["fim"] = null
+	if not state.has("evento_pendente"):
+		state["evento_pendente"] = null
+	if not state.has("familia"):
+		state["familia"] = {"conjuge": null, "filhos": []}
+	for campo in ["cronica", "guerras", "contratos", "casus_belli"]:
+		if not state.has(campo):
+			state[campo] = []
+	for campo in ["tags", "carga"]:
+		if not state.has(campo):
+			state[campo] = {}
+	if not state.has("mercados") and state.get("reinos") != null:
+		Economia.inicializar_mercados(state)
+	if not state.has("local") and state.get("reinos") != null \
+			and not (state["reinos"] as Array).is_empty():
+		state["local"] = str(state["reinos"][0]["id"])
 	for campo in ["fila_recrutamento", "pactos", "choques", "informantes", "marchas"]:
 		if not state.has(campo):
 			state[campo] = []

@@ -151,9 +151,20 @@ static func recolher(state: Dictionary, id: String) -> Dictionary:
 	for m in lista(state):
 		if m["id"] != id:
 			continue
+		var agora: int = int(state.get("minuto", 0))
+		# levantar o CERCO também é uma ordem válida: sem ela a tropa ficava
+		# presa pagando upkeep dobrado até a moral quebrar sozinha — e o
+		# jogador ainda ouvia uma mensagem mentirosa ("já está voltando")
+		if m["fase"] == "cerco":
+			m["fase"] = "volta"
+			m["chega_em"] = agora + int(m["duracao"])
+			m["proximo_teste"] = agora + MINUTOS_POR_DIA
+			Sinais.emitir(&"cerco_abandonado", {"marcha": m["id"],
+				"fase": int(m.get("cerco", {}).get("fase", 0))})
+			return {"ok": true, "msg": "Cerco levantado por sua ordem. Voltam em %s."
+				% _texto_dias(int(m["duracao"]))}
 		if m["fase"] != "ida":
 			return {"ok": false, "msg": "Esse exército já está voltando."}
-		var agora: int = int(state.get("minuto", 0))
 		var andado: int = maxi(1, int(m["duracao"]) - (int(m["chega_em"]) - agora))
 		m["fase"] = "volta"
 		m["chega_em"] = agora + andado
@@ -362,12 +373,24 @@ static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, l
 	var reino: Dictionary = Geopolitica.reino_por_id(state, reino_id)
 	var nome_reino: String = str(reino.get("nome", reino_id))
 	var guarnicao := _guarnicao_do_jogador(state)
+	var guarnicao_inicial := guarnicao.duplicate(true)
 	var bonus_atacante := 1.0 + int(reino.get("equip", 0)) * 0.15
 	var rel := Combate.resolver_assalto(m["tropas"], guarnicao, bonus_atacante, debuff_defensor, m["intencao"])
 	rel["tipo"] = "batalha"
 	rel["marcha"] = m["id"]
 	rel["contexto"] = "%s de %s contra suas terras" % [
 		"Saque" if m["intencao"] == "saque" else "Cerco", nome_reino]
+	# defender a terra também sangra: aplica a fração perdida de cada tipo
+	# às tropas REAIS do jogador (a guarnição soma milícia e lanças de
+	# lordes, por isso fração e não cópia direta). Sem isto, 50 lanceiros
+	# repeliam 240 homens de elite mês após mês sem perder um único.
+	var minhas: Dictionary = state["jogador"]["tropas"]
+	for tipo in minhas:
+		var antes_g: int = int(guarnicao_inicial.get(tipo, 0))
+		if antes_g <= 0 or int(minhas[tipo]) <= 0:
+			continue
+		var frac_viva := float(int(guarnicao.get(tipo, 0))) / float(antes_g)
+		minhas[tipo] = mini(int(minhas[tipo]), roundi(int(minhas[tipo]) * frac_viva))
 
 	if m["intencao"] == "saque":
 		m["saque"] = _colher_do_jogador(state, m["tropas"])
@@ -439,6 +462,13 @@ static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
 		"Saque" if m["intencao"] == "saque" else "Cerco", Rotas.nome_do(state, alvo)]
 
 	var reino: Dictionary = Geopolitica.reino_por_id(state, alvo)
+	# as baixas da guarnição valem DE VERDADE: a cópia lutou, o reino sente.
+	# Sem isto, o exército do alvo renascia intacto no tick seguinte
+	# (r["forca"] = forca_de(r) recalculava das tropas nunca tocadas) e
+	# cercos repetidos não desgastavam nada.
+	if not reino.is_empty() and reino.get("tropas") != null \
+			and not (reino["tropas"] as Dictionary).is_empty():
+		reino["tropas"] = guarnicao
 	if m["intencao"] == "saque":
 		m["saque"] = _colher(state, alvo, m["tropas"])
 		rel["saque"] = m["saque"].duplicate()
@@ -502,12 +532,13 @@ static func _resolver_retorno(state: Dictionary, m: Dictionary, log: Callable) -
 		trouxe[g] = q2
 	if log.is_valid():
 		if origem == "jogador":
+			var quem := "1 homem voltou" if voltaram == 1 else "%d homens voltaram" % voltaram
 			if trouxe.is_empty():
-				log.call("%d homens voltaram de %s de mãos vazias."
-					% [voltaram, Rotas.nome_do(state, m["alvo"])])
+				log.call("%s de %s de mãos vazias."
+					% [quem, Rotas.nome_do(state, m["alvo"])])
 			else:
-				log.call("%d homens voltaram de %s com a carga."
-					% [voltaram, Rotas.nome_do(state, m["alvo"])])
+				log.call("%s de %s com a carga."
+					% [quem, Rotas.nome_do(state, m["alvo"])])
 		else:
 			log.call("O exército de %s voltou de suas terras." % Rotas.nome_do(state, origem))
 	var ev := {"tipo": "retorno", "marcha": m["id"], "homens": voltaram, "carga": trouxe}

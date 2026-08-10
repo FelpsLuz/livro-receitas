@@ -12,6 +12,7 @@ const Jogo = preload("res://scripts/jogo.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Llm = preload("res://scripts/llm.gd")
+const Combate = preload("res://scripts/combate.gd")
 
 func _initialize() -> void:
 	Jogo.apagar_save()
@@ -125,8 +126,10 @@ func _initialize() -> void:
 	st["evento_pendente"] = {"tipo": "traicao_guardas"}
 	await _modal(jogo, "modal_traicao")
 	st["evento_pendente"] = null
-	jogo._modal_batalha({"vitoria": true, "contexto": "Cerco a Império Central",
-		"rodadas": [], "debandada": "", "baixas_jogador": 14})
+	# o relatório com o formato REAL de Combate.batalhar — um dicionário de
+	# mão aqui mascarou por semanas um SCRIPT ERROR em toda batalha da UI
+	jogo._modal_batalha(Combate.batalhar(st, Combate.exercito_inimigo(2),
+		"Cerco a Império Central"))
 	await _quadro(jogo, "modal_cerco")
 	jogo.overlay_modal.visible = false
 
@@ -160,6 +163,12 @@ func _tirar(jogo: Control, aba: int, nome: String, rolar: float = 0.0,
 	jogo.atualizar()
 	for i in quadros:
 		await process_frame
+	# NENHUMA aba pode pedir mais largura mínima que o canvas: foi assim que
+	# a Taverna empurrou a interface inteira para fora dos 960 e cortou até
+	# o botão "Passar o mês" (push_error contém "Invalid" — o render acusa)
+	var minw := (jogo.tela_jogo as Control).get_combined_minimum_size().x
+	if minw > 960.0:
+		push_error("Invalid largura minima: aba %s pede %dpx num canvas de 960" % [nome, int(minw)])
 	var rolagem := jogo.tabs.get_current_tab_control() as ScrollContainer
 	if rolagem != null:
 		rolagem.scroll_vertical = int(rolar)

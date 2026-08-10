@@ -109,6 +109,8 @@ static func resolver_assalto(atacante: Dictionary, defensor: Dictionary,
 	if total_atq <= 0.0:
 		rel["resumo"] = "O exército não tinha poder de ataque algum."
 		return rel
+	var defensores_inicio := total_homens(defensor)
+	var atacantes_inicio := total_homens(atacante)
 
 	for f in FASES:
 		var classe: String = f[0]
@@ -134,6 +136,26 @@ static func resolver_assalto(atacante: Dictionary, defensor: Dictionary,
 			"mortos_atacante": mortos_a, "mortos_defensor": mortos_d})
 		if intencao == "saque":
 			break                                        # saque dura um round
+
+	# Debandada da guarnição: diante de um atacante que a supera 10 para 1,
+	# sangrando 3 vezes menos, e já tendo posto abaixo boa parte da defesa,
+	# quem sobra se rende ou dispersa. Sem esta regra, o arredondamento por
+	# fase deixava um punhado de "imortais" de pé e NENHUM exército misto
+	# vencia um cerco — 2.000 homens perdiam para 53 em 10 de 10 tentativas.
+	# Saque fica de fora: uma rapina de um round não desmonta uma guarnição.
+	if intencao != "saque":
+		var restam := total_homens(defensor)
+		if restam > 0 and defensores_inicio > 0 and atacantes_inicio > 0 \
+				and restam * 10 <= total_homens(atacante) \
+				and restam <= roundi(defensores_inicio * 0.6):
+			# a dor se mede em FRAÇÃO de cada lado, nunca em absolutos: dois
+			# mil homens perdem 50 (2,5%) esmagando 53 que perderam 68% —
+			# comparar 50 contra 36 esconderia quem realmente quebrou
+			var frac_def := float(rel["baixas_defensor"]) / float(defensores_inicio)
+			var frac_atq := float(rel["baixas_atacante"]) / float(atacantes_inicio)
+			if frac_def >= frac_atq * 3.0:
+				rel["baixas_defensor"] += _ceifar(defensor, 1.0)
+				rel["debandada_defensor"] = true
 
 	rel["vitoria"] = total_homens(defensor) == 0
 	return rel

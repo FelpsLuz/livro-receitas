@@ -22,8 +22,10 @@ const TIPOS := [
 ## — a reação de Frederico Silver a uma chantagem falhada) somem do sorteio
 ## de contratante. Sem isso a flag existiria só no papel.
 static func _contratantes_elegiveis(state: Dictionary) -> Array:
+	# reino dominado não emite contrato — o rei que pagaria já não manda
 	return state["reinos"].filter(func(r):
-		return not bool(state.get("tags", {}).get("rei_" + r["id"], {})
+		return str(r.get("dominado_por", "")) == "" \
+			and not bool(state.get("tags", {}).get("rei_" + r["id"], {})
 			.get("flags", {}).get("nunca_mais_contrata", false)))
 
 static func gerar(state: Dictionary) -> Array:
@@ -42,8 +44,12 @@ static func gerar(state: Dictionary) -> Array:
 				elif g["b"] == contratante["id"]:
 					alvo = g["a"]
 			if alvo == "":
-				alvo = Dados.rnd(state["reinos"].filter(
-					func(r): return r["id"] != contratante["id"]))["id"]
+				var alvos: Array = state["reinos"].filter(func(r):
+					return r["id"] != contratante["id"] \
+						and str(r.get("dominado_por", "")) == "")
+				if alvos.is_empty():
+					continue
+				alvo = Dados.rnd(alvos)["id"]
 		var c := t.duplicate()
 		c["uid"] = str(randi())
 		c["contratante"] = contratante["id"]

@@ -227,6 +227,14 @@ godot --path reino-por-conquista-godot --script res://tests/teste_hibit.gd
 2. **Aldeões animados na vila** — os panoramas já têm gente pintada; animar
    caminhantes por cima é a "Fase 5" do roadmap de arte (recortes/overlays sobre
    as cenas).
-3. **Validar exportação real** — os presets têm `include_filter` para os assets
-   carregados via FileAccess (áudio, hi-bit, fontes); falta exportar .exe/.apk/web
-   numa máquina com os templates instalados e conferir o pacote.
+3. **Validar exportação real** — parcialmente feito: um APK real foi exportado,
+   inspecionado (raw assets, permissão, arm64, ícone) e instalado em teste; falta
+   repetir o rito para .exe/Linux/web com templates + chave de criptografia.
+4. **Arbitragem de mercado** (achado do teste alfa) — comprar barato num reino e
+   vender caro noutro não tem custo de viagem nem risco: 150 → ~22.000 de ouro em
+   24 meses. É uma DECISÃO de design (pedágio? tempo de estrada? taxa fora do
+   reino de origem?), não um remendo — anotada para a rodada de balanceamento.
+5. **Emojis na conversa viram tofu** — a DejaVu não cobre emoji; ou fonte de
+   fallback com cobertura, ou filtrar na entrada. Cosmético, sem crash.
+6. **Ícones órfãos** (caveira, louros, correntes…) — 9 pares desenhados e nunca
+   pedidos; candidatos naturais: modais de derrota/vitória e o selo de capturado.

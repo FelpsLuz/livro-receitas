@@ -509,6 +509,42 @@ func _init() -> void:
 	ok("e eventualmente despacha uma marcha de verdade contra ele",
 		marcha_apareceu)
 
+	# ---------------- ALFA: regressões do teste de campo ----------------
+	# levantar o cerco por ordem própria: antes recolher() recusava com a
+	# mensagem da fase errada e a tropa ficava presa pagando upkeep dobrado
+	var s_alfa := Jogo.novo_jogo("AlfaCerco")
+	s_alfa["jogador"]["tropas"]["lanceiro"] = 40
+	s_alfa["jogador"]["ouro"] = 3000
+	Marchas.despachar(s_alfa, "touros", {"lanceiro": 30}, "cerco")
+	var m_alfa: Dictionary = Marchas.lista(s_alfa)[0]
+	Relogio.avancar(s_alfa, int(m_alfa["duracao"]) + 5, Jogo.log_para(s_alfa))
+	ok("a marcha chegou e virou cerco", str(m_alfa["fase"]) == "cerco", str(m_alfa["fase"]))
+	var r_alfa := Marchas.recolher(s_alfa, str(m_alfa["id"]))
+	ok("levantar o cerco é uma ordem aceita", bool(r_alfa["ok"]), str(r_alfa["msg"]))
+	ok("a tropa dá meia-volta de verdade", str(m_alfa["fase"]) == "volta")
+	# as baixas da guarnição PERSISTEM: antes a batalha rodava numa cópia e
+	# o exército do reino renascia intacto no tick seguinte
+	var s_desg := Jogo.novo_jogo("AlfaDesgaste")
+	s_desg["jogador"]["ouro"] = 9000
+	# celeiro TRANSBORDANDO: o upkeep dobrado de um cerco de 300 homens por
+	# 6 fases esvazia um celeiro comum — e sem comida o acampamento abandona
+	# por moral ANTES do assalto, que é justamente o que se testa aqui
+	s_desg["terra"] = {"nome": "Vale Teste", "nivel": 3, "populacao": 150,
+		"alimento": 60000, "madeira": 9000, "felicidade": 70, "pressao": 0.0}
+	for tipo_sb in s_desg["jogador"]["tropas"]:
+		s_desg["jogador"]["tropas"][tipo_sb] = 0
+	s_desg["jogador"]["tropas"]["lanceiro"] = 200
+	s_desg["jogador"]["tropas"]["espadachim"] = 80
+	s_desg["jogador"]["tropas"]["arqueiro"] = 60
+	var reino_alvo: Dictionary = Geopolitica.reino_por_id(s_desg, "touros")
+	var homens_antes: int = Combate.total_homens(reino_alvo.get("tropas", {}))
+	Marchas.despachar(s_desg, "touros", {"lanceiro": 180, "espadachim": 70, "arqueiro": 50}, "cerco")
+	Relogio.avancar(s_desg, 30000, Jogo.log_para(s_desg))
+	var homens_depois: int = Combate.total_homens(reino_alvo.get("tropas", {}))
+	ok("as baixas da guarnição valem de verdade no reino",
+		homens_antes > 0 and homens_depois < homens_antes,
+		"%d → %d" % [homens_antes, homens_depois])
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)

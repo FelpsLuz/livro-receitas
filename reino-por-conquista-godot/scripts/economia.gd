@@ -20,7 +20,10 @@ static func inicializar_mercados(state: Dictionary) -> void:
 
 static func preco_de(state: Dictionary, reino_id: String, g_id: String) -> int:
 	var m: Dictionary = state["mercados"][reino_id][g_id]
-	var preco: float = Dados.MERCADORIAS[g_id]["preco_base"] * (m["demanda"] / m["oferta"])
+	# float SEMPRE: o load normaliza 3.0 para int 3, e int/int trunca —
+	# o preço mudava sozinho (3 → 1) só por salvar e recarregar o jogo
+	var preco: float = Dados.MERCADORIAS[g_id]["preco_base"] \
+		* (float(m["demanda"]) / maxf(0.05, float(m["oferta"])))
 	var rel: int = state["tags"].get("rei_" + reino_id, {"relacao": 0})["relacao"]
 	if rel <= -60: preco *= 1.6
 	elif rel <= -25: preco *= 1.25
@@ -66,7 +69,11 @@ static func _em_guerra(state: Dictionary, reino_id: String) -> bool:
 static func talvez_iniciar_guerra(state: Dictionary, log: Callable) -> void:
 	if state["guerras"].size() >= 2 or randf() > 0.10:
 		return
-	var livres: Array = state["reinos"].filter(func(r): return not _em_guerra(state, r["id"]))
+	# reino dominado não declara guerra: sem este filtro o mapa enchia de
+	# guerras com participantes que já não existem politicamente
+	var livres: Array = state["reinos"].filter(func(r):
+		return not _em_guerra(state, r["id"]) \
+			and str(r.get("dominado_por", "")) == "")
 	if livres.size() < 2:
 		return
 	var a: Dictionary = Dados.rnd(livres)

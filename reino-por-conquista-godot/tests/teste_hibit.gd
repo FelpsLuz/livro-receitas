@@ -513,6 +513,21 @@ func _frente_som_e_heraldica() -> void:
 	ok(faltam_bustos.is_empty(), "o pool de bustos dos cidadãos está completo",
 		"faltando: %s" % ("nenhum" if faltam_bustos.is_empty()
 			else ", ".join(faltam_bustos)))
+	# capturado muda o busto ILUSTRADO (a ferros: dessatura e escurece) — o
+	# ramo procedural sempre prometeu isso e o pool completo o desligava
+	var n_ferros := {"nome": "Preso Teste", "genero": "m", "oficio": "mercador",
+		"lorde": true, "lealdade": 80}
+	var img_livre: Image = (Retratos.textura_cidadao(n_ferros) as Texture2D).get_image()
+	var n_ferros2: Dictionary = n_ferros.duplicate()
+	n_ferros2["capturado"] = true
+	var img_presa: Image = (Retratos.textura_cidadao(n_ferros2) as Texture2D).get_image()
+	var dif_ferros := 0
+	for y_f in img_livre.get_height():
+		for x_f in img_livre.get_width():
+			if img_livre.get_pixel(x_f, y_f) != img_presa.get_pixel(x_f, y_f):
+				dif_ferros += 1
+	ok(dif_ferros > 300, "capturado muda o busto ilustrado de verdade (a ferros)",
+		"%d px diferentes" % dif_ferros)
 	ok(Retratos._arquetipo_de({"genero": "f", "lorde": true}) == "lorde_f"
 		and Retratos._arquetipo_de({"oficio": "senhor", "genero": "f"}) == "senhor_m"
 		and Retratos._arquetipo_de({"oficio": "alquimista"}) == "mercador_m",

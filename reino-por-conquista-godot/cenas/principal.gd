@@ -49,8 +49,11 @@ const NPCS_TAVERNA := [
 # Exército pela espada. Antes o código montava "aba_" + id e pedia
 # `aba_taverna`, que nunca existiu — as dez abas caíam no caixote cinza sem
 # que nada acusasse, porque o fallback do Icones é silencioso de propósito.
+## "Terra", não "Sua Terra": com dez abas de plaqueta + ícone, as duas
+## sílabas extras eram exatamente o que empurrava "Crônica" para trás das
+## setas de rolagem num canvas de 960 — a décima aba nascia invisível.
 const ABAS := [
-	["Sua Terra", "terra", "terra"], ["Mapa", "mapa", "mapa"],
+	["Terra", "terra", "terra"], ["Mapa", "mapa", "mapa"],
 	["Mercado", "mercado", "mercado"], ["Taverna", "taverna", "cerveja"],
 	["Corte", "corte", "coroa"], ["Exército", "exercito", "espada"],
 	["Clãs", "clas", "alianca"], ["Intrigas", "intrigas", "intriga"],
@@ -63,6 +66,11 @@ const MESES := ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
 var state: Dictionary = {}
 var npc_atual: Dictionary = {}
 var digitando := false
+# geração da conversa: sobe a cada abrir/fechar. As corrotinas de resposta
+# (_responder atravessa awaits de LLM e de digitação) comparam a geração em
+# que nasceram — sair da conversa no meio do "pondera..." matava npc_atual
+# sob os pés delas: SCRIPT ERROR e `digitando` preso em true para sempre.
+var conversa_geracao := 0
 var conversa_texto := ""
 
 var tela_titulo: Control
@@ -236,7 +244,12 @@ func _montar_titulo() -> void:
 		func(): iniciar_jogo(input_nome.text.strip_edges()), "primario", 180)
 	b_novo.add_theme_font_size_override("font_size", Tema.CORPO)
 	if Jogo.tem_save():
-		Kit.botao(acoes, "Continuar Saga", continuar_jogo, "fantasma", 160)
+		# valida o save JÁ no título: arquivo corrompido/mutilado ganhava um
+		# botão normal cujo clique morria em silêncio — agora o botão conta
+		var b_cont := Kit.botao(acoes, "Continuar Saga", continuar_jogo, "fantasma", 160)
+		if Jogo.carregar() == null:
+			b_cont.disabled = true
+			b_cont.tooltip_text = "O arquivo de save está danificado — comece uma Nova Saga."
 
 	# ---- a trilha ----
 	# A praça do mercado à noite, em loop (acabou, recomeça — é o próprio
@@ -267,7 +280,12 @@ func iniciar_jogo(nome: String) -> void:
 
 func continuar_jogo() -> void:
 	var salvo = Jogo.carregar()
-	if salvo == null:
+	if salvo == null or (salvo is Dictionary and (salvo as Dictionary).is_empty()):
+		# nunca entrar numa tela morta: o save recusado vira aviso com saída
+		Sfx.tocar(self, "alerta")
+		_modal("SAVE DANIFICADO",
+			"O arquivo de save não pôde ser lido. A saga anterior se perdeu — comece uma Nova Saga.",
+			[["Entendi", func(): pass]])
 		return
 	Sfx.tocar(self, "tique")
 	if not Llm.ja_escolheu():
@@ -365,7 +383,9 @@ func _montar_jogo() -> void:
 		var ic := Icones.textura_tingida(str(ABAS[i][2]))
 		if ic != null:
 			tabs.set_tab_icon(i, ic)
-			tabs.set_tab_icon_max_width(i, 16)
+			# 14, não 16: os 2px × 10 abas são a folga que faz as DEZ
+			# plaquetas caberem nos 916px úteis sem setas de rolagem
+			tabs.set_tab_icon_max_width(i, 14)
 	tabs.tab_changed.connect(func(_i): atualizar())
 	# o som de aba fica no CLIQUE, não no tab_changed: o código troca de aba
 	# sozinho (voltar da conversa, abrir evento) e essas trocas não são um
@@ -601,7 +621,10 @@ func _montar_hud(j: Dictionary) -> void:
 	# a estação pinta o próprio chip: a UI muda de temperatura com o mundo.
 	# Na leva hi-bit cada estação tem símbolo próprio (flor, sol, folha,
 	# floco — como o floco da referência); sem a arte, o calendário tingido.
-	var ic_estacao := "estacao_" + Estacoes.nome(state).to_lower()
+	# o ID da estação ("verao"), nunca o nome de exibição: "Verão".to_lower()
+	# pedia "estacao_verão" com acento — arquivo que não existe, e o único
+	# chip das quatro estações que nunca mostrava o próprio símbolo
+	var ic_estacao := "estacao_" + Estacoes.atual(state)
 	if Icones.ilustrado(ic_estacao) == null:
 		ic_estacao = "calendario"
 	Kit.chip(hud, ic_estacao, Estacoes.nome(state), Estacoes.cor(state),
@@ -757,10 +780,15 @@ func _aviso(msg: String) -> void:
 	l.add_theme_font_size_override("font_size", Tema.MICRO)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(l)
-	var timer := get_tree().create_timer(3.5)
-	timer.timeout.connect(func():
-		if is_instance_valid(faixa):
-			faixa.queue_free())
+	# o timer é FILHO da faixa: morre junto com ela quando qualquer
+	# atualizar() remonta a aba — o SceneTreeTimer antigo sobrevivia à faixa
+	# e enchia o log de "Lambda capture was freed" a cada aviso
+	var timer := Timer.new()
+	timer.wait_time = 3.5
+	timer.one_shot = true
+	timer.autostart = true
+	faixa.add_child(timer)
+	timer.timeout.connect(faixa.queue_free)
 
 # ---------------- ABAS ----------------
 func _aba_terra(c: Container) -> void:
@@ -932,7 +960,10 @@ func _aba_mapa(c: Container) -> void:
 		lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hv.add_child(lv)
 	for g in state["guerras"]:
-		_par(c, "%s × %s — %d meses de guerra. Campos em chamas." % [g["a"], g["b"], g["meses"]])
+		# nome de exibição, nunca o id: "leoes × imperio" não bate com
+		# nenhum dos reinos que esta mesma tela anuncia por extenso
+		_par(c, "%s × %s — %d meses de guerra. Campos em chamas." % [
+			Rotas.nome_do(state, str(g["a"])), Rotas.nome_do(state, str(g["b"])), g["meses"]])
 	if state["guerras"].is_empty():
 		_par(c, "Os reinos estão em paz. Por enquanto.")
 	for reino in state["reinos"]:
@@ -1127,8 +1158,12 @@ func _aba_taverna(c: Container) -> void:
 		# jogador não tem como saber que "leoes" são os Cervos Escarlates.
 		Kit.texto(l1, "para %s" % Rotas.nome_do(state, str(ct["contratante"])),
 			Tema.TEXTO_3, Tema.MICRO)
+		# o selo de alvo mora na SEGUNDA linha: na primeira, nome + "para X"
+		# + selo somavam mais largura mínima que o canvas de 960 tem — a
+		# interface INTEIRA deslocava e cortava o botão "Passar o mês"
 		if str(ct["alvo"]) != "":
-			Kit.selo(l1, "alvo: %s" % Rotas.nome_do(state, str(ct["alvo"])),
+			var l_alvo := Kit.fila(v, Tema.E3)
+			Kit.selo(l_alvo, "alvo: %s" % Rotas.nome_do(state, str(ct["alvo"])),
 				Tema.TEXTO_2, Tema.ELEVADO)
 		Kit.nota(v, str(ct["desc"]))
 		var forca: int = int(ct["forca"])
@@ -1484,7 +1519,9 @@ func _aba_exercito(c: Container) -> void:
 					var l_carga := Kit.fila(vm, Tema.E4)
 					Kit.nota(l_carga, "carga:")
 					for g in mt["carga"]:
-						Kit.icone_valor(l_carga, str(g),
+						# "ouro" não tem ícone próprio — o símbolo é o das
+						# moedas, como o gasto do cerco já faz logo acima
+						Kit.icone_valor(l_carga, "moedas" if str(g) == "ouro" else str(g),
 							"%d" % int(mt["carga"][g]), Tema.TEXTO_2)
 			if mt["fase"] == "ida":
 				var mid: String = mt["id"]
@@ -1831,9 +1868,10 @@ func _aba_cronica(c: Container) -> void:
 		{"t": "", "w": 76},
 		{"t": "", "w": 0},
 	])
-	var entradas: Array = state["cronica"].duplicate()
-	entradas.reverse()
-	for entrada in entradas:
+	# a crônica JÁ vem mais-recente-primeiro (log_para usa push_front) — o
+	# reverse() que morava aqui desfazia a ordem certa e contradizia o
+	# subtítulo impresso logo acima
+	for entrada in state["cronica"]:
 		var cel := Kit.linha(tab)
 		Kit.numero(cel[0], "%s/A%d" % [
 			MESES[entrada["mes"] - 1].substr(0, 3), entrada["ano"]],
@@ -1871,7 +1909,9 @@ func _montar_conversa() -> void:
 	var sb_fundo := StyleBoxFlat.new()
 	sb_fundo.bg_color = Tema.FUNDO
 	sb_fundo.set_corner_radius_all(0)
-	sb_fundo.set_content_margin_all(Tema.E5)
+	# o mesmo recuo que a tela_jogo usa sob a moldura de pedra: com E5 o
+	# retrato do NPC ficava com a borda enterrada embaixo da cantaria
+	sb_fundo.set_content_margin_all(22 if Tema.tex_hibit("ui_moldura_pedra") != null else Tema.E5)
 	overlay_conversa.add_theme_stylebox_override("panel", sb_fundo)
 	add_child(overlay_conversa)
 
@@ -1971,6 +2011,8 @@ func _montar_conversa() -> void:
 		"primario", 100)
 
 func abrir_conversa(npc: Dictionary) -> void:
+	conversa_geracao += 1
+	digitando = false
 	npc_atual = npc
 	overlay_conversa.visible = true
 	conversa_texto = "[color=#7a6b58][i]%s aguarda você falar...[/i][/color]\n\n" % npc["nome"]
@@ -1979,6 +2021,8 @@ func abrir_conversa(npc: Dictionary) -> void:
 	conversa_input.grab_focus()
 
 func fechar_conversa() -> void:
+	conversa_geracao += 1
+	digitando = false
 	overlay_conversa.visible = false
 	npc_atual = {}
 	atualizar()
@@ -2013,31 +2057,46 @@ func enviar_texto(texto: String) -> void:
 	# turnos, "Você:" e "Touro Bill:" em negrito idêntico obrigam a ler o
 	# nome para saber de quem é a fala. O jogador fica em creme apagado (é o
 	# lado que ele já conhece) e o NPC em latão.
-	conversa_texto += "[color=#b5a48c][b]Você[/b] · %s[/color]\n" % texto
+	# `[` do jogador vira [lb]: sem o escape, "[b]oi[/b]" digitado FORMATAVA
+	# o histórico (RichTextLabel interpreta) em vez de aparecer literal
+	conversa_texto += "[color=#b5a48c][b]Você[/b] · %s[/color]\n" % texto.replace("[", "[lb]")
 	var resultado := Dialogo.falar(state, npc_atual, texto)
 	conversa_hist.text = conversa_texto \
 		+ "[color=#7a6b58][i]%s pondera...[/i][/color]" % npc_atual["nome"]
 	_responder(resultado)
 
 func _responder(resultado: Dictionary) -> void:
+	# FOTO local do npc e da geração: o botão Sair pode fechar a conversa no
+	# meio de qualquer await abaixo (npc_atual vira {}). A mecânica já
+	# aconteceu em falar(); daqui em diante é só encenação — se a geração
+	# mudou, ela morre em silêncio, sem tocar no estado da conversa nova.
+	var npc := npc_atual
+	var ger := conversa_geracao
 	# IA do jogador (local ou nuvem): tenta gerar a superfície do texto.
 	# O saneamento corta o modelo continuando o diálogo sozinho; se sobrar
 	# nada, vale a resposta do motor interno — a mecânica já decidiu tudo.
 	var texto_final: String = resultado["resposta"]
 	if Llm.ativa():
-		var prompt := Dialogo.montar_prompt_llm(state, npc_atual, "", resultado)
+		var prompt := Dialogo.montar_prompt_llm(state, npc, "", resultado)
 		var gerado: String = await Llm.gerar(self, prompt)
-		gerado = Dialogo.sanear_llm(gerado, str(npc_atual["nome"]))
+		gerado = Dialogo.sanear_llm(gerado, str(npc["nome"]))
 		if gerado != "":
 			texto_final = gerado
+	# o texto do modelo também entra escapado — [img]/[color] gerados não
+	# devem formatar a tela (os efeitos mecânicos abaixo são nossos e podem)
+	texto_final = texto_final.replace("[", "[lb]")
 	# ponderar proporcional ao peso da resposta
 	await get_tree().create_timer(clampf(0.5 + texto_final.length() * 0.009, 0.6, 2.4)).timeout
+	if ger != conversa_geracao:
+		return
 	Sfx.tocar(self, "pagina")
 	# substitui a linha "pondera..." e digita letra a letra
-	var cabeca := "[color=#e8b04b][b]%s[/b][/color] · " % npc_atual["nome"]
+	var cabeca := "[color=#e8b04b][b]%s[/b][/color] · " % npc["nome"]
 	for i in range(0, texto_final.length(), 2):
 		conversa_hist.text = conversa_texto + cabeca + texto_final.substr(0, i + 2)
 		await get_tree().create_timer(0.024).timeout
+		if ger != conversa_geracao:
+			return
 	conversa_texto += cabeca + texto_final + "\n"
 	# os EFEITOS da fala (relação caiu, segredo usado, guerra declarada) são
 	# consequência mecânica, não diálogo: entram apagados e recuados, para
@@ -2185,24 +2244,36 @@ func _modal_evento() -> void:
 			state["evento_pendente"] = null
 			atualizar()
 
+## O corpo do modal é montado do formato REAL de Combate.batalhar (fases,
+## baixas_jogador/inimigo, vivos, debandada) — a versão anterior lia chaves
+## de um formato antigo ("rodadas") que batalhar nunca devolveu, e o
+## relatório de TODA batalha da UI morria num SCRIPT ERROR antes de abrir.
 func _modal_batalha(rel: Dictionary) -> void:
 	if rel.is_empty():
 		Jogo.salvar(state)
 		atualizar()
 		return
-	Sfx.tocar(self, "tambor")
-	Sfx.tocar(self, "vitoria" if rel["vitoria"] else "derrota")
+	Sfx.tocar(self, "espada")
+	Sfx.tocar(self, "vitoria" if rel.get("vitoria", false) else "derrota")
 	var corpo := ""
-	for r in rel["rodadas"]:
-		corpo += "Rodada %d: inimigo em %s — baixas: você −%d, inimigo −%d\n" % [
-			r["rodada"], Dados.FORMACOES[r["formacao_inimiga"]]["nome"], r["baixas_j"], r["baixas_i"]]
-	if rel["debandada"] != "":
-		corpo += "Debandada: %s!\n" % rel["debandada"]
-	corpo += "Cada soldado conta: você perdeu %d homens." % rel["baixas_jogador"]
-	_modal("VITÓRIA — %s" % rel["contexto"] if rel["vitoria"] else "DERROTA — %s" % rel["contexto"],
+	for f in rel.get("fases", []):
+		corpo += "%s: %d de ataque contra %d de defesa — baixas: você −%d, inimigo −%d\n" % [
+			str(f.get("nome", f.get("fase", "?"))), int(f.get("ataque", 0)),
+			int(f.get("defesa", 0)), int(f.get("mortos_atacante", 0)),
+			int(f.get("mortos_defensor", 0))]
+	match str(rel.get("debandada", "")):
+		"inimigo":
+			corpo += "O inimigo debandou!\n"
+		"jogador":
+			corpo += "Suas linhas quebraram!\n"
+	corpo += "Cada soldado conta: você perdeu %d homens; o inimigo, %d. Restam %d contra %d." % [
+		int(rel.get("baixas_jogador", 0)), int(rel.get("baixas_inimigo", 0)),
+		int(rel.get("vivos_jogador", 0)), int(rel.get("vivos_inimigo", 0))]
+	var contexto := str(rel.get("contexto", "Batalha"))
+	_modal("VITÓRIA — %s" % contexto if rel.get("vitoria", false) else "DERROTA — %s" % contexto,
 		corpo, [["Continuar", func():
 			Jogo.salvar(state)
-			atualizar()]], _arte_de_batalha(str(rel.get("contexto", ""))))
+			atualizar()]], _arte_de_batalha(contexto))
 
 ## A ilustração sai do CONTEXTO que combate.gd já escreve ("Cerco a …",
 ## "Rebelião camponesa"…), então nenhuma chamada precisa passar arte à mão.

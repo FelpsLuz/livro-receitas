@@ -275,15 +275,31 @@ static func norm(t: String) -> String:
 
 static func detectar_intencoes(texto: String) -> Array:
 	var t := norm(texto)
+	# palavra INTEIRA, não substring: "contrato" contém "rato", e um pedido
+	# educado de trabalho virava insulto com -25 de relação. Frases (com
+	# espaço) continuam por contains — fronteira não se aplica a elas.
+	var palavras_do_texto := t.split(" ", false)
 	var achadas: Array = []
 	for intencao in INTENCOES:
 		var peso := 0
 		for p in intencao["palavras"]:
-			if t.contains(p):
-				peso += 2 if (p as String).contains(" ") else 1
+			if (p as String).contains(" "):
+				if t.contains(p):
+					peso += 2
+			elif palavras_do_texto.has(p) or palavras_do_texto.has(str(p) + "s"):
+				# o "s" cobre o plural natural (preço/preços, guerra/guerras)
+				# sem reabrir a porta do substring ("contratos" ≠ "ratos")
+				peso += 1
 		if peso > 0:
 			achadas.append({"id": intencao["id"], "peso": peso})
-	achadas.sort_custom(func(a, b): return a["peso"] > b["peso"])
+	# empate de peso: a leitura hostil NUNCA vence — entre "pediu contrato"
+	# e "insultou" com a mesma evidência, o motor assume boa fé
+	achadas.sort_custom(func(a, b):
+		if a["peso"] != b["peso"]:
+			return a["peso"] > b["peso"]
+		var ha := 1 if a["id"] in ["insulto", "ameaca"] else 0
+		var hb := 1 if b["id"] in ["insulto", "ameaca"] else 0
+		return ha < hb)
 	return achadas
 
 static func sentimento(intencoes: Array) -> float:
@@ -413,6 +429,8 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 				resposta = "Pouco. Muito pouco. (Você precisaria de %d de ouro.)" % custo
 		"pedir_paz":
 			resposta = _resposta_paz(state, npc, efeitos)
+		"pedir_casamento":
+			resposta = _resposta_casamento(state, npc, tags, efeitos)
 		_:
 			resposta = "Não tenho paciência para balbucios. Fale claro ou saia." \
 				if tags["relacao"] <= -40 else Dados.rnd(voz["neutro"])
@@ -720,10 +738,45 @@ static func montar_prompt_llm(state: Dictionary, npc: Dictionary, texto: String,
 
 ## O modelo às vezes continua o diálogo sozinho ou repete os rótulos do
 ## briefing. Corta no primeiro sinal disso.
+## Pedir a mão em conversa — a promessa que a UI faz em três lugares
+## ("proponha casamento", "peça a mão em conversa na corte"). As regras são
+## as MESMAS que a aba Família anuncia: renome 40+, boa relação, e um rei
+## do outro lado. Aceito, o casamento real de intriga.gd acontece.
+static func _resposta_casamento(state: Dictionary, npc: Dictionary,
+		tags: Dictionary, efeitos: Array) -> String:
+	if npc.get("papel", "") != "rei":
+		return "Casamento? A mão de uma casa real se pede a um REI, não a mim."
+	if state["familia"]["conjuge"] != null:
+		return "Você já é casado. Não zombe da minha casa com esse pedido."
+	if int(state["jogador"]["renome"]) < 40:
+		return "Unir nossas casas? Seu nome ainda não pesa o bastante para sentar à minha mesa. Volte com renome."
+	if int(tags["relacao"]) < 25:
+		return "Sem confiança não há aliança. Prove o seu valor a esta corte antes de pedir a mão dela."
+	var Intriga = load("res://scripts/intriga.gd")
+	var reino_id := str(npc["id"]).trim_prefix("rei_")
+	Intriga.realizar_casamento(state, reino_id, false)
+	efeitos.append("[Aliança de casamento selada — relação +20; sua família cresceu]")
+	return "Que os bardos registrem este dia: nossas casas agora são uma. Trate os meus como seus."
+
 static func sanear_llm(texto: String, nome: String) -> String:
 	var t := texto.strip_edges()
+	# o modelo abrindo JÁ como o jogador, ou ecoando um rótulo de briefing
+	# na primeira linha — o corte antigo (i > 0) deixava a posição 0 passar
+	var rotulo := RegEx.create_from_string("^\\[[A-ZÁÉÍÓÚÂÊÔÃÕÀÇ0-9 _-]{3,}\\]")
+	while t.begins_with("Jogador:") or rotulo.search(t) != null:
+		var fim := t.find("\n")
+		if fim < 0:
+			return ""
+		t = t.substr(fim + 1).strip_edges()
+	# o modelo falando "Nome:" como cabeçalho da própria fala: tira o rótulo
+	if t.begins_with(nome + ":"):
+		t = t.substr(nome.length() + 1).strip_edges()
 	for marca in ["\nJogador:", "\n" + nome + ":", "[DATA]", "[QUEM FALA", "[GUERRA]"]:
 		var i := t.find(marca)
 		if i > 0:
 			t = t.substr(0, i)
+	# qualquer rótulo de briefing ecoado no meio do texto corta dali em diante
+	var eco := RegEx.create_from_string("\\n\\[[A-ZÁÉÍÓÚÂÊÔÃÕÀÇ]").search(t)
+	if eco != null:
+		t = t.substr(0, eco.get_start())
 	return t.strip_edges().substr(0, 400)
