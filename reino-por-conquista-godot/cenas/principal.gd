@@ -63,6 +63,24 @@ const ABAS := [
 const MESES := ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
 	"Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
+## A coroa na barra de tarefas e no canto da janela.
+##
+## `config/icon` do projeto só vale para o EDITOR; a janela do jogo
+## rodando nasce com o losango do Godot até alguém trocar em runtime — era
+## por isso que o executável de teste "ainda usava o ícone da engine".
+## (O ícone gravado DENTRO do .exe é outro passo, do exportador: ver
+## PLATAFORMAS.md.) Lido pelo filesystem virtual, como toda arte aqui.
+func _icone_da_janela() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var bytes := FileAccess.get_file_as_bytes("res://icone_jogo.png")
+	if bytes.is_empty():
+		return
+	var img := Image.new()
+	if img.load_png_from_buffer(bytes) != OK:
+		return
+	DisplayServer.set_icon(img)
+
 var state: Dictionary = {}
 var npc_atual: Dictionary = {}
 var digitando := false
@@ -71,6 +89,9 @@ var digitando := false
 # que nasceram — sair da conversa no meio do "pondera..." matava npc_atual
 # sob os pés delas: SCRIPT ERROR e `digitando` preso em true para sempre.
 var conversa_geracao := 0
+# as falas desta conversa, na ordem — é a MEMÓRIA que vai no prompt da IA.
+# Sem ela cada turno nascia amnésico e o personagem repetia a mesma frase.
+var conversa_turnos: Array = []
 var conversa_texto := ""
 
 var tela_titulo: Control
@@ -97,6 +118,7 @@ var _musica_atual := ""
 
 func _ready() -> void:
 	theme = Tema.criar()
+	_icone_da_janela()
 	# O fundo era um ColorRect chapado. Um retângulo de 960×540 numa cor só é
 	# a diferença entre "escuro" e "vazio": o gradiente (3% de luminância do
 	# topo à base) e a vinheta nos cantos não são percebidos como efeito, são
@@ -2013,6 +2035,7 @@ func _montar_conversa() -> void:
 func abrir_conversa(npc: Dictionary) -> void:
 	conversa_geracao += 1
 	digitando = false
+	conversa_turnos = []
 	npc_atual = npc
 	overlay_conversa.visible = true
 	conversa_texto = "[color=#7a6b58][i]%s aguarda você falar...[/i][/color]\n\n" % npc["nome"]
@@ -2060,12 +2083,13 @@ func enviar_texto(texto: String) -> void:
 	# `[` do jogador vira [lb]: sem o escape, "[b]oi[/b]" digitado FORMATAVA
 	# o histórico (RichTextLabel interpreta) em vez de aparecer literal
 	conversa_texto += "[color=#b5a48c][b]Você[/b] · %s[/color]\n" % texto.replace("[", "[lb]")
+	conversa_turnos.append({"quem": "Jogador", "fala": texto})
 	var resultado := Dialogo.falar(state, npc_atual, texto)
 	conversa_hist.text = conversa_texto \
 		+ "[color=#7a6b58][i]%s pondera...[/i][/color]" % npc_atual["nome"]
-	_responder(resultado)
+	_responder(resultado, texto)
 
-func _responder(resultado: Dictionary) -> void:
+func _responder(resultado: Dictionary, fala_jogador: String = "") -> void:
 	# FOTO local do npc e da geração: o botão Sair pode fechar a conversa no
 	# meio de qualquer await abaixo (npc_atual vira {}). A mecânica já
 	# aconteceu em falar(); daqui em diante é só encenação — se a geração
@@ -2077,8 +2101,12 @@ func _responder(resultado: Dictionary) -> void:
 	# nada, vale a resposta do motor interno — a mecânica já decidiu tudo.
 	var texto_final: String = resultado["resposta"]
 	if Llm.ativa():
-		var prompt := Dialogo.montar_prompt_llm(state, npc, "", resultado)
-		var gerado: String = await Llm.gerar(self, prompt)
+		# a fala do jogador E a memória da conversa vão no prompt; as regras
+		# do mundo vão como SISTEMA. Faltando as duas primeiras, o modelo
+		# improvisava no vácuo e repetia a mesma frase todo turno
+		var prompt := Dialogo.montar_prompt_llm(state, npc, fala_jogador,
+			resultado, conversa_turnos)
+		var gerado: String = await Llm.gerar(self, prompt, 12.0, Dialogo.SISTEMA_BASE)
 		gerado = Dialogo.sanear_llm(gerado, str(npc["nome"]))
 		if gerado != "":
 			texto_final = gerado
@@ -2098,6 +2126,7 @@ func _responder(resultado: Dictionary) -> void:
 		if ger != conversa_geracao:
 			return
 	conversa_texto += cabeca + texto_final + "\n"
+	conversa_turnos.append({"quem": "npc", "fala": texto_final})
 	# os EFEITOS da fala (relação caiu, segredo usado, guerra declarada) são
 	# consequência mecânica, não diálogo: entram apagados e recuados, para
 	# não serem lidos como mais uma frase do personagem

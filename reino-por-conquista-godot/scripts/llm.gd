@@ -122,7 +122,14 @@ static func ja_escolheu() -> bool:
 
 ## Gera a fala do NPC no provedor configurado. "" em QUALQUER falha —
 ## o chamador cai no motor interno e o jogador nem percebe.
-static func gerar(no_pai: Node, prompt: String, timeout_s: float = 12.0) -> String:
+## Teto de saída. 200 era pouco: a resposta chegava cortada no meio
+## ("Esfregou as") — e num modelo com raciocínio interno (Gemini Flash
+## atual) os tokens de pensamento COMEM esse teto e o texto volta VAZIO,
+## que era a "IA que não avança" do teste de campo.
+const TETO_SAIDA := 500
+
+static func gerar(no_pai: Node, prompt: String, timeout_s: float = 12.0,
+		sistema: String = "") -> String:
 	if not ativa() or no_pai == null or not no_pai.is_inside_tree():
 		return ""
 	var c := config()
@@ -131,38 +138,58 @@ static func gerar(no_pai: Node, prompt: String, timeout_s: float = 12.0) -> Stri
 	var modelo := str(c["modelo"])
 	if modelo == "":
 		modelo = str(p["modelo"])
+	# as regras do mundo vão no papel de SISTEMA, onde o modelo as trata
+	# como lei — e não como texto para continuar
+	var msgs: Array = []
+	if sistema != "" and str(p["protocolo"]) != "anthropic":
+		msgs.append({"role": "system", "content": sistema})
+	msgs.append({"role": "user", "content": prompt})
 	match str(p["protocolo"]):
 		"llama":
-			return await _post(no_pai, timeout_s, base + "/completion",
+			# /v1/chat/completions e NÃO /completion: o endpoint de chat do
+			# llama-server aplica o template do modelo. No endpoint cru o
+			# modelo continuava o texto do prompt (a lista de regras) em vez
+			# de responder — era o "format, concise). 7." da tela
+			return await _post(no_pai, timeout_s, base + "/v1/chat/completions",
 				["Content-Type: application/json"],
-				{"prompt": prompt, "n_predict": 120, "temperature": 0.8,
-					"stop": ["\n\n", "Jogador:"]},
-				_ler_llama)
+				{"model": modelo if modelo != "" else "local",
+					"max_tokens": TETO_SAIDA, "temperature": 0.8,
+					"messages": msgs},
+				_ler_openai)
 		"openai":
 			return await _post(no_pai, timeout_s, base + "/chat/completions",
 				["Content-Type: application/json",
 					"Authorization: Bearer " + str(c["chave"])],
-				{"model": modelo, "max_tokens": 200, "temperature": 0.8,
-					"messages": [{"role": "user", "content": prompt}]},
+				{"model": modelo, "max_tokens": TETO_SAIDA, "temperature": 0.9,
+					"presence_penalty": 0.6, "frequency_penalty": 0.4,
+					"messages": msgs},
 				_ler_openai)
 		"anthropic":
 			# sem temperature: os modelos Claude atuais rejeitam parâmetros
-			# de amostragem — a variação vem do próprio prompt
+			# de amostragem — a variação vem do próprio prompt.
+			# O sistema é campo próprio, não uma mensagem.
+			var corpo_a := {"model": modelo, "max_tokens": TETO_SAIDA,
+				"messages": [{"role": "user", "content": prompt}]}
+			if sistema != "":
+				corpo_a["system"] = sistema
 			return await _post(no_pai, timeout_s, base + "/messages",
 				["Content-Type: application/json",
 					"x-api-key: " + str(c["chave"]),
 					"anthropic-version: 2023-06-01"],
-				{"model": modelo, "max_tokens": 200,
-					"messages": [{"role": "user", "content": prompt}]},
-				_ler_anthropic)
+				corpo_a, _ler_anthropic)
 		"gemini":
+			# thinkingBudget 0: sem isso o modelo gasta o orçamento inteiro
+			# "pensando" e devolve candidato sem texto nenhum
+			var corpo_g := {"contents": [{"parts": [{"text": prompt}]}],
+				"generationConfig": {"maxOutputTokens": TETO_SAIDA,
+					"temperature": 0.9, "thinkingConfig": {"thinkingBudget": 0}}}
+			if sistema != "":
+				corpo_g["systemInstruction"] = {"parts": [{"text": sistema}]}
 			return await _post(no_pai, timeout_s,
 				base + "/v1beta/models/" + modelo + ":generateContent",
 				["Content-Type: application/json",
 					"x-goog-api-key: " + str(c["chave"])],
-				{"contents": [{"parts": [{"text": prompt}]}],
-					"generationConfig": {"maxOutputTokens": 200}},
-				_ler_gemini)
+				corpo_g, _ler_gemini)
 	return ""
 
 static func _post(no_pai: Node, timeout_s: float, url_alvo: String,

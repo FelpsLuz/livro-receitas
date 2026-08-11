@@ -559,6 +559,27 @@ func _frente_som_e_heraldica() -> void:
 		and Llm._ler_gemini({"promptFeedback": {"blockReason": "SAFETY"}}) == "",
 		"resposta bloqueada do Gemini devolve vazio (motor interno assume)")
 
+	# ---- o prompt do turno (bugs de campo dos prints) ----
+	# a FALA do jogador chegava vazia ao modelo e não havia memória de
+	# conversa: o personagem improvisava no vácuo e repetia a mesma frase
+	var Jogo_p = load("res://scripts/jogo.gd")
+	var Dialogo_p = load("res://scripts/dialogo.gd")
+	var st_p: Dictionary = Jogo_p.novo_jogo("Prompt")
+	var npc_p := {"id": "rei_touros", "nome": "Bjorne", "personalidade": "orgulhoso",
+		"papel": "rei"}
+	var prompt_p: String = Dialogo_p.montar_prompt_llm(st_p, npc_p, "onde consigo trabalho?",
+		{"resposta": "Ele mede você com os olhos."},
+		[{"quem": "Jogador", "fala": "salve"}, {"quem": "npc", "fala": "Fale logo."}])
+	ok(prompt_p.contains("onde consigo trabalho?"),
+		"a fala do JOGADOR entra no prompt da IA")
+	ok(prompt_p.contains("Fale logo.") and prompt_p.contains("A conversa até agora"),
+		"o histórico da conversa entra no prompt (fim do papo em loop)")
+	ok(not prompt_p.contains("REGRAS ABSOLUTAS"),
+		"as regras do mundo NÃO vão no prompt do turno — vão como sistema")
+	var Llm_p = load("res://scripts/llm.gd")
+	ok(int(Llm_p.TETO_SAIDA) >= 400,
+		"teto de saída generoso: resposta cortada no meio era o defeito antigo")
+
 	# ---- higiene de segurança do build (ver SEGURANCA.md) ----
 	# execução de comando e código dinâmico são O gatilho de heurística de
 	# antivírus — este jogo não usa nenhum, e este teste tranca a porta.
