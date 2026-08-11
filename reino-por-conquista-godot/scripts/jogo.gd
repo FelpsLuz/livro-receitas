@@ -60,6 +60,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"minuto": 0,               # relógio único do mundo (relogio.gd)
 		"empregos": {},            # portas de trabalho já abertas (empregos.gd)
 		"afetos": {},              # cortejo em andamento (pretendentes.gd)
+		"mapa_comercial": null,    # licença de negociar, 1 mês (economia.gd)
 		"progresso_atributo": {},  # dias de ofício rumo ao próximo ponto
 		"intel": {},               # o que o espião revelou (intel.gd)
 		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
@@ -463,6 +464,8 @@ static func _migrar(state: Dictionary) -> Dictionary:
 		state["dia"] = 1
 	if not state.has("afetos"):
 		state["afetos"] = {}
+	if not state.has("mapa_comercial"):
+		state["mapa_comercial"] = null
 	for campo_novo in ["empregos", "progresso_atributo"]:
 		if not state.has(campo_novo):
 			state[campo_novo] = {}

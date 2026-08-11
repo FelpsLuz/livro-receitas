@@ -65,6 +65,9 @@ func _init() -> void:
 	# ---------- economia: compra/venda e guerra ----------
 	var s3 := Jogo.novo_jogo("C")
 	s3["jogador"]["ouro"] = 1000
+	# negociar exige o Mapa Comercial (o freio da arbitragem infinita) —
+	# aqui o que se testa é a compra em si, então o mapa vem selado
+	Economia.renovar_mapa(s3, 1)
 	var rc := Economia.comprar(s3, "touros", "trigo", 5)
 	ok(rc["ok"] and s3["carga"]["trigo"] == 5, "compra adiciona carga")
 	var rv := Economia.vender(s3, "touros", "trigo", 5)

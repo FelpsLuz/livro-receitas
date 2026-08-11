@@ -92,11 +92,15 @@ static func comprar_rota(state: Dictionary) -> Dictionary:
 	if int(state["jogador"]["ouro"]) < PRECO_ROTA:
 		return {"ok": false, "msg": "Cartógrafos bêbados custam %d." % PRECO_ROTA}
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - PRECO_ROTA
+	# o mapa É a licença de negociar, e vale UM mês: sem ele nenhum feitor
+	# abre o armazém. É o custo recorrente que segura a arbitragem infinita
+	Economia.renovar_mapa(state, 1)
 	var melhor := _melhor_rota(state)
 	if melhor.is_empty():
-		return {"ok": true, "msg": "Ninguém sabe de nada útil esta noite."}
+		return {"ok": true,
+			"msg": "Mapa selado e válido por um mês. Mas ninguém sabe de rota boa esta noite."}
 	melhor["ok"] = true
-	melhor["msg"] = "\"%s: compre em %s por %d, venda em %s por %d. Lucro de %d por unidade.\"" % [
+	melhor["msg"] = "Mapa válido por um mês. \"%s: compre em %s por %d, venda em %s por %d. Lucro de %d por unidade.\"" % [
 		Dados.MERCADORIAS[melhor["bem"]]["nome"],
 		_nome_reino(state, melhor["compra"]), melhor["preco_compra"],
 		_nome_reino(state, melhor["venda"]), melhor["preco_venda"], melhor["lucro"]]

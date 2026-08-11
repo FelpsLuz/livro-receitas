@@ -18,6 +18,55 @@ static func inicializar_mercados(state: Dictionary) -> void:
 			m[g_id] = {"oferta": 1.6 if r["producao"].has(g_id) else 1.0, "demanda": 1.0}
 		state["mercados"][r["id"]] = m
 
+# ------------------------------------------------------------
+# A ESTAÇÃO NO MERCADO
+# ------------------------------------------------------------
+## O que cada estação faz com a OFERTA de cada bem. Acima de 1 é fartura
+## (preço cai), abaixo é escassez (preço sobe). É isto que transforma o
+## comércio numa aposta de calendário: comprar trigo na colheita e segurar
+## até o inverno é uma decisão, não uma tabela fixa.
+##
+## Bem que não aparece aqui não tem estação — prata e ferro saem do chão o
+## ano inteiro, e é de propósito: nem tudo pode oscilar, ou nada oscila.
+const SAZONALIDADE := {
+	"trigo":   {"primavera": 0.85, "verao": 1.35, "outono": 1.20, "inverno": 0.55},
+	"madeira": {"primavera": 1.10, "verao": 1.15, "outono": 1.05, "inverno": 0.70},
+	"tecidos": {"primavera": 1.05, "verao": 1.15, "outono": 1.00, "inverno": 0.80},
+	"sal":     {"primavera": 1.00, "verao": 1.20, "outono": 1.05, "inverno": 0.85},
+	"pedra":   {"primavera": 1.05, "verao": 1.15, "outono": 1.00, "inverno": 0.75},
+}
+
+static func fator_sazonal(state: Dictionary, g_id: String) -> float:
+	var tabela = SAZONALIDADE.get(g_id)
+	if tabela == null:
+		return 1.0
+	return float(tabela.get(Estacoes.atual(state), 1.0))
+
+## O MAPA COMERCIAL — a licença de negociar, comprada na taverna e válida
+## por UM mês.
+##
+## É o freio da arbitragem infinita que o teste alfa mediu (150 → 22.000
+## de ouro em 24 meses sem risco nenhum): agora o comércio tem custo fixo
+## recorrente e obriga a voltar à taverna. Quem compra e vende pouco não
+## paga o mapa; quem vive de rota, paga todo mês.
+static func mapa_valido(state: Dictionary) -> bool:
+	var m = state.get("mapa_comercial")
+	if not (m is Dictionary):
+		return false
+	var absoluto: int = int(state["ano"]) * 12 + int(state["mes"])
+	return int(m.get("ate", 0)) >= absoluto
+
+static func mapa_meses_restantes(state: Dictionary) -> int:
+	var m = state.get("mapa_comercial")
+	if not (m is Dictionary):
+		return 0
+	return maxi(0, int(m.get("ate", 0)) - (int(state["ano"]) * 12 + int(state["mes"])) + 1)
+
+## Renova (ou compra) o mapa: vale este mês e o próximo vira sozinho.
+static func renovar_mapa(state: Dictionary, meses: int = 1) -> void:
+	state["mapa_comercial"] = {
+		"ate": int(state["ano"]) * 12 + int(state["mes"]) + maxi(0, meses - 1)}
+
 static func preco_de(state: Dictionary, reino_id: String, g_id: String) -> int:
 	var m: Dictionary = state["mercados"][reino_id][g_id]
 	# float SEMPRE: o load normaliza 3.0 para int 3, e int/int trunca —
@@ -31,7 +80,11 @@ static func preco_de(state: Dictionary, reino_id: String, g_id: String) -> int:
 	elif rel >= 25: preco *= 0.95
 	return maxi(1, roundi(preco))
 
+const AVISO_MAPA := "Sem Mapa Comercial válido, nenhum feitor te vende nem te compra. Renove na taverna."
+
 static func comprar(state: Dictionary, reino_id: String, g_id: String, qtd: int) -> Dictionary:
+	if not mapa_valido(state):
+		return {"ok": false, "msg": AVISO_MAPA}
 	var preco := preco_de(state, reino_id, g_id)
 	var custo := preco * qtd
 	if state["jogador"]["ouro"] < custo:
@@ -43,6 +96,8 @@ static func comprar(state: Dictionary, reino_id: String, g_id: String, qtd: int)
 	return {"ok": true, "msg": "Comprou %d por %d de ouro." % [qtd, custo]}
 
 static func vender(state: Dictionary, reino_id: String, g_id: String, qtd: int) -> Dictionary:
+	if not mapa_valido(state):
+		return {"ok": false, "msg": AVISO_MAPA}
 	if int(state["carga"].get(g_id, 0)) < qtd:
 		return {"ok": false, "msg": "Você não tem essa carga."}
 	var em_guerra := _em_guerra(state, reino_id)
@@ -134,11 +189,21 @@ static func tick_mercados(state: Dictionary) -> void:
 		var em_guerra := _em_guerra(state, r["id"])
 		for g_id in Dados.MERCADORIAS:
 			var m: Dictionary = state["mercados"][r["id"]][g_id]
-			var alvo: float = 1.6 if r["producao"].has(g_id) else 1.0
+			# o alvo do mês É a estação: no inverno o celeiro do produtor de
+			# trigo encolhe, na colheita transborda. O mercado persegue esse
+			# alvo em vez de voltar sempre ao mesmo número — é o que faz
+			# existir hora certa de comprar e hora certa de vender.
+			var base: float = 1.6 if r["producao"].has(g_id) else 1.0
+			var alvo: float = clampf(base * fator_sazonal(state, g_id), 0.25, 3.0)
 			if not em_guerra:
-				m["oferta"] += (alvo - m["oferta"]) * 0.15
+				# 0.15 → 0.10: a janela de lucro precisa durar mais que um
+				# mês, senão a sazonalidade some antes de o jogador viajar
+				m["oferta"] += (alvo - m["oferta"]) * 0.10
+			# ESTOQUE que flutua sozinho: cada praça respira num ritmo
+			# próprio, e é essa diferença entre praças que sustenta a rota
+			m["oferta"] = clampf(float(m["oferta"]) * (1.0 + (randf() - 0.5) * 0.10), 0.2, 3.0)
 			m["demanda"] += (1.0 - m["demanda"]) * 0.10
-			m["demanda"] = clampf(m["demanda"] * (1.0 + (randf() - 0.5) * 0.06), 0.5, 3.0)
+			m["demanda"] = clampf(m["demanda"] * (1.0 + (randf() - 0.5) * 0.10), 0.5, 3.0)
 
 ## ---------- O DILEMA DA POPULAÇÃO ----------
 ## Quem pega em armas SAI da lavoura e do rol de contribuintes. Um exército

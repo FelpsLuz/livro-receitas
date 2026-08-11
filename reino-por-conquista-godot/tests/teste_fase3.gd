@@ -737,8 +737,24 @@ func _init() -> void:
 			paga_rica += int(c3c["pagamento"])
 	ok("corte rica pede serviço mais duro que uma vila pobre",
 		forca_rica > forca_pobre, "%d vs %d" % [forca_rica, forca_pobre])
-	ok("e paga proporcionalmente melhor", paga_rica > paga_pobre,
-		"%d vs %d" % [paga_rica, paga_pobre])
+	# comparar SOMA de pagamento seria comparar o sorteio dos tipos: um
+	# mural com duas patrulhas ganha de um com cinco escoltas. O que
+	# importa é o MULTIPLICADOR sobre a base do próprio tipo.
+	var razao_pobre := 0.0
+	var razao_rica := 0.0
+	for c3e in sesc["contratos"]:
+		var base_t := 0.0
+		for tp in Contratos3.TIPOS:
+			if str(tp["id"]) == str(c3e["id"]):
+				base_t = (float(tp["ouro"][0]) + float(tp["ouro"][1])) / 2.0
+		if base_t <= 0.0:
+			continue
+		if str(c3e["regiao"]) == "touros":
+			razao_pobre += float(c3e["pagamento"]) / base_t
+		elif str(c3e["regiao"]) == "imperio":
+			razao_rica += float(c3e["pagamento"]) / base_t
+	ok("e paga proporcionalmente melhor pelo MESMO tipo de serviço",
+		razao_rica > razao_pobre, "%.2f vs %.2f" % [razao_rica, razao_pobre])
 
 	# duração e penalidade escalam com a dificuldade
 	ok("fácil = 1 dia, difícil = 3",
@@ -849,6 +865,63 @@ func _init() -> void:
 		Pretendentes3.fator_equipamento(Jogo.novo_jogo("Solteiro")) == 1.0)
 	ok("casado não corteja mais ninguém",
 		not bool(Pretendentes3.cortejar(sca, "touros", 1)["ok"]))
+
+	# ---------------- BLOCO I: MERCADO SAZONAL E MAPA COMERCIAL ----------------
+	var sm := Jogo.novo_jogo("Mercador")
+	sm["jogador"]["ouro"] = 5000
+	ok("o jogo começa SEM mapa comercial", not Economia.mapa_valido(sm))
+	var r_sem: Dictionary = Economia.comprar(sm, "touros", "trigo", 5)
+	ok("sem mapa, nenhum armazém abre", not bool(r_sem["ok"]), str(r_sem["msg"]))
+	sm["carga"]["trigo"] = 10
+	ok("e também não se vende", not bool(Economia.vender(sm, "touros", "trigo", 5)["ok"]))
+	var r_mapa: Dictionary = Taverna.comprar_rota(sm)
+	ok("o cartógrafo da taverna sela o mapa", bool(r_mapa["ok"])
+		and Economia.mapa_valido(sm), str(r_mapa["msg"]))
+	ok("com mapa, o comércio abre", bool(Economia.comprar(sm, "touros", "trigo", 5)["ok"]))
+	ok("o mapa vale o mês corrente", Economia.mapa_meses_restantes(sm) == 1)
+	sm["evento_pendente"] = null
+	Jogo.passar_mes(sm)
+	ok("e vence na virada do mês — renovar é custo recorrente",
+		not Economia.mapa_valido(sm))
+
+	# sazonalidade: a MESMA praça, o MESMO bem, preços diferentes por estação
+	var ss := Jogo.novo_jogo("Sazonal")
+	ok("trigo tem fartura no verão e escassez no inverno",
+		Economia.SAZONALIDADE["trigo"]["verao"] > 1.0
+		and Economia.SAZONALIDADE["trigo"]["inverno"] < 1.0)
+	ok("prata e ferro não têm estação (nem tudo pode oscilar)",
+		not Economia.SAZONALIDADE.has("prata") and not Economia.SAZONALIDADE.has("ferro"))
+	ss["mes"] = 7                                     # verão
+	ok("o fator sazonal segue o calendário",
+		Economia.fator_sazonal(ss, "trigo") > 1.0)
+	ss["mes"] = 1                                     # inverno
+	ok("e vira no inverno", Economia.fator_sazonal(ss, "trigo") < 1.0)
+
+	# a oferta persegue o alvo da estação: um inverno inteiro encarece o trigo
+	var sv := Jogo.novo_jogo("Inverneiro")
+	sv["mes"] = 6
+	for i_v in 6:
+		Economia.tick_mercados(sv)
+	var preco_verao: int = Economia.preco_de(sv, "alvorecer", "trigo")
+	sv["mes"] = 1
+	for i_v2 in 6:
+		Economia.tick_mercados(sv)
+	var preco_inverno: int = Economia.preco_de(sv, "alvorecer", "trigo")
+	ok("trigo do celeiro do produtor custa mais no inverno que no verão",
+		preco_inverno > preco_verao, "%d → %d" % [preco_verao, preco_inverno])
+
+	# flutuação de estoque: praças diferentes deixam de andar em bloco
+	var sf := Jogo.novo_jogo("Feirante")
+	for i_f in 4:
+		Economia.tick_mercados(sf)
+	var ofertas: Array = []
+	for r_f in sf["reinos"]:
+		ofertas.append(float(sf["mercados"][r_f["id"]]["tecidos"]["oferta"]))
+	var todas_iguais := true
+	for o_f in ofertas:
+		if absf(float(o_f) - float(ofertas[0])) > 0.001:
+			todas_iguais = false
+	ok("o estoque de cada praça respira num ritmo próprio", not todas_iguais)
 
 	Jogo.apagar_save()
 	print("=====================================")

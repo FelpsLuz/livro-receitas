@@ -1141,6 +1141,19 @@ func _aba_mercado(c: Container) -> void:
 			em_guerra = true
 	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"],
 		"Compre onde há fartura, venda onde há guerra e fome.")
+	# O MAPA COMERCIAL é a licença de negociar, e vale um mês. Sem ele os
+	# botões continuam na tela, mas o feitor recusa — então a tela precisa
+	# dizer por quê ANTES do primeiro clique frustrado.
+	if not Economia.mapa_valido(state):
+		var sem := Kit.card(c, Tema.PERIGO)
+		Kit.texto(sem, "Sem Mapa Comercial: nenhum armazém abre para você.",
+			Tema.PERIGO, Tema.MICRO)
+		Kit.nota(sem, "O cartógrafo da taverna sela um por %d de ouro — vale o mês corrente."
+			% Taverna.PRECO_ROTA)
+	else:
+		var com_mapa := Kit.fila(c, Tema.E3)
+		Kit.selo(com_mapa, "mapa comercial válido", Tema.GANHO, Tema.GANHO_FUNDO)
+		Kit.nota(com_mapa, "Vence na virada do mês.")
 	if em_guerra:
 		var av := Kit.card(c, Tema.ATENCAO)
 		Kit.texto(av, "Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.",
