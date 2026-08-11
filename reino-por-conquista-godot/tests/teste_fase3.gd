@@ -987,6 +987,81 @@ func _init() -> void:
 	Dialogo.falar(sk, rei_j, "camafeu de uva")
 	ok("camafeu de uva encerra a partida na hora", sk["fim"] != null)
 
+	# ---------------- BLOCO I: VIAGEM PELO MAPA ----------------
+	var Viagem3 = load("res://scripts/viagem.gd")
+	var Rotas3 = load("res://scripts/rotas.gd")
+	var svg := Jogo.novo_jogo("Viajante")
+	svg["local"] = "touros"
+	ok("viajar para onde já se está é recusado",
+		not bool(Viagem3.estimar(svg, "touros")["ok"]))
+	var perto: Dictionary = Viagem3.estimar(svg, "imperio")
+	var longe: Dictionary = Viagem3.estimar(svg, "aguias")
+	ok("o vizinho custa menos dias que o outro lado do mapa",
+		int(perto["dias"]) < int(longe["dias"]),
+		"%d vs %d dias" % [int(perto["dias"]), int(longe["dias"])])
+	ok("nenhuma viagem passa de 3 dias (o mês inteiro)",
+		int(longe["dias"]) <= Jogo.DIAS_POR_MES)
+	ok("o trajeto nomeia as paradas do caminho",
+		str(longe["trajeto"]).contains("→") and str(longe["trajeto"]).contains("Ursos"))
+	ok("o risco vira texto, não porcentagem", str(perto["risco_txt"]) != "")
+
+	var svg2 := Jogo.novo_jogo("Andarilho")
+	svg2["local"] = "touros"
+	var dia_v: int = int(svg2["dia"])
+	var r_v: Dictionary = Viagem3.viajar(svg2, "imperio", Jogo.log_para(svg2))
+	ok("a viagem chega ao destino", bool(r_v["ok"]) and str(svg2["local"]) == "imperio")
+	ok("e come os dias que prometeu",
+		int(svg2["dia"]) == dia_v + int(r_v["dias"]) or int(svg2["dia"]) == 1)
+	var sem_tempo_v := Jogo.novo_jogo("Atrasado")
+	sem_tempo_v["local"] = "touros"
+	sem_tempo_v["dia"] = 3
+	ok("viagem longa no último dia do mês é recusada",
+		bool(Viagem3.viajar(sem_tempo_v, "aguias").get("sem_tempo", false)))
+
+	# a estrada: saquear a caravana paga agora e cobra o nome depois
+	var ssq := Jogo.novo_jogo("Salteador")
+	ssq["jogador"]["honra"] = 80
+	var ouro_sq: int = int(ssq["jogador"]["ouro"])
+	Viagem3.saquear_caravana(ssq, 150, Jogo.log_para(ssq))
+	ok("saquear caravana enche a bolsa", int(ssq["jogador"]["ouro"]) == ouro_sq + 150)
+	ok("e custa 15% da honra que você tinha (80 → 68)",
+		int(ssq["jogador"]["honra"]) == 68, str(int(ssq["jogador"]["honra"])))
+	var sas := Jogo.novo_jogo("Assaltado")
+	sas["jogador"]["ouro"] = 400
+	Viagem3.resolver_assalto(sas, Jogo.log_para(sas))
+	ok("o assalto leva um quarto do ouro, não tudo",
+		int(sas["jogador"]["ouro"]) == 300, str(int(sas["jogador"]["ouro"])))
+
+	# o mapa desenha o MESMO grafo, e sem cruzar estrada nenhuma
+	var Mapa3 = load("res://cenas/mapa_mundi.gd")
+	var faltando: Array[String] = []
+	for no_m in Rotas3.todos_os_nos():
+		if not Mapa3.POSICOES.has(str(no_m)):
+			faltando.append(str(no_m))
+	ok("todo nó do grafo tem lugar no mapa", faltando.is_empty(), ", ".join(faltando))
+	# planaridade do desenho: nenhum par de estradas sem nó comum se cruza
+	var cruzou: Array[String] = []
+	var arestas: Array = []
+	for ch_m in Dados.ROTAS:
+		for i_m in str(ch_m).length():
+			var a_m := str(ch_m).substr(0, i_m)
+			var b_m := str(ch_m).substr(i_m + 1)
+			if Mapa3.POSICOES.has(a_m) and Mapa3.POSICOES.has(b_m):
+				arestas.append([a_m, b_m])
+				break
+	for i_e in arestas.size():
+		for j_e in range(i_e + 1, arestas.size()):
+			var e1: Array = arestas[i_e]
+			var e2: Array = arestas[j_e]
+			if e1[0] in e2 or e1[1] in e2:
+				continue
+			if Geometry2D.segment_intersects_segment(
+					Mapa3.POSICOES[e1[0]], Mapa3.POSICOES[e1[1]],
+					Mapa3.POSICOES[e2[0]], Mapa3.POSICOES[e2[1]]) != null:
+				cruzou.append("%s-%s × %s-%s" % [e1[0], e1[1], e2[0], e2[1]])
+	ok("nenhuma estrada cruza outra no desenho", cruzou.is_empty(),
+		"; ".join(cruzou))
+
 	Jogo.apagar_save()
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

@@ -30,6 +30,8 @@ const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
 const Empregos = preload("res://scripts/empregos.gd")
 const Pretendentes = preload("res://scripts/pretendentes.gd")
+const Viagem = preload("res://scripts/viagem.gd")
+const MapaMundi = preload("res://cenas/mapa_mundi.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Rotas = preload("res://scripts/rotas.gd")
@@ -998,7 +1000,14 @@ func _aba_terra(c: Container) -> void:
 		var _fim := nivel_cap
 
 func _aba_mapa(c: Container) -> void:
-	_titulo_secao(c, "Os Seis Reinos")
+	_titulo_secao(c, "Os Seis Reinos",
+		"Clique num domínio para viajar. A cor da estrada conta o perigo dela.")
+	# o MAPA, antes da lista: a rede de estradas é a informação que a
+	# tabela nunca conseguiu dar — onde ficam os gargalos do continente
+	var mapa := MapaMundi.new()
+	c.add_child(mapa)
+	mapa.reino_clicado.connect(_abrir_viagem)
+	mapa.montar(state)
 	# o juramento é o contrato que rege o resto do mapa: enquanto vale, o
 	# suserano não marcha — e leva um quinto do seu ouro todo mês
 	var vs_mapa: Dictionary = Vassalagem.resumo(state)
@@ -1080,10 +1089,8 @@ func _aba_mapa(c: Container) -> void:
 
 		var lb := Kit.fila(v, Tema.E2)
 		if not aqui:
-			_botao(lb, "Viajar", func():
-				state["local"] = reino["id"]
-				Jogo.salvar(state)
-				atualizar(), "fantasma")
+			var destino_lb: String = str(reino["id"])
+			_botao(lb, "Viajar", func(): _abrir_viagem(destino_lb), "fantasma")
 		var alvo_id: String = reino["id"]
 		# JURAR LEALDADE: a saída para quem começa pobre diante de reinos ricos
 		if not Vassalagem.e_vassalo(state) and Vassalagem.pode_jurar(state, alvo_id)["ok"]:
@@ -1292,6 +1299,68 @@ func _aba_taverna(c: Container) -> void:
 
 ## Um serviço do balcão: rosto de quem vende, o que é, o preço e o botão.
 ## `rotulo_botao` vazio significa "já contratado" — o card fica, o botão não.
+## A VIAGEM — o popup que o clique no mapa abre.
+##
+## Dias, trajeto e risco ANTES de confirmar; depois o tempo pula sozinho
+## até a chegada. É o mesmo contrato do relatório de contrato: nenhuma
+## decisão de agenda acontece às cegas.
+func _abrir_viagem(destino: String) -> void:
+	if destino == str(state.get("local", "")):
+		_aviso("Você já está aqui.")
+		return
+	var est: Dictionary = Viagem.estimar(state, destino)
+	if not bool(est["ok"]):
+		Sfx.tocar(self, "alerta")
+		_aviso(str(est["msg"]))
+		return
+	var dias: int = int(est["dias"])
+	var corpo := "%s\n\n%d %s de estrada · risco %s" % [str(est["trajeto"]),
+		dias, "dia" if dias == 1 else "dias", str(est["risco_txt"])]
+	if int(state.get("dia", 1)) + dias > Jogo.DIAS_POR_MES + 1:
+		corpo += "\n\nNão sobra mês para esta viagem. Feche o mês antes de partir."
+		_modal("Viajar até %s" % Rotas.nome_do(state, destino), corpo,
+			[["Entendi", func(): atualizar()]])
+		return
+	_modal("Viajar até %s" % Rotas.nome_do(state, destino), corpo, [
+		["Partir agora", func(): _viajar(destino)],
+		["Ficar", func(): atualizar()]])
+
+func _viajar(destino: String) -> void:
+	var r: Dictionary = Viagem.viajar(state, destino, Jogo.log_para(state))
+	if not bool(r.get("ok", false)):
+		Sfx.tocar(self, "alerta")
+		_aviso(str(r.get("msg", "")))
+		return
+	Sfx.tocar(self, "pagina")
+	Jogo.salvar(state)
+	var enc: Dictionary = r.get("encontro", {})
+	if enc.is_empty():
+		atualizar()
+		return
+	# a estrada tem gente: e o encontro é uma ESCOLHA, não um castigo
+	match str(enc["tipo"]):
+		"caravana":
+			var ouro_c: int = int(enc["ouro"])
+			_modal(str(enc["titulo"]), str(enc["texto"]), [
+				["Saquear", func():
+					var rs: Dictionary = Viagem.saquear_caravana(state, ouro_c,
+						Jogo.log_para(state))
+					Sfx.tocar(self, "moeda")
+					Jogo.salvar(state)
+					_aviso("+%d de ouro. A honra caiu para %d." % [ouro_c, int(rs["honra"])])
+					atualizar()],
+				["Deixar passar", func():
+					Jogo.salvar(state)
+					atualizar()]], Retratos.ilustracao("emboscada"))
+		"assalto":
+			var ra: Dictionary = Viagem.resolver_assalto(state, Jogo.log_para(state))
+			Sfx.tocar(self, "alerta")
+			Jogo.salvar(state)
+			_modal(str(enc["titulo"]),
+				"%s\n\nLevaram %d de ouro." % [str(enc["texto"]), int(ra["ouro_perdido"])],
+				[["Seguir viagem", func(): atualizar()]],
+				Retratos.ilustracao("emboscada"))
+
 ## O RELATÓRIO DE PREPARAÇÃO — a tela entre aceitar e marchar.
 ##
 ## Antes, "Aceitar e executar" era um botão só: o jogador descobria o
