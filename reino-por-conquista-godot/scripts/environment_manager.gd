@@ -8,7 +8,7 @@
 # Por que registrar em vez de tingir tudo
 # ---------------------------------------
 # CanvasModulate multiplica TODO o CanvasLayer em que vive. A interface deste
-# jogo é uma tela de pergaminho com dez abas de texto; um autoload que põe um
+# jogo é uma tela de pergaminho com onze abas de texto; um autoload que põe um
 # CanvasModulate na raiz deixaria a interface azul às 3h da manhã e ilegível.
 # Isso já tinha sido aprendido antes: a cena antiga da cidade empacotava a luz
 # num SubViewport próprio exatamente "sem tingir a interface de pergaminho".

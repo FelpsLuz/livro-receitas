@@ -39,21 +39,30 @@ func _ready() -> void:
 	ok(jogo.state["jogador"]["nome"] == "Teste da Silva", "nome do jogador aplicado")
 	ok(jogo.status_label.text.contains("Teste da Silva"), "barra de status renderizada")
 
-	# navegar por todas as abas sem erro
-	for i in 10:
+	# navegar por TODAS as abas sem erro — pelo contador real, não por um
+	# número decorado: quando a Guerra virou a 11ª aba, o `for i in 10` a
+	# deixava fora do passeio sem que nada acusasse
+	var n_abas: int = jogo.tabs.get_tab_count()
+	ok(n_abas == 11, "o jogo tem 11 abas (tem %d)" % n_abas)
+	for i in n_abas:
 		jogo.tabs.current_tab = i
 		await get_tree().process_frame
-	ok(true, "10 abas navegadas sem erro")
+	ok(true, "%d abas navegadas sem erro" % n_abas)
 
 	# cidade pixel art presente na aba Terra
 	jogo.tabs.current_tab = 0
 	await get_tree().process_frame
 	ok(jogo.cidade_view.get_parent() != null, "cidade pixel art montada na aba Terra")
 
-	# mercado: comprar 5 trigo
+	# mercado: o Mapa Comercial é o portão (Bloco I) — sem ele o feitor
+	# recusa e o ouro não se move; com ele, a compra debita
 	jogo.tabs.current_tab = 2
 	await get_tree().process_frame
 	var ouro_antes: int = jogo.state["jogador"]["ouro"]
+	var r_sem: Dictionary = jogo.Economia.comprar(jogo.state, jogo.state["local"], "trigo", 5)
+	ok((not r_sem["ok"]) and jogo.state["jogador"]["ouro"] == ouro_antes,
+		"sem Mapa Comercial a compra é recusada")
+	jogo.Economia.renovar_mapa(jogo.state)
 	var r_compra: Dictionary = jogo.Economia.comprar(jogo.state, jogo.state["local"], "trigo", 5)
 	ok(r_compra["ok"] and jogo.state["jogador"]["ouro"] < ouro_antes, "compra no mercado debita ouro")
 
@@ -74,13 +83,16 @@ func _ready() -> void:
 		tentativas += 1
 	ok(not jogo.digitando, "resposta concluída")
 	ok(jogo.conversa_hist.text.length() > 60, "resposta digitada no histórico")
-	ok(jogo.state["tags"]["rei_touros"]["relacao"] < 0, "insulto derrubou a relação")
+	# pela chave REAL do rei insultado, não por "rei_touros" decorado: quando
+	# a ordem dos reinos mudou, o teste passou a olhar a tag de outro rei
+	var rei_id: String = str(rei["id"])
+	ok(jogo.state["tags"][rei_id]["relacao"] < 0, "insulto derrubou a relação")
 	jogo.fechar_conversa()
 	await get_tree().process_frame
 
 	# retrato muda de humor com relação negativa
-	jogo.state["tags"]["rei_touros"]["relacao"] = -50
-	var tex_raiva = jogo.Retratos.textura("rei_touros", "raiva")
+	jogo.state["tags"][rei_id]["relacao"] = -50
+	var tex_raiva = jogo.Retratos.textura(rei_id, "raiva")
 	ok(tex_raiva != null, "retrato com humor de raiva gerado")
 
 	# passar 6 meses

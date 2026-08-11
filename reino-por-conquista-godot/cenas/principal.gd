@@ -47,16 +47,16 @@ const NPCS_TAVERNA := [
 	{"id": "capitao", "nome": "Capitã Renna", "personalidade": "honrado"},
 	{"id": "espiao", "nome": "O Corvo", "personalidade": "calculista"},
 ]
-## As dez abas: rótulo visível e o sufixo do ícone (icone_aba_<sufixo>).
+## As onze abas: rótulo visível e o sufixo do ícone (icone_aba_<sufixo>).
 ## Uma tabela só, para nome e ícone não saírem de sincronia.
 # [rótulo, id da aba, ÍCONE]. O terceiro campo existe porque nem toda aba
 # tem um ícone com o seu próprio nome: a Taverna se anuncia pela caneca e o
 # Exército pela espada. Antes o código montava "aba_" + id e pedia
-# `aba_taverna`, que nunca existiu — as dez abas caíam no caixote cinza sem
+# `aba_taverna`, que nunca existiu — as abas caíam no caixote cinza sem
 # que nada acusasse, porque o fallback do Icones é silencioso de propósito.
-## "Terra", não "Sua Terra": com dez abas de plaqueta + ícone, as duas
+## "Terra", não "Sua Terra": com onze abas de plaqueta + ícone, as duas
 ## sílabas extras eram exatamente o que empurrava "Crônica" para trás das
-## setas de rolagem num canvas de 960 — a décima aba nascia invisível.
+## setas de rolagem num canvas de 960 — a última aba nascia invisível.
 const ABAS := [
 	["Terra", "terra", "terra"], ["Mapa", "mapa", "mapa"],
 	["Feira", "mercado", "mercado"], ["Taverna", "taverna", "cerveja"],
@@ -1147,9 +1147,11 @@ func _aba_mercado(c: Container) -> void:
 	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"],
 		"Compre onde há fartura, venda onde há guerra e fome.")
 	# O MAPA COMERCIAL é a licença de negociar, e vale um mês. Sem ele os
-	# botões continuam na tela, mas o feitor recusa — então a tela precisa
-	# dizer por quê ANTES do primeiro clique frustrado.
-	if not Economia.mapa_valido(state):
+	# botões ficam CINZAS — a mesma regra do "Vender 5" sem carga — e o
+	# cartão vermelho acima diz o porquê e onde comprar a licença. Botão
+	# vivo que o feitor recusa é convite a um clique frustrado.
+	var tem_mapa := Economia.mapa_valido(state)
+	if not tem_mapa:
 		var sem := Kit.card(c, Tema.PERIGO)
 		Kit.texto(sem, "Sem Mapa Comercial: nenhum armazém abre para você.",
 			Tema.PERIGO, Tema.MICRO)
@@ -1187,19 +1189,20 @@ func _aba_mercado(c: Container) -> void:
 		Kit.numero(cel[3], str(carga), Tema.TEXTO if carga > 0 else Tema.TEXTO_3)
 		Kit.numero(cel[4], str(carga * preco),
 			Tema.TEXTO_2 if carga > 0 else Tema.TEXTO_3)
-		Kit.botao_mini(cel[5], "Comprar 5", func():
+		var b_comprar := Kit.botao_mini(cel[5], "Comprar 5", func():
 			var r: Dictionary = Economia.comprar(state, state["local"], g_id, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
 			atualizar(), "fantasma", 88)
+		b_comprar.disabled = not tem_mapa
 		var b_vender := Kit.botao_mini(cel[5], "Vender 5", func():
 			var r: Dictionary = Economia.vender(state, state["local"], g_id, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
 			atualizar(), "fantasma", 88)
-		b_vender.disabled = carga < 5
+		b_vender.disabled = carga < 5 or not tem_mapa
 
 func _aba_taverna(c: Container) -> void:
 	_titulo_secao(c, "Taverna do Javali Manco", "Mural de contratos")
@@ -1479,8 +1482,13 @@ func _modal_preparacao(ct: Dictionary) -> void:
 	var rp: Dictionary = Contratos.relatorio_preparacao(state, ct)
 	var dias: int = int(rp["dias"])
 	var corpo := "%s\n\n" % str(ct["desc"])
-	corpo += "Serviço de %s — %d %s de trabalho.\n" % [
-		str(rp["dificuldade"]), dias, "dia" if dias == 1 else "dias"]
+	# a chave crua ("facil"/"media"/"dificil") é régua de mecânica, não texto
+	# de tela — o render flagrou "Serviço de facil" sem acento no modal
+	var nome_dif: Dictionary = {"facil": "Serviço fácil", "media": "Serviço mediano",
+		"dificil": "Serviço difícil"}
+	corpo += "%s — %d %s de trabalho.\n" % [
+		str(nome_dif.get(str(rp["dificuldade"]), "Serviço")),
+		dias, "dia" if dias == 1 else "dias"]
 	corpo += "Eles: cerca de %d homens.   Você: %d, equipamento %d, moral %d.\n" % [
 		int(rp["inimigos"]), int(rp["meus"]), int(rp["equipamento"]), int(rp["moral"])]
 	corpo += "\n%s\n\n" % str(rp["veredito"])
@@ -1818,7 +1826,12 @@ func _aba_exercito(c: Container) -> void:
 
 	var medidores := Kit.fila(painel, Tema.E6)
 	Kit.medidor_rotulado(medidores, "Moral do exército", moral, 100, "/100")
-	Kit.medidor_rotulado(medidores, "População comprometida",
+	# "Sustento da terra", não "população comprometida": a aba Terra já usa
+	# esse segundo nome para OUTRA conta (homens em armas sobre a base ativa).
+	# Dois medidores quase homônimos com denominadores diferentes eram uma
+	# pegadinha; este mede contra o teto que a terra sustenta — o mesmo
+	# número da linha "Tropa que a terra sustenta" da aba Terra.
+	Kit.medidor_rotulado(medidores, "Sustento da terra",
 		Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state),
 		" de %d" % Recrutamento.pop_maxima(state), Tema.TEXTO_2)
 	if moral <= 35:
@@ -2268,7 +2281,10 @@ func _aba_familia(c: Container) -> void:
 			Kit.selo(lc, "união sob pressão", Tema.ATENCAO, Tema.ATENCAO_FUNDO)
 	else:
 		Kit.texto(casa, "Solteiro.", Tema.TEXTO)
+		# as DUAS portas do altar, senão a ficha esconde metade do jogo: a
+		# nobre pela corte, a plebeia pelo salão da taverna (Bloco I)
 		Kit.nota(casa, "Casamento real exige 40+ de renome e boa relação — peça a mão em conversa na corte.")
+		Kit.nota(casa, "Sem coroa ao alcance, corteje uma moça no salão da taverna: casa plebeia, mas o ofício dela vem junto.")
 
 	Kit.respiro(c, Tema.E2)
 	Kit.subsecao(c, "Herdeiros")

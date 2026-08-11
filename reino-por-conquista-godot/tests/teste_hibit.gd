@@ -169,7 +169,7 @@ func _frente1() -> void:
 	# "keep" + "integer", que é a receita para proteger uma GRADE DE PIXEL:
 	# tudo renderizado em 960×540 e ampliado em múltiplo inteiro.
 	#
-	# Só que a tela deste jogo é dez abas de tabela, e nessa receita cada
+	# Só que a tela deste jogo é onze abas de tabela, e nessa receita cada
 	# letra virava um bitmap esticado. "canvas_items" mantém 960×540 como
 	# sistema de coordenadas — nenhum layout se move — e manda a fonte para
 	# o rasterizador na resolução real do monitor.

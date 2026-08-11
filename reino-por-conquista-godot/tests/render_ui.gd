@@ -13,6 +13,8 @@ const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Llm = preload("res://scripts/llm.gd")
 const Combate = preload("res://scripts/combate.gd")
+const Contratos = preload("res://scripts/contratos.gd")
+const Barbaros = preload("res://scripts/barbaros.gd")
 
 func _initialize() -> void:
 	Jogo.apagar_save()
@@ -144,6 +146,34 @@ func _initialize() -> void:
 	jogo.abrir_conversa({"id": "rei_imperio", "nome": "Touro Bill",
 		"personalidade": "cruel"})
 	await _quadro(jogo, "conversa")
+	jogo.fechar_conversa()
+
+	# ---- os fluxos do Bloco I: viagem, contrato e fronteira ----
+	# Os três modais novos que nenhum quadro cobria — e onde uma regressão
+	# de layout viveria invisível até o próximo teste alfa. Ficam no FIM do
+	# harness de propósito: o batedor consome um dia do relógio, e nada
+	# abaixo dele pode depender da agenda.
+	jogo._abrir_viagem("imperio")
+	await _quadro(jogo, "viagem_popup")
+	jogo.overlay_modal.visible = false
+
+	var mural: Array = Contratos.do_local(st)
+	if mural.is_empty():
+		push_error("Invalid mural vazio: sem contrato para o quadro de preparação")
+	else:
+		jogo._modal_preparacao(mural[0])
+		await _quadro(jogo, "contrato_preparacao")
+		jogo.overlay_modal.visible = false
+
+	# a fronteira selvagem RECONHECIDA: batedor pago, conta dos clãs na mesa
+	st["local"] = "barbaros"
+	var r_esp: Dictionary = Barbaros.espiar(st, Jogo.log_para(st))
+	if not bool(r_esp.get("ok", false)):
+		push_error("Invalid batedor recusado no harness: %s" % str(r_esp.get("msg", "")))
+	await _tirar(jogo, 1, "fronteira", 340)
+	jogo._modal_invadir()
+	await _quadro(jogo, "modal_invadir")
+	jogo.overlay_modal.visible = false
 
 	print("pronto — PNGs em ", ProjectSettings.globalize_path("user://"))
 	quit()

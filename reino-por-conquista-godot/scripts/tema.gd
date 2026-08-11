@@ -146,7 +146,7 @@ const LINHA_H_RETRATO := 60
 #
 # As duas fontes pixel saíram. A razão não é que fossem ruins — foram
 # escolhidas medindo 361 candidatas, e o critério estava certo. A razão é
-# que ESTE jogo é uma planilha: dez abas de tabela, preço, carga, prazo e
+# que ESTE jogo é uma planilha: onze abas de tabela, preço, carga, prazo e
 # moral. Fonte pixel obriga o texto inteiro a viver na grade de 960×540 e
 # a ser ampliado com o resto, e é isso que fazia a interface parecer
 # protótipo por mais bonita que a arte ficasse.
@@ -527,7 +527,7 @@ static func _botao(fundo: Color, borda: Color, apertado: bool) -> StyleBoxFlat:
 # Três variantes, e a regra de uso é a parte que importa:
 #
 #   PRIMÁRIO  latão preenchido. UM por região da tela, no verbo que a
-#             região existe para cumprir ("Passar o mês", "Nova Saga").
+#             região existe para cumprir ("Passar o dia", "Nova Saga").
 #   NORMAL    o padrão do tema: preenchimento elevado, borda fria.
 #   FANTASMA  sem preenchimento, só texto e borda apagada. Para ação
 #             secundária dentro de uma linha de tabela, onde três botões

@@ -227,7 +227,7 @@ static var _tingidas: Dictionary = {}
 ## esses dois a cor tem que estar no pixel. É a mesma tabela COR — o que muda
 ## é só onde a tinta é aplicada.
 ##
-## Cacheado por nome+cor: dez abas pedem dez texturas uma vez, não a cada
+## Cacheado por nome+cor: onze abas pedem onze texturas uma vez, não a cada
 ## `atualizar()`.
 static func textura_tingida(nome: String, cor: Variant = null) -> Texture2D:
 	# ilustrado NÃO se tinge: onde a aba/botão pedia a silhueta assada na

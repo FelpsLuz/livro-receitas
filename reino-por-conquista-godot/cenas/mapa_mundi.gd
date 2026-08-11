@@ -58,7 +58,13 @@ var state: Dictionary = {}
 var _botoes: Dictionary = {}
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(0, 340)
+	# 300, não 340: a janela útil da aba (abaixo do título, acima do rodapé)
+	# tem ~297px, e com 340 os rótulos da fileira de baixo nasciam na parte
+	# que só aparece rolando — o render flagrou "Reino sem Rei" e "Garças de
+	# Prata" cortados. Com 300 o mapa inteiro, rótulos inclusos, cabe no
+	# primeiro olhar; a conta do pior caso (p.y=0,87 + raio 30 + botão 22)
+	# fecha em ~292px.
+	custom_minimum_size = Vector2(0, 300)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	resized.connect(_posicionar)
 

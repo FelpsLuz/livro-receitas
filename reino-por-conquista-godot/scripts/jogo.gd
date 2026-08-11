@@ -270,7 +270,7 @@ static func melhorar_terra(state: Dictionary) -> Dictionary:
 	return {"ok": true, "msg": "Evoluiu para %s!" % prox["nome"]}
 
 # ---------- gestão do exército ----------
-## Recrutar agora ENFILEIRA: a tropa leva segundos para ficar pronta.
+## Recrutar agora ENFILEIRA: a tropa leva dias de relógio para ficar pronta.
 ## Mesma assinatura de antes, então a UI e os testes existentes seguem valendo.
 static func recrutar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
 	return Recrutamento.enfileirar(state, tipo, qtd)
