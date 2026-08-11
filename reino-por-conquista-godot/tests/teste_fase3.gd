@@ -923,6 +923,70 @@ func _init() -> void:
 			todas_iguais = false
 	ok("o estoque de cada praça respira num ritmo próprio", not todas_iguais)
 
+	# ---------------- BLOCO I: VASSALAGEM COMO CARREIRA ----------------
+	var Vassalagem3 = load("res://scripts/vassalagem.gd")
+	var sv3 := Jogo.novo_jogo("Juramentado")
+	sv3["local"] = "imperio"
+	Dialogo.mudar_relacao(sv3, "rei_touros", 60, "teste")
+	ok("não se jura a um rei estando na terra de outro",
+		not bool(Vassalagem3.pode_jurar(sv3, "touros")["ok"]))
+	sv3["local"] = "touros"
+	sv3["jogador"]["honra"] = 20
+	ok("nem com a palavra suja", not bool(Vassalagem3.pode_jurar(sv3, "touros")["ok"]))
+	sv3["jogador"]["honra"] = 60
+	ok("presente, com honra e relação, o rei ouve",
+		bool(Vassalagem3.pode_jurar(sv3, "touros")["ok"]))
+	var sem_rel := Jogo.novo_jogo("Estranho")
+	sem_rel["local"] = "touros"
+	sem_rel["jogador"]["honra"] = 60
+	ok("mas um estranho não recebe proteção de ninguém",
+		not bool(Vassalagem3.pode_jurar(sem_rel, "touros")["ok"]))
+
+	# a escada: tempo servido E confiança, os dois
+	ok("juramentado raso não tem soldo",
+		int(Vassalagem3.CARGOS[0]["soldo"]) == 0)
+	ok("cada degrau baixa o tributo e sobe a contrapartida",
+		float(Vassalagem3.CARGOS[3]["tributo"]) < float(Vassalagem3.CARGOS[0]["tributo"])
+		and int(Vassalagem3.CARGOS[3]["soldo"]) > int(Vassalagem3.CARGOS[1]["soldo"]))
+	Vassalagem3.jurar(sv3, "touros", Jogo.log_para(sv3))
+	ok("jurado, você é vassalo", Vassalagem3.e_vassalo(sv3))
+	sv3["jogador"]["meses_vassalo"] = 20
+	Dialogo.mudar_relacao(sv3, "rei_touros", 20, "serviço")
+	var posto3: Dictionary = Vassalagem3.cargo(sv3)
+	ok("vinte meses de serviço com boa relação promovem de verdade",
+		int(posto3["soldo"]) > 0, str(posto3["nome"]))
+	# a contrapartida sai do cofre DELE e entra no seu
+	var ouro_v: int = int(sv3["jogador"]["ouro"])
+	var reino_v: Dictionary = Geopolitica.reino_por_id(sv3, "touros")
+	reino_v["tesouro"] = 5000
+	sv3["jogador"]["ouro"] = 0
+	sv3["jogador"]["meses_vassalo"] = 20
+	Vassalagem3.tick(sv3, Jogo.log_para(sv3))
+	ok("o suserano PAGA o vassalo graduado (tributo de 0 é 0; o soldo, não)",
+		int(sv3["jogador"]["ouro"]) > 0, "+%d de ouro" % int(sv3["jogador"]["ouro"]))
+	ok("e o soldo sai do cofre dele", int(reino_v["tesouro"]) < 5000)
+
+	# jurar pela CONVERSA, que é onde o joelho dobra
+	var sj := Jogo.novo_jogo("Conversador")
+	sj["local"] = "touros"
+	sj["jogador"]["honra"] = 70
+	Dialogo.mudar_relacao(sj, "rei_touros", 60, "teste")
+	var rei_j := {"id": "rei_touros", "nome": "Bjorne", "personalidade": "orgulhoso",
+		"papel": "rei"}
+	var r_j: Dictionary = Dialogo.falar(sj, rei_j, "meu rei, quero ser seu vassalo")
+	ok("dizer que quer servir, na corte dele, sela o juramento",
+		Vassalagem3.e_vassalo(sj), str(r_j["resposta"]))
+	ok("e a fala explica o que aconteceu", not r_j["efeitos"].is_empty())
+
+	# camafeus de teste
+	var sk := Jogo.novo_jogo("Testador")
+	var ouro_k: int = int(sk["jogador"]["ouro"])
+	Dialogo.falar(sk, rei_j, "camafeu de morango")
+	ok("camafeu de morango enche o cofre",
+		int(sk["jogador"]["ouro"]) == ouro_k + 10000)
+	Dialogo.falar(sk, rei_j, "camafeu de uva")
+	ok("camafeu de uva encerra a partida na hora", sk["fim"] != null)
+
 	Jogo.apagar_save()
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

@@ -56,10 +56,11 @@ const NPCS_TAVERNA := [
 ## setas de rolagem num canvas de 960 — a décima aba nascia invisível.
 const ABAS := [
 	["Terra", "terra", "terra"], ["Mapa", "mapa", "mapa"],
-	["Mercado", "mercado", "mercado"], ["Taverna", "taverna", "cerveja"],
-	["Corte", "corte", "coroa"], ["Exército", "exercito", "espada"],
-	["Clãs", "clas", "alianca"], ["Intrigas", "intrigas", "intriga"],
-	["Família", "familia", "familia"], ["Crônica", "cronica", "pergaminho"],
+	["Feira", "mercado", "mercado"], ["Taverna", "taverna", "cerveja"],
+	["Corte", "corte", "coroa"], ["Tropas", "exercito", "espada"],
+	["Clãs", "clas", "alianca"], ["Intriga", "intrigas", "intriga"],
+	["Casa", "familia", "familia"], ["Crônica", "cronica", "pergaminho"],
+	["Guerra", "guerras", "cerco"],
 ]
 
 const MESES := ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -408,9 +409,9 @@ func _montar_jogo() -> void:
 		var ic := Icones.textura_tingida(str(ABAS[i][2]))
 		if ic != null:
 			tabs.set_tab_icon(i, ic)
-			# 14, não 16: os 2px × 10 abas são a folga que faz as DEZ
+			# 12, não 16: cada pixel × 11 abas é a folga que faz as ONZE
 			# plaquetas caberem nos 916px úteis sem setas de rolagem
-			tabs.set_tab_icon_max_width(i, 14)
+			tabs.set_tab_icon_max_width(i, 12)
 	tabs.tab_changed.connect(func(_i): atualizar())
 	# o som de aba fica no CLIQUE, não no tab_changed: o código troca de aba
 	# sozinho (voltar da conversa, abrir evento) e essas trocas não são um
@@ -725,6 +726,7 @@ func atualizar() -> void:
 		7: _aba_intrigas(c)
 		8: _aba_familia(c)
 		9: _aba_cronica(c)
+		10: _aba_guerras(c)
 
 	# o modal entra por cima da aba JÁ COERENTE com o estado
 	if state["fim"] != null:
@@ -1698,8 +1700,14 @@ func _aba_exercito(c: Container) -> void:
 			if ic_amp != null:
 				ic_amp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 				cel_f[0].add_child(ic_amp)
-			Kit.texto(cel_f[1], "%s ×%d" % [
+			var col_f := Kit.coluna(cel_f[1], 0)
+			Kit.texto(col_f, "%s ×%d" % [
 				Dados.TROPAS[item["tipo"]]["nome"], item["restantes"]])
+			# BARRA: "3:20" sozinho não diz se falta muito ou pouco — a barra
+			# diz de relance, e é o que o quartel sempre quis mostrar
+			var total_i: int = maxi(1, Recrutamento.tempo_de(state, str(item["tipo"])))
+			var feito_i: int = clampi(total_i - int(item["restante"]), 0, total_i)
+			Kit.medidor(col_f, float(feito_i), float(total_i), 150, 5, Tema.ACENTO)
 			Kit.numero(cel_f[2], _mmss(int(item["restante"])), Tema.ATENCAO)
 			var idx := i
 			Kit.botao_mini(cel_f[3], "Cancelar", func():
@@ -2110,6 +2118,89 @@ func _aba_familia(c: Container) -> void:
 ## trigo subiu". Aqui a data vira uma coluna própria na monoespaçada — o que
 ## faz as entradas do mesmo mês se agruparem sozinhas aos olhos — e a mais
 ## recente vem PRIMEIRO, que é a que o jogador abriu a aba para ler.
+## A ABA GUERRAS — o mapa político num lugar só.
+##
+## As guerras viviam soltas: uma linha no Mapa, outra na Crônica, e a
+## vassalagem num card que só aparecia quando você rolava até ele. Aqui
+## fica a pergunta que o jogador faz toda virada de mês — quem luta contra
+## quem, de que lado eu estou, e o que essa casa me deve.
+func _aba_guerras(c: Container) -> void:
+	_titulo_secao(c, "Guerras e Juramentos",
+		"Quem sangra com quem — e o que a sua palavra vale hoje.")
+
+	# ---- as SUAS guerras primeiro: é a linha que decide o seu mês ----
+	var minhas: Array = state["guerras"].filter(func(g):
+		return str(g["a"]) == "jogador" or str(g["b"]) == "jogador")
+	if not minhas.is_empty():
+		Kit.subsecao(c, "Você está em guerra")
+		for g in minhas:
+			var inimigo: String = str(g["b"]) if str(g["a"]) == "jogador" else str(g["a"])
+			var h := _card(c, Tema.PERIGO)
+			Kit.retrato(h, Retratos.textura("rei_" + inimigo), 48)
+			var v := Kit.coluna(h, 0)
+			v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			Kit.texto(v, "Contra %s" % Rotas.nome_do(state, inimigo), Tema.PERIGO)
+			Kit.nota(v, "%d %s de guerra. Marchas dele podem cair sobre a sua terra." % [
+				int(g["meses"]), "mês" if int(g["meses"]) == 1 else "meses"])
+	else:
+		Kit.nota(c, "Ninguém marcha contra você. Por enquanto.")
+
+	# ---- as guerras dos outros: onde o contrato fica caro e o trigo, raro ----
+	var alheias: Array = state["guerras"].filter(func(g):
+		return str(g["a"]) != "jogador" and str(g["b"]) != "jogador")
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "O resto do mapa")
+	if alheias.is_empty():
+		Kit.nota(c, "Os reinos estão em paz. É quando o trigo fica barato e o mercenário, ocioso.")
+	else:
+		var tab := Kit.tabela(c, [
+			{"t": "Guerra", "w": 0},
+			{"t": "Meses", "w": 76, "a": Kit.DIR},
+			{"t": "O que muda", "w": 260},
+		])
+		for g in alheias:
+			var cel := Kit.linha(tab)
+			Kit.texto(cel[0], "%s × %s" % [Rotas.nome_do(state, str(g["a"])),
+				Rotas.nome_do(state, str(g["b"]))])
+			Kit.numero(cel[1], str(int(g["meses"])), Tema.ATENCAO)
+			Kit.nota(cel[2], "Trigo escasso dos dois lados; contratos de fronteira pagam mais.")
+
+	# ---- casus belli: a licença de atacar sem manchar o nome ----
+	var cb: Array = state.get("casus_belli", [])
+	if not cb.is_empty():
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Pretextos de guerra")
+		var linha_cb := Kit.fila(c, Tema.E3)
+		for id_cb in cb:
+			Kit.selo(linha_cb, Rotas.nome_do(state, str(id_cb)), Tema.ACENTO, Tema.ACENTO_FUNDO)
+		Kit.nota(c, "Contra estes você pode marchar sem que o mapa inteiro te chame de bandido.")
+
+	# ---- o juramento: a escada da casa a que você serve ----
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Seu juramento")
+	var vs: Dictionary = Vassalagem.resumo(state)
+	if not bool(vs.get("vassalo", false)):
+		Kit.nota(c, "Você não deve joelho a ninguém. Também não há quem mande soldo ou lanças quando a terra queimar.")
+		Kit.nota(c, "Juramento se faz em pessoa, na corte do rei: viaje até a capital dele e diga que quer servir.")
+		return
+	var hj := _card(c, Tema.ACENTO)
+	Kit.retrato(hj, Retratos.textura("rei_" + str(vs["suserano"])), 48)
+	var vj := Kit.coluna(hj, 0)
+	vj.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var l_cargo := Kit.fila(vj, Tema.E3)
+	Kit.texto(l_cargo, "%s de %s" % [str(vs["cargo"]), str(vs["nome"])], Tema.ACENTO)
+	Kit.texto(l_cargo, "%d meses de serviço" % int(vs["meses"]), Tema.TEXTO_3, Tema.MICRO)
+	Kit.nota(vj, "Tributo estimado do mês: %d de ouro." % int(vs["tributo_estimado"]))
+	if int(vs["soldo"]) > 0:
+		Kit.nota(vj, "A casa te paga %d de ouro por mês%s." % [int(vs["soldo"]),
+			" e manda %d lanceiros a cada meia dúzia de meses" % int(vs["tropas_lote"])
+			if int(vs["tropas_lote"]) > 0 else ""])
+	else:
+		Kit.nota(vj, "Juramentado raso: ainda não há soldo. Sirva e a casa reconhece.")
+	if str(vs.get("proximo_cargo", "")) != "":
+		Kit.nota(c, "Próximo degrau: %s — %d meses de serviço e relação %d." % [
+			str(vs["proximo_cargo"]), int(vs["proximo_meses"]), int(vs["proximo_relacao"])])
+
 func _aba_cronica(c: Container) -> void:
 	_titulo_secao(c, "Crônica da Casa", "A mais recente no alto.")
 	if state["cronica"].is_empty():

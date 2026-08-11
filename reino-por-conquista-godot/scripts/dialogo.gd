@@ -34,7 +34,18 @@ const INTENCOES := [
 	{"id": "chantagear", "palavras": ["sei o que voce fez", "segredo", "todos vao saber", "chantagem",
 		"revelar", "contarei a todos", "eu sei sobre"]},
 	{"id": "pedir_paz", "palavras": ["paz", "tregua", "cessar", "acordo de paz", "fim da guerra"]},
+	{"id": "jurar_lealdade", "palavras": ["juro lealdade", "jurar lealdade", "dobro o joelho",
+		"dobrar o joelho", "sou seu vassalo", "quero ser seu vassalo", "vassalagem",
+		"quero te servir", "quero servir", "meu juramento", "sirvo a voce"]},
 ]
+
+## CÓDIGOS DE TESTE — ditos na conversa da corte, como o desenvolvedor
+## pediu. Ficam aqui, e não num menu escondido, porque a conversa livre já
+## é o console do jogo: qualquer texto entra por ela.
+const CAMAFEUS := {
+	"camafeu de uva": "fim",
+	"camafeu de morango": "ouro",
+}
 
 const VOZES := {
 	"orgulhoso": {
@@ -285,7 +296,10 @@ static func detectar_intencoes(texto: String) -> Array:
 		for p in intencao["palavras"]:
 			if (p as String).contains(" "):
 				if t.contains(p):
-					peso += 2
+					# frase mais LONGA pesa mais: "quero ser seu vassalo" (4)
+					# tem que ganhar de "meu rei" (2) quando as duas casam na
+					# mesma fala — a mais específica é a que diz a intenção
+					peso += (p as String).split(" ", false).size()
 			elif palavras_do_texto.has(p) or palavras_do_texto.has(str(p) + "s"):
 				# o "s" cobre o plural natural (preço/preços, guerra/guerras)
 				# sem reabrir a porta do substring ("contratos" ≠ "ratos")
@@ -332,6 +346,9 @@ static func nome_relacao(r: int) -> String:
 
 # ---------- fala principal ----------
 static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictionary:
+	var codigo := _camafeu(state, texto)
+	if not codigo.is_empty():
+		return codigo
 	var tags := tags_de(state, npc["id"])
 	var intencoes := detectar_intencoes(texto)
 	var sent := sentimento(intencoes)
@@ -431,6 +448,8 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			resposta = _resposta_paz(state, npc, efeitos)
 		"pedir_casamento":
 			resposta = _resposta_casamento(state, npc, tags, efeitos)
+		"jurar_lealdade":
+			resposta = _resposta_juramento(state, npc, efeitos, acoes)
 		_:
 			resposta = "Não tenho paciência para balbucios. Fale claro ou saia." \
 				if tags["relacao"] <= -40 else Dados.rnd(voz["neutro"])
@@ -774,6 +793,45 @@ static func _resposta_casamento(state: Dictionary, npc: Dictionary,
 	Intriga.realizar_casamento(state, reino_id, false)
 	efeitos.append("[Aliança de casamento selada — relação +20; sua família cresceu]")
 	return "Que os bardos registrem este dia: nossas casas agora são uma. Trate os meus como seus."
+
+## O joelho dobra AQUI, na frente do rei, e não num botão do mapa. O
+## módulo de vassalagem continua dono das regras — este ramo só é a porta.
+static func _resposta_juramento(state: Dictionary, npc: Dictionary,
+		efeitos: Array, acoes: Array) -> String:
+	if npc.get("papel", "") != "rei":
+		return "Juramento se faz ao REI, não a mim. Eu só guardo o portão."
+	var Vassalagem = load("res://scripts/vassalagem.gd")
+	var reino_id := str(npc["id"]).trim_prefix("rei_")
+	var check: Dictionary = Vassalagem.pode_jurar(state, reino_id)
+	if not bool(check["ok"]):
+		return str(check["msg"])
+	var Jogo = load("res://scripts/jogo.gd")
+	var r: Dictionary = Vassalagem.jurar(state, reino_id, Jogo.log_para(state))
+	if not bool(r["ok"]):
+		return str(r["msg"])
+	efeitos.append("[Você é vassalo desta casa — tributo mensal, e a proteção dela]")
+	acoes.append({"tipo": "atualizar"})
+	return "Então ajoelhe. Enquanto a sua palavra valer, esta casa é a sua também."
+
+## Os camafeus do desenvolvedor. Devolvem uma fala em personagem para não
+## quebrar a ficção enquanto testam o jogo por dentro.
+static func _camafeu(state: Dictionary, texto: String) -> Dictionary:
+	var t := norm(texto)
+	for chave in CAMAFEUS:
+		if not t.contains(chave):
+			continue
+		match str(CAMAFEUS[chave]):
+			"ouro":
+				state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + 10000
+				return {"resposta": "Um camafeu de morango troca de mãos. O cofre pesa mais.",
+					"efeitos": ["[+10.000 de ouro]"], "acoes": [{"tipo": "atualizar"}],
+					"intencao": "camafeu"}
+			"fim":
+				state["fim"] = {"tipo": "derrota", "causa": "camafeu"}
+				return {"resposta": "O camafeu de uva estala entre os dedos. A saga termina aqui.",
+					"efeitos": ["[Fim de jogo]"], "acoes": [{"tipo": "atualizar"}],
+					"intencao": "camafeu"}
+	return {}
 
 static func sanear_llm(texto: String, nome: String) -> String:
 	var t := texto.strip_edges()

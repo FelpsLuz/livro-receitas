@@ -28,6 +28,39 @@ static func e_vassalo(state: Dictionary) -> bool:
 
 ## Um reino só aceita vassalo que valha a pena proteger — ou que seja fraco
 ## o bastante para não ameaçar. Rei de si mesmo não jura a ninguém.
+## A ESCADA DA CASA. Vassalagem deixou de ser um interruptor (paga 20% e
+## pronto) e virou carreira: quanto mais tempo de lealdade provada, menor
+## o tributo e MAIOR a contrapartida. É de mão dupla — o suserano que só
+## cobra não é suserano, é cobrador.
+const CARGOS := [
+	{"nome": "Juramentado",        "meses": 0,  "relacao": -20,
+		"tributo": 0.20, "soldo": 0,   "tropas": 0},
+	{"nome": "Homem de confiança", "meses": 6,  "relacao": 25,
+		"tributo": 0.17, "soldo": 60,  "tropas": 3},
+	{"nome": "Capitão da Casa",    "meses": 18, "relacao": 45,
+		"tributo": 0.14, "soldo": 140, "tropas": 6},
+	{"nome": "Mão do Rei",         "meses": 36, "relacao": 65,
+		"tributo": 0.10, "soldo": 260, "tropas": 10},
+]
+
+## Honra mínima para um rei sequer ouvir o juramento: quem quebra palavra
+## com taverneiro não jura a um trono.
+const HONRA_PARA_JURAR := 45
+const MESES_ENTRE_LOTES := 6
+
+## Em que degrau o jogador está HOJE — tempo servido e confiança, os dois.
+static func cargo(state: Dictionary) -> Dictionary:
+	if not e_vassalo(state):
+		return CARGOS[0]
+	var meses: int = int(state["jogador"].get("meses_vassalo", 0))
+	var rel: int = int(state["tags"].get("rei_" + suserano(state),
+		{"relacao": 0})["relacao"])
+	var atual: Dictionary = CARGOS[0]
+	for c in CARGOS:
+		if meses >= int(c["meses"]) and rel >= int(c["relacao"]):
+			atual = c
+	return atual
+
 static func pode_jurar(state: Dictionary, reino_id: String) -> Dictionary:
 	if e_vassalo(state):
 		return {"ok": false, "msg": "Você já jurou lealdade a %s." % suserano(state)}
@@ -37,9 +70,18 @@ static func pode_jurar(state: Dictionary, reino_id: String) -> Dictionary:
 	var r: Dictionary = Geopolitica.reino_por_id(state, reino_id)
 	if r.is_empty() or not Geopolitica.vivo(r):
 		return {"ok": false, "msg": "Esse trono não manda mais em nada."}
+	# PRESENCIAL: juramento se faz de joelho, na capital dele — não por
+	# carta e não pelo mapa. É o que amarra a vassalagem à viagem.
+	if str(state.get("local", "")) != reino_id:
+		return {"ok": false,
+			"msg": "Juramento se faz diante do trono. Viaje até %s." % str(r["nome"])}
+	if int(state["jogador"].get("honra", 50)) < HONRA_PARA_JURAR:
+		return {"ok": false,
+			"msg": "\"Sua palavra já valeu pouco antes. Por que valeria agora?\""}
 	var rel: int = int(state["tags"].get("rei_" + reino_id, {"relacao": 0})["relacao"])
-	if rel <= -40:
-		return {"ok": false, "msg": "Ele prefere sua cabeça numa lança a seu juramento."}
+	if rel < 25:
+		return {"ok": false,
+			"msg": "\"Não te conheço o bastante para te dever proteção.\" (relação %d de 25)" % rel}
 	return {"ok": true, "reino": r}
 
 static func jurar(state: Dictionary, reino_id: String, log: Callable) -> Dictionary:
@@ -79,12 +121,41 @@ static func tick(state: Dictionary, log: Callable) -> void:
 		return
 	state["jogador"]["meses_vassalo"] = int(state["jogador"].get("meses_vassalo", 0)) + 1
 
-	var tributo: int = roundi(int(state["jogador"]["ouro"]) * TRIBUTO)
+	var posto := cargo(state)
+	var tributo: int = roundi(int(state["jogador"]["ouro"]) * float(posto["tributo"]))
 	if tributo > 0:
 		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - tributo
 		r["tesouro"] = int(r.get("tesouro", 0)) + tributo
 		if int(state["jogador"]["meses_vassalo"]) % 6 == 1:
 			log.call("O cobrador de %s levou %d de ouro." % [r["nome"], tributo])
+
+	# ---- A CONTRAPARTIDA ----
+	# O soldo da casa: o suserano paga quem serve, e paga do próprio cofre.
+	# Cofre vazio não paga — e vassalo não pago é vassalo que escuta ofertas.
+	var soldo: int = int(posto["soldo"])
+	if soldo > 0:
+		soldo = mini(soldo, int(r.get("tesouro", 0)))
+		if soldo > 0:
+			r["tesouro"] = int(r["tesouro"]) - soldo
+			state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + soldo
+			if int(state["jogador"]["meses_vassalo"]) % 6 == 1:
+				log.call("O soldo de %s como %s: +%d de ouro."
+					% [r["nome"], str(posto["nome"]), soldo])
+		else:
+			log.call("O cofre de %s não tem seu soldo este mês. A casa range." % r["nome"])
+	# E as lanças emprestadas, a cada meia dúzia de meses de lealdade.
+	var lote: int = int(posto["tropas"])
+	if lote > 0 and int(state["jogador"]["meses_vassalo"]) % MESES_ENTRE_LOTES == 0:
+		state["jogador"]["tropas"]["lanceiro"] = \
+			int(state["jogador"]["tropas"].get("lanceiro", 0)) + lote
+		log.call("%s manda %d lanceiros para a sua casa — como manda o costume."
+			% [r["nome"], lote])
+	# promoção anunciada: a escada tem que ser VISÍVEL para valer como meta
+	var ultimo := str(state["jogador"].get("ultimo_cargo", ""))
+	if ultimo != str(posto["nome"]):
+		state["jogador"]["ultimo_cargo"] = str(posto["nome"])
+		if ultimo != "":
+			log.call("A casa de %s te nomeia %s." % [r["nome"], str(posto["nome"])])
 
 	# suserano em guerra convoca tropas do vassalo — e elas não voltam todas
 	if _em_guerra(state, id) and randf() < 0.25:
@@ -139,7 +210,18 @@ static func resumo(state: Dictionary) -> Dictionary:
 		return {"vassalo": false}
 	var Geopolitica = load("res://scripts/geopolitica.gd")
 	var r: Dictionary = Geopolitica.reino_por_id(state, suserano(state))
+	var posto := cargo(state)
+	var prox: Dictionary = {}
+	for c in CARGOS:
+		if int(c["meses"]) > int(posto["meses"]):
+			prox = c
+			break
 	return {"vassalo": true, "suserano": suserano(state),
 		"nome": str(r.get("nome", suserano(state))),
 		"meses": int(state["jogador"].get("meses_vassalo", 0)),
-		"tributo_estimado": roundi(int(state["jogador"]["ouro"]) * TRIBUTO)}
+		"cargo": str(posto["nome"]), "soldo": int(posto["soldo"]),
+		"tropas_lote": int(posto["tropas"]),
+		"proximo_cargo": str(prox.get("nome", "")),
+		"proximo_meses": int(prox.get("meses", 0)),
+		"proximo_relacao": int(prox.get("relacao", 0)),
+		"tributo_estimado": roundi(int(state["jogador"]["ouro"]) * float(posto["tributo"]))}

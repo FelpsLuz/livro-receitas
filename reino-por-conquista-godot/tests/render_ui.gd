@@ -88,6 +88,7 @@ func _initialize() -> void:
 	# duas em que ninguém tinha olhado: a ficha da casa e a crônica
 	await _tirar(jogo, 8, "familia")
 	await _tirar(jogo, 9, "cronica")
+	await _tirar(jogo, 10, "guerras")
 
 	st["terra"]["alimento"] = 0            # celeiro vazio: a cena da fome
 	await _tirar(jogo, 0, "terra_fome", 300)
@@ -170,6 +171,12 @@ func _tirar(jogo: Control, aba: int, nome: String, rolar: float = 0.0,
 	var minw := (jogo.tela_jogo as Control).get_combined_minimum_size().x
 	if minw > 960.0:
 		push_error("Invalid largura minima: aba %s pede %dpx num canvas de 960" % [nome, int(minw)])
+	# e a BARRA DE ABAS também não pode estourar: com 11 plaquetas a última
+	# nasce escondida atrás das setas, que foi achado do teste alfa
+	var barra := jogo.tabs.get_tab_bar() as TabBar
+	if barra != null and barra.get_offset_buttons_visible():
+		push_error("Invalid barra de abas rolando: as %d abas não cabem no canvas"
+			% barra.tab_count)
 	var rolagem := jogo.tabs.get_current_tab_control() as ScrollContainer
 	if rolagem != null:
 		rolagem.scroll_vertical = int(rolar)

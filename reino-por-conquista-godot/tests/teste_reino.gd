@@ -194,6 +194,12 @@ func _init() -> void:
 	# ============ 4. VASSALAGEM ============
 	var v := com_terra(1, 120)
 	ok("começa livre", not Vassalagem.e_vassalo(v))
+	# o juramento virou PRESENCIAL e exige nome limpo e confiança prévia:
+	# estar na capital dele, honra 45+ e relação 25+ (ver vassalagem.gd)
+	v["local"] = "imperio"
+	v["jogador"]["honra"] = 70
+	var Dialogo_v = load("res://scripts/dialogo.gd")
+	Dialogo_v.mudar_relacao(v, "rei_imperio", 40, "teste de vassalagem")
 	var jr := Vassalagem.jurar(v, "imperio", Jogo.log_para(v))
 	ok("dá para jurar lealdade", jr["ok"], str(jr["msg"]))
 	ok("o suserano fica registrado", Vassalagem.suserano(v) == "imperio")
@@ -212,6 +218,9 @@ func _init() -> void:
 	# proteção: jurar cancela a guerra do suserano contra você
 	var vg := com_terra(1, 120)
 	vg["guerras"].append({"a": "leoes", "b": "jogador", "meses": 2})
+	vg["local"] = "leoes"
+	vg["jogador"]["honra"] = 70
+	Dialogo_v.mudar_relacao(vg, "rei_leoes", 40, "teste de vassalagem")
 	Vassalagem.jurar(vg, "leoes", Jogo.log_para(vg))
 	var ainda_em_guerra := false
 	for g in vg["guerras"]:
@@ -332,6 +341,9 @@ func _init() -> void:
 
 	# ============ 6. INTEGRAÇÃO ============
 	var full := com_terra(2, 200)
+	full["local"] = "touros"
+	full["jogador"]["honra"] = 70
+	Dialogo_v.mudar_relacao(full, "rei_touros", 40, "teste de vassalagem")
 	Vassalagem.jurar(full, "touros", Jogo.log_para(full))
 	Jogo.recrutar(full, "lanceiro", 10)
 	Marchas.despachar(full, "sem_rei", {"lanceiro": 0}, "saque")   # recusado, sem tropa
