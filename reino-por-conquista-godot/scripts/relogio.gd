@@ -23,8 +23,18 @@ extends RefCounted
 const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 
-const MINUTOS_POR_DIA := 20
-const MINUTOS_POR_MES := 600      # 30 dias
+## UM RELÓGIO SÓ, e o DIA é o átomo dele.
+##
+## Antes havia duas réguas: o dia do jogador (um terço do mês) e o "dia"
+## das marchas e do quartel (um trigésimo). Um exército atravessava o
+## continente em "12 dias" que não eram os 3 dias do mês — e por isso a
+## conta nunca fechava na cabeça de ninguém.
+##
+## Agora MINUTOS_POR_DIA × Jogo.DIAS_POR_MES == MINUTOS_POR_MES, e um teste
+## trava essa igualdade. Marcha, treino, viagem, trabalho e prisão medem o
+## tempo na MESMA unidade que o botão do rodapé.
+const MINUTOS_POR_DIA := 200
+const MINUTOS_POR_MES := 600      # 3 dias de jogo
 
 static func agora(state: Dictionary) -> int:
 	return int(state.get("minuto", 0))
@@ -43,10 +53,14 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 static func em_dias(minutos: int) -> float:
 	return minutos / float(MINUTOS_POR_DIA)
 
+## O jogador só age em dias INTEIROS, então o texto arredonda para CIMA:
+## "chega em 1 dia" tem que significar "no próximo clique", nunca "quase".
 static func texto_dias(minutos: int) -> String:
-	var d := em_dias(minutos)
-	if d < 1.0:
-		return "menos de um dia"
-	if d < 2.0:
-		return "1 dia"
-	return "%d dias" % roundi(d)
+	if minutos <= 0:
+		return "agora"
+	var d := ceili(em_dias(minutos))
+	return "1 dia" if d <= 1 else "%d dias" % d
+
+## Quantos cliques de "Passar o dia" faltam para isto terminar.
+static func dias_ate(minutos: int) -> int:
+	return maxi(0, ceili(em_dias(minutos)))

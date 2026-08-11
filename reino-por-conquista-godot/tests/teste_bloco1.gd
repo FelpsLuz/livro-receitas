@@ -26,6 +26,7 @@ const Taverna = preload("res://scripts/taverna.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
+const Marchas = preload("res://scripts/marchas.gd")
 
 var passou := 0
 var falhou := 0
@@ -59,6 +60,32 @@ func _init() -> void:
 		int(s["mes"]) == mes0 + 1 and int(s["dia"]) == 1)
 	ok("um mês em dias move o relógio como um mês inteiro (marcha e quartel intactos)",
 		int(s["minuto"]) == Relogio.MINUTOS_POR_MES, "%d min" % int(s["minuto"]))
+	# O RELÓGIO É UM SÓ: o dia do rodapé, o dia da marcha e o dia do quartel
+	# têm que ser o MESMO dia. Antes eram duas réguas (1/3 do mês contra
+	# 1/30) e "12 dias de marcha" não cabia num mês de 3 dias.
+	ok("a régua do dia fecha com a do mês (uma unidade para tudo)",
+		Relogio.MINUTOS_POR_DIA * Jogo.DIAS_POR_MES == Relogio.MINUTOS_POR_MES,
+		"%d × %d = %d" % [Relogio.MINUTOS_POR_DIA, Jogo.DIAS_POR_MES,
+			Relogio.MINUTOS_POR_MES])
+	ok("o texto de dias arredonda para CIMA (o jogador só age em dia inteiro)",
+		Relogio.texto_dias(Relogio.MINUTOS_POR_DIA + 1) == "2 dias"
+		and Relogio.texto_dias(1) == "1 dia")
+	# uma marcha de exército tem que caber na mesma cabeça: dias de verdade
+	var sm_r := Jogo.novo_jogo("Marchador")
+	sm_r["terra"] = {"nome": "Vale", "nivel": 3, "populacao": 300, "alimento": 900,
+		"madeira": 200, "felicidade": 70, "pressao": 0.0}
+	sm_r["jogador"]["ouro"] = 9999
+	sm_r["jogador"]["tropas"]["lanceiro"] = 60
+	var est_m: Dictionary = Marchas.estimar(sm_r, "imperio", {"lanceiro": 20})
+	var dias_m: int = Relogio.dias_ate(int(est_m["minutos"]))
+	ok("uma marcha ao Império leva poucos DIAS — a mesma unidade do rodapé",
+		dias_m >= 1 and dias_m <= 6, "%d dias" % dias_m)
+	# e o exército é mais lento que o homem sozinho a cavalo
+	sm_r["local"] = "jogador"
+	var est_v: Dictionary = Viagem.estimar(sm_r, "imperio")
+	ok("a coluna é mais lenta que o cavaleiro sozinho",
+		dias_m >= int(est_v["dias"]),
+		"marcha %d vs viagem %d" % [dias_m, int(est_v["dias"])])
 	# o quartel tem que andar pelos dias, não só pela virada
 	var sq := Jogo.novo_jogo("Quartel")
 	sq["terra"] = {"nome": "Vale", "nivel": 2, "populacao": 200, "alimento": 500,

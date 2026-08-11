@@ -97,15 +97,19 @@ const DIAS_POR_MES := 3
 ## Um dia. Move o relógio (quartel e marchas andam junto) e, no último
 ## dia, vira o mês inteiro — daí o `false`: quem virou o relógio foi o
 ## dia, e passar_mes não pode virar de novo.
-static func passar_dia(state: Dictionary, log_ext: Callable = Callable()) -> void:
+## Devolve o que o dia trouxe ({"recrutas": n, "marchas": [...]}), porque
+## a UI precisa narrar emboscada e recruta pronto — antes isso vinha de um
+## Timer girando o relógio em tempo real, e o tempo passava sem o jogador.
+static func passar_dia(state: Dictionary, log_ext: Callable = Callable()) -> Dictionary:
 	if state["fim"] != null or state["evento_pendente"] != null:
-		return
+		return {"recrutas": 0, "marchas": []}
 	var log := log_ext if log_ext.is_valid() else log_para(state)
-	Relogio.avancar(state, Relogio.MINUTOS_POR_MES / DIAS_POR_MES, log)
+	var r := Relogio.avancar(state, Relogio.MINUTOS_POR_DIA, log)
 	state["dia"] = int(state.get("dia", 1)) + 1
 	if int(state["dia"]) > DIAS_POR_MES:
 		state["dia"] = 1
 		passar_mes(state, false)
+	return r
 
 static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 	if state["fim"] != null or state["evento_pendente"] != null:

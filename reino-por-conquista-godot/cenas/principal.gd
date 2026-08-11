@@ -541,9 +541,6 @@ func _texto_contingente(d: Dictionary) -> String:
 	return ", ".join(partes)
 
 ## mm:ss para a fila do quartel.
-func _mmss(seg: int) -> String:
-	return "%d:%02d" % [int(seg / 60.0), seg % 60]
-
 ## ---------- O TIMER DO QUARTEL ----------
 ## Um Timer é um nó da cena; o save é um Dictionary. Por isso ele NÃO guarda
 ## o tempo restante — quem guarda é a fila, dentro do state. O Timer só
@@ -565,25 +562,18 @@ func _nova_cena() -> SubViewportContainer:
 		return CenarioV3View.new()
 	return CidadeCena.new()
 
+## O QUARTEL NÃO GIRA SOZINHO.
+##
+## Existia aqui um Timer de 1 segundo que avançava o relógio do mundo em
+## tempo real enquanto houvesse fila ou marcha: o tempo passava sem o
+## jogador dar o ok, e um recruta podia ficar pronto enquanto ele lia a
+## Crônica. Agora o dia só anda por vontade dele — o botão do rodapé, um
+## turno de trabalho, uma viagem, um contrato, ou a cela.
+##
+## A função continua existindo, vazia de relógio, porque a montagem da
+## cena a chama; o que ela guarda hoje é só a decisão de NÃO ter um.
 func _montar_quartel() -> void:
-	quartel = Timer.new()
-	quartel.wait_time = 1.0
-	quartel.timeout.connect(_tique_quartel)
-	add_child(quartel)
-	quartel.start()
-
-func _tique_quartel() -> void:
-	if state.is_empty() or state.get("fim") != null:
-		return
-	# nada com prazo pendente? o relógio não precisa girar
-	if Recrutamento.fila(state).is_empty() and Marchas.lista(state).is_empty():
-		return
-	var r: Dictionary = Relogio.avancar(state, 1, Jogo.log_para(state))
-	if int(r["recrutas"]) > 0 or not r["marchas"].is_empty():
-		Sfx.tocar(self, "tique")
-		Jogo.salvar(state)
-		atualizar()          # só redesenha quando algo REALMENTE aconteceu
-		_narrar_estrada(r["marchas"])
+	pass
 
 ## Emboscada acontecia só na crônica: o jogador via homens sumindo do exército
 ## sem nada na tela. Agora a estrada interrompe o jogo, com a arte do assalto.
@@ -613,11 +603,15 @@ func _passar_dia() -> void:
 	# no ÚLTIMO dia o clique vira o mês inteiro: o jogador vê "fecha o mês"
 	# no botão antes de clicar, então a virada nunca é surpresa
 	var virou := int(state.get("dia", 1)) >= Jogo.DIAS_POR_MES
-	Jogo.passar_dia(state)
+	var r: Dictionary = Jogo.passar_dia(state, Jogo.log_para(state))
 	if virou:
 		Sfx.tocar(self, "pagina")
+	elif int(r.get("recrutas", 0)) > 0:
+		Sfx.tocar(self, "espada")          # saiu recruta do quartel
 	Jogo.salvar(state)
 	atualizar()
+	# a estrada conta o que houve NELA — era o Timer quem fazia isso
+	_narrar_estrada(r.get("marchas", []))
 
 ## Mantido para os testes de cena e para quem quiser pular o mês inteiro.
 func _passar_mes() -> void:
@@ -1841,7 +1835,7 @@ func _aba_exercito(c: Container) -> void:
 		{"t": "Tem", "w": 60, "a": Kit.DIR},
 		{"t": "Custo", "w": 64, "a": Kit.DIR},
 		{"t": "Manut.", "w": 64, "a": Kit.DIR},
-		{"t": "Treino", "w": 70, "a": Kit.DIR},
+		{"t": "Treino", "w": 76, "a": Kit.DIR},
 		{"t": "", "w": 96, "a": Kit.DIR},
 	])
 	for tipo in Dados.TROPAS:
@@ -1855,7 +1849,12 @@ func _aba_exercito(c: Container) -> void:
 		Kit.numero(cel[2], str(n_tem), Tema.TEXTO if n_tem > 0 else Tema.TEXTO_3)
 		Kit.numero(cel[3], str(Dados.TROPAS[tipo]["custo"]), Tema.ACENTO)
 		Kit.numero(cel[4], str(Dados.TROPAS[tipo]["manut"]), Tema.TEXTO_2)
-		Kit.numero(cel[5], "%ds" % Recrutamento.tempo_de(state, tipo), Tema.TEXTO_2)
+		# em DIAS, não em segundos: o "14s" era herança do Timer que girava o
+		# relógio em tempo real. Com uma unidade só no jogo, a coluna passa a
+		# falar a mesma língua do rodapé — e uma casa decimal separa o
+		# camponês (0,1) da cavalaria pesada (0,9)
+		Kit.numero(cel[5], "%.1f d" % Relogio.em_dias(
+			Recrutamento.tempo_de(state, tipo)), Tema.TEXTO_2)
 		Kit.botao_mini(cel[6], "Recrutar 5", func():
 			var r: Dictionary = Jogo.recrutar(state, tipo, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
@@ -1870,7 +1869,7 @@ func _aba_exercito(c: Container) -> void:
 	if not fila.is_empty():
 		Kit.respiro(c, Tema.E2)
 		Kit.subsecao(c, "Na fila do quartel — %s até o último recruta"
-			% _mmss(Recrutamento.minutos_restantes(state)))
+			% Relogio.texto_dias(Recrutamento.minutos_restantes(state)))
 		var tab_f := Kit.tabela(c, [
 			{"t": "", "w": 24, "a": Kit.CENTRO},
 			{"t": "", "w": 0},
@@ -1892,7 +1891,7 @@ func _aba_exercito(c: Container) -> void:
 			var total_i: int = maxi(1, Recrutamento.tempo_de(state, str(item["tipo"])))
 			var feito_i: int = clampi(total_i - int(item["restante"]), 0, total_i)
 			Kit.medidor(col_f, float(feito_i), float(total_i), 150, 5, Tema.ACENTO)
-			Kit.numero(cel_f[2], _mmss(int(item["restante"])), Tema.ATENCAO)
+			Kit.numero(cel_f[2], Relogio.texto_dias(int(item["restante"])), Tema.ATENCAO)
 			var idx := i
 			Kit.botao_mini(cel_f[3], "Cancelar", func():
 				var r: Dictionary = Recrutamento.cancelar(state, idx)

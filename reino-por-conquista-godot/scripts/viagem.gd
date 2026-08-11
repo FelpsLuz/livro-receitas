@@ -12,12 +12,14 @@ extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
 const Rotas = preload("res://scripts/rotas.gd")
+const Relogio = preload("res://scripts/relogio.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 
-## Quantos campos de estrada cabem num dia de viagem SOZINHO. O exército
-## anda mais devagar (marchas.gd tem a própria régua) — um homem a cavalo
-## atravessa o que uma coluna leva semanas para vencer.
-const CAMPOS_POR_DIA := 9
+## Minutos por campo de estrada viajando SOZINHO — a mesma unidade da
+## marcha (dados.gd dá "vel" 10 à cavalaria leve, 18 ao lanceiro), só que
+## a cavalo e sem coluna. É isso que mantém "3 dias" significando a mesma
+## coisa no mapa, no quartel e no rodapé.
+const MINUTOS_POR_CAMPO := 10
 
 static func estimar(state: Dictionary, destino: String) -> Dictionary:
 	var origem: String = str(state.get("local", ""))
@@ -27,7 +29,8 @@ static func estimar(state: Dictionary, destino: String) -> Dictionary:
 	if not bool(c.get("existe", false)):
 		return {"ok": false, "msg": "Não há estrada conhecida até lá.", "dias": 0}
 	var dist: int = int(c["distancia"])
-	var dias: int = clampi(ceili(float(dist) / float(CAMPOS_POR_DIA)), 1, 3)
+	var minutos: int = dist * MINUTOS_POR_CAMPO
+	var dias: int = clampi(Relogio.dias_ate(minutos), 1, 3)
 	var perigo: float = float(c["perigo"])
 	var nomes: Array = []
 	for n in c["nos"]:

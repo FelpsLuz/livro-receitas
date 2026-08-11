@@ -105,8 +105,11 @@ func _init() -> void:
 	ok("estimativa traz dias, risco e trajeto",
 		est.has("minutos") and est.has("risco") and str(est["trajeto"]).contains("→"),
 		str(est["trajeto"]))
-	ok("13 campos com lanceiros ≈ 12 dias",
-		Relogio.texto_dias(int(est["minutos"])) == "12 dias",
+	# UMA régua só: o "dia" da marcha é o mesmo dia do rodapé (200 minutos),
+	# e não mais um trigésimo de mês. 13 campos de lanceiro = 234 minutos =
+	# dois cliques de "Passar o dia" — a conta agora fecha na cabeça.
+	ok("13 campos com lanceiros ≈ 2 dias do jogador",
+		Relogio.texto_dias(int(est["minutos"])) == "2 dias",
 		"%d min" % int(est["minutos"]))
 
 	# ---------------- 4. DESPACHO ----------------
