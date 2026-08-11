@@ -59,6 +59,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"marchas": [],             # exércitos na estrada (marchas.gd)
 		"minuto": 0,               # relógio único do mundo (relogio.gd)
 		"empregos": {},            # portas de trabalho já abertas (empregos.gd)
+		"afetos": {},              # cortejo em andamento (pretendentes.gd)
 		"progresso_atributo": {},  # dias de ofício rumo ao próximo ponto
 		"intel": {},               # o que o espião revelou (intel.gd)
 		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
@@ -156,6 +157,9 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 		Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 	Clas.tick(state, log)
 	Intriga.tick_familia(state, log)
+	# palavra dada e não cumprida cobra ANTES de o mural ser renovado —
+	# senão o contrato aceito sumiria de graça na virada
+	Contratos.expirar_pendentes(state, log)
 	state["contratos"] = Contratos.gerar(state)
 	if state["jogador"]["rei_de"] != "":
 		state["jogador"]["meses_reinando"] += 1
@@ -296,7 +300,10 @@ static func contratar_guardas(state: Dictionary, qtd: int) -> Dictionary:
 static func melhorar_equip(state: Dictionary) -> Dictionary:
 	if int(state["jogador"]["equip"]) >= 3:
 		return {"ok": false, "msg": "Equipamento no máximo."}
-	var custo: int = 200 * (int(state["jogador"]["equip"]) + 1)
+	# a forja da família da esposa cobra o preço de casa
+	var Pretendentes = load("res://scripts/pretendentes.gd")
+	var custo: int = roundi(200 * (int(state["jogador"]["equip"]) + 1)
+		* Pretendentes.fator_equipamento(state))
 	if state["jogador"]["ouro"] < custo:
 		return {"ok": false, "msg": "Melhoria custa %d de ouro." % custo}
 	state["jogador"]["ouro"] -= custo
@@ -454,6 +461,8 @@ static func _migrar(state: Dictionary) -> Dictionary:
 		state["jogador"]["honra"] = 50
 	if not state.has("dia"):
 		state["dia"] = 1
+	if not state.has("afetos"):
+		state["afetos"] = {}
 	for campo_novo in ["empregos", "progresso_atributo"]:
 		if not state.has(campo_novo):
 			state[campo_novo] = {}

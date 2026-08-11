@@ -191,6 +191,10 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	# já é zero e continua zero: farinha não nasce de campo que não colheu.
 	if Cidadaos.oficio_ativo(state, "moleiro"):
 		producao = roundi(producao * 1.2)
+	# a casa da esposa também trabalha: filha de moleiro sabe onde o grão
+	# rende, e é esse o dote de quem casa fora da nobreza
+	var Pretendentes = load("res://scripts/pretendentes.gd")
+	producao = roundi(producao * Pretendentes.fator_colheita(state))
 	t["alimento"] = maxi(0, int(t["alimento"]) + producao - int(t["populacao"]))
 	t["madeira"] = int(t["madeira"]) + 2 + int(t["nivel"]) * 2 + int(trabalhando / 12.0)
 
@@ -210,6 +214,10 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 		log.call("FOME em %s! Felicidade -20." % t["nome"])
 	elif int(t["felicidade"]) < 70:
 		t["felicidade"] = clampi(int(t["felicidade"]) + 5, 0, 100)
+	# filha do capataz: a vila obedecia a ela antes de obedecer a você
+	var bonus_esposa: int = Pretendentes.bonus_felicidade(state)
+	if bonus_esposa > 0:
+		t["felicidade"] = clampi(int(t["felicidade"]) + bonus_esposa, 0, 100)
 	if int(t["felicidade"]) <= 20 and randf() < 0.5:
 		# um capataz rico e desleal não espera cruzar o limiar de ascensão
 		# quando a vila já está pronta para pegar em foices — ele lidera

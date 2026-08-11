@@ -698,6 +698,158 @@ func _init() -> void:
 	ok("os doze ofícios têm risco declarado e dentro da régua",
 		Empregos.EMPREGOS.size() == 12 and riscos_validos)
 
+	# ---------------- BLOCO I: CONTRATOS COM PRAZO E PALAVRA ----------------
+	var Contratos3 = load("res://scripts/contratos.gd")
+	var sc3 := Jogo.novo_jogo("Empreiteiro")
+	var regioes := {}
+	for c3 in sc3["contratos"]:
+		regioes[str(c3["regiao"])] = int(regioes.get(str(c3["regiao"]), 0)) + 1
+	var cinco_por_taverna := true
+	for reg in regioes:
+		if int(regioes[reg]) != Contratos3.POR_TAVERNA:
+			cinco_por_taverna = false
+	ok("cada taverna tem seu mural de 5 contratos exclusivos",
+		regioes.size() >= 5 and cinco_por_taverna, "%d regiões" % regioes.size())
+	sc3["local"] = "touros"
+	var mural: Array = Contratos3.do_local(sc3)
+	ok("o mural mostra só os contratos DESTA região", mural.size() == Contratos3.POR_TAVERNA)
+	var so_daqui := true
+	for c3b in mural:
+		if str(c3b["regiao"]) != "touros":
+			so_daqui = false
+	ok("e nenhum contrato de fora vaza para o mural local", so_daqui)
+
+	# a região manda na régua: corte rica pede serviço mais duro e paga mais
+	var sesc := Jogo.novo_jogo("Escala")
+	Geopolitica.reino_por_id(sesc, "touros")["tesouro"] = 200
+	Geopolitica.reino_por_id(sesc, "imperio")["tesouro"] = 4000
+	sesc["contratos"] = Contratos3.gerar(sesc)
+	var forca_pobre := 0
+	var forca_rica := 0
+	var paga_pobre := 0
+	var paga_rica := 0
+	for c3c in sesc["contratos"]:
+		if str(c3c["regiao"]) == "touros":
+			forca_pobre += int(c3c["forca"])
+			paga_pobre += int(c3c["pagamento"])
+		elif str(c3c["regiao"]) == "imperio":
+			forca_rica += int(c3c["forca"])
+			paga_rica += int(c3c["pagamento"])
+	ok("corte rica pede serviço mais duro que uma vila pobre",
+		forca_rica > forca_pobre, "%d vs %d" % [forca_rica, forca_pobre])
+	ok("e paga proporcionalmente melhor", paga_rica > paga_pobre,
+		"%d vs %d" % [paga_rica, paga_pobre])
+
+	# duração e penalidade escalam com a dificuldade
+	ok("fácil = 1 dia, difícil = 3",
+		Contratos3.duracao_dias({"forca": 1}) == 1
+		and Contratos3.duracao_dias({"forca": 3}) == 2
+		and Contratos3.duracao_dias({"forca": 6}) == 3)
+	ok("largar serviço difícil custa mais honra que largar um fácil",
+		int(Contratos3.PENALIDADE_HONRA["dificil"]) == 25
+		and int(Contratos3.PENALIDADE_HONRA["facil"]) == 10)
+
+	# a palavra dada: uma de cada vez, e quebrar custa
+	var uid_a: String = str(mural[0]["uid"])
+	var uid_b: String = str(mural[1]["uid"])
+	ok("dar a palavra é aceito", bool(Contratos3.aceitar(sc3, uid_a)["ok"]))
+	ok("mas só um contrato por vez", not bool(Contratos3.aceitar(sc3, uid_b)["ok"]))
+	var honra_c: int = int(sc3["jogador"]["honra"])
+	var r_ab: Dictionary = Contratos3.abandonar(sc3, uid_a, Jogo.log_para(sc3))
+	ok("largar cobra a honra da dificuldade certa",
+		int(sc3["jogador"]["honra"]) == honra_c - int(r_ab["honra_perdida"]),
+		"honra %d → %d" % [honra_c, int(sc3["jogador"]["honra"])])
+	ok("e o contratante lembra da palavra quebrada",
+		int(Dialogo.tags_de(sc3, "rei_" + str(mural[0]["contratante"]))["relacao"]) < 0)
+
+	# a virada do mês cobra sozinha quem aceitou e não entregou
+	var sexp := Jogo.novo_jogo("Caloteiro")
+	sexp["local"] = "touros"
+	var lista_exp: Array = Contratos3.do_local(sexp)
+	var alvo_exp: String = str(lista_exp[0]["uid"])
+	Contratos3.aceitar(sexp, alvo_exp)
+	var honra_exp: int = int(sexp["jogador"]["honra"])
+	sexp["evento_pendente"] = null
+	Jogo.passar_mes(sexp)
+	ok("contrato aceito e não cumprido cobra honra na virada do mês",
+		int(sexp["jogador"]["honra"]) < honra_exp,
+		"honra %d → %d" % [honra_exp, int(sexp["jogador"]["honra"])])
+	ok("e o mural é renovado", Contratos3.aceito_de(sexp).is_empty())
+
+	# executar come dias e exige que caibam no mês
+	var sex := Jogo.novo_jogo("Executor")
+	sex["local"] = "touros"
+	sex["jogador"]["tropas"]["lanceiro"] = 200
+	var facil: Dictionary = {}
+	for c3d in Contratos3.do_local(sex):
+		if Contratos3.duracao_dias(c3d) == 1:
+			facil = c3d
+	if not facil.is_empty():
+		var dia_ex: int = int(sex["dia"])
+		Contratos3.executar(sex, facil, Jogo.log_para(sex))
+		ok("o serviço come o dia que promete",
+			int(sex["dia"]) == dia_ex + 1 or int(sex["dia"]) == 1)
+	else:
+		ok("o serviço come o dia que promete", true, "sem contrato fácil nesta seed")
+	var sem_tempo := Jogo.novo_jogo("SemTempo")
+	sem_tempo["local"] = "touros"
+	sem_tempo["dia"] = 3
+	sem_tempo["jogador"]["tropas"]["lanceiro"] = 200
+	var dificil: Dictionary = {"forca": 6, "nome": "Teste", "pagamento": 10,
+		"renome": 1, "contratante": "touros", "alvo": "", "id": "escolta"}
+	ok("turno de 3 dias no último dia do mês é recusado",
+		bool(Contratos3.executar(sem_tempo, dificil, Jogo.log_para(sem_tempo)).get("sem_tempo", false)))
+
+	# ---------------- BLOCO I: PRETENDENTES E CASAMENTO ----------------
+	var Pretendentes3 = load("res://scripts/pretendentes.gd")
+	var sp3 := Jogo.novo_jogo("Pretendente")
+	var mocas: Array = Pretendentes3.do_reino(sp3, "touros")
+	ok("cada região tem três moças", mocas.size() == 3)
+	ok("e elas são as MESMAS na partida inteira",
+		str(Pretendentes3.do_reino(sp3, "touros")[0]["nome"]) == str(mocas[0]["nome"]))
+	ok("regiões diferentes têm moças diferentes",
+		str(Pretendentes3.do_reino(sp3, "imperio")[0]["nome"]) != str(mocas[0]["nome"]))
+
+	sp3["jogador"]["ouro"] = 2000
+	var honra_p: int = int(sp3["jogador"]["honra"])
+	Pretendentes3.cortejar(sp3, "touros", 0)
+	ok("cortejar rende afeto e come um dia",
+		Pretendentes3.afeto(sp3, "touros", 0) > 0 and int(sp3["dia"]) == 2)
+	ok("sem afeto suficiente ela recusa a mão",
+		not bool(Pretendentes3.pedir_a_mao(sp3, "touros", 0)["ok"]))
+	Pretendentes3.cortejar(sp3, "imperio", 1)
+	ok("cortejar duas ao mesmo tempo é escândalo e custa honra",
+		int(sp3["jogador"]["honra"]) < honra_p,
+		"honra %d → %d" % [honra_p, int(sp3["jogador"]["honra"])])
+
+	# casar de verdade: o ofício da casa dela entra na sua economia
+	var sca := Jogo.novo_jogo("Casadouro")
+	sca["afetos"] = {"touros:0": 100}
+	var moca0: Dictionary = Pretendentes3.do_reino(sca, "touros")[0]
+	var renome_ca: int = int(sca["jogador"]["renome"]) + 20
+	sca["jogador"]["renome"] = renome_ca
+	var r_casa: Dictionary = Pretendentes3.pedir_a_mao(sca, "touros", 0, Jogo.log_para(sca))
+	ok("com afeto cheio, o casamento acontece",
+		bool(r_casa["ok"]) and sca["familia"]["conjuge"] != null)
+	ok("a nobreza inteira torce o nariz",
+		int(Dialogo.tags_de(sca, "rei_imperio")["relacao"]) <= Pretendentes3.PENALIDADE_RELACAO)
+	ok("e custa renome", int(sca["jogador"]["renome"]) < renome_ca)
+	ok("o cônjuge plebeu tem a mesma forma do nobre (a Família o reconhece)",
+		sca["familia"]["conjuge"].has("atributos")
+		and sca["familia"]["conjuge"].has("nome"))
+	# o dote de quem não tem ouro
+	var buff_ok := false
+	match str(moca0["buff"]):
+		"equip": buff_ok = Pretendentes3.fator_equipamento(sca) < 1.0
+		"colheita": buff_ok = Pretendentes3.fator_colheita(sca) > 1.0
+		"felicidade": buff_ok = Pretendentes3.bonus_felicidade(sca) > 0
+		"rumor": buff_ok = Pretendentes3.buff_ativo(sca, "rumor")
+	ok("o ofício da casa dela vale de verdade na economia (%s)" % str(moca0["buff"]), buff_ok)
+	ok("solteiro não tem buff nenhum",
+		Pretendentes3.fator_equipamento(Jogo.novo_jogo("Solteiro")) == 1.0)
+	ok("casado não corteja mais ninguém",
+		not bool(Pretendentes3.cortejar(sca, "touros", 1)["ok"]))
+
 	Jogo.apagar_save()
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

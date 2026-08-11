@@ -29,6 +29,7 @@ const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
 const Empregos = preload("res://scripts/empregos.gd")
+const Pretendentes = preload("res://scripts/pretendentes.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Rotas = preload("res://scripts/rotas.gd")
@@ -1196,7 +1197,7 @@ func _aba_taverna(c: Container) -> void:
 		{"t": "Renome", "w": 76, "a": Kit.DIR},
 		{"t": "", "w": 140, "a": Kit.DIR},
 	])
-	for ct in state["contratos"]:
+	for ct in Contratos.do_local(state):
 		var cel := Kit.linha(tab)
 		var v := Kit.coluna(cel[0], 0)
 		var l1 := Kit.fila(v, Tema.E3)
@@ -1220,15 +1221,17 @@ func _aba_taverna(c: Container) -> void:
 			Tema.PERIGO if forca >= 7 else (Tema.ATENCAO if forca >= 4 else Tema.GANHO))
 		Kit.numero(cel[2], str(ct["pagamento"]), Tema.ACENTO)
 		Kit.numero(cel[3], "+%d" % int(ct["renome"]), Tema.GANHO)
-		Kit.botao_mini(cel[4], "Aceitar e executar", func():
-			if Combate.total_homens(state["jogador"]["tropas"]) == 0:
-				_aviso("Você não tem tropas! Recrute no quartel.")
-				return
-			var rel_batalha: Dictionary = Contratos.executar(state, ct, Jogo.log_para(state))
-			state["contratos"] = state["contratos"].filter(func(x): return x["uid"] != ct["uid"])
-			Jogo.salvar(state)
-			_modal_batalha(rel_batalha), "fantasma", 136)
+		# o dia e a palavra dada entram na linha: são a informação que
+		# transforma "aceitar" numa decisão de agenda, não num clique
+		var dias_ct: int = Contratos.duracao_dias(ct)
+		Kit.texto(l1, "%d %s" % [dias_ct, "dia" if dias_ct == 1 else "dias"],
+			Tema.TEXTO_3, Tema.MICRO)
+		if bool(ct.get("aceito", false)):
+			Kit.selo(l1, "palavra dada", Tema.ACENTO, Tema.ACENTO_FUNDO)
+		Kit.botao_mini(cel[4], "Ver serviço", func():
+			_modal_preparacao(ct), "fantasma", 136)
 	_balcao_de_empregos(c)
+	_salao_de_pretendentes(c)
 	# ---- serviços: informação vira dinheiro ----
 	# taverna.gd já resolvia rumor, rota e informante; faltava a porta de
 	# entrada. Cada serviço tem o rosto de quem o vende — é o que separa
@@ -1274,6 +1277,112 @@ func _aba_taverna(c: Container) -> void:
 
 ## Um serviço do balcão: rosto de quem vende, o que é, o preço e o botão.
 ## `rotulo_botao` vazio significa "já contratado" — o card fica, o botão não.
+## O RELATÓRIO DE PREPARAÇÃO — a tela entre aceitar e marchar.
+##
+## Antes, "Aceitar e executar" era um botão só: o jogador descobria o
+## tamanho do inimigo quando já tinha perdido os homens. Agora ele vê a
+## conta antes — e o preço de largar depois de dar a palavra.
+func _modal_preparacao(ct: Dictionary) -> void:
+	var rp: Dictionary = Contratos.relatorio_preparacao(state, ct)
+	var dias: int = int(rp["dias"])
+	var corpo := "%s\n\n" % str(ct["desc"])
+	corpo += "Serviço de %s — %d %s de trabalho.\n" % [
+		str(rp["dificuldade"]), dias, "dia" if dias == 1 else "dias"]
+	corpo += "Eles: cerca de %d homens.   Você: %d, equipamento %d, moral %d.\n" % [
+		int(rp["inimigos"]), int(rp["meus"]), int(rp["equipamento"]), int(rp["moral"])]
+	corpo += "\n%s\n\n" % str(rp["veredito"])
+	corpo += "Paga %d de ouro e +%d de renome. Largar depois de dar a palavra custa %d de honra." % [
+		int(ct["pagamento"]), int(ct["renome"]), int(rp["penalidade"])]
+	var botoes: Array = []
+	if bool(ct.get("aceito", false)):
+		botoes.append(["Marchar agora", func(): _executar_contrato(ct)])
+		botoes.append(["Largar o serviço", func():
+			var r: Dictionary = Contratos.abandonar(state, str(ct["uid"]),
+				Jogo.log_para(state))
+			Sfx.tocar(self, "alerta")
+			_aviso(str(r["msg"]))
+			Jogo.salvar(state)
+			atualizar()])
+	else:
+		botoes.append(["Dar a palavra", func():
+			var r: Dictionary = Contratos.aceitar(state, str(ct["uid"]))
+			Sfx.tocar(self, "tique" if r["ok"] else "alerta")
+			_aviso(str(r["msg"]))
+			Jogo.salvar(state)
+			atualizar()])
+	botoes.append(["Voltar ao mural", func(): atualizar()])
+	_modal(str(ct["nome"]), corpo, botoes, _arte_de_batalha(str(ct["nome"])))
+
+func _executar_contrato(ct: Dictionary) -> void:
+	if Combate.total_homens(state["jogador"]["tropas"]) == 0:
+		Sfx.tocar(self, "alerta")
+		_aviso("Você não tem tropas! Recrute no quartel.")
+		return
+	var rel: Dictionary = Contratos.executar(state, ct, Jogo.log_para(state))
+	if bool(rel.get("sem_tempo", false)):
+		Sfx.tocar(self, "alerta")
+		_aviso(str(rel["msg"]))
+		return
+	state["contratos"] = state["contratos"].filter(func(x): return x["uid"] != ct["uid"])
+	Jogo.salvar(state)
+	_modal_batalha(rel)
+
+## O SALÃO — as três moças da região.
+##
+## Casar com plebeia não dá dote nem aliança: dá OFÍCIO, todo mês, e o
+## povo levanta a caneca. Os reis é que torcem o nariz. É a escolha entre
+## uma casa que produz e uma casa que abre portas.
+func _salao_de_pretendentes(c: Container) -> void:
+	if state["familia"]["conjuge"] != null:
+		return
+	var reino_id: String = str(state.get("local", ""))
+	var mocas: Array = Pretendentes.do_reino(state, reino_id)
+	if mocas.is_empty():
+		return
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "No salão")
+	Kit.nota(c, "Casar fora da nobreza custa relação com os reis e um naco de renome — e traz o ofício da casa dela para dentro da sua.")
+	for m in mocas:
+		var idx: int = int(m["idx"])
+		var h := _card(c)
+		Kit.retrato(h, Retratos.textura_cidadao({
+			"nome": str(m["nome"]), "oficio": str(m["oficio"]),
+			"genero": "f", "riqueza": 200}), 32)
+		var v := Kit.coluna(h, 0)
+		v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var l1 := Kit.fila(v, Tema.E3)
+		Kit.texto(l1, str(m["nome"]))
+		Kit.texto(l1, str(m["titulo"]), Tema.TEXTO_3, Tema.MICRO)
+		Kit.nota(v, "%s  %s" % [str(m["dom"]), str(m["efeito"])])
+		var af: int = int(m["afeto"])
+		Kit.medidor(v, float(af), float(Pretendentes.AFETO_PARA_CASAR), 140, 5,
+			Tema.GANHO if af >= Pretendentes.AFETO_PARA_CASAR else Tema.ACENTO)
+		var acao := Kit.fila(h, Tema.E4)
+		acao.size_flags_horizontal = Control.SIZE_SHRINK_END
+		acao.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if af >= Pretendentes.AFETO_PARA_CASAR:
+			Kit.botao_mini(acao, "Pedir a mão", func():
+				var r: Dictionary = Pretendentes.pedir_a_mao(state, reino_id, idx,
+					Jogo.log_para(state))
+				Sfx.tocar(self, "vitoria" if r["ok"] else "alerta")
+				Jogo.salvar(state)
+				if bool(r["ok"]):
+					_modal("Casados", "%s\n\n%s" % [str(r["msg"]), str(r["efeito"])],
+						[["Que os bardos cantem", func(): atualizar()]],
+						Retratos.ilustracao("juramento"))
+				else:
+					_aviso(str(r["msg"]))
+					atualizar(), "primario", 118)
+			continue
+		Kit.icone_valor(acao, "moedas", str(Pretendentes.CUSTO_CORTEJO), Tema.ACENTO)
+		Kit.botao_mini(acao, "Cortejar", func():
+			var r: Dictionary = Pretendentes.cortejar(state, reino_id, idx,
+				Jogo.log_para(state))
+			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+			_aviso(str(r["msg"]))
+			Jogo.salvar(state)
+			atualizar(), "fantasma", 100)
+
 ## O BALCÃO DE EMPREGOS — a saída para quem está sem ouro, sem tropa e
 ## sem terra (o "estado zumbi" que o teste alfa encontrou).
 ##
