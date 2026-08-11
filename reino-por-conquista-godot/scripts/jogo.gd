@@ -26,7 +26,7 @@ const ARQUIVO_SAVE := "user://save.json"
 
 static func novo_jogo(nome: String = "") -> Dictionary:
 	var state := {
-		"ano": 1, "mes": 3,
+		"ano": 1, "mes": 3, "dia": 1,
 		"jogador": {
 			"nome": nome if nome != "" else Dados.rnd(Dados.NOMES_M) + " " + Dados.rnd(Dados.SOBRENOMES),
 			"idade": 22,
@@ -37,6 +37,10 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 			"equip": 0, "formacao": "linha", "guardas": 0,
 			"rei_de": "", "meses_reinando": 0, "meses_sem_pagar": 0, "meses_imperador": 0,
 			"suserano": "", "meses_vassalo": 0,
+			# HONRA é a reputação que abre e fecha portas: o conselho real
+			# não contrata bandido conhecido, e O Corvo não confia num santo.
+			# Começa no meio — você ainda não é ninguém.
+			"honra": 50,
 		},
 		"reinos": Dados.REINOS_BASE.duplicate(true),
 		"guerras": [], "tags": {}, "segredos": [], "casus_belli": [],
@@ -54,6 +58,8 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"informantes": [],         # ouvidos comprados na taverna
 		"marchas": [],             # exércitos na estrada (marchas.gd)
 		"minuto": 0,               # relógio único do mundo (relogio.gd)
+		"empregos": {},            # portas de trabalho já abertas (empregos.gd)
+		"progresso_atributo": {},  # dias de ofício rumo ao próximo ponto
 		"intel": {},               # o que o espião revelou (intel.gd)
 		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
 	}
@@ -80,9 +86,29 @@ static func log_para(state: Dictionary) -> Callable:
 		if state["cronica"].size() > 60:
 			state["cronica"].pop_back()
 
-static func passar_mes(state: Dictionary) -> void:
+## Quantos cliques de "Passar o dia" cabem num mês. Três: o mês é a
+## unidade da economia e da política, mas contrato de taverna, turno de
+## trabalho e viagem precisavam de uma unidade MENOR para existir como
+## escolha — sem o dia, "1 a 3 dias de missão" não tinha onde acontecer.
+const DIAS_POR_MES := 3
+
+## Um dia. Move o relógio (quartel e marchas andam junto) e, no último
+## dia, vira o mês inteiro — daí o `false`: quem virou o relógio foi o
+## dia, e passar_mes não pode virar de novo.
+static func passar_dia(state: Dictionary, log_ext: Callable = Callable()) -> void:
 	if state["fim"] != null or state["evento_pendente"] != null:
 		return
+	var log := log_ext if log_ext.is_valid() else log_para(state)
+	Relogio.avancar(state, Relogio.MINUTOS_POR_MES / DIAS_POR_MES, log)
+	state["dia"] = int(state.get("dia", 1)) + 1
+	if int(state["dia"]) > DIAS_POR_MES:
+		state["dia"] = 1
+		passar_mes(state, false)
+
+static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
+	if state["fim"] != null or state["evento_pendente"] != null:
+		return
+	state["dia"] = 1
 	var log := log_para(state)
 
 	# ---- CADEIA ----
@@ -101,7 +127,8 @@ static func passar_mes(state: Dictionary) -> void:
 		Geopolitica.tick(state, log)
 		# as marchas já despachadas continuam: quem está na estrada não sabe
 		# que o senhor foi preso, e volta para uma casa sem dono
-		Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
+		if avancar_relogio:
+			Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 		# de propósito: sem tick_terra e sem tick_exercito — sua casa apodrece
 		return
 
@@ -123,8 +150,10 @@ static func passar_mes(state: Dictionary) -> void:
 	Cidadaos.tick(state, log)             # a sua sociedade também
 	Taverna.tick(state, log)              # informantes cobram e reportam
 	Vassalagem.tick(state, log)           # o suserano cobra o tributo
-	# um mês de jogo = 600 minutos: empurra quartel E marchas pelo mesmo relógio
-	Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
+	# um mês de jogo = 600 minutos: empurra quartel E marchas pelo mesmo relógio.
+	# Quando quem chamou foi passar_dia, o relógio JÁ andou dia a dia.
+	if avancar_relogio:
+		Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 	Clas.tick(state, log)
 	Intriga.tick_familia(state, log)
 	state["contratos"] = Contratos.gerar(state)
@@ -421,6 +450,13 @@ static func _migrar(state: Dictionary) -> Dictionary:
 			state[campo] = {}
 	if not state["jogador"].has("moral"):
 		state["jogador"]["moral"] = 100
+	if not state["jogador"].has("honra"):
+		state["jogador"]["honra"] = 50
+	if not state.has("dia"):
+		state["dia"] = 1
+	for campo_novo in ["empregos", "progresso_atributo"]:
+		if not state.has(campo_novo):
+			state[campo_novo] = {}
 	if not state["jogador"].has("suserano"):
 		state["jogador"]["suserano"] = ""
 	# tropas renomeadas (cavaleiro → cav_leve) e as oito novas, que um save

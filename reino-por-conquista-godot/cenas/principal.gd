@@ -28,6 +28,7 @@ const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
+const Empregos = preload("res://scripts/empregos.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Rotas = preload("res://scripts/rotas.gd")
@@ -111,6 +112,7 @@ var overlay_modal: Control
 var modal_centro: CenterContainer
 var input_nome: LineEdit
 var b_som: Button
+var b_dia: Button
 var musica_titulo: AudioStreamPlayer
 var musica_jogo: AudioStreamPlayer
 var fila_musicas: Array[String] = []
@@ -424,16 +426,19 @@ func _montar_jogo() -> void:
 	rodape.add_theme_constant_override("separation", Tema.E3)
 	v.add_child(rodape)
 	var dica := Label.new()
-	dica.text = "Enter passa o mês"
+	dica.text = "Enter passa o dia"
 	dica.add_theme_font_size_override("font_size", Tema.MINI)
 	dica.add_theme_color_override("font_color", Tema.TEXTO_3)
 	dica.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	dica.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rodape.add_child(dica)
 	b_som = Kit.botao_icone(rodape, "som", "Som", _alternar_som, "fantasma", 34)
-	var b_mes := Kit.botao(rodape, "Passar o mês", _passar_mes, "primario", 210)
-	b_mes.add_theme_font_size_override("font_size", Tema.CORPO)
-	_com_icone(b_mes, "ampulheta")
+	# O verbo do jogo agora é o DIA: três cliques fecham o mês. Foi o dia que
+	# deu onde acontecer para turno de trabalho, contrato curto e viagem —
+	# antes disso a menor unidade que existia era o mês inteiro.
+	b_dia = Kit.botao(rodape, "Passar o dia", _passar_dia, "primario", 210)
+	b_dia.add_theme_font_size_override("font_size", Tema.CORPO)
+	_com_icone(b_dia, "ampulheta")
 
 ## Pendura um ícone ilustrado num botão, quando a leva hi-bit o tiver.
 ## `icon_max_width` mantém o ícone de 32 no tamanho de texto do botão.
@@ -506,7 +511,7 @@ func _unhandled_input(evento: InputEvent) -> void:
 	if overlay_modal.visible or overlay_conversa.visible:
 		return
 	get_viewport().set_input_as_handled()
-	_passar_mes()
+	_passar_dia()
 
 ## A cidade_view sai da árvore quando outra aba está ativa (atualizar() a
 ## remove do pai). Node não é ref-counted: sem isto, fechar o jogo em qualquer
@@ -598,6 +603,18 @@ func _narrar_estrada(eventos: Array) -> void:
 			atualizar()]], Retratos.ilustracao("emboscada"))
 		return          # uma emboscada por vez: a próxima espera o clique
 
+func _passar_dia() -> void:
+	Sfx.tocar(self, "tique")
+	# no ÚLTIMO dia o clique vira o mês inteiro: o jogador vê "fecha o mês"
+	# no botão antes de clicar, então a virada nunca é surpresa
+	var virou := int(state.get("dia", 1)) >= Jogo.DIAS_POR_MES
+	Jogo.passar_dia(state)
+	if virou:
+		Sfx.tocar(self, "pagina")
+	Jogo.salvar(state)
+	atualizar()
+
+## Mantido para os testes de cena e para quem quiser pular o mês inteiro.
 func _passar_mes() -> void:
 	Sfx.tocar(self, "tique")
 	Jogo.passar_mes(state)
@@ -633,6 +650,12 @@ func _montar_hud(j: Dictionary) -> void:
 	_celula_hud("moral", "%d" % moral,
 		"Moral do exército — abaixo de 35 os homens desertam", moral <= 35)
 	_celula_hud("renome", str(int(j["renome"])), "Renome")
+	# HONRA abre e fecha portas de emprego (e, no futuro, de vassalagem):
+	# vira alarme quando cai a ponto de a corte fechar a porta
+	var honra: int = int(j.get("honra", 50))
+	_celula_hud("pergaminho", str(honra),
+		"Honra — reputação: portas de trabalho e de corte abrem e fecham por ela",
+		honra <= 25)
 	if int(j["guardas"]) > 0:
 		_celula_hud("escudo", str(int(j["guardas"])),
 			"Guardas de elite na sua casa")
@@ -668,9 +691,13 @@ func atualizar() -> void:
 	# Primavera" ao lado de um chip que diz "Primavera" era a mesma
 	# informação duas vezes na mesma barra. Sobra a IDENTIDADE, que é o que
 	# esta linha sempre quis ser.
-	status_label.text = "%s · %s%s · %d anos · %s, Ano %d" % [
+	status_label.text = "%s · %s%s · %d anos · dia %d de %s, Ano %d" % [
 		j["nome"], Contratos.titulo(state), selo, j["idade"],
-		MESES[state["mes"] - 1], state["ano"]]
+		int(state.get("dia", 1)), MESES[state["mes"] - 1], state["ano"]]
+	if b_dia != null:
+		var ultimo := int(state.get("dia", 1)) >= Jogo.DIAS_POR_MES
+		b_dia.text = "Fechar o mês" if ultimo else "Passar o dia (%d/%d)" % [
+			int(state.get("dia", 1)), Jogo.DIAS_POR_MES]
 	# a linha de identidade é creme e fica creme: ela é contexto, não estado.
 	# Quem muda de temperatura com a estação é o chip do calendário no HUD.
 	status_label.add_theme_color_override("font_color", Tema.TEXTO_2)
@@ -1201,6 +1228,7 @@ func _aba_taverna(c: Container) -> void:
 			state["contratos"] = state["contratos"].filter(func(x): return x["uid"] != ct["uid"])
 			Jogo.salvar(state)
 			_modal_batalha(rel_batalha), "fantasma", 136)
+	_balcao_de_empregos(c)
 	# ---- serviços: informação vira dinheiro ----
 	# taverna.gd já resolvia rumor, rota e informante; faltava a porta de
 	# entrada. Cada serviço tem o rosto de quem o vende — é o que separa
@@ -1246,6 +1274,85 @@ func _aba_taverna(c: Container) -> void:
 
 ## Um serviço do balcão: rosto de quem vende, o que é, o preço e o botão.
 ## `rotulo_botao` vazio significa "já contratado" — o card fica, o botão não.
+## O BALCÃO DE EMPREGOS — a saída para quem está sem ouro, sem tropa e
+## sem terra (o "estado zumbi" que o teste alfa encontrou).
+##
+## Cada reino tem o SEU quadro: o Covil Negro oferece lenha e sermão, uma
+## corte rica oferece o poço do gladiador e o espião do conselho. A régua
+## é o tesouro do reino, que a geopolítica já mantém.
+##
+## O jogador nunca vê porcentagem — vê o aviso em texto. É a diferença
+## entre "risco 25%" e "a areia é trocada toda noite; não é por limpeza".
+func _balcao_de_empregos(c: Container) -> void:
+	var reino_id: String = str(state.get("local", ""))
+	var vagas: Array = Empregos.do_reino(state, reino_id)
+	if vagas.is_empty():
+		return
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Trabalho no balcão")
+	Kit.nota(c, "Um turno rende ouro e ofício — e come dias do mês. Turno maior paga melhor e arrisca mais.")
+	for vaga in vagas:
+		_vaga_de_emprego(c, reino_id, vaga)
+
+func _vaga_de_emprego(c: Container, reino_id: String, vaga: Dictionary) -> void:
+	var id_vaga: String = str(vaga["id"])
+	var h := _card(c)
+	# retrato PROCEDURAL: o patrão tem cara sem custar arte nova. A leva
+	# ilustrada de fregueses entra na rodada de arte (Bloco II).
+	Kit.retrato(h, Retratos.textura_cidadao({
+		"nome": str(vaga["patrao"]), "oficio": "mercador",
+		"genero": "m", "riqueza": 400}), 32)
+	var v := Kit.coluna(h, 0)
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var l1 := Kit.fila(v, Tema.E3)
+	Kit.texto(l1, str(vaga["nome"]))
+	Kit.selo(l1, str(vaga["atributo"]), Tema.TEXTO_2, Tema.ELEVADO)
+	Kit.nota(v, str(vaga["patrao"]))
+	Kit.nota(v, "%s  %s" % [str(vaga["desc"]), str(vaga["aviso"])])
+	var acao := Kit.fila(h, Tema.E4)
+	acao.size_flags_horizontal = Control.SIZE_SHRINK_END
+	acao.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Kit.icone_valor(acao, "moedas", "%d/dia" % int(vaga["paga_dia"]), Tema.ACENTO)
+	if not Empregos.contratado(state, reino_id, id_vaga):
+		# a porta fechada é o desenho: sem pedir, não se trabalha — e a
+		# HONRA é a entrevista inteira
+		Kit.botao_mini(acao, "Pedir emprego", func():
+			var r: Dictionary = Empregos.pedir_emprego(state, reino_id, id_vaga)
+			Sfx.tocar(self, "tique" if r["ok"] else "alerta")
+			_aviso(r["msg"])
+			Jogo.salvar(state)
+			atualizar(), "fantasma", 118)
+		return
+	for dias in [1, 2, 3]:
+		Kit.botao_mini(acao, "%dd" % dias, func():
+			_trabalhar(reino_id, id_vaga, dias), "fantasma", 40)
+
+func _trabalhar(reino_id: String, emprego_id: String, dias: int) -> void:
+	var r: Dictionary = Empregos.trabalhar(state, reino_id, emprego_id, dias,
+		Jogo.log_para(state))
+	if not bool(r.get("ok", false)):
+		Sfx.tocar(self, "alerta")
+		_aviso(str(r.get("msg", "")))
+		return
+	Jogo.salvar(state)
+	var e: Dictionary = Empregos.por_id(emprego_id)
+	var conseq: Array = r.get("consequencias", [])
+	if bool(r.get("morreu", false)):
+		Sfx.tocar(self, "derrota")
+		atualizar()
+		return                          # o modal de fim já vem por atualizar()
+	if conseq.is_empty():
+		Sfx.tocar(self, "moeda")
+		_aviso("Turno cumprido: +%d de ouro." % int(r["paga"]))
+		atualizar()
+		return
+	# consequência não é aviso de rodapé: é acontecimento, e ganha modal
+	Sfx.tocar(self, "alerta")
+	_modal(str(e["nome"]),
+		"Turno de %d %s: +%d de ouro.\n\n%s" % [dias, "dia" if dias == 1 else "dias",
+			int(r["paga"]), "\n".join(conseq)],
+		[["Seguir", func(): atualizar()]])
+
 func _servico(c: Container, rosto: Texture2D, titulo: String, desc: String,
 		preco: int, rotulo_botao: String, cb: Callable) -> void:
 	var h := _card(c)

@@ -16,6 +16,7 @@ const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
 const Sinais = preload("res://scripts/sinais.gd")
+const Relogio = preload("res://scripts/relogio.gd")
 
 var passou := 0
 var falhou := 0
@@ -590,6 +591,112 @@ func _init() -> void:
 		Jogo.passar_mes(s_ru)
 	ok("na terceira queda a saga acaba de verdade",
 		s_ru["fim"] != null and str(s_ru["fim"].get("causa", "")) == "ruina")
+
+	# ---------------- BLOCO I: O DIA E O BALCÃO DE EMPREGOS ----------------
+	var Empregos = load("res://scripts/empregos.gd")
+	var s_dia := Jogo.novo_jogo("Diarista")
+	ok("o jogo começa no dia 1", int(s_dia["dia"]) == 1)
+	var mes_dia0: int = int(s_dia["mes"])
+	Jogo.passar_dia(s_dia)
+	Jogo.passar_dia(s_dia)
+	ok("dois dias passam SEM virar o mês",
+		int(s_dia["dia"]) == 3 and int(s_dia["mes"]) == mes_dia0, "dia %d" % int(s_dia["dia"]))
+	var minuto_2dias: int = int(s_dia["minuto"])
+	ok("cada dia move o relógio (marchas e quartel andam junto)",
+		minuto_2dias == 2 * (Relogio.MINUTOS_POR_MES / Jogo.DIAS_POR_MES),
+		"%d min" % minuto_2dias)
+	Jogo.passar_dia(s_dia)
+	ok("o terceiro dia vira o mês e volta ao dia 1",
+		int(s_dia["mes"]) == mes_dia0 + 1 and int(s_dia["dia"]) == 1)
+	ok("um mês em dias move o relógio EXATAMENTE como um mês inteiro",
+		int(s_dia["minuto"]) == Relogio.MINUTOS_POR_MES, "%d min" % int(s_dia["minuto"]))
+
+	# o quadro muda de reino para reino, e é estável dentro da partida
+	var se := Jogo.novo_jogo("Balconista")
+	var pobre: Dictionary = Geopolitica.reino_por_id(se, "touros")
+	var rica: Dictionary = Geopolitica.reino_por_id(se, "imperio")
+	pobre["tesouro"] = 300
+	rica["tesouro"] = 4000
+	var q_pobre: Array = Empregos.do_reino(se, "touros")
+	var q_rica: Array = Empregos.do_reino(se, "imperio")
+	ok("cada taverna abre 3 vagas", q_pobre.size() == 3 and q_rica.size() == 3)
+	ok("o quadro é estável na partida (mesmo reino, mesmas vagas)",
+		str(Empregos.do_reino(se, "touros")[0]["id"]) == str(q_pobre[0]["id"]))
+	var max_nivel_pobre := 0
+	for v_p in q_pobre:
+		max_nivel_pobre = maxi(max_nivel_pobre, int(v_p["nivel"]))
+	var min_nivel_rica := 9
+	for v_r in q_rica:
+		min_nivel_rica = mini(min_nivel_rica, int(v_r["nivel"]))
+	ok("reino pobre só oferece trabalho de vila; reino rico, serviço perigoso",
+		max_nivel_pobre <= 2 and min_nivel_rica >= 2)
+	ok("reino rico paga mais pelo MESMO ofício",
+		Empregos.fator_reino(se, "imperio") > Empregos.fator_reino(se, "touros"))
+
+	# a honra é a entrevista inteira
+	se["jogador"]["honra"] = 20
+	ok("o conselho real recusa quem tem pouca honra",
+		not Empregos.pedir_emprego(se, "imperio", "diplomata")["ok"])
+	ok("O Corvo aceita justamente quem já sujou as mãos",
+		Empregos.pedir_emprego(se, "imperio", "falsificador")["ok"])
+	se["jogador"]["honra"] = 90
+	ok("e recusa quem tem nome demais",
+		not Empregos.pedir_emprego(se, "touros", "cobrador")["ok"])
+	ok("sem pedir o emprego, não se trabalha",
+		not Empregos.trabalhar(se, "touros", "lenhador", 1)["ok"])
+
+	# um turno: ouro no bolso, dias no calendário, ofício no corpo
+	var sw := Jogo.novo_jogo("Lenhador")
+	sw["jogador"]["honra"] = 50
+	Empregos.pedir_emprego(sw, "touros", "lenhador")
+	var ouro_w: int = int(sw["jogador"]["ouro"])
+	var r_w: Dictionary = Empregos.trabalhar(sw, "touros", "lenhador", 2)
+	ok("o turno paga", bool(r_w["ok"]) and int(sw["jogador"]["ouro"]) > ouro_w,
+		"+%d" % int(r_w["paga"]))
+	ok("e o tempo do jogo andou dois dias", int(sw["dia"]) == 3)
+	ok("dois dias de ofício viram dois pontos de progresso",
+		int(sw["progresso_atributo"]["forca"]) == 2)
+	ok("turno maior paga proporcionalmente melhor que dois turnos curtos",
+		Empregos.BONUS_PAGA[2] > Empregos.BONUS_PAGA[0])
+	# dez dias de ofício = um ponto de atributo
+	var forca_w0: int = int(sw["jogador"]["atributos"]["forca"])
+	for i_w in 5:
+		sw["dia"] = 1
+		Empregos.trabalhar(sw, "touros", "lenhador", 2)
+	ok("dez dias de ofício sobem o atributo em um ponto",
+		int(sw["jogador"]["atributos"]["forca"]) >= forca_w0 + 1,
+		"força %d → %d" % [forca_w0, int(sw["jogador"]["atributos"]["forca"])])
+	sw["dia"] = 3
+	ok("turno que não cabe no mês é recusado",
+		not Empregos.trabalhar(sw, "touros", "lenhador", 3)["ok"])
+
+	# a notação de risco: o número é a chance E a fração perdida
+	var sh := Jogo.novo_jogo("Bardo")
+	sh["jogador"]["honra"] = 80
+	sh["jogador"]["moral"] = 100
+	Empregos.pedir_emprego(sh, "touros", "bardo")
+	var caiu_honra := false
+	var caiu_moral := false
+	for i_h in 60:
+		sh["dia"] = 1
+		sh["jogador"]["honra"] = 80
+		sh["jogador"]["moral"] = 100
+		Empregos.trabalhar(sh, "touros", "bardo", 1)
+		if int(sh["jogador"]["honra"]) == 72:
+			caiu_honra = true
+		if int(sh["jogador"]["moral"]) == 90:
+			caiu_moral = true
+	ok("perda de honra é 10% do que VOCÊ TEM (80 → 72), não um valor fixo", caiu_honra)
+	ok("o bardo também custa moral da tropa (100 → 90)", caiu_moral)
+	var riscos_validos := true
+	for e_v in Empregos.EMPREGOS:
+		for tipo_v in e_v["riscos"]:
+			if not str(tipo_v) in ["morte", "prisao", "honra", "moral"]:
+				riscos_validos = false
+			if int(e_v["riscos"][tipo_v]) <= 0 or int(e_v["riscos"][tipo_v]) > 50:
+				riscos_validos = false
+	ok("os doze ofícios têm risco declarado e dentro da régua",
+		Empregos.EMPREGOS.size() == 12 and riscos_validos)
 
 	Jogo.apagar_save()
 	print("=====================================")
