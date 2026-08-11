@@ -359,6 +359,12 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 				else:
 					morrer(state, "rebeliao", log)
 			else:
+				# sem terra não há celeiro para abrir: o evento pode chegar a
+				# quem perdeu tudo (ou a um save mutilado), e o ramo caía num
+				# SCRIPT ERROR em vez de simplesmente não acontecer
+				if state["terra"] == null:
+					log.call("Não há celeiro para abrir. A turba se dispersa sozinha, por ora.")
+					return {}
 				var custo: int = mini(int(state["jogador"]["ouro"]), 200)
 				state["jogador"]["ouro"] -= custo
 				state["terra"]["alimento"] = int(state["terra"]["alimento"]) + 60

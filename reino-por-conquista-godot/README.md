@@ -219,6 +219,29 @@ godot --path reino-por-conquista-godot --script res://tests/teste_hibit.gd
 ```
 
 
+## Bloco I — a mecânica, revisada de ponta a ponta
+
+`tests/teste_bloco1.gd` é a suíte de INTEGRAÇÃO: em vez de conferir peças,
+ela joga cada sistema do começo ao fim (sair do zero trabalhando na
+taverna, dar a palavra num contrato e cumprir, comprar barato e vender
+caro com o Mapa Comercial, cortejar até casar, jurar e ser promovido,
+espiar e fundar um reino). É o teste que responde "a mecânica funciona?"
+em vez de "a função existe?".
+
+O que ela cobre, sistema a sistema:
+
+| sistema | o elo verificado |
+|---|---|
+| Dia (3 = 1 mês) | relógio exato, fila do quartel andando em terços, evento que segura o tempo sem travar |
+| Empregos | porta fechada até pedir, quatro turnos tirando o jogador do zero, ofício virando atributo |
+| Contratos | mural por taverna, palavra dada, relatório, marcha, e a virada do mês cobrando quem sumiu |
+| Comércio | sem mapa não negocia · comprar barato → viajar → vender caro · mapa vencendo na virada · preço mudando com a estação |
+| Casamento | cortejo até o altar e o ofício da esposa aparecendo num mês de verdade |
+| Vassalagem | juramento pela conversa, promoção por tempo servido, soldo saindo do cofre do suserano |
+| Viagem | dias por distância, trajeto nomeado, saque na estrada |
+| Terras Bárbaras | batedor obrigatório, invasão, reino fundado sobrevivendo a save/load e a seis meses |
+| Honra | três formas de perder — e o caminho de volta |
+
 ## Upgrades futuros (anotados, não pendentes)
 
 1. **Expressões nos retratos hi-bit** — o humor (raiva/feliz/neutro) vive no medidor

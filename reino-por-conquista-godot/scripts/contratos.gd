@@ -61,6 +61,15 @@ static func duracao_dias(contrato: Dictionary) -> int:
 ## Quebrar a palavra custa NOME, e custa mais quanto maior era o serviço.
 const PENALIDADE_HONRA := {"facil": 10, "media": 15, "dificil": 25}
 
+## E cumpri-la DEVOLVE nome — metade do que largar teria custado.
+##
+## Sem este caminho de volta a honra era uma via de mão única: três formas
+## de perder e nenhuma de recuperar, então um deslize fechava para sempre
+## os empregos de honra alta e a vassalagem (que pede 45). Reconstruir o
+## nome tem que ser mais lento que perdê-lo — mas tem que existir.
+const RECOMPENSA_HONRA := {"facil": 5, "media": 7, "dificil": 12}
+const HONRA_MAX := 100
+
 static func gerar(state: Dictionary) -> Array:
 	var contratos: Array = []
 	var elegiveis := _contratantes_elegiveis(state)
@@ -201,8 +210,12 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 		contrato["pagamento"] = _pagamento_de(contrato["contratante"], int(contrato["pagamento"]))
 		state["jogador"]["ouro"] += int(contrato["pagamento"])
 		state["jogador"]["renome"] += int(contrato["renome"])
+		var ganho_h: int = int(RECOMPENSA_HONRA[dificuldade(contrato)])
+		state["jogador"]["honra"] = mini(HONRA_MAX,
+			int(state["jogador"].get("honra", 50)) + ganho_h)
 		Dialogo.mudar_relacao(state, "rei_" + contrato["contratante"], 8, "contrato cumprido")
-		log.call("Contrato cumprido: +%d ouro, +%d renome." % [contrato["pagamento"], contrato["renome"]])
+		log.call("Contrato cumprido: +%d ouro, +%d renome, +%d de honra."
+			% [contrato["pagamento"], contrato["renome"], ganho_h])
 		if contrato["id"] == "incursao" and contrato["alvo"] != "":
 			Dialogo.mudar_relacao(state, "rei_" + contrato["alvo"], -25, "queimou vila")
 			state["jogador"]["crueldade"] = int(state["jogador"].get("crueldade", 0)) + 1
