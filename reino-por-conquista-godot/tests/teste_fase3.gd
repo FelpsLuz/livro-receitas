@@ -1062,6 +1062,89 @@ func _init() -> void:
 	ok("nenhuma estrada cruza outra no desenho", cruzou.is_empty(),
 		"; ".join(cruzou))
 
+	# ---------------- BLOCO I: TERRAS BÁRBARAS ----------------
+	var Barbaros3 = load("res://scripts/barbaros.gd")
+	var Combate3 = load("res://scripts/combate.gd")
+	var sb3 := Jogo.novo_jogo("Fronteiriço")
+	ok("a fronteira selvagem entra no grafo de estradas",
+		Rotas3.todos_os_nos().has("barbaros")
+		and int(Rotas3.entre("barbaros", "sem_rei")["distancia"]) > 0)
+	ok("e tem nome antes de ser reino",
+		Rotas3.nome_do(sb3, "barbaros") == "Terras Bárbaras")
+	ok("nenhuma estrada imperial chega lá (só as duas pontas sem lei)",
+		Rotas3.vizinhos("barbaros").size() == 2
+		and Rotas3.vizinhos("barbaros").has("rosa"))
+
+	# a regra dura: não se invade o que não se conhece
+	sb3["local"] = "barbaros"
+	sb3["jogador"]["tropas"]["lanceiro"] = 200
+	ok("sem batedor, a invasão é recusada",
+		not bool(Barbaros3.pode_invadir(sb3)["ok"]))
+	sb3["jogador"]["ouro"] = 500
+	var r_esp: Dictionary = Barbaros3.espiar(sb3, Jogo.log_para(sb3))
+	ok("o batedor volta com a conta dos clãs",
+		bool(r_esp["ok"]) and Barbaros3.reconhecido(sb3), str(r_esp["msg"]))
+	ok("e custa ouro e um dia", int(sb3["jogador"]["ouro"]) == 500 - Barbaros3.CUSTO_ESPIAO)
+	ok("são três clãs com homens de verdade",
+		Barbaros3.CLAS.size() == 3 and Barbaros3.total_de_homens(sb3) > 60,
+		"%d homens" % Barbaros3.total_de_homens(sb3))
+	var sb_longe := Jogo.novo_jogo("Distante")
+	sb_longe["jogador"]["tropas"]["lanceiro"] = 200
+	sb_longe["barbaros"] = {"reconhecido": true, "conquistado": false, "forcas": {}}
+	ok("nem de longe se atravessa a fronteira",
+		not bool(Barbaros3.pode_invadir(sb_longe)["ok"]))
+	var sb_fraco := Jogo.novo_jogo("Fraco")
+	sb_fraco["local"] = "barbaros"
+	sb_fraco["barbaros"] = {"reconhecido": true, "conquistado": false, "forcas": {}}
+	ok("nem com um punhado de homens",
+		not bool(Barbaros3.pode_invadir(sb_fraco)["ok"]))
+
+	# a invasão: três assaltos seguidos, com as baixas passando de um ao outro
+	var sb_inv := Jogo.novo_jogo("Invasor")
+	sb_inv["local"] = "barbaros"
+	sb_inv["jogador"]["ouro"] = 500
+	Barbaros3.espiar(sb_inv, Jogo.log_para(sb_inv))
+	for tipo_i in sb_inv["jogador"]["tropas"]:
+		sb_inv["jogador"]["tropas"][tipo_i] = 0
+	sb_inv["jogador"]["tropas"]["lanceiro"] = 400
+	sb_inv["jogador"]["tropas"]["espadachim"] = 200
+	sb_inv["jogador"]["tropas"]["arqueiro"] = 150
+	var homens_antes_i: int = Combate3.total_homens(sb_inv["jogador"]["tropas"])
+	var r_inv: Dictionary = Barbaros3.invadir(sb_inv, Jogo.log_para(sb_inv))
+	ok("um exército grande atravessa a fronteira",
+		bool(r_inv["vitoria"]) and Barbaros3.conquistado(sb_inv),
+		"%d clãs vencidos" % r_inv["clas_vencidos"].size())
+	ok("e paga em homens por isso",
+		Combate3.total_homens(sb_inv["jogador"]["tropas"]) < homens_antes_i,
+		"−%d" % int(r_inv["baixas"]))
+	ok("a conquista rende renome", int(sb_inv["jogador"]["renome"]) >= 40)
+
+	# fundar a casa: o que não existe em nenhum outro lugar do jogo
+	ok("sem renome não se funda casa nenhuma",
+		bool(Barbaros3.pode_fundar(sb_inv)["ok"]) == (int(sb_inv["jogador"]["renome"])
+			>= Barbaros3.RENOME_PARA_FUNDAR))
+	sb_inv["jogador"]["renome"] = 80
+	var reinos_antes: int = sb_inv["reinos"].size()
+	var r_fund: Dictionary = Barbaros3.fundar_reino(sb_inv, "Casa do Lobo Branco",
+		"Fim do Mundo", Jogo.log_para(sb_inv))
+	ok("o reino novo entra no mapa", bool(r_fund["ok"])
+		and sb_inv["reinos"].size() == reinos_antes + 1, str(r_fund["msg"]))
+	ok("e você é rei dele", str(sb_inv["jogador"]["rei_de"]) == "barbaros")
+	var novo_r: Dictionary = Geopolitica.reino_por_id(sb_inv, "barbaros")
+	ok("a casa nova tem nome, capital e produção próprios",
+		str(novo_r["nome"]) == "Casa do Lobo Branco"
+		and str(novo_r["capital"]) == "Fim do Mundo"
+		and not (novo_r["producao"] as Array).is_empty())
+	ok("nasce POBRE — quem funda começa do chão",
+		int(novo_r["tesouro"]) <= 300)
+	ok("e ganha praça própria no mercado", sb_inv["mercados"].has("barbaros"))
+	sb_inv["evento_pendente"] = null
+	Jogo.passar_mes(sb_inv)
+	ok("o mês passa com sete casas no mapa, sem quebrar nada",
+		sb_inv["fim"] == null or str(sb_inv["fim"].get("tipo", "")) != "")
+	ok("um rei não funda outra casa",
+		not bool(Barbaros3.pode_fundar(sb_inv)["ok"]))
+
 	Jogo.apagar_save()
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

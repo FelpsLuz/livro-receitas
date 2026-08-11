@@ -37,15 +37,18 @@ signal reino_clicado(id: String)
 ## Rei e as Garças são a borda onde a lei não chega.
 const POSICOES := {
 	# anel interno — o coração do continente
-	"touros":    Vector2(0.361, 0.32),
-	"imperio":   Vector2(0.639, 0.32),
-	"alvorecer": Vector2(0.639, 0.68),
-	"jogador":   Vector2(0.361, 0.68),
+	"touros":    Vector2(0.44, 0.32),
+	"imperio":   Vector2(0.68, 0.32),
+	"alvorecer": Vector2(0.68, 0.68),
+	"jogador":   Vector2(0.44, 0.68),
 	# anel externo — cada um no raio do seu vizinho de dentro
-	"rosa":      Vector2(0.150, 0.13),
-	"leoes":     Vector2(0.850, 0.13),
-	"aguias":    Vector2(0.850, 0.87),
-	"sem_rei":   Vector2(0.150, 0.87),
+	"rosa":      Vector2(0.25, 0.13),
+	"leoes":     Vector2(0.91, 0.13),
+	"aguias":    Vector2(0.91, 0.87),
+	"sem_rei":   Vector2(0.25, 0.87),
+	# ALÉM da borda: a fronteira selvagem só toca as duas pontas sem lei, e
+	# fica FORA da linha que as une — é o que mantém o desenho sem cruzar
+	"barbaros":  Vector2(0.055, 0.50),
 }
 
 const RAIO_DOMINIO := 30.0

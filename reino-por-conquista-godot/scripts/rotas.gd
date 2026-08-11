@@ -57,7 +57,10 @@ static func _partes_da_chave(chave: String) -> Array:
 	return []
 
 static func todos_os_nos() -> Array:
-	var ids: Array = ["jogador", Dados.SEM_REI["id"]]
+	# "barbaros" não está em REINOS_BASE de propósito: a fronteira selvagem
+	# não é um reino, é o lugar onde ainda não há um. Mas É um nó do grafo,
+	# e sem estar nesta lista nem `vizinhos()` nem `caminho()` a enxergam.
+	var ids: Array = ["jogador", Dados.SEM_REI["id"], "barbaros"]
 	for r in Dados.REINOS_BASE:
 		ids.append(r["id"])
 	return ids
@@ -123,6 +126,9 @@ static func nome_do(state: Dictionary, id: String) -> String:
 	for r in state["reinos"]:
 		if r["id"] == id:
 			return str(r["nome"])
+	# a fronteira selvagem não é um reino ainda — mas tem nome no mapa
+	if id == "barbaros":
+		return "Terras Bárbaras"
 	return id
 
 ## Descrição do trajeto para o modal de envio: "Vale do Corvo → Touros → Império".

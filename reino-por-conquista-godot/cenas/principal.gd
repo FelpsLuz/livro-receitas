@@ -31,6 +31,7 @@ const Taverna = preload("res://scripts/taverna.gd")
 const Empregos = preload("res://scripts/empregos.gd")
 const Pretendentes = preload("res://scripts/pretendentes.gd")
 const Viagem = preload("res://scripts/viagem.gd")
+const Barbaros = preload("res://scripts/barbaros.gd")
 const MapaMundi = preload("res://cenas/mapa_mundi.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
@@ -1008,6 +1009,7 @@ func _aba_mapa(c: Container) -> void:
 	c.add_child(mapa)
 	mapa.reino_clicado.connect(_abrir_viagem)
 	mapa.montar(state)
+	_fronteira_selvagem(c)
 	# o juramento é o contrato que rege o resto do mapa: enquanto vale, o
 	# suserano não marcha — e leva um quinto do seu ouro todo mês
 	var vs_mapa: Dictionary = Vassalagem.resumo(state)
@@ -1299,6 +1301,119 @@ func _aba_taverna(c: Container) -> void:
 
 ## Um serviço do balcão: rosto de quem vende, o que é, o preço e o botão.
 ## `rotulo_botao` vazio significa "já contratado" — o card fica, o botão não.
+## A FRONTEIRA SELVAGEM — o único lugar do jogo onde não há trono a tomar.
+##
+## Só aparece quando você está lá: é uma decisão de viagem antes de ser
+## uma decisão militar. E a ordem é sempre a mesma — batedor, exército,
+## coroa —, porque marchar às cegas contra três clãs é enterrar homens
+## num número que ninguém viu.
+func _fronteira_selvagem(c: Container) -> void:
+	if str(state.get("local", "")) != Barbaros.ID:
+		return
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "A fronteira selvagem")
+	if Barbaros.conquistado(state):
+		if str(state["jogador"].get("rei_de", "")) == Barbaros.ID:
+			Kit.nota(c, "Estas terras são o seu reino. O mapa tem sete casas.")
+			return
+		var pf: Dictionary = Barbaros.pode_fundar(state)
+		var card_f := _card(c, Tema.ACENTO)
+		var vf := Kit.coluna(card_f, 0)
+		Kit.texto(vf, "Três clãs quebrados e nenhum trono.", Tema.ACENTO)
+		Kit.nota(vf, "Aqui não se herda coroa: se funda uma casa do zero, com capital, produção e brasão próprios.")
+		if not bool(pf["ok"]):
+			Kit.nota(vf, str(pf["msg"]))
+			return
+		Kit.botao(vf, "Fundar um reino", func(): _modal_fundar(), "primario", 180)
+		return
+	var card := _card(c)
+	var v := Kit.coluna(card, 0)
+	if not Barbaros.reconhecido(state):
+		Kit.texto(v, "Ninguém sabe quantos são.")
+		Kit.nota(v, "Um batedor atravessa a fronteira e volta com a conta dos clãs. Sem isso, o exército marcha no escuro.")
+		var l_esp := Kit.fila(v, Tema.E3)
+		Kit.icone_valor(l_esp, "moedas", str(Barbaros.CUSTO_ESPIAO), Tema.ACENTO)
+		Kit.botao_mini(l_esp, "Mandar batedor", func():
+			var r: Dictionary = Barbaros.espiar(state, Jogo.log_para(state))
+			Sfx.tocar(self, "tique" if r["ok"] else "alerta")
+			_aviso(str(r["msg"]))
+			Jogo.salvar(state)
+			atualizar(), "fantasma", 140)
+		return
+	# reconhecido: a conta dos clãs na mesa, e a decisão de atravessar
+	Kit.texto(v, "O batedor voltou: %d homens em três clãs."
+		% Barbaros.total_de_homens(state))
+	var tab := Kit.tabela(v, [
+		{"t": "Clã", "w": 0},
+		{"t": "Homens", "w": 90, "a": Kit.DIR},
+	])
+	for cla in Barbaros.CLAS:
+		var cel := Kit.linha(tab)
+		var col := Kit.coluna(cel[0], 0)
+		Kit.texto(col, str(cla["nome"]))
+		Kit.nota(col, str(cla["nota"]))
+		Kit.numero(cel[1], str(Combate.total_homens(
+			Barbaros.forcas(state)[cla["id"]])), Tema.PERIGO)
+	var pi: Dictionary = Barbaros.pode_invadir(state)
+	if not bool(pi["ok"]):
+		Kit.nota(v, str(pi["msg"]))
+		return
+	Kit.botao(v, "Atravessar a fronteira", func(): _modal_invadir(), "perigo", 200)
+
+func _modal_invadir() -> void:
+	_modal("Atravessar a fronteira",
+		"Três clãs, um depois do outro, sem descanso entre eles: %d homens ao todo contra os seus %d.\n\nQuem recua no meio perde o que já gastou — e os clãs lembram." % [
+			Barbaros.total_de_homens(state),
+			Combate.total_homens(state["jogador"]["tropas"])],
+		[["Marchar", func():
+			var r: Dictionary = Barbaros.invadir(state, Jogo.log_para(state))
+			Jogo.salvar(state)
+			var corpo := ""
+			for f in r.get("fases", []):
+				corpo += "%s — %s (você −%d, eles −%d)\n" % [str(f["cla"]),
+					"vencido" if bool(f["vitoria"]) else "resistiu",
+					int(f["baixas_suas"]), int(f["baixas_deles"])]
+			corpo += "\nBaixas suas: %d." % int(r.get("baixas", 0))
+			Sfx.tocar(self, "vitoria" if bool(r.get("vitoria", false)) else "derrota")
+			_modal("TERRAS BÁRBARAS" if bool(r.get("vitoria", false)) else "A fronteira resistiu",
+				corpo, [["Continuar", func(): atualizar()]],
+				Retratos.ilustracao("cerco"))],
+		["Recuar", func(): atualizar()]], Retratos.ilustracao("cerco"))
+
+func _modal_fundar() -> void:
+	var v := _painel_modal()
+	var l := Label.new()
+	l.text = "Fundar uma casa"
+	var f := Tema.fonte_forte()
+	if f != null:
+		l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
+	l.add_theme_color_override("font_color", Tema.ACENTO)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(l)
+	Kit.nota(v, "O nome que o mapa vai carregar, e a capital que os mensageiros vão procurar.")
+	var r_casa := Kit.fila(v, Tema.E2)
+	Kit.texto(r_casa, "Casa", Tema.TEXTO_3, Tema.MICRO)
+	var campo_casa := LineEdit.new()
+	campo_casa.placeholder_text = "Casa de %s" % str(state["jogador"]["nome"]).split(" ")[0]
+	campo_casa.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r_casa.add_child(campo_casa)
+	var r_cap := Kit.fila(v, Tema.E2)
+	Kit.texto(r_cap, "Capital", Tema.TEXTO_3, Tema.MICRO)
+	var campo_cap := LineEdit.new()
+	campo_cap.placeholder_text = "Forte da Fronteira"
+	campo_cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r_cap.add_child(campo_cap)
+	Kit.respiro(v, Tema.E1)
+	Kit.botao(v, "Erguer o estandarte", func():
+		var r: Dictionary = Barbaros.fundar_reino(state, campo_casa.text,
+			campo_cap.text, Jogo.log_para(state))
+		overlay_modal.visible = false
+		Sfx.tocar(self, "vitoria" if r["ok"] else "alerta")
+		Jogo.salvar(state)
+		_aviso(str(r["msg"]))
+		atualizar(), "primario")
+
 ## A VIAGEM — o popup que o clique no mapa abre.
 ##
 ## Dias, trajeto e risco ANTES de confirmar; depois o tempo pula sozinho

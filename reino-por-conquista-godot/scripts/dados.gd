@@ -145,6 +145,12 @@ const ROTAS := {
 	# as bordas do mundo, onde a lei não chega
 	"rosa_sem_rei":       {"distancia": 8,  "perigo": 0.20},
 	"aguias_sem_rei":     {"distancia": 12, "perigo": 0.25},
+
+	# ALÉM da borda: a fronteira selvagem, alcançável só pelas duas pontas
+	# sem lei do mapa. Nenhuma estrada imperial chega até lá — é isso que
+	# faz das Terras Bárbaras o único lugar onde não há trono para tomar.
+	"barbaros_rosa":      {"distancia": 9,  "perigo": 0.30},
+	"barbaros_sem_rei":   {"distancia": 6,  "perigo": 0.32},
 }
 
 ## Rota de fallback quando o par não existe no grafo: caro e arriscado, como

@@ -55,10 +55,14 @@ func _init() -> void:
 	# ids com underscore não podem quebrar o parser de chaves
 	ok("id composto (sem_rei) é lido corretamente",
 		int(Rotas.entre("jogador", "sem_rei")["distancia"]) == 7)
+	# 4 vizinhos desde as Terras Bárbaras: o Reino sem Rei é uma das duas
+	# pontas por onde se chega à fronteira selvagem
 	ok("vizinhos de sem_rei encontrados",
-		Rotas.vizinhos("sem_rei").size() == 3,
+		Rotas.vizinhos("sem_rei").size() == 4
+		and Rotas.vizinhos("sem_rei").has("barbaros"),
 		", ".join(Rotas.vizinhos("sem_rei")))
-	ok("todos os 8 nós existem", Rotas.todos_os_nos().size() == 8)
+	ok("todos os 9 nós existem (6 reinos + jogador + sem-rei + fronteira)",
+		Rotas.todos_os_nos().size() == 9)
 
 	# ---------------- 2. CAMINHO E GARGALOS ----------------
 	var c_imp := Rotas.caminho("jogador", "imperio")
