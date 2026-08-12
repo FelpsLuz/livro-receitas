@@ -201,8 +201,17 @@ static func trabalhar(state: Dictionary, reino_id: String, emprego_id: String,
 		return {"ok": false, "msg": "Trabalho desconhecido."}
 	if not contratado(state, reino_id, emprego_id):
 		return {"ok": false, "msg": "Peça o emprego ao patrão primeiro."}
+	# O TURNO É NO BALCÃO, e o balcão fica onde fica. Sem esta linha o
+	# jogador batia ponto em Ursos de Ferro estando em Garças de Prata: a
+	# viagem existe justamente para a distância custar dias e risco, e o
+	# emprego a ignorava por completo.
+	if str(state.get("local", "")) != reino_id:
+		return {"ok": false,
+			"msg": "O turno é lá, não aqui. Volte à taverna onde você pediu o emprego."}
 	dias = clampi(dias, 1, 3)
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.esta_preso(state):
+		return Jogo.recusa_preso(state)
 	if int(state.get("dia", 1)) + dias > Jogo.DIAS_POR_MES + 1:
 		return {"ok": false, "msg": "Não sobra mês para esse turno. Passe o mês antes."}
 
@@ -241,7 +250,7 @@ static func trabalhar(state: Dictionary, reino_id: String, emprego_id: String,
 	# ---- morte encerra tudo: sem paga, sem atributo ----
 	if bool(ev["morreu"]):
 		if log.is_valid():
-			log.call("%s morre trabalhando como %s." % [str(j["nome"]), str(e["nome"])])
+			_diz(log, "%s morre trabalhando como %s." % [str(j["nome"]), str(e["nome"])])
 		Jogo.morrer(state, "trabalho de " + str(e["nome"]), log)
 		Sinais.emitir(&"trabalho_terminou", ev)
 		return ev
@@ -269,7 +278,7 @@ static func trabalhar(state: Dictionary, reino_id: String, emprego_id: String,
 		prog[atrib] = 0
 
 	if log.is_valid():
-		log.call("%d %s de %s: +%d de ouro." % [dias, "dia" if dias == 1 else "dias",
+		_diz(log, "%d %s de %s: +%d de ouro." % [dias, "dia" if dias == 1 else "dias",
 			str(e["nome"]).to_lower(), int(ev["paga"])])
 
 	# ---- o tempo anda: é o custo que não aparece na bolsa ----
@@ -291,3 +300,12 @@ static func _vaga_ou_base(state: Dictionary, reino_id: String,
 		if str(v["id"]) == emprego_id:
 			return v
 	return {"paga_dia": maxi(1, roundi(int(e["paga"]) * fator_reino(state, reino_id)))}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

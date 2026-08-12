@@ -14,6 +14,40 @@ extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
 const Sinais = preload("res://scripts/sinais.gd")
+const Dialogo = preload("res://scripts/dialogo.gd")
+const Economia = preload("res://scripts/economia.gd")
+
+## O que o armazém do jogador vale a preço da praça onde ele está — a base
+## que o cobrador enxerga além do cofre.
+static func _valor_da_carga(state: Dictionary) -> int:
+	var local := str(state.get("local", ""))
+	if not Economia.tem_praca(state, local):
+		return 0
+	var total := 0
+	for g_id in state.get("carga", {}):
+		total += int(state["carga"][g_id]) * Economia.preco_de(state, local, g_id)
+	return total
+
+## Faltou moeda: o cobrador leva mercadoria até fechar a conta. Devolve o
+## valor efetivamente confiscado.
+static func _confiscar_carga(state: Dictionary, falta: int) -> int:
+	var local := str(state.get("local", ""))
+	if falta <= 0 or not Economia.tem_praca(state, local):
+		return 0
+	var levado := 0
+	for g_id in state.get("carga", {}).keys():
+		if levado >= falta:
+			break
+		var preco: int = Economia.preco_de(state, local, g_id)
+		if preco <= 0:
+			continue
+		var tem: int = int(state["carga"][g_id])
+		var quer: int = mini(tem, ceili(float(falta - levado) / preco))
+		if quer <= 0:
+			continue
+		state["carga"][g_id] = tem - quer
+		levado += quer * preco
+	return levado
 
 ## Fatia do ouro do vassalo que o suserano leva por mês.
 const TRIBUTO := 0.20
@@ -88,6 +122,9 @@ static func jurar(state: Dictionary, reino_id: String, log: Callable) -> Diction
 	var check := pode_jurar(state, reino_id)
 	if not check["ok"]:
 		return check
+	var Jogo_j = load("res://scripts/jogo.gd")
+	if Jogo_j.esta_preso(state):
+		return Jogo_j.recusa_preso(state)
 	var r: Dictionary = check["reino"]
 	state["jogador"]["suserano"] = reino_id
 	state["jogador"]["meses_vassalo"] = 0
@@ -102,7 +139,7 @@ static func jurar(state: Dictionary, reino_id: String, log: Callable) -> Diction
 		vivas.append(g)
 	state["guerras"] = vivas
 	Sinais.emitir(&"vassalagem", {"suserano": reino_id, "jurou": true})
-	log.call("Você dobrou o joelho diante de %s. Enquanto pagar, vive." % r["nome"])
+	_diz(log, "Você dobrou o joelho diante de %s. Enquanto pagar, vive." % r["nome"])
 	return {"ok": true, "msg": "Você agora é vassalo de %s. Tributo: %d%% do seu ouro."
 		% [r["nome"], int(TRIBUTO * 100)]}
 
@@ -116,18 +153,45 @@ static func tick(state: Dictionary, log: Callable) -> void:
 	if r.is_empty() or not Geopolitica.vivo(r):
 		# o suserano caiu: você está livre, e ninguém precisou saber
 		state["jogador"]["suserano"] = ""
-		log.call("Seu suserano caiu. Ninguém mais reclama o seu tributo.")
+		_diz(log, "Seu suserano caiu. Ninguém mais reclama o seu tributo.")
 		Sinais.emitir(&"vassalagem", {"suserano": "", "jurou": false})
 		return
 	state["jogador"]["meses_vassalo"] = int(state["jogador"].get("meses_vassalo", 0)) + 1
 
 	var posto := cargo(state)
-	var tributo: int = roundi(int(state["jogador"]["ouro"]) * float(posto["tributo"]))
-	if tributo > 0:
-		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - tributo
-		r["tesouro"] = int(r.get("tesouro", 0)) + tributo
+	# O TRIBUTO INCIDE SOBRE A RIQUEZA, NÃO SOBRE O SALDO DO INSTANTE.
+	#
+	# Cobrar só o ouro na mão fazia do vassalo leal uma renda de risco zero:
+	# bastava esvaziar o cofre em mercadoria antes da virada do mês para
+	# pagar ZERO e receber o soldo cheio (medido: 60 meses guardando rendem
+	# 1.469; gastando tudo, 5.566). O cobrador do rei não é cego — ele conta
+	# o que está no armazém também, e leva em carga o que faltar em moeda.
+	var riqueza: int = int(state["jogador"]["ouro"]) + _valor_da_carga(state)
+	var tributo: int = roundi(riqueza * float(posto["tributo"]))
+	var pago_em_ouro: int = mini(tributo, int(state["jogador"]["ouro"]))
+	var em_carga: int = 0
+	if pago_em_ouro > 0:
+		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - pago_em_ouro
+	if tributo > pago_em_ouro:
+		em_carga = _confiscar_carga(state, tributo - pago_em_ouro)
+	var recolhido: int = pago_em_ouro + em_carga
+	if recolhido > 0:
+		r["tesouro"] = int(r.get("tesouro", 0)) + recolhido
 		if int(state["jogador"]["meses_vassalo"]) % 6 == 1:
-			log.call("O cobrador de %s levou %d de ouro." % [r["nome"], tributo])
+			_diz(log, "O cobrador de %s levou %d de ouro%s." % [r["nome"], pago_em_ouro,
+				" e %d em carga do seu armazém" % em_carga if em_carga > 0 else ""])
+	# ---- SERVIR CONSTRÓI A CONFIANÇA QUE A PROMOÇÃO EXIGE ----
+	# A escada pede relação 25 → 45 → 65, e nada dentro da vassalagem a
+	# movia: doze meses pagando tributo e sangrando nas guerras dele davam
+	# delta ZERO. O sistema dependia de um número que ele mesmo não
+	# alimentava. Agora o tributo pago conta como serviço — e o cofre
+	# vazio na hora da cobrança conta como desfeita.
+	if tributo > 0 and recolhido >= tributo:
+		Dialogo.mudar_relacao(state, "rei_" + id, 2, "tributo em dia")
+	elif recolhido < tributo:
+		Dialogo.mudar_relacao(state, "rei_" + id, -3, "cobrador de mãos vazias")
+		if int(state["jogador"]["meses_vassalo"]) % 6 == 1:
+			_diz(log, "O cobrador de %s voltou de mãos vazias. A casa anota." % r["nome"])
 
 	# ---- A CONTRAPARTIDA ----
 	# O soldo da casa: o suserano paga quem serve, e paga do próprio cofre.
@@ -139,23 +203,23 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			r["tesouro"] = int(r["tesouro"]) - soldo
 			state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + soldo
 			if int(state["jogador"]["meses_vassalo"]) % 6 == 1:
-				log.call("O soldo de %s como %s: +%d de ouro."
+				_diz(log, "O soldo de %s como %s: +%d de ouro."
 					% [r["nome"], str(posto["nome"]), soldo])
 		else:
-			log.call("O cofre de %s não tem seu soldo este mês. A casa range." % r["nome"])
+			_diz(log, "O cofre de %s não tem seu soldo este mês. A casa range." % r["nome"])
 	# E as lanças emprestadas, a cada meia dúzia de meses de lealdade.
 	var lote: int = int(posto["tropas"])
 	if lote > 0 and int(state["jogador"]["meses_vassalo"]) % MESES_ENTRE_LOTES == 0:
 		state["jogador"]["tropas"]["lanceiro"] = \
 			int(state["jogador"]["tropas"].get("lanceiro", 0)) + lote
-		log.call("%s manda %d lanceiros para a sua casa — como manda o costume."
+		_diz(log, "%s manda %d lanceiros para a sua casa — como manda o costume."
 			% [r["nome"], lote])
 	# promoção anunciada: a escada tem que ser VISÍVEL para valer como meta
 	var ultimo := str(state["jogador"].get("ultimo_cargo", ""))
 	if ultimo != str(posto["nome"]):
 		state["jogador"]["ultimo_cargo"] = str(posto["nome"])
 		if ultimo != "":
-			log.call("A casa de %s te nomeia %s." % [r["nome"], str(posto["nome"])])
+			_diz(log, "A casa de %s te nomeia %s." % [r["nome"], str(posto["nome"])])
 
 	# suserano em guerra convoca tropas do vassalo — e elas não voltam todas
 	if _em_guerra(state, id) and randf() < 0.25:
@@ -168,7 +232,9 @@ static func tick(state: Dictionary, log: Callable) -> void:
 				levados += vao
 		if levados > 0:
 			r["tropas"][_maior_tipo(r)] = int(r["tropas"].get(_maior_tipo(r), 0)) + levados
-			log.call("%s convocou %d dos seus homens para a guerra dele." % [r["nome"], levados])
+			_diz(log, "%s convocou %d dos seus homens para a guerra dele." % [r["nome"], levados])
+			# sangrar pela casa vale mais que pagar por ela
+			Dialogo.mudar_relacao(state, "rei_" + id, 3, "homens dados à guerra do suserano")
 
 static func _maior_tipo(r: Dictionary) -> String:
 	var melhor := "lanceiro"
@@ -201,7 +267,7 @@ static func declarar_independencia(state: Dictionary, log: Callable) -> Dictiona
 		state["casus_belli"].append(id)      # agora a guerra é sua, e é legítima
 	Sinais.emitir(&"vassalagem", {"suserano": "", "jurou": false, "independencia": true})
 	var nome: String = str(r.get("nome", id))
-	log.call("Você rasgou o juramento a %s. Os arautos já cavalgam." % nome)
+	_diz(log, "Você rasgou o juramento a %s. Os arautos já cavalgam." % nome)
 	return {"ok": true, "msg": "Independência declarada. %s vem cobrar." % nome}
 
 ## Resumo para a UI.
@@ -225,3 +291,12 @@ static func resumo(state: Dictionary) -> Dictionary:
 		"proximo_meses": int(prox.get("meses", 0)),
 		"proximo_relacao": int(prox.get("relacao", 0)),
 		"tributo_estimado": roundi(int(state["jogador"]["ouro"]) * float(posto["tributo"]))}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

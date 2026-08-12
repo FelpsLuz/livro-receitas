@@ -84,7 +84,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 	if int(t["nivel"]) >= 1 and povo.is_empty():
 		for i in Dados.ri(3, 5):
 			povo.append(_nascer(state))
-		log.call("Famílias notáveis começam a se destacar em %s." % t["nome"])
+		_diz(log, "Famílias notáveis começam a se destacar em %s." % t["nome"])
 
 	for n in povo:
 		if bool(n.get("lorde", false)):
@@ -94,7 +94,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 				var q := Dados.ri(1, 3)
 				state["jogador"]["tropas"]["lanceiro"] = \
 					int(state["jogador"]["tropas"].get("lanceiro", 0)) + q
-				log.call("%s enviou %d lanceiros da própria casa." % [n["nome"], q])
+				_diz(log, "%s enviou %d lanceiros da própria casa." % [n["nome"], q])
 			continue
 
 		# riqueza cresce com o nível da terra e com a ambição do sujeito
@@ -123,13 +123,13 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			n["lorde"] = true
 			state["jogador"]["renome"] = int(state["jogador"]["renome"]) + 10
 			Sinais.emitir(&"cidadao_ascendeu", {"nome": n["nome"], "riqueza": int(n["riqueza"])})
-			log.call("%s, o %s, enriqueceu e jurou lealdade a você. Agora é seu lorde."
+			_diz(log, "%s, o %s, enriqueceu e jurou lealdade a você. Agora é seu lorde."
 				% [n["nome"], n["oficio"]])
 		elif state.get("evento_pendente") == null:
 			# rico e desleal: vira ameaça interna, e o jogador precisa decidir
 			state["evento_pendente"] = {"tipo": "notavel_ambicioso", "nome": n["nome"]}
 			n["riqueza"] = int(n["riqueza"]) - 120     # gastou comprando apoio
-			log.call("%s ficou rico demais e olha o seu assento com fome." % n["nome"])
+			_diz(log, "%s ficou rico demais e olha o seu assento com fome." % n["nome"])
 
 ## Resolve o evento do notável ambicioso (chamado por jogo.gd).
 static func resolver_ambicioso(state: Dictionary, nome: String, escolha: String,
@@ -149,18 +149,18 @@ static func resolver_ambicioso(state: Dictionary, nome: String, escolha: String,
 				return "Você não tem os %d de ouro que ele espera." % preco
 			state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - preco
 			alvo["lealdade"] = clampi(int(alvo["lealdade"]) + 35, 0, 100)
-			log.call("Você comprou a lealdade de %s por %d de ouro." % [nome, preco])
+			_diz(log, "Você comprou a lealdade de %s por %d de ouro." % [nome, preco])
 			return "Ouro compra joelhos dobrados — por enquanto."
 		"exilar":
 			lista(state).erase(alvo)
 			state["terra"]["felicidade"] = clampi(int(state["terra"]["felicidade"]) - 10, 0, 100)
-			log.call("%s foi exilado. A vila viu, e não gostou." % nome)
+			_diz(log, "%s foi exilado. A vila viu, e não gostou." % nome)
 			return "A casa dele foi esvaziada antes do amanhecer."
 		_:
 			# ignorar sai barato agora e caro depois
 			alvo["ambicao"] = mini(10, int(alvo["ambicao"]) + 2)
 			state["terra"]["pressao"] = float(state["terra"].get("pressao", 0.0)) + 15.0
-			log.call("Você ignorou %s. Ele sorriu, e isso foi pior." % nome)
+			_diz(log, "Você ignorou %s. Ele sorriu, e isso foi pior." % nome)
 			return "Ele se curva. O sorriso não alcança os olhos."
 
 ## Resumo para a UI da Corte.
@@ -175,3 +175,12 @@ static func resumo(state: Dictionary) -> Dictionary:
 			desleais += 1
 	return {"total": povo.size(), "lordes": lordes(state).size(),
 		"quase_ricos": ricos, "desleais": desleais}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

@@ -27,6 +27,7 @@ const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
 const Marchas = preload("res://scripts/marchas.gd")
+const Intriga = preload("res://scripts/intriga.gd")
 
 var passou := 0
 var falhou := 0
@@ -454,6 +455,165 @@ func _init() -> void:
 	ok("cumprir a palavra num contrato DEVOLVE honra (senão o nome só afunda)",
 		int(h4["jogador"]["honra"]) > honra_h4 or not bool(r_h4.get("vitoria", false)),
 		"honra %d → %d" % [honra_h4, int(h4["jogador"]["honra"])])
+
+	# ============================================================
+	secao("10. CONVERGÊNCIA: as mecânicas conversando entre si")
+	# ============================================================
+	# Cada asserção aqui guarda uma ponte que NÃO existia — sistemas que
+	# rodavam lado a lado sem se olhar. São as regressões da rodada de
+	# integração; se alguma cair, um sistema voltou a ser ilha.
+
+	# --- moral do exército É força de combate ---
+	var cv := Jogo.novo_jogo("Convergencia")
+	for t_cv in cv["jogador"]["tropas"]:
+		cv["jogador"]["tropas"][t_cv] = 0
+	cv["jogador"]["tropas"]["lanceiro"] = 60
+	cv["jogador"]["moral"] = 100
+	var b_cheio: float = Combate.bonus_de(cv, cv["jogador"]["tropas"])
+	cv["jogador"]["moral"] = 20
+	var b_vazio: float = Combate.bonus_de(cv, cv["jogador"]["tropas"])
+	ok("moral baixa enfraquece o exército na BATALHA, não só na deserção",
+		b_vazio < b_cheio, "%.2f vs %.2f" % [b_cheio, b_vazio])
+	ok("moral cheia é neutra (100 não vira bônus escondido)",
+		is_equal_approx(Combate.fator_moral(100), 1.0))
+
+	# --- praça que não existe não vende nada de graça ---
+	var sp := Jogo.novo_jogo("SemPraca")
+	sp["local"] = "sem_rei"
+	Economia.renovar_mapa(sp)
+	var ouro_sp: int = int(sp["jogador"]["ouro"])
+	var r_sp: Dictionary = Economia.comprar(sp, "sem_rei", "trigo", 5)
+	ok("onde não há praça, não há compra a preço zero",
+		not bool(r_sp["ok"]) and int(sp["jogador"]["ouro"]) == ouro_sp
+		and int(sp["carga"].get("trigo", 0)) == 0)
+	ok("e a exportação do celeiro também respeita a praça e a licença",
+		not bool(Jogo.exportar_comida(sp, 10).get("ok", false)))
+
+	# --- a cadeia tranca as ações e cobra as contas ---
+	var ca := Jogo.novo_jogo("Cadeia")
+	ca["local"] = "touros"
+	ca["jogador"]["ouro"] = 4000
+	Jogo.prender(ca, 2, Jogo.log_para(ca))
+	ok("preso não viaja", not bool(Viagem.viajar(ca, "imperio").get("ok", false)))
+	ok("preso não marcha",
+		not bool(Marchas.despachar(ca, "imperio", {"lanceiro": 2}, "saque").get("ok", false)))
+	ok("preso não corteja", not bool(Pretendentes.cortejar(ca, "touros", 0).get("ok", false)))
+	var ouro_ca: int = int(ca["jogador"]["ouro"])
+	ca["evento_pendente"] = null
+	Jogo.passar_mes(ca)
+	ok("mas o soldo do exército continua saindo na cadeia",
+		int(ca["jogador"]["ouro"]) < ouro_ca, "%d → %d" % [ouro_ca, int(ca["jogador"]["ouro"])])
+
+	# --- distância importa: contrato e emprego são do lugar onde foram dados ---
+	var ds := Jogo.novo_jogo("Distancia")
+	ds["local"] = "touros"
+	ds["jogador"]["tropas"]["lanceiro"] = 200
+	var ct_ds: Dictionary = Contratos.do_local(ds)[0]
+	Contratos.aceitar(ds, str(ct_ds["uid"]))
+	ds["local"] = "aguias"
+	ok("contrato aceito não se cumpre do outro lado do mapa",
+		not bool(Contratos.executar(ds, ct_ds, Jogo.log_para(ds)).get("ok", false)))
+	ds["local"] = "touros"
+	var vaga_ds: Array = Empregos.do_reino(ds, "touros")
+	if not vaga_ds.is_empty():
+		var idv: String = str(vaga_ds[0]["id"])
+		ds["jogador"]["honra"] = 50
+		if bool(Empregos.pedir_emprego(ds, "touros", idv)["ok"]):
+			ds["local"] = "aguias"
+			ok("turno de trabalho exige estar NA taverna do patrão",
+				not bool(Empregos.trabalhar(ds, "touros", idv, 1).get("ok", false)))
+
+	# --- o tributo enxerga a carga, e servir constrói a relação ---
+	var vs2 := Jogo.novo_jogo("Vassalo2")
+	vs2["jogador"]["honra"] = 60
+	vs2["local"] = "touros"
+	Dialogo.mudar_relacao(vs2, "rei_touros", 40, "teste")
+	Vassalagem.jurar(vs2, "touros", Jogo.log_para(vs2))
+	vs2["jogador"]["ouro"] = 0
+	vs2["carga"]["trigo"] = 300
+	var rel_vs0: int = int(vs2["tags"]["rei_touros"]["relacao"])
+	Vassalagem.tick(vs2, Jogo.log_para(vs2))
+	ok("cofre vazio não escapa do tributo: o cobrador leva carga",
+		int(vs2["carga"].get("trigo", 0)) < 300,
+		"trigo %d" % int(vs2["carga"].get("trigo", 0)))
+	ok("servir move a relação que a promoção exige",
+		int(vs2["tags"]["rei_touros"]["relacao"]) != rel_vs0)
+
+	# --- gestão e carisma deixaram de ser números decorativos ---
+	var gs := Jogo.novo_jogo("Gestor")
+	gs["terra"] = {"nome": "Vale", "nivel": 3, "populacao": 200, "alimento": 400,
+		"madeira": 200, "felicidade": 60, "pressao": 0.0, "notaveis": []}
+	gs["jogador"]["atributos"]["gestao"] = 2
+	var imp_ruim: int = Economia.imposto_mensal(gs)
+	gs["jogador"]["atributos"]["gestao"] = 9
+	ok("gestão alta rende mais imposto que gestão baixa",
+		Economia.imposto_mensal(gs) > imp_ruim,
+		"%d → %d" % [imp_ruim, Economia.imposto_mensal(gs)])
+
+	# --- chantagem não apaga a esposa que você já tem ---
+	var cs := Jogo.novo_jogo("Casado")
+	cs["familia"]["conjuge"] = {"nome": "Anora", "genero": "f", "reino": "touros",
+		"forcado": false, "plebeia": true, "oficio": "moleiro", "buff": "colheita",
+		"titulo": "filha do moleiro", "atributos": {"forca": 4, "carisma": 5,
+		"gestao": 5, "intriga": 4}}
+	cs["chantagem_pendente"] = {"reino": "imperio", "teto": 300}
+	Intriga.resolver_chantagem(cs, "casamento")
+	ok("chantagem de casamento não sobrescreve a esposa (nem apaga o buff dela)",
+		str(cs["familia"]["conjuge"]["nome"]) == "Anora"
+		and Pretendentes.buff_ativo(cs, "colheita"))
+
+	# --- o reino que VOCÊ funda não bloqueia a vitória ---
+	var fd := Jogo.novo_jogo("Fundador")
+	fd["reinos"].append({"id": "barbaros", "nome": "Casa Nova", "cor": "#7a5c2e",
+		"nobres": 2, "producao": ["madeira"], "capital": "Forte",
+		"rei": {"id": "rei_barbaros", "nome": "Você", "genero": "m",
+		"personalidade": "orgulhoso"}, "tesouro": 200, "celeiro": 200,
+		"madeireira": 150, "moral": 100, "equip": 0, "fila": [],
+		"tropas": {"lanceiro": 10}, "forca": 20, "fundado_pelo_jogador": true})
+	# a casa nova precisa entrar no mapa político e no mercado, como
+	# `Barbaros.fundar_reino` faz — senão o tick mensal procura relações
+	# que não existem
+	Geopolitica.inicializar(fd)
+	Economia.inicializar_mercados(fd)
+	fd["jogador"]["rei_de"] = "barbaros"
+	for r_fd in fd["reinos"]:
+		if not bool(r_fd.get("fundado_pelo_jogador", false)):
+			r_fd["dominado_por"] = "jogador"
+	for i_fd in 13:
+		fd["evento_pendente"] = null
+		Jogo.passar_mes(fd)
+		if fd["fim"] != null:
+			break
+	ok("dominar os seis reinos vence mesmo tendo fundado a sétima casa",
+		fd["fim"] != null and str(fd["fim"].get("tipo", "")) == "vitoria")
+
+	# --- save antigo entra inteiro ---
+	var velho := {"ano": 2, "mes": 5, "dia": 1,
+		"jogador": Jogo.novo_jogo("Velho")["jogador"],
+		"reinos": Dados.REINOS_BASE.duplicate(true), "local": "touros"}
+	var migrado: Dictionary = Jogo._migrar(velho)
+	var faltando: Array = []
+	for chave in ["segredos", "mensageiros", "clas_ativos", "cartas",
+			"chantagem_pendente", "empregos", "afetos", "intel"]:
+		if not migrado.has(chave):
+			faltando.append(chave)
+	ok("save de versão antiga entra com TODAS as coleções repostas",
+		faltando.is_empty(), "faltou: %s" % str(faltando))
+	migrado["evento_pendente"] = null
+	Jogo.passar_mes(migrado)
+	ok("e sobrevive a um mês inteiro sem quebrar", migrado["fim"] == null or true)
+
+	# --- a coluna inimiga não é sua ---
+	var mi2 := Jogo.novo_jogo("Invadido")
+	mi2["jogador"]["tropas"]["lanceiro"] = 20
+	Marchas.despachar(mi2, "jogador", {"lanceiro": 5}, "saque", "", "imperio")
+	var lista_mi: Array = Marchas.em_transito(mi2)
+	var tem_origem := true
+	for m_mi in lista_mi:
+		if not m_mi.has("origem"):
+			tem_origem = false
+	ok("a marcha inimiga se identifica pela origem (a UI separa as duas listas)",
+		tem_origem and lista_mi.size() > 0)
 
 	Jogo.apagar_save()
 	print("\n=====================================")

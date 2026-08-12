@@ -826,6 +826,41 @@ func _card(c: Container, marca: Variant = null) -> HBoxContainer:
 	painel.add_child(h)
 	return h
 
+## A CELA — o estado que a interface inteira ignorava.
+##
+## O jogador era preso, e nada na tela mudava: nenhum selo, nenhum aviso, e
+## todas as ações continuavam disponíveis. Agora a cadeia se anuncia onde
+## ela é vivida (a aba da sua casa), diz quanto falta, e oferece a única
+## coisa que ouro sempre comprou — a saída.
+func _painel_cadeia(c: Container) -> void:
+	if not Jogo.esta_preso(state):
+		return
+	var meses: int = Jogo.meses_preso(state)
+	var card := _card(c, Tema.PERIGO)
+	_arte(card, Retratos.ilustracao("traicao"), 64)
+	var v := Kit.coluna(card, Tema.E2)
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var l := Kit.fila(v, Tema.E3)
+	var ic := Icones.imagem("correntes", 20)
+	if ic != null:
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		l.add_child(ic)
+	Kit.texto(l, "A ferros — faltam %d %s" % [meses, "mês" if meses == 1 else "meses"],
+		Tema.PERIGO, Tema.CORPO_G)
+	Kit.nota(v, "Daqui não se viaja, não se trabalha, não se marcha e não se corteja. Mas o soldo, o tributo e a palavra dada continuam correndo.")
+	var custo: int = Jogo.preco_fianca(state)
+	var acao := Kit.fila(card, Tema.E3)
+	acao.size_flags_horizontal = Control.SIZE_SHRINK_END
+	acao.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Kit.icone_valor(acao, "moedas", str(custo), Tema.ACENTO)
+	var b_f := Kit.botao_mini(acao, "Pagar fiança", func():
+		var r: Dictionary = Jogo.pagar_fianca(state, Jogo.log_para(state))
+		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+		_aviso(str(r["msg"]))
+		Jogo.salvar(state)
+		atualizar(), "primario", 130)
+	b_f.disabled = int(state["jogador"]["ouro"]) < custo
+
 ## Retrato de um personagem fixo (rei, chefe de clã, freguês da taverna).
 ##
 ## Aqui morava o pior defeito visual do jogo, e ele se disfarçava de outra
@@ -906,6 +941,7 @@ func _aviso(msg: String) -> void:
 
 # ---------------- ABAS ----------------
 func _aba_terra(c: Container) -> void:
+	_painel_cadeia(c)
 	var t = state["terra"]
 	_titulo_secao(c, ("%s — %s" % [t["nome"], Dados.NIVEIS_TERRA[t["nivel"]]["nome"]]) if t != null else "Acampamento Mercenário")
 
@@ -1205,6 +1241,18 @@ func _aba_mapa(c: Container) -> void:
 ## monoespaçada, carga, valor da carga, e as duas ações. Em 34px de altura
 ## por linha as dez mercadorias cabem na tela — antes cabiam quatro.
 func _aba_mercado(c: Container) -> void:
+	# NEM TODO LUGAR DO MAPA TEM PRAÇA. O Reino sem Rei e as Terras
+	# Bárbaras são nós de viagem sem armazém — e a tabela desenhada ali
+	# disparava um erro por mercadoria e mostrava preço 0 em tudo, o que
+	# fazia "Comprar 5" custar zero: ouro infinito por um clique.
+	if not Economia.tem_praca(state, str(state.get("local", ""))):
+		_titulo_secao(c, "Sem mercado aqui",
+			Economia.AVISO_SEM_PRACA)
+		var sp := Kit.card(c, Tema.ATENCAO)
+		Kit.texto(sp, "Não há feitor, armazém nem livro-razão nesta terra.",
+			Tema.ATENCAO, Tema.MICRO)
+		Kit.nota(sp, "Volte a um dos seis reinos para comprar e vender.")
+		return
 	var reino := _reino_local()
 	var em_guerra := false
 	for g in state["guerras"]:
@@ -1938,10 +1986,16 @@ func _aba_exercito(c: Container) -> void:
 	Kit.medidor_rotulado(medidores, "Sustento da terra",
 		Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state),
 		" de %d" % Recrutamento.pop_maxima(state), Tema.TEXTO_2)
+	# A MORAL AGORA VALE NA BATALHA, e o jogador tem que saber disso — e
+	# saber como se recupera, que era a metade invisível da mecânica.
 	if moral <= 35:
-		Kit.texto(Kit.card(c, Tema.PERIGO),
-			"Moral baixa: seus homens estão desertando. Pague o soldo e encha os celeiros.",
-			Tema.PERIGO)
+		var cm := Kit.card(c, Tema.PERIGO)
+		Kit.texto(cm, "Moral baixa: seus homens desertam e lutam pior (%d%% da força)."
+			% roundi(Combate.fator_moral(moral) * 100), Tema.PERIGO)
+		Kit.nota(cm, "Pague o soldo e encha os celeiros: mês com tudo em dia devolve 6 de moral.")
+	elif moral < 100:
+		Kit.nota(c, "Moral %d: o exército luta a %d%% da força. Mês com soldo e celeiro em dia devolve 6."
+			% [moral, roundi(Combate.fator_moral(moral) * 100)])
 
 	# ---- as unidades, em tabela ----
 	Kit.respiro(c, Tema.E2)
@@ -2019,10 +2073,35 @@ func _aba_exercito(c: Container) -> void:
 	# ---- exércitos na estrada ----
 	# O jogador precisa VER que mandou gente e quanto falta para o impacto,
 	# senão o exército some do inventário e parece bug.
-	var transito: Array = Marchas.em_transito(state)
+	# DUAS LISTAS, NÃO UMA. `em_transito` devolve todas as colunas do mapa,
+	# inclusive as que um rei inimigo despachou CONTRA você: elas apareciam
+	# no seu painel de exércitos, com botão de "Recuar" — e o clique
+	# cancelava a invasão dele de graça. Agora a origem separa as duas.
+	var todas_marchas: Array = Marchas.em_transito(state)
+	var transito: Array = todas_marchas.filter(
+		func(m): return str(m.get("origem", "jogador")) == "jogador")
+	var contra_voce: Array = todas_marchas.filter(
+		func(m): return str(m.get("origem", "jogador")) != "jogador")
+	if not contra_voce.is_empty():
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Marchando contra você")
+		for mi in contra_voce:
+			var hi := _card(c, Tema.PERIGO)
+			var vi := Kit.coluna(hi, Tema.E2)
+			vi.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			var li := Kit.fila(vi, Tema.E3)
+			Kit.icone_valor(li, "tropa", "%d" % int(mi["homens"]), Tema.PERIGO)
+			Kit.texto(li, "de %s" % Rotas.nome_do(state, str(mi.get("origem", ""))),
+				Tema.PERIGO, Tema.CORPO)
+			if str(mi["fase"]) == "cerco":
+				Kit.selo(li, "sitiando sua terra", Tema.PERIGO, Tema.PERIGO_FUNDO)
+			else:
+				Kit.texto(li, "chega em %s" % str(mi["texto_faltam"]),
+					Tema.TEXTO_2, Tema.MICRO)
+			Kit.nota(vi, "Coluna inimiga. Você não manda nela — só pode estar pronto.")
 	if not transito.is_empty():
 		Kit.respiro(c, Tema.E2)
-		Kit.subsecao(c, "Exércitos em marcha")
+		Kit.subsecao(c, "Seus exércitos em marcha")
 		for mt in transito:
 			# a coluna em marcha é o único item da aba que muda sozinho com o
 			# relógio; a barra de acento na esquerda é o que a separa das
@@ -2082,16 +2161,20 @@ func _aba_exercito(c: Container) -> void:
 						# moedas, como o gasto do cerco já faz logo acima
 						Kit.icone_valor(l_carga, "moedas" if str(g) == "ouro" else str(g),
 							"%d" % int(mt["carga"][g]), Tema.TEXTO_2)
-			if mt["fase"] == "ida":
+			# a ordem de retirada vale na estrada E no muro: `recolher` tem
+			# um ramo dedicado a levantar cerco, escrito porque sem ele a
+			# tropa ficava presa pagando upkeep dobrado até a moral quebrar
+			# sozinha — e a interface nunca criava o botão para chamá-lo
+			if mt["fase"] == "ida" or sitiando:
 				var mid: String = mt["id"]
 				var acao_m := Kit.fila(hm, Tema.E3)
 				acao_m.size_flags_horizontal = Control.SIZE_SHRINK_END
 				acao_m.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-				Kit.botao_mini(acao_m, "Recuar", func():
+				Kit.botao_mini(acao_m, "Levantar o cerco" if sitiando else "Recuar", func():
 					var r: Dictionary = Marchas.recolher(state, mid)
 					_aviso(r["msg"])
 					Jogo.salvar(state)
-					atualizar(), "perigo", 84)
+					atualizar(), "perigo", 140 if sitiando else 84)
 
 	# ---- enviar exército ----
 	# A estimativa de marcha aparece ANTES de decidir: é a informação que

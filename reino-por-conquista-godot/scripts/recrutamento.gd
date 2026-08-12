@@ -151,7 +151,7 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 		else:
 			item["restante"] = tempo_de(state, tipo)
 	if entregues > 0 and log.is_valid():
-		log.call("O quartel entregou %d recruta(s)." % entregues)
+		_diz(log, "O quartel entregou %d recruta(s)." % entregues)
 	return entregues
 
 ## Cancelar devolve METADE do ouro do que ainda não saiu — a fila não pode
@@ -180,3 +180,12 @@ static func minutos_restantes(state: Dictionary) -> int:
 		else:
 			t += unitario * int(item["restantes"])
 	return t
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

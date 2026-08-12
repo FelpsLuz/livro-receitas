@@ -275,7 +275,14 @@ static func resolver_chantagem(state: Dictionary, escolha: String) -> void:
 					# que ele passou a te vigiar, sem consequência mecânica extra
 					Dialogo.tags_de(state, "rei_alvorecer")["flags"]["sabe_seu_segredo"] = true
 		"casamento":
-			realizar_casamento(state, reino_id, true)
+			# JÁ CASADO NÃO CASA DE NOVO. O pedido em conversa checava isto;
+			# a chantagem não, e sobrescrevia o cônjuge inteiro — a esposa
+			# plebeia sumia sem uma linha, levando junto o buff dela (que
+			# vive no dicionário do cônjuge). Quem já tem casa cobra ouro.
+			if state["familia"]["conjuge"] != null:
+				_pagar_chantagem(state, reino_id, int(ch.get("teto", 0)))
+			else:
+				realizar_casamento(state, reino_id, true)
 		"casusbelli":
 			if not state["casus_belli"].has(reino_id):
 				state["casus_belli"].append(reino_id)
@@ -317,12 +324,49 @@ static func tick_familia(state: Dictionary, log: Callable) -> void:
 			"mimado": int(state["jogador"].get("crueldade", 0)) >= 3 and randf() < 0.5,
 		}
 		f["filhos"].append(filho)
-		log.call("Nasce %s! A dinastia continua." % filho["nome"])
+		_diz(log, "Nasce %s! A dinastia continua." % filho["nome"])
+	_educar(state, log)
+
+## A EDUCAÇÃO DO HERDEIRO — o campo `educacao` existia em toda criança
+## nascida e nunca era escrito nem lido por ninguém.
+##
+## Aos 8 anos a casa decide o que o menino vai ser, e a decisão é a SUA:
+## não há escolha a fazer numa tela, há uma vida sendo levada. A criança
+## aprende o que o pai faz — quem vive de guerra cria soldado, quem vive
+## de livro-razão cria administrador, quem vive de sussurro cria víbora.
+## E isso importa de verdade: quando você morre, é o herdeiro que assume,
+## com os atributos dele. A linhagem passa a carregar o seu ofício.
+const EDUCACOES := {
+	"armas":  {"atributo": "forca",   "nome": "nas armas"},
+	"corte":  {"atributo": "carisma", "nome": "na corte"},
+	"livros": {"atributo": "gestao",  "nome": "nos livros"},
+	"sombra": {"atributo": "intriga", "nome": "na sombra"},
+}
+
+static func _educar(state: Dictionary, log: Callable) -> void:
+	var j: Dictionary = state["jogador"]
+	for filho in state["familia"]["filhos"]:
+		if int(filho.get("idade", 0)) < 8 or str(filho.get("educacao", "")) != "":
+			continue
+		# o pai ensina o que o pai faz: o maior atributo dele escolhe
+		var melhor := "armas"
+		var maior := -1
+		for chave in EDUCACOES:
+			var a: String = str(EDUCACOES[chave]["atributo"])
+			var v: int = int(j.get("atributos", {}).get(a, 5))
+			if v > maior:
+				maior = v
+				melhor = chave
+		filho["educacao"] = melhor
+		var attr: String = str(EDUCACOES[melhor]["atributo"])
+		filho["atributos"][attr] = clampi(int(filho["atributos"][attr]) + 2, 1, 10)
+		_diz(log, "%s completa 8 anos e é criado %s, como o pai."
+			% [str(filho["nome"]), str(EDUCACOES[melhor]["nome"])])
 
 static func declarar_guerra(state: Dictionary, reino_id: String, log: Callable) -> Dictionary:
 	var tem_cb: bool = state["casus_belli"].has(reino_id)
 	if not tem_cb:
-		log.call("Ataque SEM casus belli: os 6 reinos condenam sua agressão!")
+		_diz(log, "Ataque SEM casus belli: os 6 reinos condenam sua agressão!")
 		for r in state["reinos"]:
 			Dialogo.mudar_relacao(state, "rei_" + r["id"],
 				-60 if r["id"] == reino_id else -35, "agressão")
@@ -335,8 +379,17 @@ static func declarar_guerra(state: Dictionary, reino_id: String, log: Callable) 
 		if state["jogador"]["rei_de"] == "":
 			state["jogador"]["rei_de"] = reino_id
 		state["jogador"]["renome"] += 50
-		log.call("VITÓRIA! Você toma o trono de %s!" % reino_id)
+		_diz(log, "VITÓRIA! Você toma o trono de %s!" % reino_id)
 	else:
 		state["jogador"]["renome"] = maxi(0, state["jogador"]["renome"] - 20)
-		log.call("Derrota diante dos muros de %s." % reino_id)
+		_diz(log, "Derrota diante dos muros de %s." % reino_id)
 	return rel
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

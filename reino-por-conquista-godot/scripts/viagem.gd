@@ -60,6 +60,8 @@ static func viajar(state: Dictionary, destino: String, log: Callable = Callable(
 	if not bool(est["ok"]):
 		return est
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.esta_preso(state):
+		return Jogo.recusa_preso(state)
 	var dias: int = int(est["dias"])
 	if int(state.get("dia", 1)) + dias > Jogo.DIAS_POR_MES + 1:
 		return {"ok": false, "sem_tempo": true,
@@ -73,7 +75,7 @@ static func viajar(state: Dictionary, destino: String, log: Callable = Callable(
 		if state["fim"] != null:
 			break
 	if log.is_valid():
-		log.call("Você viaja até %s — %d %s de estrada." % [
+		_diz(log, "Você viaja até %s — %d %s de estrada." % [
 			Rotas.nome_do(state, destino), dias, "dia" if dias == 1 else "dias"])
 	Sinais.emitir(&"viagem", {"destino": destino, "dias": dias})
 	est["encontro"] = ev
@@ -99,7 +101,7 @@ static func resolver_assalto(state: Dictionary, log: Callable = Callable()) -> D
 	var perdido: int = roundi(int(j["ouro"]) * 0.25)
 	j["ouro"] = maxi(0, int(j["ouro"]) - perdido)
 	if log.is_valid():
-		log.call("Salteadores levaram %d de ouro na estrada." % perdido)
+		_diz(log, "Salteadores levaram %d de ouro na estrada." % perdido)
 	return {"ouro_perdido": perdido}
 
 ## Saquear a caravana: ouro agora, nome depois. Honra é proporcional, como
@@ -111,7 +113,17 @@ static func saquear_caravana(state: Dictionary, ouro: int,
 	var antes: int = int(j.get("honra", 50))
 	j["honra"] = maxi(0, roundi(antes * 0.85))
 	j["crueldade"] = int(j.get("crueldade", 0)) + 1
+	j["meses_limpos"] = 0   # ato cruel zera a contagem de bom governo
 	if log.is_valid():
-		log.call("Você saqueou uma caravana na estrada: +%d de ouro, honra %d → %d."
+		_diz(log, "Você saqueou uma caravana na estrada: +%d de ouro, honra %d → %d."
 			% [ouro, antes, int(j["honra"])])
 	return {"ouro": ouro, "honra": int(j["honra"])}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

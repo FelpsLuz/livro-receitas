@@ -150,7 +150,7 @@ static func abandonar(state: Dictionary, uid: String, log: Callable) -> Dictiona
 	Dialogo.mudar_relacao(state, "rei_" + str(c["contratante"]), -12, "palavra quebrada")
 	c["aceito"] = false
 	if log.is_valid():
-		log.call("Você largou \"%s\". A palavra quebrada corre: honra −%d." % [str(c["nome"]), perda])
+		_diz(log, "Você largou \"%s\". A palavra quebrada corre: honra −%d." % [str(c["nome"]), perda])
 	return {"ok": true, "msg": "Serviço largado. Honra −%d." % perda,
 		"honra_perdida": perda}
 
@@ -198,6 +198,18 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 	# o serviço come DIAS, e tem que caber no mês: é isso que transforma
 	# "aceitar tudo" numa escolha de agenda
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.esta_preso(state):
+		return Jogo.recusa_preso(state)
+	# A COLUNA PARTE DAQUI. O serviço foi contratado numa taverna, e é de
+	# lá que se marcha: antes dava para cumprir um contrato de Ursos de
+	# Ferro estando do outro lado do mapa, o que apagava a viagem inteira
+	# da conta. Quem deu a palavra volta para dá-la por cumprida.
+	var regiao := str(contrato.get("regiao", state.get("local", "")))
+	if str(state.get("local", "")) != regiao:
+		var Rotas = load("res://scripts/rotas.gd")
+		return {"ok": false, "longe": true,
+			"msg": "O serviço é em %s. Volte para lá antes de marchar."
+				% Rotas.nome_do(state, regiao)}
 	var dias := duracao_dias(contrato)
 	if int(state.get("dia", 1)) + dias > Jogo.DIAS_POR_MES + 1:
 		return {"ok": false, "sem_tempo": true,
@@ -214,15 +226,16 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 		state["jogador"]["honra"] = mini(HONRA_MAX,
 			int(state["jogador"].get("honra", 50)) + ganho_h)
 		Dialogo.mudar_relacao(state, "rei_" + contrato["contratante"], 8, "contrato cumprido")
-		log.call("Contrato cumprido: +%d ouro, +%d renome, +%d de honra."
+		_diz(log, "Contrato cumprido: +%d ouro, +%d renome, +%d de honra."
 			% [contrato["pagamento"], contrato["renome"], ganho_h])
 		if contrato["id"] == "incursao" and contrato["alvo"] != "":
 			Dialogo.mudar_relacao(state, "rei_" + contrato["alvo"], -25, "queimou vila")
 			state["jogador"]["crueldade"] = int(state["jogador"].get("crueldade", 0)) + 1
-			log.call("Você queimou uma vila de %s. O rei de lá não esquecerá." % contrato["alvo"])
+			state["jogador"]["meses_limpos"] = 0
+			_diz(log, "Você queimou uma vila de %s. O rei de lá não esquecerá." % contrato["alvo"])
 	else:
 		state["jogador"]["renome"] = maxi(0, state["jogador"]["renome"] - 5)
-		log.call("Contrato fracassou. Renome -5.")
+		_diz(log, "Contrato fracassou. Renome -5.")
 		# derrota esmagadora não é só perder: é ser CAPTURADO no campo
 		if rel.get("esmagado", false):
 			Jogo.prender(state, 3, log)
@@ -244,3 +257,12 @@ static func titulo(state: Dictionary) -> String:
 	if state["jogador"]["renome"] >= 50:
 		return "Capitão Mercenário"
 	return "Mercenário"
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

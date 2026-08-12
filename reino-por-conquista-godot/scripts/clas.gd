@@ -64,11 +64,18 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			continue
 		var cla := cla_por_id(m["cla"])
 		if state["guerras"].size() > 0 and randf() < 0.15:
-			log.call("Mensageiro para %s interceptado na estrada." % cla["nome"])
+			_diz(log, "Mensageiro para %s interceptado na estrada." % cla["nome"])
 			continue
 		var relacao: int = state["tags"].get(cla["id"], {"relacao": 0})["relacao"]
 		var generosidade: float = float(m["oferta"]) / cla["preco_base"]
-		var chance: float = minf(0.95, generosidade * 0.55 + state["jogador"]["renome"] / 200.0 + relacao / 150.0)
+		# CARISMA entra aqui: negociar com chefe mercenário é conversa, e
+		# o atributo só servia para acelerar cortejo. Neutro em 5, ±2% por
+		# ponto — pesa menos que a oferta, como tem que ser (mercenário
+		# ouve moeda antes de ouvir charme).
+		var carisma: int = int(state["jogador"].get("atributos", {}).get("carisma", 5))
+		var chance: float = minf(0.95, generosidade * 0.55
+			+ state["jogador"]["renome"] / 200.0 + relacao / 150.0
+			+ (carisma - 5) * 0.02)
 		if state["jogador"].get("traiu_clas", false):
 			chance -= 0.3
 		if generosidade >= 1.5:
@@ -81,9 +88,9 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			for tipo in cla["contingente"]:
 				state["jogador"]["tropas"][tipo] = int(state["jogador"]["tropas"].get(tipo, 0)) + int(cla["contingente"][tipo])
 			Dialogo.mudar_relacao(state, cla["id"], 10, "contrato")
-			log.call("Os %s aceitaram o contrato!" % cla["nome"])
+			_diz(log, "Os %s aceitaram o contrato!" % cla["nome"])
 		else:
-			log.call("Os %s recusaram a oferta de %d." % [cla["nome"], m["oferta"]])
+			_diz(log, "Os %s recusaram a oferta de %d." % [cla["nome"], m["oferta"]])
 	state["mensageiros"] = pendentes
 
 	# contratos ativos
@@ -96,7 +103,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			if a["meses"] <= 0:
 				_remover_contingente(state, a)
 				Dialogo.mudar_relacao(state, a["id"], 10, "contrato honrado")
-				log.call("Contrato com os %s encerrado em bons termos." % cla["nome"])
+				_diz(log, "Contrato com os %s encerrado em bons termos." % cla["nome"])
 			else:
 				vivos.append(a)
 		else:
@@ -106,12 +113,21 @@ static func tick(state: Dictionary, log: Callable) -> void:
 			if randf() < 0.4 and state["terra"] != null:
 				var saque: int = mini(int(state["terra"]["alimento"]), 40)
 				state["terra"]["alimento"] = int(state["terra"]["alimento"]) - saque
-				log.call("Os %s saquearam %d de alimento ao partir sem soldo!" % [cla["nome"], saque])
+				_diz(log, "Os %s saquearam %d de alimento ao partir sem soldo!" % [cla["nome"], saque])
 			else:
-				log.call("Sem soldo, os %s rasgaram o contrato." % cla["nome"])
+				_diz(log, "Sem soldo, os %s rasgaram o contrato." % cla["nome"])
 	state["clas_ativos"] = vivos
 
 static func _remover_contingente(state: Dictionary, a: Dictionary) -> void:
 	for tipo in a["contingente"]:
 		state["jogador"]["tropas"][tipo] = maxi(0,
 			int(state["jogador"]["tropas"].get(tipo, 0)) - int(a["contingente"][tipo]))
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

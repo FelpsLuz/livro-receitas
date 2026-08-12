@@ -17,6 +17,8 @@ const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Taverna = preload("res://scripts/taverna.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Relogio = preload("res://scripts/relogio.gd")
+const Viagem = preload("res://scripts/viagem.gd")
+const Marchas = preload("res://scripts/marchas.gd")
 
 var passou := 0
 var falhou := 0
@@ -329,17 +331,36 @@ func _init() -> void:
 			break
 	ok("três espiões pegos devolvem pena de prisão", pena == 3)
 
-	# prisão: o tempo passa, mas a casa apodrece
+	# PRISÃO: o tempo passa, as contas correm, e o jogador não age.
+	#
+	# A regra ANTIGA pulava tick_terra e tick_exercito na cadeia, e isso
+	# tornava a masmorra um abrigo: seis meses preso preservavam ouro,
+	# homens e moral intactos, enquanto seis meses livre arruinavam tudo.
+	# Agora a cela cobra: a tropa come, o suserano cobra e a palavra dada
+	# vence — o que se perde é a AÇÃO, não a conta.
 	var pr := com_terra(2)
 	Jogo.prender(pr, 3, Jogo.log_para(pr))
 	ok("preso_ate marcado", int(pr["jogador"]["preso_ate"]) > 0)
+	ok("esta_preso responde de verdade", Jogo.esta_preso(pr))
 	ok("prisão custa ouro, tropas e renome", int(pr["jogador"]["ouro"]) < 150)
 	var mes0: int = int(pr["mes"])
-	var alim0: int = int(pr["terra"]["alimento"])
 	Jogo.passar_mes(pr)
 	ok("o MÊS PASSA na cadeia (não trava o jogo)", int(pr["mes"]) != mes0)
-	ok("a terra não é cuidada enquanto você está preso",
-		int(pr["terra"]["alimento"]) == alim0)
+	# as ações do lado de fora ficam trancadas
+	ok("preso não viaja", not bool(Viagem.viajar(pr, "imperio").get("ok", false)))
+	ok("preso não despacha exército",
+		not bool(Marchas.despachar(pr, "imperio", {"lanceiro": 1}, "saque").get("ok", false)))
+	# e a fiança é o caminho de volta — ouro comprando liberdade
+	pr["jogador"]["ouro"] = 99999
+	var meses_falta: int = Jogo.meses_preso(pr)
+	var r_fianca: Dictionary = Jogo.pagar_fianca(pr, Jogo.log_para(pr))
+	ok("fiança liberta e cobra por mês restante",
+		bool(r_fianca["ok"]) and not Jogo.esta_preso(pr)
+		and int(r_fianca["custo"]) == Jogo.FIANCA_POR_MES * meses_falta)
+	ok("solto, o jogador volta a viajar",
+		bool(Viagem.viajar(pr, "imperio").get("ok", false)))
+	# de volta à cadeia para o resto do bloco
+	Jogo.prender(pr, 3, Jogo.log_para(pr))
 	for i in 4:
 		Jogo.passar_mes(pr)
 	ok("a pena termina sozinha", not Jogo.esta_preso(pr))

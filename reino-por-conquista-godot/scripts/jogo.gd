@@ -24,6 +24,25 @@ const Vassalagem = preload("res://scripts/vassalagem.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
+## O MOLDE das coleções do estado — a única lista que novo_jogo e _migrar
+## consultam. Existe porque as duas divergiram: `novo_jogo` ganhou campos
+## que `_migrar` não repunha, e um save antigo entrava sem `segredos`,
+## `mensageiros`, `clas_ativos`, `cartas` ou `chantagem_pendente` — cada um
+## indexado direto em clas.gd, intriga.gd e na interface. Campo novo aqui
+## nasce reposto nos dois caminhos.
+static func _molde_de_estado() -> Dictionary:
+	return {
+		"guerras": [], "tags": {}, "segredos": [], "casus_belli": [],
+		"carga": {}, "mensageiros": [], "clas_ativos": [], "cartas": [],
+		"cronica": [], "contratos": [], "evento_pendente": null,
+		"chantagem_pendente": null, "fila_recrutamento": [], "pactos": [],
+		"choques": [], "flagras": {}, "informantes": [], "marchas": [],
+		"minuto": 0, "empregos": {}, "afetos": {}, "mapa_comercial": null,
+		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
+		"familia": {"conjuge": null, "filhos": []},
+		"terra": null, "fim": null,
+	}
+
 static func novo_jogo(nome: String = "") -> Dictionary:
 	var state := {
 		"ano": 1, "mes": 3, "dia": 1,
@@ -65,11 +84,12 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"intel": {},               # o que o espião revelou (intel.gd)
 		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
 	}
+	state.merge(_molde_de_estado())
 	Economia.inicializar_mercados(state)
 	Geopolitica.inicializar(state)
 	state["contratos"] = Contratos.gerar(state)
 	var log := log_para(state)
-	log.call("Ano 1. Você é %s: sem terras, sem título, com %d moedas e 5 lanceiros leais." %
+	_diz(log, "Ano 1. Você é %s: sem terras, sem título, com %d moedas e 5 lanceiros leais." %
 		[state["jogador"]["nome"], state["jogador"]["ouro"]])
 	return state
 
@@ -126,16 +146,27 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 		if state["mes"] > 12:
 			state["mes"] = 1
 			state["ano"] += 1
-		log.call("Mais um mês a ferros. As paredes escorrem.")
+		_diz(log, "Mais um mês a ferros. As paredes escorrem.")
 		Economia.tick_mercados(state)         # o mundo segue sem você
 		Economia.tick_choques(state)
 		Economia.tick_guerras(state, log)
 		Geopolitica.tick(state, log)
+		# AS CONTAS NÃO ESPERAM O SENHOR SAIR. Antes a masmorra pulava
+		# upkeep, tributo e palavra dada — e ficar preso saía mais barato
+		# que ficar livre (medido: 6 meses preso preservavam ouro, homens e
+		# moral intactos). Cadeia é castigo, não abrigo: a tropa continua
+		# comendo, o suserano continua cobrando, e o contrato que você
+		# jurou cumprir continua vencendo sem você.
+		Economia.tick_terra(state, log)
+		Economia.tick_exercito(state, log)
+		Vassalagem.tick(state, log)
+		Contratos.expirar_pendentes(state, log)
+		state["contratos"] = Contratos.gerar(state)
 		# as marchas já despachadas continuam: quem está na estrada não sabe
 		# que o senhor foi preso, e volta para uma casa sem dono
 		if avancar_relogio:
 			Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
-		# de propósito: sem tick_terra e sem tick_exercito — sua casa apodrece
+		_tick_ruina(state, log)
 		return
 
 	state["mes"] += 1
@@ -169,11 +200,20 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 	if state["jogador"]["rei_de"] != "":
 		state["jogador"]["meses_reinando"] += 1
 	# VITÓRIA: ser suserano de TODOS os reinos por 12 meses (conquista via guerra)
+	#
+	# O reino que VOCÊ fundou não entra na conta: ele nunca aparece como
+	# "dominado por jogador" (é seu de nascença), e por isso a soma jamais
+	# fechava — fundar uma casa nas Terras Bárbaras tornava a vitória
+	# matematicamente impossível. Sua própria coroa não é um alvo.
 	var dominados := 0
+	var alvos := 0
 	for r in state["reinos"]:
+		if bool(r.get("fundado_pelo_jogador", false)):
+			continue
+		alvos += 1
 		if r.get("dominado_por", "") == "jogador":
 			dominados += 1
-	if dominados >= state["reinos"].size() and state["reinos"].size() > 0:
+	if dominados >= alvos and alvos > 0:
 		state["jogador"]["meses_imperador"] = state["jogador"].get("meses_imperador", 0) + 1
 		if state["jogador"]["meses_imperador"] >= 12:
 			state["fim"] = {"tipo": "vitoria"}
@@ -201,9 +241,9 @@ static func _tick_ruina(state: Dictionary, log: Callable) -> void:
 		state["meses_ruina"] = 0
 		j["ouro"] = int(j["ouro"]) + 150
 		j["renome"] = maxi(0, int(j["renome"]) - 5)
-		log.call("Um agiota compra o que resta do seu nome: +150 de ouro, e menos um naco de orgulho.")
+		_diz(log, "Um agiota compra o que resta do seu nome: +150 de ouro, e menos um naco de orgulho.")
 	elif state["meses_ruina"] >= 6:
-		log.call("Sem ouro, sem homens, sem terra. O mundo esqueceu seu nome.")
+		_diz(log, "Sem ouro, sem homens, sem terra. O mundo esqueceu seu nome.")
 		state["fim"] = {"tipo": "derrota", "causa": "ruina"}
 
 static func _envelhecer(state: Dictionary, log: Callable) -> void:
@@ -224,7 +264,7 @@ static func morrer(state: Dictionary, causa: String, log: Callable) -> void:
 	if herdeiro.is_empty():
 		state["fim"] = {"tipo": "derrota", "causa": causa}
 		return
-	log.call("%s morre (%s). %s assume a casa." % [state["jogador"]["nome"], causa, herdeiro["nome"]])
+	_diz(log, "%s morre (%s). %s assume a casa." % [state["jogador"]["nome"], causa, herdeiro["nome"]])
 	state["jogador"]["nome"] = herdeiro["nome"]
 	state["jogador"]["idade"] = herdeiro["idade"]
 	state["jogador"]["atributos"] = herdeiro["atributos"]
@@ -289,10 +329,53 @@ static func prender(state: Dictionary, meses: int, log: Callable) -> void:
 	for tipo in j["tropas"]:
 		j["tropas"][tipo] = int(int(j["tropas"][tipo]) * 0.5)
 	Sinais.emitir(&"preso", {"meses": meses})
-	log.call("Capturado. %d meses a ferros." % meses)
+	_diz(log, "Capturado. %d meses a ferros." % meses)
 
+## Você está a ferros? A pergunta que TODA ação de fora da cela tem que
+## fazer. Existia desde sempre e não era chamada por ninguém: o jogador
+## era preso e seguia viajando, trabalhando e marchando como se nada
+## fosse. Agora viagem, emprego, contrato, marcha, invasão, cortejo e
+## juramento passam por aqui.
 static func esta_preso(state: Dictionary) -> bool:
 	return int(state["jogador"].get("preso_ate", 0)) > _mes_absoluto(state)
+
+## Quantos meses ainda faltam — para a interface dizer, e para a fiança
+## saber quanto cobrar.
+static func meses_preso(state: Dictionary) -> int:
+	return maxi(0, int(state["jogador"].get("preso_ate", 0)) - _mes_absoluto(state))
+
+const AVISO_PRESO := "Você está a ferros. Daqui não se manda em nada."
+
+## A recusa padrão, em personagem, para quem tentar agir da cela.
+static func recusa_preso(state: Dictionary) -> Dictionary:
+	var m := meses_preso(state)
+	return {"ok": false, "preso": true,
+		"msg": "%s Faltam %d %s." % [AVISO_PRESO, m, "mês" if m == 1 else "meses"]}
+
+## A FIANÇA — ouro compra liberdade, como sempre comprou.
+##
+## Sem ela a cadeia era um beco: o jogador só podia clicar "passar o dia"
+## até o prazo vencer, e nenhum recurso do jogo tocava a masmorra. Aqui o
+## cofre conversa com o calendário — e o preço sobe com o que falta.
+const FIANCA_POR_MES := 240
+
+static func preco_fianca(state: Dictionary) -> int:
+	return FIANCA_POR_MES * meses_preso(state)
+
+static func pagar_fianca(state: Dictionary, log: Callable = Callable()) -> Dictionary:
+	if not esta_preso(state):
+		return {"ok": false, "msg": "Você não está preso."}
+	var custo := preco_fianca(state)
+	if int(state["jogador"]["ouro"]) < custo:
+		return {"ok": false,
+			"msg": "O carcereiro conta com o dedo: %d de ouro, nem uma moeda a menos." % custo}
+	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - custo
+	state["jogador"]["preso_ate"] = 0
+	# comprar a saída não é o mesmo que sair inocente
+	state["jogador"]["honra"] = maxi(0, roundi(int(state["jogador"].get("honra", 50)) * 0.93))
+	if log.is_valid():
+		_diz(log, "Fiança paga: %d de ouro. O portão range e você anda de novo." % custo)
+	return {"ok": true, "msg": "Fiança paga: %d de ouro." % custo, "custo": custo}
 
 static func contratar_guardas(state: Dictionary, qtd: int) -> Dictionary:
 	var custo := 60 * qtd
@@ -315,15 +398,26 @@ static func melhorar_equip(state: Dictionary) -> Dictionary:
 	state["jogador"]["equip"] = int(state["jogador"]["equip"]) + 1
 	return {"ok": true, "msg": "Equipamento nível %d (+15%% de força)." % state["jogador"]["equip"]}
 
+## Vender o excedente do celeiro é COMÉRCIO, e passa pelas mesmas duas
+## regras da Feira: precisa da licença e empurra a oferta da praça. Sem
+## isso a exportação era um cano paralelo que furava os dois freios —
+## vendia sem Mapa Comercial, no preço cheio, quantas vezes quisesse, e o
+## preço do trigo nunca caía por mais trigo que fosse despejado nele.
 static func exportar_comida(state: Dictionary, qtd: int) -> Dictionary:
 	if state["terra"] == null:
 		return {"ok": false, "msg": "Você não tem terras."}
 	var t: Dictionary = state["terra"]
 	if int(t["alimento"]) < qtd:
 		return {"ok": false, "msg": "Não há tanto alimento nos celeiros."}
+	if not Economia.tem_praca(state, str(state["local"])):
+		return {"ok": false, "msg": Economia.AVISO_SEM_PRACA}
+	if not Economia.mapa_valido(state):
+		return {"ok": false, "msg": Economia.AVISO_MAPA}
 	t["alimento"] = int(t["alimento"]) - qtd
+	# +10% sobre o preço: o excedente da própria terra sai sem intermediário
 	var ganho: int = roundi(Economia.preco_de(state, state["local"], "trigo") * qtd * 1.1)
 	state["jogador"]["ouro"] += ganho
+	Economia.empurrar_oferta(state, str(state["local"]), "trigo", qtd)
 	if int(t["alimento"]) < int(t["populacao"]) * 2:
 		t["felicidade"] = clampi(int(t["felicidade"]) - 15, 0, 100)
 		return {"ok": true, "msg": "Vendeu %d de alimento por %d — o povo murmura (felicidade -15)." % [qtd, ganho]}
@@ -357,9 +451,9 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 							if str(n.get("nome", "")) == lider:
 								Cidadaos.lista(state).erase(n)
 								break
-						log.call("Você afogou a rebelião em sangue — e %s morreu com a turba que liderou." % lider)
+						_diz(log, "Você afogou a rebelião em sangue — e %s morreu com a turba que liderou." % lider)
 					else:
-						log.call("Você afogou a rebelião em sangue. A vila obedece — e odeia.")
+						_diz(log, "Você afogou a rebelião em sangue. A vila obedece — e odeia.")
 				else:
 					morrer(state, "rebeliao", log)
 			else:
@@ -367,14 +461,14 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 				# quem perdeu tudo (ou a um save mutilado), e o ramo caía num
 				# SCRIPT ERROR em vez de simplesmente não acontecer
 				if state["terra"] == null:
-					log.call("Não há celeiro para abrir. A turba se dispersa sozinha, por ora.")
+					_diz(log, "Não há celeiro para abrir. A turba se dispersa sozinha, por ora.")
 					return {}
 				var custo: int = mini(int(state["jogador"]["ouro"]), 200)
 				state["jogador"]["ouro"] -= custo
 				state["terra"]["alimento"] = int(state["terra"]["alimento"]) + 60
 				if lider == "":
 					state["terra"]["felicidade"] = 55
-					log.call("Você abriu os celeiros (-%d ouro). O povo abaixa as foices." % custo)
+					_diz(log, "Você abriu os celeiros (-%d ouro). O povo abaixa as foices." % custo)
 				else:
 					# o povo se acalma, mas o capataz que armou a revolta segue
 					# no cargo — a ambição dele só cresceu com o gosto do poder
@@ -383,7 +477,7 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 						if str(n.get("nome", "")) == lider:
 							n["ambicao"] = mini(10, int(n.get("ambicao", 5)) + 2)
 							break
-					log.call("Você abriu os celeiros (-%d ouro). O povo abaixa as foices — mas %s, o capataz, continua no cargo, e não esqueceu." % [custo, lider])
+					_diz(log, "Você abriu os celeiros (-%d ouro). O povo abaixa as foices — mas %s, o capataz, continua no cargo, e não esqueceu." % [custo, lider])
 		"notavel_ambicioso":
 			# escolha: "comprar" (lealdade por ouro), "exilar" ou ignorar
 			resultado = {"msg": Cidadaos.resolver_ambicioso(state, ev["nome"], escolha, log)}
@@ -392,9 +486,9 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 			if escolha == "pagar" and state["jogador"]["ouro"] >= custo_g:
 				state["jogador"]["ouro"] -= custo_g
 				state["jogador"]["meses_sem_pagar"] = 0
-				log.call("Você pagou a guarda em dobro (-%d). Os portões continuam seus." % custo_g)
+				_diz(log, "Você pagou a guarda em dobro (-%d). Os portões continuam seus." % custo_g)
 			else:
-				log.call("Sua guarda abriu os portões na calada da noite. Você fugiu pelo esgoto.")
+				_diz(log, "Sua guarda abriu os portões na calada da noite. Você fugiu pelo esgoto.")
 				state["jogador"]["guardas"] = 0
 				state["jogador"]["ouro"] = int(state["jogador"]["ouro"] / 2.0)
 				if state["terra"] != null:
@@ -455,6 +549,18 @@ static func _migrar(state: Dictionary) -> Dictionary:
 	for campo in ["fila_recrutamento", "pactos", "choques", "informantes", "marchas"]:
 		if not state.has(campo):
 			state[campo] = []
+	# A LISTA VEM DE novo_jogo, não de uma cópia à mão: era assim que
+	# `segredos`, `mensageiros`, `clas_ativos`, `cartas` e
+	# `chantagem_pendente` ficaram de fora — cada um indexado DIRETO em
+	# clas.gd, intriga.gd e na interface, e cada save antigo virava um
+	# SCRIPT ERROR por mês e duas abas que paravam de desenhar no meio.
+	# Chave nova em novo_jogo passa a ser reposta sozinha, para sempre.
+	var molde: Dictionary = _molde_de_estado()
+	for campo in molde:
+		if not state.has(campo):
+			var padrao = molde[campo]
+			state[campo] = padrao.duplicate(true) if padrao is Array or padrao is Dictionary \
+				else padrao
 	if not state.has("minuto"):
 		state["minuto"] = 0
 	# a fila guardava `restante_seg` quando o quartel tinha relógio próprio;
@@ -518,3 +624,12 @@ static func _normalizar(v: Variant) -> Variant:
 			if v == floorf(v):
 				return int(v)
 	return v
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

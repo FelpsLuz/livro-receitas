@@ -129,7 +129,7 @@ static func _tick_mercador(state: Dictionary, log: Callable) -> void:
 	var melhor := _melhor_rota(state)
 	if melhor.is_empty():
 		return
-	log.call("Seu mercador: \"%s vale mais em %s do que em %s — leve a carga.\""
+	_diz(log, "Seu mercador: \"%s vale mais em %s do que em %s — leve a carga.\""
 		% [Dados.MERCADORIAS[melhor["bem"]]["nome"], _nome_reino(state, melhor["venda"]),
 			_nome_reino(state, melhor["compra"])])
 
@@ -140,7 +140,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 		return
 	var custo: int = 25 * state["informantes"].size()
 	if int(state["jogador"]["ouro"]) < custo:
-		log.call("Sem soldo, seus informantes sumiram nas sombras.")
+		_diz(log, "Sem soldo, seus informantes sumiram nas sombras.")
 		state["informantes"] = []
 		return
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - custo
@@ -163,8 +163,17 @@ static func tick(state: Dictionary, log: Callable) -> void:
 				noticias.append("%s e %s estão à beira da guerra"
 					% [r["nome"], outro["nome"]])
 		if not noticias.is_empty():
-			log.call("Informante: %s." % Dados.rnd(noticias))
+			_diz(log, "Informante: %s." % Dados.rnd(noticias))
 
 static func _nome_reino(state: Dictionary, id: String) -> String:
 	var r := Geopolitica.reino_por_id(state, id)
 	return str(r.get("nome", id))
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

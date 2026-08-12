@@ -165,6 +165,17 @@ func _initialize() -> void:
 		await _quadro(jogo, "contrato_preparacao")
 		jogo.overlay_modal.visible = false
 
+	# ---- os dois estados de tela que a integração criou ----
+	# A CELA: o jogador preso via a interface como se nada tivesse
+	# acontecido. Agora a aba da terra abre com o painel de ferros.
+	Jogo.prender(st, 2, Jogo.log_para(st))
+	await _tirar(jogo, 0, "cadeia")
+	st["jogador"]["preso_ate"] = 0
+	# A PRAÇA QUE NÃO EXISTE: nas Terras Bárbaras a Feira desenhava a
+	# tabela com preço 0 em tudo e 14 erros de script atrás dela.
+	st["local"] = "barbaros"
+	await _tirar(jogo, 2, "feira_sem_praca")
+
 	# a fronteira selvagem RECONHECIDA: batedor pago, conta dos clãs na mesa
 	st["local"] = "barbaros"
 	var r_esp: Dictionary = Barbaros.espiar(st, Jogo.log_para(st))

@@ -81,7 +81,7 @@ static func espiar(state: Dictionary, log: Callable = Callable()) -> Dictionary:
 	_ficha(state)["reconhecido"] = true
 	Jogo.passar_dia(state, log)
 	if log.is_valid():
-		log.call("Seu batedor voltou das Terras Bárbaras: são %d homens em três clãs."
+		_diz(log, "Seu batedor voltou das Terras Bárbaras: são %d homens em três clãs."
 			% total_de_homens(state))
 	Sinais.emitir(&"barbaros_reconhecidos", {"homens": total_de_homens(state)})
 	return {"ok": true, "msg": "O batedor conta %d homens, em três clãs." % total_de_homens(state)}
@@ -104,6 +104,9 @@ static func invadir(state: Dictionary, log: Callable = Callable()) -> Dictionary
 	var check := pode_invadir(state)
 	if not bool(check["ok"]):
 		return check
+	var Jogo_i = load("res://scripts/jogo.gd")
+	if Jogo_i.esta_preso(state):
+		return Jogo_i.recusa_preso(state)
 	var rel := {"ok": true, "fases": [], "vitoria": true,
 		"baixas": 0, "clas_vencidos": []}
 	var antes := Combate.total_homens(state["jogador"]["tropas"])
@@ -131,10 +134,10 @@ static func invadir(state: Dictionary, log: Callable = Callable()) -> Dictionary
 		_ficha(state)["conquistado"] = true
 		state["jogador"]["renome"] = int(state["jogador"]["renome"]) + 40
 		if log.is_valid():
-			log.call("As Terras Bárbaras caíram. Três clãs, um senhor — e nenhum trono ainda.")
+			_diz(log, "As Terras Bárbaras caíram. Três clãs, um senhor — e nenhum trono ainda.")
 		Sinais.emitir(&"barbaros_conquistados", {})
 	elif log.is_valid():
-		log.call("A invasão das Terras Bárbaras fracassou: %d homens ficaram no gelo."
+		_diz(log, "A invasão das Terras Bárbaras fracassou: %d homens ficaram no gelo."
 			% int(rel["baixas"]))
 	return rel
 
@@ -190,7 +193,16 @@ static func fundar_reino(state: Dictionary, nome_casa: String, capital: String,
 			m[g_id] = {"oferta": 1.6 if novo["producao"].has(g_id) else 1.0, "demanda": 1.0}
 		state["mercados"][ID] = m
 	if log.is_valid():
-		log.call("Nasce %s, com capital em %s. O mapa tem sete casas — e você é rei de uma."
+		_diz(log, "Nasce %s, com capital em %s. O mapa tem sete casas — e você é rei de uma."
 			% [nome, cap])
 	Sinais.emitir(&"reino_fundado", {"nome": nome, "capital": cap})
 	return {"ok": true, "msg": "%s está no mapa. Você é rei." % nome, "reino": novo}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

@@ -37,9 +37,12 @@ const MORAL_MINIMA := 25
 ## O prêmio: os defensores lutam com metade dos status.
 const DEBUFF_DEFENSOR := 0.5
 
-static func iniciar(m: Dictionary, minuto_atual: int) -> void:
+## O acampamento NASCE com a moral do exército que marchou, não com 100.
+## Antes, tropa faminta e sem soldo montava acampamento perfeito no muro
+## inimigo: eram duas contas com o mesmo nome que nunca se olhavam.
+static func iniciar(m: Dictionary, minuto_atual: int, moral_inicial: int = 100) -> void:
 	m["cerco"] = {
-		"fase": 0, "moral": 100, "efetivado": false,
+		"fase": 0, "moral": clampi(moral_inicial, 0, 100), "efetivado": false,
 		"gasto": {"ouro": 0, "comida": 0, "madeira": 0},
 		"reforcos": 0, "abandonado": false,
 	}
@@ -69,7 +72,7 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 	if not pagou.is_empty():
 		c["moral"] = int(c["moral"]) - 18 * pagou.size()
 		if log.is_valid():
-			log.call("Cerco (fase %d): falta %s no acampamento."
+			_diz(log, "Cerco (fase %d): falta %s no acampamento."
 				% [int(c["fase"]), " e ".join(pagou)])
 	else:
 		# tédio e lama cobram sozinhos; a neve cobra mais
@@ -87,7 +90,7 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 		ev["perdidos"] = antes - Combate.total_homens(m["tropas"])
 		c["moral"] = int(c["moral"]) - 9
 		if log.is_valid():
-			log.call("Cerco (fase %d): um lorde aliado atacou seu acampamento — %d baixas."
+			_diz(log, "Cerco (fase %d): um lorde aliado atacou seu acampamento — %d baixas."
 				% [int(c["fase"]), int(ev["perdidos"])])
 
 	c["moral"] = clampi(int(c["moral"]), 0, 100)
@@ -105,7 +108,7 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 			# nome de exibição, nunca o id: "sem_rei" cru na crônica quebrava
 			# a ficção que todas as outras linhas sustentam
 			var Rotas = load("res://scripts/rotas.gd")
-			log.call("O cerco a %s foi levantado: a tropa não aguentou mais."
+			_diz(log, "O cerco a %s foi levantado: a tropa não aguentou mais."
 				% Rotas.nome_do(state, str(m["alvo"])))
 		Sinais.emitir(&"cerco_abandonado", {"marcha": m["id"], "fase": int(c["fase"])})
 		return ev
@@ -114,7 +117,7 @@ static func avancar_fase(state: Dictionary, m: Dictionary, log: Callable) -> Dic
 		c["efetivado"] = true
 		ev["efetivado"] = true
 		if log.is_valid():
-			log.call("CERCO EFETIVADO em %s: os muros estão famintos." % m["alvo"])
+			_diz(log, "CERCO EFETIVADO em %s: os muros estão famintos." % m["alvo"])
 		Sinais.emitir(&"cerco_efetivado", {"marcha": m["id"]})
 	return ev
 
@@ -199,3 +202,12 @@ static func progresso(m: Dictionary) -> Dictionary:
 	return {"fase": int(c["fase"]), "de": FASES, "moral": int(c["moral"]),
 		"efetivado": bool(c["efetivado"]), "reforcos": int(c["reforcos"]),
 		"gasto": c["gasto"].duplicate()}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

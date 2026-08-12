@@ -105,7 +105,7 @@ static func capturar(state: Dictionary, cmd: Dictionary, log: Callable) -> Dicti
 		return {}
 	var id: String = str(cmd.get("id", ""))
 	if id == "senhor":
-		log.call("Seu estandarte caiu. Você foi capturado no campo.")
+		_diz(log, "Seu estandarte caiu. Você foi capturado no campo.")
 		return {"preso": 3, "quem": "senhor", "nome": str(cmd["nome"])}
 	if id.begins_with("lorde:"):
 		# um lorde capturado deixa de render imposto até ser resgatado
@@ -113,9 +113,9 @@ static func capturar(state: Dictionary, cmd: Dictionary, log: Callable) -> Dicti
 		for n in Cidadaos.lista(state):
 			if "lorde:" + str(n["nome"]) == id:
 				n["capturado"] = true
-		log.call("%s foi capturado e está a ferros em terra inimiga." % cmd["nome"])
+		_diz(log, "%s foi capturado e está a ferros em terra inimiga." % cmd["nome"])
 		return {"preso": 0, "quem": "lorde", "nome": str(cmd["nome"]), "resgate": 300}
-	log.call("%s não voltou do campo." % cmd["nome"])
+	_diz(log, "%s não voltou do campo." % cmd["nome"])
 	return {"preso": 0, "quem": "outro", "nome": str(cmd["nome"])}
 
 ## Resgate de um lorde capturado — ouro por lealdade.
@@ -132,3 +132,12 @@ static func resgatar(state: Dictionary, nome: String) -> Dictionary:
 		n["lealdade"] = clampi(int(n.get("lealdade", 50)) + 20, 0, 100)
 		return {"ok": true, "msg": "%s voltou para casa, e não vai esquecer." % nome}
 	return {"ok": false, "msg": "Ninguém com esse nome está preso."}
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

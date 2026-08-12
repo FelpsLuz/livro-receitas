@@ -94,6 +94,8 @@ static func cortejadas(state: Dictionary) -> Array:
 static func cortejar(state: Dictionary, reino_id: String, idx: int,
 		log: Callable = Callable()) -> Dictionary:
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.esta_preso(state):
+		return Jogo.recusa_preso(state)
 	if state["familia"]["conjuge"] != null:
 		return {"ok": false, "msg": "Você é casado. A vila inteira sabe."}
 	if int(state["jogador"]["ouro"]) < CUSTO_CORTEJO:
@@ -117,7 +119,7 @@ static func cortejar(state: Dictionary, reino_id: String, idx: int,
 			int(state["jogador"].get("honra", 50)) - ESCANDALO_HONRA)
 		msg = "A vila comenta que você visita duas portas. Honra −%d." % ESCANDALO_HONRA
 		if log.is_valid():
-			log.call("Falam de você nas duas casas. Honra −%d." % ESCANDALO_HONRA)
+			_diz(log, "Falam de você nas duas casas. Honra −%d." % ESCANDALO_HONRA)
 	Jogo.passar_dia(state, log)
 	return {"ok": true, "msg": msg, "afeto": int(state["afetos"][chave]),
 		"escandalo": escandalo}
@@ -159,7 +161,7 @@ static func pedir_a_mao(state: Dictionary, reino_id: String, idx: int,
 			int(state["terra"]["felicidade"]) + 6)
 	state["afetos"] = {}
 	if log.is_valid():
-		log.call("Você casa com %s, %s. Os reis torcem o nariz; a vila bebe até de manhã."
+		_diz(log, "Você casa com %s, %s. Os reis torcem o nariz; a vila bebe até de manhã."
 			% [str(moca["nome"]), str(moca["titulo"])])
 	Sinais.emitir(&"casamento", {"plebeia": true, "reino": reino_id})
 	return {"ok": true, "msg": "Casados. %s" % str(moca["dom"]),
@@ -184,3 +186,12 @@ static func fator_colheita(state: Dictionary) -> float:
 ## Felicidade que a casa dela segura sozinha, todo mês.
 static func bonus_felicidade(state: Dictionary) -> int:
 	return 8 if buff_ativo(state, "felicidade") else 0
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

@@ -77,7 +77,21 @@ static func poder(tropas: Dictionary, equip: int) -> Dictionary:
 # ------------------------------------------------------------
 ## Equipamento vale para todo mundo; o clã mercenário dá +20% SÓ na classe
 ## em que é especialista — é o que dá caráter a cada bando.
-static func bonus_de(state: Dictionary, tropas: Dictionary) -> float:
+## MORAL VIRA FORÇA. Um exército que não recebe soldo há três meses não
+## luta como um exército pago — e até esta linha existir, lutava: a mesma
+## batalha com moral 100 e com moral 5 devolvia baixas idênticas. A moral
+## só sabia desertar, o que é a consequência TARDIA; esta é a imediata.
+##
+## A curva é neutra em 100 (nenhuma batalha antiga muda de resultado) e
+## desce até 0,70 no fundo do poço — sensível o bastante para o jogador
+## sentir, longe de decidir sozinha o combate.
+static func fator_moral(moral: int) -> float:
+	return 0.70 + 0.30 * (clampi(moral, 0, 100) / 100.0)
+
+## `moral` explícita serve à coluna em marcha, que carrega a moral do
+## acampamento, e não a do quartel que ficou em casa. Sem argumento, vale
+## a do exército do jogador.
+static func bonus_de(state: Dictionary, tropas: Dictionary, moral: int = -1) -> float:
 	var b := 1.0 + int(state["jogador"].get("equip", 0)) * 0.15
 	for a in state.get("clas_ativos", []):
 		var esp: String = str(a.get("especialidade", ""))
@@ -88,7 +102,8 @@ static func bonus_de(state: Dictionary, tropas: Dictionary) -> float:
 			if int(tropas[tipo]) > 0 and d != null and d.get("classe", "") == esp:
 				b += 0.20
 				break
-	return b
+	var m: int = moral if moral >= 0 else int(state["jogador"].get("moral", 100))
+	return b * fator_moral(m)
 
 # ------------------------------------------------------------
 # O assalto: um lado ataca, o outro defende

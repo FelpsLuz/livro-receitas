@@ -104,6 +104,12 @@ static func despachar(state: Dictionary, alvo: String, tropas: Dictionary,
 		intencao: String, comandante: String = "", origem: String = "jogador") -> Dictionary:
 	if intencao != "saque" and intencao != "cerco":
 		return {"ok": false, "msg": "Intenção inválida."}
+	# senhor a ferros não despacha exército — mas o INIMIGO continua
+	# marchando contra você, e por isso a guarda só vale para `jogador`
+	if origem == "jogador":
+		var Jogo_m = load("res://scripts/jogo.gd")
+		if Jogo_m.esta_preso(state):
+			return Jogo_m.recusa_preso(state)
 	var fonte := _tropas_de(state, origem)
 	var soma := 0
 	for tipo in tropas:
@@ -200,7 +206,7 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 		if Combate.total_homens(m["tropas"]) == 0:
 			# aniquilados na estrada: o saque se perde com eles
 			if log.is_valid():
-				log.call("Nenhum homem da marcha para %s voltou."
+				_diz(log, "Nenhum homem da marcha para %s voltou."
 					% Rotas.nome_do(state, m["alvo"]))
 			var cap := Comandantes.capturar(state,
 				Comandantes.por_id(state, str(m.get("comandante", ""))), log)
@@ -230,13 +236,16 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 					# o cerco começa no instante em que a marcha CHEGOU, não
 					# "agora": um salto grande de tempo (passar_mes = 600) tem
 					# que gastar o resto do mês nos muros, e não parado
-					Cerco.iniciar(m, int(m["chega_em"]))
+					# a coluna do jogador leva a moral do quartel para o muro;
+					# a do inimigo acampa inteira, que é o que ele tem
+					Cerco.iniciar(m, int(m["chega_em"]),
+						int(state["jogador"].get("moral", 100)) if minha else 100)
 					if log.is_valid():
 						if minha:
-							log.call("Seu exército acampou diante de %s. O cerco começou."
+							_diz(log, "Seu exército acampou diante de %s. O cerco começou."
 								% Rotas.nome_do(state, m["alvo"]))
 						else:
-							log.call("Um exército de %s acampou diante de suas terras. O cerco começou."
+							_diz(log, "Um exército de %s acampou diante de suas terras. O cerco começou."
 								% Rotas.nome_do(state, m["origem"]))
 					eventos.append({"tipo": "cerco_iniciado", "marcha": m["id"]})
 					# e as fases que já couberam nesse salto rodam JÁ
@@ -263,10 +272,10 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 						Jogo2.prender(state, int(cap2["preso"]), log)
 					if log.is_valid():
 						if minha:
-							log.call("O exército enviado a %s foi destruído."
+							_diz(log, "O exército enviado a %s foi destruído."
 								% Rotas.nome_do(state, m["alvo"]))
 						else:
-							log.call("O exército de %s foi destruído diante de suas terras."
+							_diz(log, "O exército de %s foi destruído diante de suas terras."
 								% Rotas.nome_do(state, m["origem"]))
 			"volta":
 				eventos.append(_resolver_retorno(state, m, log))
@@ -317,11 +326,11 @@ static func _emboscada(state: Dictionary, m: Dictionary, log: Callable) -> Dicti
 				m["saque"][g] = int(m["saque"][g]) - leva
 	if log.is_valid():
 		if perdidos > 0 or not roubado.is_empty():
-			log.call("Emboscada na estrada para %s: %d homens caídos%s." % [
+			_diz(log, "Emboscada na estrada para %s: %d homens caídos%s." % [
 				Rotas.nome_do(state, m["alvo"]), perdidos,
 				" e parte da carga levada" if not roubado.is_empty() else ""])
 		else:
-			log.call("Bandidos tentaram a sorte contra sua coluna e fugiram.")
+			_diz(log, "Bandidos tentaram a sorte contra sua coluna e fugiram.")
 	var ev := {"tipo": "emboscada", "marcha": m["id"], "perdidos": perdidos,
 		"roubado": roubado, "fases": rel["fases"]}
 	Sinais.emitir(&"marcha_emboscada", ev)
@@ -396,7 +405,7 @@ static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, l
 		m["saque"] = _colher_do_jogador(state, m["tropas"])
 		rel["saque"] = m["saque"].duplicate()
 		if log.is_valid():
-			log.call("%s saqueou suas terras." % nome_reino)
+			_diz(log, "%s saqueou suas terras." % nome_reino)
 	elif rel["vitoria"]:
 		# `rel["vitoria"]` aqui é do ATACANTE (o reino) — resolver_assalto
 		# chama de "vitória" quando o DEFENSOR (a guarnição do jogador) é
@@ -405,7 +414,7 @@ static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, l
 			var nivel_antigo: int = int(state["terra"]["nivel"])
 			state["terra"]["nivel"] = nivel_antigo - 1
 			if log.is_valid():
-				log.call("%s derrubou os muros — sua terra caiu para %s."
+				_diz(log, "%s derrubou os muros — sua terra caiu para %s."
 					% [nome_reino, Dados.NIVEIS_TERRA[nivel_antigo - 1]["nome"]])
 		# vitória esmagadora pode impor vassalagem — sem custo de renome,
 		# porque não foi o jogador quem escolheu se ajoelhar
@@ -423,7 +432,7 @@ static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, l
 			state["guerras"] = vivas
 			Dialogo.mudar_relacao(state, "rei_" + reino_id, 10, "vassalagem imposta")
 			if log.is_valid():
-				log.call("Derrotado, você jura lealdade a %s." % nome_reino)
+				_diz(log, "Derrotado, você jura lealdade a %s." % nome_reino)
 		Dialogo.mudar_relacao(state, "rei_" + reino_id, -20, "invasão")
 	else:
 		# o jogador REPELIU a invasão: o invasor recua enfraquecido, e
@@ -433,7 +442,7 @@ static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, l
 		if state["terra"] != null:
 			state["terra"]["felicidade"] = clampi(int(state["terra"]["felicidade"]) + 10, 0, 100)
 		if log.is_valid():
-			log.call("Suas terras resistiram ao ataque de %s." % nome_reino)
+			_diz(log, "Suas terras resistiram ao ataque de %s." % nome_reino)
 
 	rel["resumo"] = Combate.montar_relatorio({
 		"contexto": rel["contexto"], "intencao": m["intencao"], "fases": rel["fases"],
@@ -442,7 +451,7 @@ static func _resolver_chegada_contra_jogador(state: Dictionary, m: Dictionary, l
 		"vivos_inimigo": Combate.total_homens(m["tropas"]),
 		"vitoria": not rel["vitoria"], "debandada": ""})
 	if log.is_valid():
-		log.call(rel["resumo"].split("\n")[0] + (" Repelido." if not rel["vitoria"] else " Suas terras sofreram."))
+		_diz(log, rel["resumo"].split("\n")[0] + (" Repelido." if not rel["vitoria"] else " Suas terras sofreram."))
 	Sinais.emitir(&"marcha_chegou", rel)
 	return rel
 
@@ -452,7 +461,11 @@ static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
 	var Geopolitica = load("res://scripts/geopolitica.gd")
 	var alvo: String = m["alvo"]
 	var guarnicao := _guarnicao_de(state, alvo)
-	var bonus := Combate.bonus_de(state, m["tropas"])
+	# a coluna luta com a moral DELA: o acampamento passou fome no cerco, e
+	# é essa conta que chega ao muro — não a do quartel em casa
+	var moral_col: int = int(m.get("cerco", {}).get("moral",
+		state["jogador"].get("moral", 100)))
+	var bonus := Combate.bonus_de(state, m["tropas"], moral_col)
 	var cmd: Dictionary = Comandantes.por_id(state, str(m.get("comandante", "")))
 	bonus *= Comandantes.bonus_ataque(cmd)
 	var rel := Combate.resolver_assalto(m["tropas"], guarnicao, bonus, debuff_defensor, m["intencao"])
@@ -495,7 +508,7 @@ static func _resolver_chegada(state: Dictionary, m: Dictionary, log: Callable,
 		"vivos_inimigo": Combate.total_homens(guarnicao),
 		"vitoria": rel["vitoria"], "debandada": ""})
 	if log.is_valid():
-		log.call(rel["resumo"].split("\n")[0] + (" VITÓRIA." if rel["vitoria"] else " Repelido."))
+		_diz(log, rel["resumo"].split("\n")[0] + (" VITÓRIA." if rel["vitoria"] else " Repelido."))
 	Sinais.emitir(&"marcha_chegou", rel)
 	return rel
 
@@ -534,13 +547,13 @@ static func _resolver_retorno(state: Dictionary, m: Dictionary, log: Callable) -
 		if origem == "jogador":
 			var quem := "1 homem voltou" if voltaram == 1 else "%d homens voltaram" % voltaram
 			if trouxe.is_empty():
-				log.call("%s de %s de mãos vazias."
+				_diz(log, "%s de %s de mãos vazias."
 					% [quem, Rotas.nome_do(state, m["alvo"])])
 			else:
-				log.call("%s de %s com a carga."
+				_diz(log, "%s de %s com a carga."
 					% [quem, Rotas.nome_do(state, m["alvo"])])
 		else:
-			log.call("O exército de %s voltou de suas terras." % Rotas.nome_do(state, origem))
+			_diz(log, "O exército de %s voltou de suas terras." % Rotas.nome_do(state, origem))
 	var ev := {"tipo": "retorno", "marcha": m["id"], "homens": voltaram, "carga": trouxe}
 	Sinais.emitir(&"marcha_voltou", ev)
 	return ev
@@ -622,6 +635,10 @@ static func em_transito(state: Dictionary) -> Array:
 	for m in lista(state):
 		saida.append({
 			"id": m["id"], "alvo": m["alvo"], "fase": m["fase"],
+			# ORIGEM É O CAMPO QUE FALTAVA. Sem ele a interface desenhava a
+			# coluna do INIMIGO na sua lista de exércitos, com botão de
+			# "Recuar" e tudo — um clique cancelava a invasão dele de graça.
+			"origem": str(m.get("origem", "jogador")),
 			"intencao": m["intencao"], "homens": Combate.total_homens(m["tropas"]),
 			"faltam": maxi(0, int(m["chega_em"]) - agora),
 			"texto_faltam": _texto_dias(maxi(0, int(m["chega_em"]) - agora)),
@@ -629,3 +646,12 @@ static func em_transito(state: Dictionary) -> Array:
 			"cerco": Cerco.progresso(m),
 		})
 	return saida
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

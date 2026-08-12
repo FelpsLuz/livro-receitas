@@ -67,7 +67,19 @@ static func renovar_mapa(state: Dictionary, meses: int = 1) -> void:
 	state["mapa_comercial"] = {
 		"ate": int(state["ano"]) * 12 + int(state["mes"]) + maxi(0, meses - 1)}
 
+## Existe armazém aqui? `state["mercados"]` só tem os SEIS reinos — o Reino
+## sem Rei e as Terras Bárbaras são nós do mapa onde se viaja, se luta e se
+## bebe, mas não se negocia. Sem esta pergunta, `preco_de` abortava com
+## SCRIPT ERROR e devolvia 0, e comprar a preço zero era ouro infinito.
+static func tem_praca(state: Dictionary, reino_id: String) -> bool:
+	var m = state.get("mercados")
+	return m is Dictionary and m.has(reino_id)
+
+const AVISO_SEM_PRACA := "Aqui não há armazém nem feitor — só fogueira e desconfiança."
+
 static func preco_de(state: Dictionary, reino_id: String, g_id: String) -> int:
+	if not tem_praca(state, reino_id):
+		return 0
 	var m: Dictionary = state["mercados"][reino_id][g_id]
 	# float SEMPRE: o load normaliza 3.0 para int 3, e int/int trunca —
 	# o preço mudava sozinho (3 → 1) só por salvar e recarregar o jogo
@@ -107,6 +119,8 @@ const AVISO_MAPA := "Sem Mapa Comercial válido, nenhum feitor te vende nem te c
 const ELASTICIDADE := 0.006
 
 static func comprar(state: Dictionary, reino_id: String, g_id: String, qtd: int) -> Dictionary:
+	if not tem_praca(state, reino_id):
+		return {"ok": false, "msg": AVISO_SEM_PRACA}
 	if not mapa_valido(state):
 		return {"ok": false, "msg": AVISO_MAPA}
 	var preco := preco_de(state, reino_id, g_id)
@@ -120,6 +134,8 @@ static func comprar(state: Dictionary, reino_id: String, g_id: String, qtd: int)
 	return {"ok": true, "msg": "Comprou %d por %d de ouro." % [qtd, custo]}
 
 static func vender(state: Dictionary, reino_id: String, g_id: String, qtd: int) -> Dictionary:
+	if not tem_praca(state, reino_id):
+		return {"ok": false, "msg": AVISO_SEM_PRACA}
 	if not mapa_valido(state):
 		return {"ok": false, "msg": AVISO_MAPA}
 	if int(state["carga"].get(g_id, 0)) < qtd:
@@ -135,9 +151,18 @@ static func vender(state: Dictionary, reino_id: String, g_id: String, qtd: int) 
 	var ganho := preco * qtd
 	state["carga"][g_id] = int(state["carga"][g_id]) - qtd
 	state["jogador"]["ouro"] += ganho
-	var m: Dictionary = state["mercados"][reino_id][g_id]
-	m["oferta"] = minf(3.0, m["oferta"] + ELASTICIDADE * qtd)
+	empurrar_oferta(state, reino_id, g_id, qtd)
 	return {"ok": true, "msg": "Vendeu %d por %d de ouro." % [qtd, ganho]}
+
+## Despejar mercadoria numa praça derruba o preço dela. Público porque a
+## exportação do celeiro (jogo.gd) também é despejo — e tem que pagar o
+## mesmo preço em preço.
+static func empurrar_oferta(state: Dictionary, reino_id: String, g_id: String,
+		qtd: int) -> void:
+	if not tem_praca(state, reino_id):
+		return
+	var m: Dictionary = state["mercados"][reino_id][g_id]
+	m["oferta"] = minf(3.0, float(m["oferta"]) + ELASTICIDADE * qtd)
 
 static func _em_guerra(state: Dictionary, reino_id: String) -> bool:
 	for g in state["guerras"]:
@@ -158,7 +183,7 @@ static func talvez_iniciar_guerra(state: Dictionary, log: Callable) -> void:
 	var a: Dictionary = Dados.rnd(livres)
 	var b: Dictionary = Dados.rnd(livres.filter(func(r): return r["id"] != a["id"]))
 	state["guerras"].append({"a": a["id"], "b": b["id"], "meses": 0})
-	log.call("GUERRA! %s declarou guerra a %s." % [a["nome"], b["nome"]])
+	_diz(log, "GUERRA! %s declarou guerra a %s." % [a["nome"], b["nome"]])
 
 static func tick_guerras(state: Dictionary, log: Callable) -> void:
 	var vivas: Array = []
@@ -174,7 +199,7 @@ static func tick_guerras(state: Dictionary, log: Callable) -> void:
 			m["trigo"]["oferta"] = maxf(0.25, m["trigo"]["oferta"] * 0.82)
 			m["ferro"]["demanda"] = minf(3.0, m["ferro"]["demanda"] * 1.08)
 		if g["meses"] >= 6 and randf() < 0.35:
-			log.call("%s e %s assinaram a paz, exaustos." % [g["a"], g["b"]])
+			_diz(log, "%s e %s assinaram a paz, exaustos." % [g["a"], g["b"]])
 		else:
 			vivas.append(g)
 	state["guerras"] = vivas
@@ -256,12 +281,23 @@ static func populacao_ativa(state: Dictionary) -> int:
 
 ## Imposto do mês. Sai do NÍVEL da terra (o portão de progressão) vezes a
 ## população que sobrou trabalhando.
+## GESTÃO, o atributo que não valia nada.
+##
+## Dois empregos a subiam (Supervisor de obras, Intendente de suprimentos),
+## a ficha da Casa mostrava a barra e os filhos herdavam o número — e
+## NENHUMA mecânica lia o valor. Agora ela vale nos dois lugares onde um
+## bom administrador aparece: o que entra da terra e o que sai do quartel.
+## Neutra em 5 (o meio da escala, onde o jogador começa), ±4% por ponto.
+static func fator_gestao(state: Dictionary) -> float:
+	var g: int = int(state["jogador"].get("atributos", {}).get("gestao", 5))
+	return 1.0 + (g - 5) * 0.04
+
 static func imposto_mensal(state: Dictionary) -> int:
 	if state.get("terra") == null:
 		return 0
 	var nivel: int = clampi(int(state["terra"]["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
 	var taxa: float = float(Dados.NIVEIS_TERRA[nivel]["imposto"])
-	return roundi(populacao_ativa(state) * taxa)
+	return roundi(populacao_ativa(state) * taxa * fator_gestao(state))
 
 static func tick_terra(state: Dictionary, log: Callable) -> void:
 	if state["terra"] == null:
@@ -288,9 +324,9 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	t["madeira"] = int(t["madeira"]) + 2 + int(t["nivel"]) * 2 + int(trabalhando / 12.0)
 
 	if Estacoes.e_inverno(state) and producao == 0:
-		log.call("Inverno: as fazendas de %s pararam. O celeiro é o que há." % t["nome"])
+		_diz(log, "Inverno: as fazendas de %s pararam. O celeiro é o que há." % t["nome"])
 	elif em_armas > int(t["populacao"]) * 0.4:
-		log.call("Quase metade da vila está em armas: a colheita e o imposto despencaram.")
+		_diz(log, "Quase metade da vila está em armas: a colheita e o imposto despencaram.")
 
 	# ---- imposto: só quem ficou é que paga ----
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + imposto_mensal(state)
@@ -300,10 +336,25 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	if int(t["alimento"]) <= 0:
 		t["felicidade"] = clampi(int(t["felicidade"]) - 20, 0, 100)
 		t["populacao"] = maxi(5, int(t["populacao"]) - Dados.ri(1, 4))
-		log.call("FOME em %s! Felicidade -20." % t["nome"])
+		_diz(log, "FOME em %s! Felicidade -20." % t["nome"])
 	elif int(t["felicidade"]) < 70:
 		t["felicidade"] = clampi(int(t["felicidade"]) + 5, 0, 100)
 	# filha do capataz: a vila obedecia a ela antes de obedecer a você
+	# CRUELDADE TEM CAMINHO DE VOLTA. Saquear uma caravana marcava você
+	# para sempre: o número só subia, e ele fecha portas (os notáveis
+	# reagem a partir de 3, e o herdeiro nasce mimado). Governar bem por
+	# meio ano seguido apaga um ponto — reputação se refaz devagar, mas
+	# se refaz. Um único ato cruel zera o contador (jogo.gd/viagem.gd).
+	if int(t["felicidade"]) >= 65:
+		var limpos: int = int(state["jogador"].get("meses_limpos", 0)) + 1
+		state["jogador"]["meses_limpos"] = limpos
+		if limpos >= 6 and int(state["jogador"].get("crueldade", 0)) > 0:
+			state["jogador"]["crueldade"] = int(state["jogador"]["crueldade"]) - 1
+			state["jogador"]["meses_limpos"] = 0
+			_diz(log, "Meio ano de bom governo: o povo já fala de você com menos medo.")
+	else:
+		state["jogador"]["meses_limpos"] = 0
+
 	var bonus_esposa: int = Pretendentes.bonus_felicidade(state)
 	if bonus_esposa > 0:
 		t["felicidade"] = clampi(int(t["felicidade"]) + bonus_esposa, 0, 100)
@@ -312,10 +363,10 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 		# quando a vila já está pronta para pegar em foices — ele lidera
 		var lider := Cidadaos.capataz_lider(state)
 		if lider.is_empty():
-			log.call("REBELIÃO em %s!" % t["nome"])
+			_diz(log, "REBELIÃO em %s!" % t["nome"])
 			state["evento_pendente"] = {"tipo": "rebeliao"}
 		else:
-			log.call("REBELIÃO em %s — e %s, o capataz, está à frente dela!"
+			_diz(log, "REBELIÃO em %s — e %s, o capataz, está à frente dela!"
 				% [t["nome"], str(lider["nome"])])
 			state["evento_pendente"] = {"tipo": "rebeliao", "lider": str(lider["nome"])}
 
@@ -364,7 +415,9 @@ static func mudar_moral(state: Dictionary, delta: int) -> int:
 static func tick_exercito(state: Dictionary, log: Callable) -> void:
 	# tropas em marcha também comem — só que do que carregam, e o Cerco
 	# cobra em dobro. Aqui paga-se pelo que está EM CASA.
-	var custo := upkeep_de(state["jogador"]["tropas"], 1.0,
+	# um quartel-mestre de verdade compra melhor: gestão alta desconta o
+	# soldo, gestão baixa o encarece (mesmo fator do imposto, invertido)
+	var custo := upkeep_de(state["jogador"]["tropas"], 2.0 - fator_gestao(state),
 		Cidadaos.oficio_ativo(state, "ferreiro"))
 	state["jogador"]["ultima_manut"] = int(custo["ouro"])
 	state["jogador"]["ultimo_upkeep"] = custo
@@ -400,7 +453,7 @@ static func tick_exercito(state: Dictionary, log: Callable) -> void:
 		mudar_moral(state, 6)
 		return
 	mudar_moral(state, -12 * faltou.size())
-	log.call("Falta %s ao seu exército. A moral cai (%d)."
+	_diz(log, "Falta %s ao seu exército. A moral cai (%d)."
 		% [" e ".join(faltou), moral(state)])
 
 	if moral(state) <= 35:
@@ -415,8 +468,17 @@ static func tick_exercito(state: Dictionary, log: Callable) -> void:
 			state["jogador"]["tropas"][tipo] = n - vao
 			perdidos += vao
 		if perdidos > 0:
-			log.call("%d homens desertaram na calada da noite." % perdidos)
+			_diz(log, "%d homens desertaram na calada da noite." % perdidos)
 	if moral(state) <= 10 and int(state["jogador"]["guardas"]) > 0 \
 			and state["terra"] != null and randf() < 0.5:
 		state["evento_pendente"] = {"tipo": "traicao_guardas"}
-		log.call("Um reino rival ofereceu ouro à sua guarda de elite...")
+		_diz(log, "Um reino rival ofereceu ouro à sua guarda de elite...")
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

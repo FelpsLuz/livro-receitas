@@ -130,9 +130,9 @@ static func _assinar(state: Dictionary, a: Dictionary, b: Dictionary,
 	mudar_relacao(state, a["id"], b["id"], 15 if tipo == "comercio" else 25)
 	Sinais.emitir(&"pacto_npc", {"a": a["id"], "b": b["id"], "tipo": tipo})
 	if tipo == "comercio":
-		log.call("%s e %s assinaram um acordo comercial." % [a["nome"], b["nome"]])
+		_diz(log, "%s e %s assinaram um acordo comercial." % [a["nome"], b["nome"]])
 	else:
-		log.call("ALIANÇA: %s e %s juram defesa mútua." % [a["nome"], b["nome"]])
+		_diz(log, "ALIANÇA: %s e %s juram defesa mútua." % [a["nome"], b["nome"]])
 
 # ------------------------------------------------------------
 # O turno
@@ -195,7 +195,7 @@ static func _tick_economia(state: Dictionary, log: Callable) -> void:
 					r["tropas"][tipo] = n - vao
 					perdidos += vao
 				if perdidos > 0 and randf() < 0.35:
-					log.call("Sem soldo, %d homens desertaram de %s." % [perdidos, r["nome"]])
+					_diz(log, "Sem soldo, %d homens desertaram de %s." % [perdidos, r["nome"]])
 
 		# ---- recrutamento e melhorias ----
 		_npc_treina(state, r)
@@ -248,7 +248,7 @@ static func _tick_pactos(state: Dictionary, log: Callable) -> void:
 		if int(p["meses"]) <= 0 or relacao(state, p["a"], p["b"]) < 0 \
 				or ra.is_empty() or rb.is_empty() or not vivo(ra) or not vivo(rb):
 			if int(p["meses"]) <= 0 and not ra.is_empty() and not rb.is_empty():
-				log.call("O pacto entre %s e %s expirou." % [ra["nome"], rb["nome"]])
+				_diz(log, "O pacto entre %s e %s expirou." % [ra["nome"], rb["nome"]])
 			continue
 		vivos.append(p)
 	state["pactos"] = vivos
@@ -341,14 +341,14 @@ static func _tick_declaracoes(state: Dictionary, log: Callable) -> void:
 				continue
 			state["guerras"].append({"a": forte["id"], "b": fraco["id"], "meses": 0})
 			Sinais.emitir(&"guerra_npc", {"a": forte["id"], "b": fraco["id"]})
-			log.call("GUERRA! %s marcha contra %s." % [forte["nome"], fraco["nome"]])
+			_diz(log, "GUERRA! %s marcha contra %s." % [forte["nome"], fraco["nome"]])
 			# aliados são arrastados: é o que torna uma aliança perigosa
 			for p in pactos_de(state, fraco["id"]):
 				if p["tipo"] != "alianca":
 					continue
 				var aliado_id: String = p["b"] if p["a"] == fraco["id"] else p["a"]
 				mudar_relacao(state, aliado_id, forte["id"], -30)
-				log.call("%s honra a aliança e volta-se contra %s."
+				_diz(log, "%s honra a aliança e volta-se contra %s."
 					% [reino_por_id(state, aliado_id)["nome"], forte["nome"]])
 			return              # uma declaração por mês, para o mapa respirar
 
@@ -383,7 +383,7 @@ static func _tick_declaracao_jogador(state: Dictionary, log: Callable) -> void:
 			continue
 		state["guerras"].append({"a": r["id"], "b": "jogador", "meses": 0})
 		Sinais.emitir(&"guerra_npc", {"a": r["id"], "b": "jogador"})
-		log.call("GUERRA! %s declara guerra contra você." % r["nome"])
+		_diz(log, "GUERRA! %s declara guerra contra você." % r["nome"])
 		return                       # uma declaração por mês, igual às demais
 
 ## Já em guerra, o reino tenta de fato marchar — sem isto a guerra fica só
@@ -414,7 +414,7 @@ static func _tick_ataques_jogador(state: Dictionary, log: Callable) -> void:
 		var intencao := "cerco" if randf() < 0.5 else "saque"
 		var res: Dictionary = Marchas.despachar(state, "jogador", tropas, intencao, "", reino_id)
 		if bool(res.get("ok", false)) and log.is_valid():
-			log.call("%s reúne tropas e marcha contra suas terras." % r["nome"])
+			_diz(log, "%s reúne tropas e marcha contra suas terras." % r["nome"])
 
 static func _marchando_contra_jogador(state: Dictionary, reino_id: String) -> bool:
 	for m in state.get("marchas", []):
@@ -445,6 +445,13 @@ static func _tick_conquistas(state: Dictionary, log: Callable) -> void:
 		var b := reino_por_id(state, g["b"])
 		if a.is_empty() or b.is_empty() or not vivo(a) or not vivo(b):
 			continue
+		# O JOGADOR PODE SER ATACADO, MAS NÃO PODE SER ABSORVIDO — o
+		# invariante que marchas.gd já respeitava. O reino fundado por ele
+		# é uma casa dele: entra em guerra, perde tropas, mas nenhum NPC
+		# resolve o mapa dele por decreto num tick mensal.
+		if bool(a.get("fundado_pelo_jogador", false)) \
+				or bool(b.get("fundado_pelo_jogador", false)):
+			continue
 		var forca_a: float = float(a["forca"]) * (1.0 + int(a["tesouro"]) / 2000.0)
 		var forca_b: float = float(b["forca"]) * (1.0 + int(b["tesouro"]) / 2000.0)
 		var razao: float = forca_a / maxf(1.0, forca_b)
@@ -464,7 +471,7 @@ static func _tick_conquistas(state: Dictionary, log: Callable) -> void:
 			if r["id"] != vencedor["id"] and vivo(r):
 				mudar_relacao(state, r["id"], vencedor["id"], -15)
 		Sinais.emitir(&"conquista_npc", {"vencedor": vencedor["id"], "perdedor": perdedor["id"]})
-		log.call("%s CONQUISTOU %s. O equilíbrio do mundo mudou."
+		_diz(log, "%s CONQUISTOU %s. O equilíbrio do mundo mudou."
 			% [vencedor["nome"], perdedor["nome"]])
 		return                           # uma conquista por mês
 
@@ -494,3 +501,12 @@ static func panorama(state: Dictionary) -> Array:
 			"pactos": pactos_de(state, r["id"]).size(),
 		})
 	return linhas
+
+## Fala com o diário do jogo SÓ se houver diário. A assinatura
+## `log: Callable = Callable()` prometia log opcional, e 71 das 100
+## chamadas ignoravam a promessa: qualquer chamador sem log (teste,
+## sonda, ferramenta) morria no meio da função, deixando o estado
+## pela metade. Uma porta só, e ela confere.
+static func _diz(log: Callable, msg: String) -> void:
+	if log.is_valid():
+		log.call(msg)

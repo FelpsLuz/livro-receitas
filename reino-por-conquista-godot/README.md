@@ -297,6 +297,33 @@ título do modal de batalha, correntes no lorde a ferros, neblina na
 fronteira não reconhecida, cavalos no botão Viajar, e escudo/lança/arco
 nas três formações de batalha.
 
+## Convergência — as pontes que faltavam entre os sistemas
+
+Duas auditorias (coerência de mecânicas + segundo teste alfa) encontraram
+sistemas que rodavam lado a lado sem se olhar. O padrão era claro: o que o
+Bloco I trouxe de novo conversava bem para dentro e quase nada com o que
+já existia. Cada ponte abaixo tem asserção de regressão em
+`teste_bloco1.gd` (seção 10) — se uma cair, um sistema virou ilha de novo.
+
+| ponte | antes | agora |
+|---|---|---|
+| moral → batalha | mesma batalha com moral 100 e 5 dava baixas idênticas | `Combate.fator_moral` de 1,00 a 0,70; a UI diz a % e como recuperar |
+| moral → cerco | acampamento nascia com 100 sempre | a coluna leva a moral do quartel para o muro |
+| prisão → tudo | `esta_preso()` nunca era chamada; a cadeia congelava custos | tranca viagem/emprego/marcha/contrato/cortejo/juramento, as contas correm, e há **fiança** |
+| local → contrato e emprego | cumpria serviço e batia ponto do outro lado do mapa | exigem estar onde a palavra foi dada |
+| praça → comércio | Reino sem Rei e Terras Bárbaras davam preço 0 = ouro infinito | `tem_praca` recusa, e a Feira explica |
+| licença → exportação | `exportar_comida` furava mapa e elasticidade | passa pelos mesmos dois freios |
+| carga → tributo | esvaziar o cofre zerava a cobrança | tributo incide sobre ouro + carga; o cobrador confisca o que falta |
+| servir → relação | 12 meses de tributo davam delta 0 na relação que a promoção exige | tributo em dia +2/mês, sangue dado +3, cofre vazio −3 |
+| gestão → economia | atributo que subia e ninguém lia | imposto e soldo do exército, ±4% por ponto |
+| carisma → clãs | só acelerava cortejo | pesa na negociação com chefe mercenário |
+| bom governo → crueldade | só subia, para sempre | seis meses de vila feliz apagam um ponto |
+| pai → herdeiro | `educacao` nascia vazia e ninguém escrevia | aos 8 anos a criança é criada no ofício do pai (+2 no atributo) |
+| coroa própria → vitória | fundar reino tornava a vitória impossível e o reino era absorvido por NPC | sua casa sai da conta de alvos e do tick de conquistas |
+| origem → marchas na UI | a coluna inimiga aparecia na sua lista, com "Recuar" | duas listas separadas; e o **seu** cerco ganhou "Levantar o cerco" |
+| save antigo → estado | `_migrar` esquecia 5 coleções e o jogo quebrava todo mês | molde único (`_molde_de_estado`) alimenta `novo_jogo` e `_migrar` |
+| log opcional → API | 71 de 100 chamadas quebravam sem log | tudo passa por `_diz(log, msg)` |
+
 ## Upgrades futuros (anotados, não pendentes)
 
 1. **Expressões nos retratos hi-bit** — o humor (raiva/feliz/neutro) vive no medidor
