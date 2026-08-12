@@ -1386,7 +1386,7 @@ func _fronteira_selvagem(c: Container) -> void:
 		var tr_p := TextureRect.new()
 		tr_p.texture = pano
 		tr_p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		tr_p.custom_minimum_size = Vector2(400, 225)
+		tr_p.custom_minimum_size = Vector2(400, 224)
 		tr_p.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr_p.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cc.add_child(tr_p)
