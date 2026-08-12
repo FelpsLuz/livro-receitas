@@ -51,7 +51,9 @@ const LADO_EVENTO := 128
 ## estilo — se qualquer string ganhasse arte, um typo apareceria como IMAGEM
 ## ERRADA no modal, e imagem errada é o defeito que ninguém liga ao typo.
 const EVENTOS := ["cerco", "coroacao", "derrota", "emboscada", "fome",
-	"inverno", "juramento", "rebeliao", "saque", "traicao"]
+	"inverno", "juramento", "rebeliao", "saque", "traicao",
+	# a leva do Bloco II — os momentos que o Bloco I criou
+	"casamento", "emprego", "invasao", "caravana"]
 
 # ============================================================
 # PALETAS
@@ -883,15 +885,71 @@ static func textura_tropa(tipo: String) -> Texture2D:
 	return textura("tropa_" + tipo)
 
 ## Ilustração de evento para os modais (cerco, emboscada, inverno…).
+##
+## A leva do Bloco II vive na pasta hi-bit e carrega pelo filesystem
+## virtual (bytes + load_png_from_buffer), como todo o resto da leva —
+## PNG novo não passa pelo editor e ainda assim aparece no export. A
+## pasta antiga continua valendo para as dez ilustrações originais.
 static func ilustracao(evento: String) -> Texture2D:
 	if not EVENTOS.has(evento):
 		return null
+	var chave := "evento|" + evento
+	if _pecas.has(chave):
+		return _pecas[chave]
+	var img := _png_hibit("evento_" + evento + ".png")
+	if img != null:
+		var tex := ImageTexture.create_from_image(img)
+		_pecas[chave] = tex
+		return tex
 	var caminho := PASTA + "evento_" + evento + ".png"
 	if ResourceLoader.exists(caminho):
 		var t = load(caminho)
 		if t is Texture2D:
+			_pecas[chave] = t
 			return t
 	return Arte.caixa(LADO_EVENTO)
+
+## Peça avulsa da leva hi-bit (marcadores do mapa, rosa dos ventos, selo,
+## panorama). Devolve null quando o arquivo não existe — o chamador decide
+## o que desenhar no lugar, que em geral é "nada, como antes".
+static var _pecas: Dictionary = {}
+static func peca(arquivo: String) -> Texture2D:
+	if _pecas.has(arquivo):
+		return _pecas[arquivo]
+	var img := _png_hibit(arquivo + ".png")
+	var tex: Texture2D = null
+	if img != null:
+		tex = ImageTexture.create_from_image(img)
+	_pecas[arquivo] = tex
+	return tex
+
+## O id de retrato hi-bit de uma pretendente plebeia — ou "" se a peça não
+## existe (aí o salão continua no busto procedural, como sempre).
+##
+## As moças existem em NOVE locais, mas a leva de arte cobre os seis
+## reinos: os três locais sem corte própria emprestam a arte do reino cuja
+## trinca de ofícios coincide com a deles.
+const PRETENDENTE_RESERVA := {"jogador": "leoes", "sem_rei": "aguias",
+	"barbaros": "touros"}
+static func id_pretendente(local_id: String, oficio: String) -> String:
+	var reino: String = str(PRETENDENTE_RESERVA.get(local_id, local_id))
+	var id := "pretendente_%s_%s" % [reino, oficio]
+	return id if _retrato_hibit(id) != null else ""
+
+## O id de retrato de um filho, pela idade e gênero. "" sem arte.
+static func id_filho(filho: Dictionary) -> String:
+	var idade: int = int(filho.get("idade", 0))
+	var faixa := "bebe" if idade <= 3 else ("crianca" if idade <= 13 else "jovem")
+	var id := "filho_%s_%s" % [faixa, str(filho.get("genero", "m"))]
+	return id if _retrato_hibit(id) != null else ""
+
+## O id de retrato do cônjuge: plebeia leva a arte do salão onde foi
+## cortejada; nobre leva o herdeiro real da casa de origem. "" sem arte.
+static func id_conjuge(cj: Dictionary) -> String:
+	if bool(cj.get("plebeia", false)):
+		return id_pretendente(str(cj.get("reino", "")), str(cj.get("oficio", "")))
+	var id := "conjuge_real_" + str(cj.get("reino", ""))
+	return id if _retrato_hibit(id) != null else ""
 
 ## Retrato de quem lidera a marcha. Resolve pela IDENTIDADE primeiro — um
 ## lorde que subiu de cidadão leva a cara que ele já tinha na Corte — e só

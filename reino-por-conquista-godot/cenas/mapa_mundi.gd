@@ -142,6 +142,19 @@ func _draw() -> void:
 		var cor := Color("6b5b3e").lerp(Color("a8503a"), clampf(perigo / 0.28, 0.0, 1.0))
 		draw_line(_pos_de(partes[0]), _pos_de(partes[1]), cor, 2.0, true)
 
+	# ---- a rosa dos ventos, no miolo vazio do anel interno ----
+	# nos cantos ela brigava com os rótulos das fileiras de cima e de
+	# baixo; o centro do anel é o único retângulo que nenhuma estrada
+	# cruza e nenhum rótulo alcança
+	var rosa := Retratos.peca("mapa_rosa_ventos")
+	if rosa != null:
+		var centro := Vector2(size.x * 0.56, size.y * 0.50)
+		draw_texture_rect(rosa, Rect2(centro - Vector2(24, 24), Vector2(48, 48)), false)
+	# o selo de cera da moldura, no canto baixo-esquerdo (livre de rótulos)
+	var selo := Retratos.peca("mapa_selo")
+	if selo != null:
+		draw_texture_rect(selo, Rect2(Vector2(8, size.y - 52), Vector2(44, 44)), false)
+
 	# ---- os domínios ----
 	for id in POSICOES:
 		var p := _pos_de(str(id))
@@ -151,14 +164,23 @@ func _draw() -> void:
 		for reino in state.get("reinos", []):
 			if str(reino["id"]) == str(id) and str(reino.get("dominado_por", "")) != "":
 				dominado = true
-		# o nó: disco cheio na cor da casa, anel escuro por fora
-		draw_circle(p, RAIO_NO, cor)
-		draw_arc(p, RAIO_NO + 1.5, 0.0, TAU, 20, Tema.FUNDO, 2.0, true)
+		# o MARCADOR de capital da leva hi-bit; sem a peça, o desenho de
+		# sempre (disco cheio na cor da casa, anel escuro por fora)
+		var marc := Retratos.peca("mapa_marcador_" + str(id))
+		if marc != null:
+			# centrado um fio acima do ponto: a base do castelo assenta no
+			# disco heráldico, que continua embaixo como chão da casa
+			draw_texture_rect(marc, Rect2(p - Vector2(24, 30), Vector2(48, 48)), false)
+		else:
+			draw_circle(p, RAIO_NO, cor)
+			draw_arc(p, RAIO_NO + 1.5, 0.0, TAU, 20, Tema.FUNDO, 2.0, true)
 		if dominado:
-			# corrente do conquistador: o domínio some do jogo político
-			draw_line(p - Vector2(RAIO_NO, RAIO_NO), p + Vector2(RAIO_NO, RAIO_NO),
+			# corrente do conquistador: o domínio some do jogo político —
+			# e o X cobre o castelo inteiro quando há marcador
+			var rx: float = 20.0 if marc != null else float(RAIO_NO)
+			draw_line(p - Vector2(rx, rx), p + Vector2(rx, rx),
 				Tema.PERIGO, 2.0, true)
-			draw_line(p - Vector2(-RAIO_NO, RAIO_NO), p + Vector2(-RAIO_NO, RAIO_NO),
+			draw_line(p - Vector2(-rx, rx), p + Vector2(-rx, rx),
 				Tema.PERIGO, 2.0, true)
 
 	# ---- ONDE VOCÊ ESTÁ: o anel que responde à pergunta de sempre ----

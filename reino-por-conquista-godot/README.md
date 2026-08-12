@@ -242,6 +242,30 @@ O que ela cobre, sistema a sistema:
 | Terras Bárbaras | batedor obrigatório, invasão, reino fundado sobrevivendo a save/load e a seis meses |
 | Honra | três formas de perder — e o caminho de volta |
 
+## Bloco II — a leva de arte que o Bloco I passou a exigir
+
+Gerada pelo mesmo pipeline PixelLab da rodada hi-bit (pixflux, estilo
+único, idempotente) e carregada pelo filesystem virtual — PNG novo entra
+sem passar pelo editor e sobrevive ao export. Tudo com reserva: peça
+ausente cai no busto procedural ou no desenho em código de antes.
+
+| leva | peças | onde aparece |
+|---|---|---|
+| pretendentes plebeias por (reino × ofício) | 18 | salão da taverna, ficha da Casa |
+| fregueses regionais com nome e voz própria | 21 | taverna de cada domínio (`FREGUESES_POR_LOCAL`) |
+| cônjuges reais, um por casa | 6 | ficha da Casa após casamento nobre |
+| filhos (bebê/criança/jovem × 2) | 6 | herdeiros da Casa |
+| chefes bárbaros (prefixo `barbaro_`) | 3 | mesa de clãs da fronteira |
+| ícones de emprego (o objeto do ofício) | 12 | balcão de vagas |
+| ícones de UI (guerra, tributo, vassalo, honra, dia, viagem) | 6 | HUD, aba Guerra, botão do dia |
+| marcadores de capital + rosa dos ventos + selo | 11 | mapa-múndi (base segue em código) |
+| ilustrações de evento (casamento, emprego, invasão, caravana) | 4 | modais do Bloco I |
+| panorama das Terras Bárbaras | 1 | fronteira selvagem |
+
+Cada taverna também ganhou nome próprio (`TAVERNAS`), e as Terras
+Bárbaras deixaram de servir cerveja: clã não tem taverna, e o Reino sem
+Rei ficou com o trio clássico — é para onde gente sem bandeira vai beber.
+
 ## Upgrades futuros (anotados, não pendentes)
 
 1. **Expressões nos retratos hi-bit** — o humor (raiva/feliz/neutro) vive no medidor

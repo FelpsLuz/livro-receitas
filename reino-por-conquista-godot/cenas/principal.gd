@@ -47,6 +47,70 @@ const NPCS_TAVERNA := [
 	{"id": "capitao", "nome": "Capitã Renna", "personalidade": "honrado"},
 	{"id": "espiao", "nome": "O Corvo", "personalidade": "calculista"},
 ]
+
+## Cada taverna tem nome próprio e fregueses próprios (Bloco II): quem
+## bebe no Covil Negro não é quem bebe na capital imperial. O id de cada
+## freguês é a chave do retrato hi-bit E da relação em `tags` — conversar
+## com o arpoador das Garças fica lembrado ali, não numa ficha genérica.
+## O Reino sem Rei fica com o trio clássico (Bram, Renna e o Corvo — é
+## para onde gente sem bandeira vai beber) e as Terras Bárbaras não têm
+## taverna: clã não serve cerveja a forasteiro.
+const TAVERNAS := {
+	"jogador":  "Taverna do Javali Manco",
+	"imperio":  "Salão do Cetro Torto",
+	"touros":   "Caneca do Urso Afogado",
+	"alvorecer":"Pátio da Moeda de Cobre",
+	"leoes":    "Estalagem do Cervo Coroado",
+	"aguias":   "Farol da Garça Cinzenta",
+	"rosa":     "Adega da Víbora Doce",
+	"sem_rei":  "Buraco Sem Bandeira",
+	"barbaros": "Fogueira dos Clãs",
+}
+const FREGUESES_POR_LOCAL := {
+	"imperio": [
+		{"id": "fregues_imperio_1", "nome": "Otto Dedo-de-Tinta", "personalidade": "calculista"},
+		{"id": "fregues_imperio_2", "nome": "Vera da Nona Legião", "personalidade": "honrado"},
+		{"id": "fregues_imperio_3", "nome": "Tulio, o Escriba", "personalidade": "covarde"},
+	],
+	"touros": [
+		{"id": "fregues_touros_1", "nome": "Grom Remo-Quebrado", "personalidade": "cruel"},
+		{"id": "fregues_touros_2", "nome": "Velha Ysolda", "personalidade": "honrado"},
+		{"id": "fregues_touros_3", "nome": "Snorri do Âmbar", "personalidade": "ganancioso"},
+	],
+	"alvorecer": [
+		{"id": "fregues_alvorecer_1", "nome": "Basim das Especiarias", "personalidade": "ganancioso"},
+		{"id": "fregues_alvorecer_2", "nome": "Nadir Troca-Moeda", "personalidade": "calculista"},
+		{"id": "fregues_alvorecer_3", "nome": "Samira das Caravanas", "personalidade": "honrado"},
+	],
+	"leoes": [
+		{"id": "fregues_leoes_1", "nome": "Cedric, Escudeiro", "personalidade": "orgulhoso"},
+		{"id": "fregues_leoes_2", "nome": "Irmão Anselmo", "personalidade": "sabio"},
+		{"id": "fregues_leoes_3", "nome": "Rowena Caça-Cervos", "personalidade": "calculista"},
+	],
+	"aguias": [
+		{"id": "fregues_aguias_1", "nome": "Halvar do Gelo", "personalidade": "honrado"},
+		{"id": "fregues_aguias_2", "nome": "Viúva Gudrun", "personalidade": "ganancioso"},
+		{"id": "fregues_aguias_3", "nome": "Eirik Arpoador", "personalidade": "cruel"},
+	],
+	"rosa": [
+		{"id": "fregues_rosa_1", "nome": "Mestre Faruk, Perfumista", "personalidade": "calculista"},
+		{"id": "fregues_rosa_2", "nome": "Dona Vespa", "personalidade": "orgulhoso"},
+		{"id": "fregues_rosa_3", "nome": "Sálvia, a Herbolária", "personalidade": "ganancioso"},
+	],
+	"jogador": [
+		{"id": "fregues_jogador_1", "nome": "Velho Milo, Moleiro", "personalidade": "honrado"},
+		{"id": "fregues_jogador_2", "nome": "Finn Laço-Torto", "personalidade": "covarde"},
+		{"id": "fregues_jogador_3", "nome": "Tia Berta, Parteira", "personalidade": "sabio"},
+	],
+	"sem_rei": [],   # preenchido em _fregueses_do_local com o trio clássico
+	"barbaros": [],  # clã não tem taverna
+}
+
+func _fregueses_do_local() -> Array:
+	var local := str(state.get("local", ""))
+	if local == "sem_rei":
+		return NPCS_TAVERNA
+	return FREGUESES_POR_LOCAL.get(local, NPCS_TAVERNA)
 ## As onze abas: rótulo visível e o sufixo do ícone (icone_aba_<sufixo>).
 ## Uma tabela só, para nome e ícone não saírem de sincronia.
 # [rótulo, id da aba, ÍCONE]. O terceiro campo existe porque nem toda aba
@@ -443,7 +507,8 @@ func _montar_jogo() -> void:
 	# antes disso a menor unidade que existia era o mês inteiro.
 	b_dia = Kit.botao(rodape, "Passar o dia", _passar_dia, "primario", 210)
 	b_dia.add_theme_font_size_override("font_size", Tema.CORPO)
-	_com_icone(b_dia, "ampulheta")
+	# o sol nascendo é o verbo do botão; a ampulheta fica de reserva
+	_com_icone(b_dia, "dia" if Icones.ilustrado("dia") != null else "ampulheta")
 
 ## Pendura um ícone ilustrado num botão, quando a leva hi-bit o tiver.
 ## `icon_max_width` mantém o ícone de 32 no tamanho de texto do botão.
@@ -652,7 +717,7 @@ func _montar_hud(j: Dictionary) -> void:
 	# HONRA abre e fecha portas de emprego (e, no futuro, de vassalagem):
 	# vira alarme quando cai a ponto de a corte fechar a porta
 	var honra: int = int(j.get("honra", 50))
-	_celula_hud("pergaminho", str(honra),
+	_celula_hud("honra" if Icones.ilustrado("honra") != null else "pergaminho", str(honra),
 		"Honra — reputação: portas de trabalho e de corte abrem e fecham por ela",
 		honra <= 25)
 	if int(j["guardas"]) > 0:
@@ -1205,7 +1270,8 @@ func _aba_mercado(c: Container) -> void:
 		b_vender.disabled = carga < 5 or not tem_mapa
 
 func _aba_taverna(c: Container) -> void:
-	_titulo_secao(c, "Taverna do Javali Manco", "Mural de contratos")
+	_titulo_secao(c, str(TAVERNAS.get(str(state.get("local", "")),
+		"Taverna do Javali Manco")), "Mural de contratos")
 	# O pagamento e o renome eram dois números no fim de uma frase de três
 	# linhas, e a "dificuldade" era uma string repetida que saía VAZIA na
 	# tela (`"".repeat(n)` repete nada n vezes). Aqui o pagamento é coluna, o
@@ -1291,10 +1357,12 @@ func _aba_taverna(c: Container) -> void:
 			Jogo.salvar(state)
 			atualizar())
 
-	Kit.respiro(c, Tema.E2)
-	Kit.subsecao(c, "Fregueses")
-	for npc in NPCS_TAVERNA:
-		_card_npc(c, npc, false)
+	var fregueses: Array = _fregueses_do_local()
+	if not fregueses.is_empty():
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "Fregueses")
+		for npc in fregueses:
+			_card_npc(c, npc, false)
 
 ## Um serviço do balcão: rosto de quem vende, o que é, o preço e o botão.
 ## `rotulo_botao` vazio significa "já contratado" — o card fica, o botão não.
@@ -1309,6 +1377,19 @@ func _fronteira_selvagem(c: Container) -> void:
 		return
 	Kit.respiro(c, Tema.E2)
 	Kit.subsecao(c, "A fronteira selvagem")
+	# o panorama das três terras — geleira, estepe e lama — como a primeira
+	# coisa que se vê da fronteira, em qualquer estado dela
+	var pano := Retratos.peca("barbaros_panorama")
+	if pano != null:
+		var cc := CenterContainer.new()
+		c.add_child(cc)
+		var tr_p := TextureRect.new()
+		tr_p.texture = pano
+		tr_p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tr_p.custom_minimum_size = Vector2(400, 225)
+		tr_p.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr_p.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cc.add_child(tr_p)
 	if Barbaros.conquistado(state):
 		if str(state["jogador"].get("rei_de", "")) == Barbaros.ID:
 			Kit.nota(c, "Estas terras são o seu reino. O mapa tem sete casas.")
@@ -1341,15 +1422,19 @@ func _fronteira_selvagem(c: Container) -> void:
 	Kit.texto(v, "O batedor voltou: %d homens em três clãs."
 		% Barbaros.total_de_homens(state))
 	var tab := Kit.tabela(v, [
+		{"t": "", "w": 40, "a": Kit.CENTRO},
 		{"t": "Clã", "w": 0},
 		{"t": "Homens", "w": 90, "a": Kit.DIR},
 	])
 	for cla in Barbaros.CLAS:
 		var cel := Kit.linha(tab)
-		var col := Kit.coluna(cel[0], 0)
+		# o chefe tem cara (prefixo barbaro_: cla_estepe já é o clã
+		# MERCENÁRIO da aba Clãs, e são duas pessoas diferentes)
+		Kit.retrato(cel[0], Retratos.textura_pequena("barbaro_" + str(cla["id"])), 32)
+		var col := Kit.coluna(cel[1], 0)
 		Kit.texto(col, str(cla["nome"]))
 		Kit.nota(col, str(cla["nota"]))
-		Kit.numero(cel[1], str(Combate.total_homens(
+		Kit.numero(cel[2], str(Combate.total_homens(
 			Barbaros.forcas(state)[cla["id"]])), Tema.PERIGO)
 	var pi: Dictionary = Barbaros.pode_invadir(state)
 	if not bool(pi["ok"]):
@@ -1374,8 +1459,8 @@ func _modal_invadir() -> void:
 			Sfx.tocar(self, "vitoria" if bool(r.get("vitoria", false)) else "derrota")
 			_modal("TERRAS BÁRBARAS" if bool(r.get("vitoria", false)) else "A fronteira resistiu",
 				corpo, [["Continuar", func(): atualizar()]],
-				Retratos.ilustracao("cerco"))],
-		["Recuar", func(): atualizar()]], Retratos.ilustracao("cerco"))
+				Retratos.ilustracao("invasao"))],
+		["Recuar", func(): atualizar()]], Retratos.ilustracao("invasao"))
 
 func _modal_fundar() -> void:
 	var v := _painel_modal()
@@ -1463,7 +1548,7 @@ func _viajar(destino: String) -> void:
 					atualizar()],
 				["Deixar passar", func():
 					Jogo.salvar(state)
-					atualizar()]], Retratos.ilustracao("emboscada"))
+					atualizar()]], Retratos.ilustracao("caravana"))
 		"assalto":
 			var ra: Dictionary = Viagem.resolver_assalto(state, Jogo.log_para(state))
 			Sfx.tocar(self, "alerta")
@@ -1546,9 +1631,12 @@ func _salao_de_pretendentes(c: Container) -> void:
 	for m in mocas:
 		var idx: int = int(m["idx"])
 		var h := _card(c)
-		Kit.retrato(h, Retratos.textura_cidadao({
-			"nome": str(m["nome"]), "oficio": str(m["oficio"]),
-			"genero": "f", "riqueza": 200}), 32)
+		# a leva ilustrada por (reino, ofício); busto procedural de reserva
+		var id_arte := Retratos.id_pretendente(reino_id, str(m["oficio"]))
+		Kit.retrato(h, Retratos.textura_pequena(id_arte) if id_arte != ""
+			else Retratos.textura_cidadao({
+				"nome": str(m["nome"]), "oficio": str(m["oficio"]),
+				"genero": "f", "riqueza": 200}), 32)
 		var v := Kit.coluna(h, 0)
 		v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var l1 := Kit.fila(v, Tema.E3)
@@ -1570,7 +1658,7 @@ func _salao_de_pretendentes(c: Container) -> void:
 				if bool(r["ok"]):
 					_modal("Casados", "%s\n\n%s" % [str(r["msg"]), str(r["efeito"])],
 						[["Que os bardos cantem", func(): atualizar()]],
-						Retratos.ilustracao("juramento"))
+						Retratos.ilustracao("casamento"))
 				else:
 					_aviso(str(r["msg"]))
 					atualizar(), "primario", 118)
@@ -1607,11 +1695,17 @@ func _balcao_de_empregos(c: Container) -> void:
 func _vaga_de_emprego(c: Container, reino_id: String, vaga: Dictionary) -> void:
 	var id_vaga: String = str(vaga["id"])
 	var h := _card(c)
-	# retrato PROCEDURAL: o patrão tem cara sem custar arte nova. A leva
-	# ilustrada de fregueses entra na rodada de arte (Bloco II).
-	Kit.retrato(h, Retratos.textura_cidadao({
-		"nome": str(vaga["patrao"]), "oficio": "mercador",
-		"genero": "m", "riqueza": 400}), 32)
+	# o ícone do OFÍCIO, não a cara do patrão: numa lista de vagas o que
+	# distingue as linhas é o que se faz — machado, alaúde, sinete. O busto
+	# procedural fica de reserva para quando a peça não existir.
+	var ic_of := Icones.imagem("emprego_" + id_vaga, 32)
+	if ic_of != null:
+		ic_of.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(ic_of)
+	else:
+		Kit.retrato(h, Retratos.textura_cidadao({
+			"nome": str(vaga["patrao"]), "oficio": "mercador",
+			"genero": "m", "riqueza": 400}), 32)
 	var v := Kit.coluna(h, 0)
 	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var l1 := Kit.fila(v, Tema.E3)
@@ -1661,7 +1755,7 @@ func _trabalhar(reino_id: String, emprego_id: String, dias: int) -> void:
 	_modal(str(e["nome"]),
 		"Turno de %d %s: +%d de ouro.\n\n%s" % [dias, "dia" if dias == 1 else "dias",
 			int(r["paga"]), "\n".join(conseq)],
-		[["Seguir", func(): atualizar()]])
+		[["Seguir", func(): atualizar()]], Retratos.ilustracao("emprego"))
 
 func _servico(c: Container, rosto: Texture2D, titulo: String, desc: String,
 		preco: int, rotulo_botao: String, cb: Callable) -> void:
@@ -2269,13 +2363,16 @@ func _aba_familia(c: Container) -> void:
 	if f["conjuge"] != null:
 		var cj: Dictionary = f["conjuge"]
 		var lc := Kit.fila(casa, Tema.E3)
-		# o retrato do cônjuge leva o fundo do reino DE ORIGEM, não o da
-		# sua casa: a aliança de casamento é justamente o que a heráldica
-		# tem que mostrar — quem entrou, e de onde veio
-		Kit.retrato(lc, Retratos.textura_cidadao(
-			{"nome": str(cj["nome"]), "oficio": "senhor", "riqueza": 500,
-			"genero": str(cj.get("genero", "f")), "lealdade": 60, "lorde": true},
-			true, str(Retratos.REIS.get("rei_" + str(cj.get("reino", "")), {}).get("fundo", ""))), 32)
+		# a leva ilustrada primeiro: plebeia leva o retrato do salão onde
+		# foi cortejada, nobre leva o herdeiro real da casa de origem. O
+		# procedural fica de reserva — com o fundo do reino DE ORIGEM,
+		# porque a aliança é justamente o que a heráldica tem que mostrar
+		var id_cj := Retratos.id_conjuge(cj)
+		Kit.retrato(lc, Retratos.textura_pequena(id_cj) if id_cj != ""
+			else Retratos.textura_cidadao(
+				{"nome": str(cj["nome"]), "oficio": "senhor", "riqueza": 500,
+				"genero": str(cj.get("genero", "f")), "lealdade": 60, "lorde": true},
+				true, str(Retratos.REIS.get("rei_" + str(cj.get("reino", "")), {}).get("fundo", ""))), 32)
 		Kit.texto(lc, "Casado com %s" % str(cj["nome"]))
 		if cj["forcado"]:
 			Kit.selo(lc, "união sob pressão", Tema.ATENCAO, Tema.ATENCAO_FUNDO)
@@ -2296,10 +2393,13 @@ func _aba_familia(c: Container) -> void:
 		var apto: bool = int(filho["idade"]) >= 16
 		var card := Kit.card(c, Tema.GANHO if apto else null)
 		var lf := Kit.fila(card, Tema.E3)
-		Kit.retrato(lf, Retratos.textura_cidadao(
-			{"nome": str(filho["nome"]), "oficio": "herdeiro", "riqueza": 400,
-			"genero": str(filho.get("genero", "m")), "lealdade": 60}, true,
-			Retratos.fundo_da_casa(state)), 32)
+		# bebê, criança e jovem têm cara própria na leva do Bloco II
+		var id_f := Retratos.id_filho(filho)
+		Kit.retrato(lf, Retratos.textura_pequena(id_f) if id_f != ""
+			else Retratos.textura_cidadao(
+				{"nome": str(filho["nome"]), "oficio": "herdeiro", "riqueza": 400,
+				"genero": str(filho.get("genero", "m")), "lealdade": 60}, true,
+				Retratos.fundo_da_casa(state)), 32)
 		var vf := Kit.coluna(lf, 0)
 		Kit.texto(vf, str(filho["nome"]))
 		Kit.nota(vf, "%d anos" % int(filho["idade"]))
@@ -2359,6 +2459,10 @@ func _aba_guerras(c: Container) -> void:
 		])
 		for g in alheias:
 			var cel := Kit.linha(tab)
+			var ic_g := Icones.imagem("guerra", 16)
+			if ic_g != null:
+				ic_g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				cel[0].add_child(ic_g)
 			Kit.texto(cel[0], "%s × %s" % [Rotas.nome_do(state, str(g["a"])),
 				Rotas.nome_do(state, str(g["b"]))])
 			Kit.numero(cel[1], str(int(g["meses"])), Tema.ATENCAO)
@@ -2387,9 +2491,19 @@ func _aba_guerras(c: Container) -> void:
 	var vj := Kit.coluna(hj, 0)
 	vj.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var l_cargo := Kit.fila(vj, Tema.E3)
+	var ic_v := Icones.imagem("vassalo", 20)
+	if ic_v != null:
+		ic_v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		l_cargo.add_child(ic_v)
 	Kit.texto(l_cargo, "%s de %s" % [str(vs["cargo"]), str(vs["nome"])], Tema.ACENTO)
 	Kit.texto(l_cargo, "%d meses de serviço" % int(vs["meses"]), Tema.TEXTO_3, Tema.MICRO)
-	Kit.nota(vj, "Tributo estimado do mês: %d de ouro." % int(vs["tributo_estimado"]))
+	var l_trib := Kit.fila(vj, Tema.E2)
+	var ic_t := Icones.imagem("tributo", 16)
+	if ic_t != null:
+		ic_t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		l_trib.add_child(ic_t)
+	Kit.texto(l_trib, "Tributo estimado do mês: %d de ouro." % int(vs["tributo_estimado"]),
+		Tema.TEXTO_3, Tema.MICRO)
 	if int(vs["soldo"]) > 0:
 		Kit.nota(vj, "A casa te paga %d de ouro por mês%s." % [int(vs["soldo"]),
 			" e manda %d lanceiros a cada meia dúzia de meses" % int(vs["tropas_lote"])
