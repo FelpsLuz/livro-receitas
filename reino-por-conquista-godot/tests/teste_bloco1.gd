@@ -224,6 +224,28 @@ func _init() -> void:
 	Jogo.passar_mes(m)
 	ok("o mapa vence na virada — a rota tem custo recorrente",
 		not Economia.mapa_valido(m))
+	# O FREIO ELÁSTICO, travado por número: encher a carroça de uma vez
+	# tem que encarecer o próprio preço. Era a única defesa contra a
+	# arbitragem infinita, e é o que a sonda de balanceamento afere —
+	# se alguém zerar ELASTICIDADE, esta asserção cai antes do release.
+	var me := Jogo.novo_jogo("Elastico")
+	me["local"] = "touros"
+	me["jogador"]["ouro"] = 20000
+	Economia.renovar_mapa(me)
+	var p0: int = Economia.preco_de(me, "touros", "madeira")
+	for i_e in 20:
+		Economia.comprar(me, "touros", "madeira", 5)
+	var p1: int = Economia.preco_de(me, "touros", "madeira")
+	ok("comprar 100 unidades encarece a praça em pelo menos 40%",
+		p1 >= roundi(p0 * 1.4), "%d → %d" % [p0, p1])
+	var pv0: int = Economia.preco_de(me, "imperio", "madeira")
+	me["local"] = "imperio"
+	me["carga"]["madeira"] = 100
+	for i_v in 20:
+		Economia.vender(me, "imperio", "madeira", 5)
+	ok("e despejar 100 unidades derruba o preço de quem vende",
+		Economia.preco_de(me, "imperio", "madeira") < pv0,
+		"%d → %d" % [pv0, Economia.preco_de(me, "imperio", "madeira")])
 	# a estação move o preço na MESMA praça
 	var ms := Jogo.novo_jogo("Sazonal")
 	ms["mes"] = 7

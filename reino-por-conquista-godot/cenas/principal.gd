@@ -1151,7 +1151,8 @@ func _aba_mapa(c: Container) -> void:
 		var lb := Kit.fila(v, Tema.E2)
 		if not aqui:
 			var destino_lb: String = str(reino["id"])
-			_botao(lb, "Viajar", func(): _abrir_viagem(destino_lb), "fantasma")
+			var b_viajar := _botao(lb, "Viajar", func(): _abrir_viagem(destino_lb), "fantasma")
+			_com_icone(b_viajar, "cavalos")  # viagem é a cavalo — a marcha é que anda a pé
 		var alvo_id: String = reino["id"]
 		# JURAR LEALDADE: a saída para quem começa pobre diante de reinos ricos
 		if not Vassalagem.e_vassalo(state) and Vassalagem.pode_jurar(state, alvo_id)["ok"]:
@@ -1407,7 +1408,12 @@ func _fronteira_selvagem(c: Container) -> void:
 	var card := _card(c)
 	var v := Kit.coluna(card, 0)
 	if not Barbaros.reconhecido(state):
-		Kit.texto(v, "Ninguém sabe quantos são.")
+		var l_neb := Kit.fila(v, Tema.E2)
+		var ic_neb := Icones.imagem("neblina", 18)
+		if ic_neb != null:
+			ic_neb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			l_neb.add_child(ic_neb)
+		Kit.texto(l_neb, "Ninguém sabe quantos são.")
 		Kit.nota(v, "Um batedor atravessa a fronteira e volta com a conta dos clãs. Sem isso, o exército marcha no escuro.")
 		var l_esp := Kit.fila(v, Tema.E3)
 		Kit.icone_valor(l_esp, "moedas", str(Barbaros.CUSTO_ESPIAO), Tema.ACENTO)
@@ -1813,6 +1819,10 @@ func _aba_corte(c: Container) -> void:
 			if bool(n.get("lorde", false)):
 				Kit.selo(l_nome, "seu lorde", Tema.ACENTO, Tema.ACENTO_FUNDO)
 			if preso:
+				var ic_ferros := Icones.imagem("correntes", 14)
+				if ic_ferros != null:
+					ic_ferros.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+					l_nome.add_child(ic_ferros)
 				Kit.selo(l_nome, "a ferros", Color("e8917a"), Tema.PERIGO_FUNDO)
 			# riqueza e lealdade são status OCULTOS: o jogador lê a impressão,
 			# não o número, exatamente como leria um vassalo de verdade
@@ -2161,14 +2171,18 @@ func _aba_exercito(c: Container) -> void:
 	Kit.subsecao(c, "Formação de batalha")
 	Kit.nota(c, "Linha vence Cunha, Cunha vence Envolvimento, Envolvimento vence Linha.")
 	var hf := Kit.fila(c, Tema.E3)
+	# o desenho tático de cada formação, no ícone: escudos na Linha, lança
+	# na Cunha, arco no Envolvimento (flanco de atiradores)
+	var icone_formacao := {"linha": "escudo", "cunha": "lanca", "cerco": "arco"}
 	for f_id in Dados.FORMACOES:
 		# a formação ATIVA é um botão primário e as outras são fantasma. O
 		# asterisco que marcava a escolhida ("Cunha*") é uma convenção de
 		# terminal: num jogo, o estado de um botão é o preenchimento dele.
-		Kit.botao(hf, str(Dados.FORMACOES[f_id]["nome"]), func():
+		var b_f := Kit.botao(hf, str(Dados.FORMACOES[f_id]["nome"]), func():
 			j["formacao"] = f_id
 			Jogo.salvar(state)
-			atualizar(), "primario" if j["formacao"] == f_id else "fantasma", 130)
+			atualizar(), "primario" if j["formacao"] == f_id else "fantasma", 150)
+		_com_icone(b_f, str(icone_formacao.get(f_id, "")))
 	var melhorias := Kit.fila(c, Tema.E3)
 	_botao(melhorias, "Melhorar equipamento  ·  %d ouro"
 			% (200 * (int(j["equip"]) + 1)), func():
@@ -2703,7 +2717,9 @@ func _atualizar_cab_conversa() -> void:
 		Retratos.humor_de(state, npc_atual["id"]))
 
 func enviar_texto(texto: String) -> void:
-	texto = texto.strip_edges()
+	# emoji do teclado do celular viraria tofu na fonte do jogo — o mesmo
+	# filtro que limpa a resposta do modelo limpa a fala do jogador
+	texto = Dialogo.sem_emoji(texto).strip_edges()
 	if texto == "" or digitando or npc_atual.is_empty():
 		return
 	digitando = true
@@ -2814,7 +2830,8 @@ func _painel_modal() -> VBoxContainer:
 ## O quarto argumento é a ILUSTRAÇÃO do momento (Retratos.ilustracao(...)).
 ## Vem por último e aceita null porque nenhum modal depende dela para funcionar:
 ## sem o PNG, é o mesmo modal de texto de sempre.
-func _modal(titulo: String, corpo: String, botoes: Array, arte: Texture2D = null) -> void:
+func _modal(titulo: String, corpo: String, botoes: Array, arte: Texture2D = null,
+		selo_icone: String = "") -> void:
 	var v := _painel_modal()
 	# a ilustração é CENTRADA e o título também: o modal anterior tinha a
 	# arte centrada e o título alinhado à esquerda logo abaixo dela, e o
@@ -2833,7 +2850,31 @@ func _modal(titulo: String, corpo: String, botoes: Array, arte: Texture2D = null
 	l_titulo.add_theme_color_override("font_color", Tema.ACENTO)
 	l_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l_titulo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(l_titulo)
+	# O SELO DO DESFECHO — louros na vitória, caveira na derrota — vai na
+	# MESMA linha do título, não sozinho acima dele. Ícone solto e sem
+	# rótulo no meio de um painel lê como sujeira (foi o que já aconteceu
+	# com a neblina e o espião na aba Mapa); colado ao título ele vira o
+	# que é: a marca do que aconteceu.
+	## Os dois selos LADEIAM o título, numa fila que ocupa o painel inteiro:
+	## o rótulo continua expandido e centrado (é ele quem manda na largura),
+	## e os louros ficam como uma coroa em volta do nome do desfecho. Pôr o
+	## título dentro de um CenterContainer com autowrap ligado o colapsa
+	## para uma letra por linha — foi o que o render flagrou.
+	var ic_esq: TextureRect = null
+	if selo_icone != "":
+		ic_esq = Icones.imagem(selo_icone, 26)
+	if ic_esq != null:
+		var linha_t := Kit.fila(v, Tema.E3)
+		ic_esq.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		linha_t.add_child(ic_esq)
+		l_titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		linha_t.add_child(l_titulo)
+		var ic_dir := Icones.imagem(selo_icone, 26)
+		if ic_dir != null:
+			ic_dir.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			linha_t.add_child(ic_dir)
+	else:
+		v.add_child(l_titulo)
 	var l_corpo := Label.new()
 	l_corpo.text = corpo
 	l_corpo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2935,7 +2976,8 @@ func _modal_batalha(rel: Dictionary) -> void:
 	_modal("VITÓRIA — %s" % contexto if rel.get("vitoria", false) else "DERROTA — %s" % contexto,
 		corpo, [["Continuar", func():
 			Jogo.salvar(state)
-			atualizar()]], _arte_de_batalha(contexto))
+			atualizar()]], _arte_de_batalha(contexto),
+		"louros" if rel.get("vitoria", false) else "caveira")
 
 ## A ilustração sai do CONTEXTO que combate.gd já escreve ("Cerco a …",
 ## "Rebelião camponesa"…), então nenhuma chamada precisa passar arte à mão.

@@ -266,6 +266,37 @@ Cada taverna também ganhou nome próprio (`TAVERNAS`), e as Terras
 Bárbaras deixaram de servir cerveja: clã não tem taverna, e o Reino sem
 Rei ficou com o trio clássico — é para onde gente sem bandeira vai beber.
 
+## Bloco III — o polimento
+
+**A arbitragem, medida em vez de estimada.** `tests/medir_arbitragem.gd`
+não é asserção, é INSTRUMENTO: joga 24 meses só de comércio, com cinco
+vidas por bolsa, e imprime a mediana. Foi ele que mostrou que o freio do
+Bloco I (Mapa Comercial mensal) tinha passado do ponto — o mercador
+sensato PERDIA dinheiro em toda bolsa, porque a elasticidade de 0,02 por
+unidade quintuplicava o preço contra quem enchia a carroça.
+
+Com `Economia.ELASTICIDADE` em 0,006 e a licença a 60, em 24 meses:
+
+| bolsa | mercador sensato | mercador ganancioso |
+|---|---|---|
+| 150 | 30 — não decola | 30 |
+| 1.000 | 2.255 (2,3×) | 270 — quebra |
+| 4.000 | 5.924 (1,5×) | 1.326 — quebra |
+
+A rota paga a quem sabe PARAR de comprar, arruína quem enche a carroça
+cega, e não substitui empregos e contratos para quem começa do zero. O
+freio elástico está travado por asserção em `teste_bloco1.gd`.
+
+**Emoji não vira mais tofu.** A fonte do jogo não cobre pictogramas, e
+tanto o modelo de IA quanto o teclado do celular mandam emoji. O filtro
+(`Dialogo.sem_emoji`) corta por FAIXA — pictogramas, setas ornamentais e
+os invisíveis de composição — e deixa o PT-BR inteiro passar.
+
+**Os ícones órfãos entraram em serviço:** louros e caveira ladeando o
+título do modal de batalha, correntes no lorde a ferros, neblina na
+fronteira não reconhecida, cavalos no botão Viajar, e escudo/lança/arco
+nas três formações de batalha.
+
 ## Upgrades futuros (anotados, não pendentes)
 
 1. **Expressões nos retratos hi-bit** — o humor (raiva/feliz/neutro) vive no medidor

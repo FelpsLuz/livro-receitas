@@ -21,7 +21,7 @@ const Sinais = preload("res://scripts/sinais.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 
 const PRECO_RUMOR := 60
-const PRECO_ROTA := 90
+const PRECO_ROTA := 60
 const PRECO_INFORMANTE := 120       # entrada; depois 25/mês
 
 # ------------------------------------------------------------

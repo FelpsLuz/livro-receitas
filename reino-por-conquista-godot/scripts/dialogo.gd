@@ -854,4 +854,22 @@ static func sanear_llm(texto: String, nome: String) -> String:
 	var eco := RegEx.create_from_string("\\n\\[[A-ZÁÉÍÓÚÂÊÔÃÕÀÇ]").search(t)
 	if eco != null:
 		t = t.substr(0, eco.get_start())
-	return t.strip_edges().substr(0, 400)
+	return sem_emoji(t).strip_edges().substr(0, 400)
+
+## A fonte do jogo não cobre emoji: cada 😀 que o modelo mandar viraria
+## um quadradinho (tofu) na máquina de escrever. Filtrar por FAIXA, não
+## por lista: pictogramas, símbolos diversos, setas ornamentais e os
+## invisíveis de composição (ZWJ, seletores de variação). Latim e a
+## pontuação do PT-BR passam intactos.
+static func sem_emoji(t: String) -> String:
+	var limpo := ""
+	for c in t:
+		var u := c.unicode_at(0)
+		if u >= 0x1F000:                    # pictogramas, emoticons, bandeiras
+			continue
+		if u >= 0x2190 and u <= 0x2BFF:     # setas e símbolos técnicos/diversos
+			continue
+		if u == 0x200D or u == 0xFE0F or u == 0xFE0E or u == 0x20E3:
+			continue                        # ZWJ, seletores, combining keycap
+		limpo += c
+	return limpo

@@ -500,6 +500,16 @@ func _init() -> void:
 		Dialogo.sanear_llm("Claro que sim.\n[O QUE VOCÊ SENTE POR ELE] Neutro (0)", "X")
 			== "Claro que sim.")
 
+	# emoji do modelo (ou do teclado do celular) viraria tofu: a fonte não
+	# cobre pictogramas. O filtro derruba emoji, setas e invisíveis de
+	# composição — e NÃO toca no PT-BR (acentos, ç, pontuação)
+	ok("emoji some da fala saneada",
+		not Dialogo.sanear_llm("Salve, guerreiro! ⚔️😀", "X").contains("😀"))
+	ok("seta ornamental some da fala saneada",
+		Dialogo.sem_emoji("vamos → lá") == "vamos  lá")
+	ok("PT-BR sai intacto do filtro de emoji",
+		Dialogo.sem_emoji("Coração, ação e maçã — tudo çê!") == "Coração, ação e maçã — tudo çê!")
+
 	# a promessa dos três lugares da UI: "proponha casamento" em conversa
 	var sc := com_terra(3)
 	sc["jogador"]["renome"] = 80

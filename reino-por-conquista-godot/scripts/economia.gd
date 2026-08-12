@@ -82,6 +82,30 @@ static func preco_de(state: Dictionary, reino_id: String, g_id: String) -> int:
 
 const AVISO_MAPA := "Sem Mapa Comercial válido, nenhum feitor te vende nem te compra. Renove na taverna."
 
+## Quanto cada unidade negociada move a oferta do armazém.
+##
+## Era 0,02 — um lote de 5 empurrava a oferta 0,10, e como o preço é
+## `base × demanda / oferta`, quarenta lotes levavam a oferta ao piso e
+## quintuplicavam o preço contra quem estava comprando. Isso matou o
+## exploit do teste alfa (150 → 22.000 em 24 meses), mas matou junto a
+## rota inteira: a sonda `tests/medir_arbitragem.gd` mediu um mercador
+## sensato PERDENDO dinheiro em toda bolsa — a licença mensal custava
+## mais que a margem que a rota conseguia entregar.
+##
+## 0,006 (com a licença a 60) dá fôlego para uma carga de verdade sem
+## devolver o dinheiro infinito. O que a sonda mede hoje, em 24 meses:
+##
+##   bolsa    mercador sensato      mercador ganancioso
+##   150      30    (não decola)    30
+##   1.000    2.255 (2,3×)          270  (quebra)
+##   4.000    5.924 (1,5×)          1.326 (quebra)
+##
+## É o desenho certo: a rota paga a quem sabe PARAR de comprar, arruína
+## quem enche a carroça cegamente, e não substitui empregos e contratos
+## para quem começa do zero. A sonda é a régua — mexer aqui obriga a
+## rodá-la de novo (`tests/medir_arbitragem.gd`).
+const ELASTICIDADE := 0.006
+
 static func comprar(state: Dictionary, reino_id: String, g_id: String, qtd: int) -> Dictionary:
 	if not mapa_valido(state):
 		return {"ok": false, "msg": AVISO_MAPA}
@@ -92,7 +116,7 @@ static func comprar(state: Dictionary, reino_id: String, g_id: String, qtd: int)
 	state["jogador"]["ouro"] -= custo
 	state["carga"][g_id] = int(state["carga"].get(g_id, 0)) + qtd
 	var m: Dictionary = state["mercados"][reino_id][g_id]
-	m["oferta"] = maxf(0.2, m["oferta"] - 0.02 * qtd)
+	m["oferta"] = maxf(0.2, m["oferta"] - ELASTICIDADE * qtd)
 	return {"ok": true, "msg": "Comprou %d por %d de ouro." % [qtd, custo]}
 
 static func vender(state: Dictionary, reino_id: String, g_id: String, qtd: int) -> Dictionary:
@@ -112,7 +136,7 @@ static func vender(state: Dictionary, reino_id: String, g_id: String, qtd: int) 
 	state["carga"][g_id] = int(state["carga"][g_id]) - qtd
 	state["jogador"]["ouro"] += ganho
 	var m: Dictionary = state["mercados"][reino_id][g_id]
-	m["oferta"] = minf(3.0, m["oferta"] + 0.02 * qtd)
+	m["oferta"] = minf(3.0, m["oferta"] + ELASTICIDADE * qtd)
 	return {"ok": true, "msg": "Vendeu %d por %d de ouro." % [qtd, ganho]}
 
 static func _em_guerra(state: Dictionary, reino_id: String) -> bool:
