@@ -226,13 +226,28 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 		state["jogador"]["honra"] = mini(HONRA_MAX,
 			int(state["jogador"].get("honra", 50)) + ganho_h)
 		Dialogo.mudar_relacao(state, "rei_" + contrato["contratante"], 8, "contrato cumprido")
+		# o relatório da batalha mostra o que o serviço rendeu
+		rel["ganho_ouro"] = int(contrato["pagamento"])
+		rel["ganho_renome"] = int(contrato["renome"])
+		rel["ganho_honra"] = ganho_h
 		_diz(log, "Contrato cumprido: +%d ouro, +%d renome, +%d de honra."
 			% [contrato["pagamento"], contrato["renome"], ganho_h])
-		if contrato["id"] == "incursao" and contrato["alvo"] != "":
-			Dialogo.mudar_relacao(state, "rei_" + contrato["alvo"], -25, "queimou vila")
-			state["jogador"]["crueldade"] = int(state["jogador"].get("crueldade", 0)) + 1
-			state["jogador"]["meses_limpos"] = 0
-			_diz(log, "Você queimou uma vila de %s. O rei de lá não esquecerá." % contrato["alvo"])
+		# SERVIÇO CONTRA UM REINO CUSTA COM AQUELE REINO. Antes só a
+		# incursão marcava — mas guarnecer a fronteira contra alguém é
+		# tomar lado na guerra dele igual, e o rei do outro lado sabe. A
+		# vila queimada continua sendo a única que suja as mãos.
+		if str(contrato.get("alvo", "")) != "":
+			var queimou: bool = str(contrato["id"]) == "incursao"
+			Dialogo.mudar_relacao(state, "rei_" + str(contrato["alvo"]),
+				-25 if queimou else -12,
+				"queimou vila" if queimou else "lutou contra a minha casa")
+			rel["custo_relacao"] = str(contrato["alvo"])
+			if queimou:
+				state["jogador"]["crueldade"] = int(state["jogador"].get("crueldade", 0)) + 1
+				state["jogador"]["meses_limpos"] = 0
+				_diz(log, "Você queimou uma vila de %s. O rei de lá não esquecerá." % contrato["alvo"])
+			else:
+				_diz(log, "O rei de %s soube de que lado você lutou." % contrato["alvo"])
 	else:
 		state["jogador"]["renome"] = maxi(0, state["jogador"]["renome"] - 5)
 		_diz(log, "Contrato fracassou. Renome -5.")

@@ -160,7 +160,11 @@ const ROTAS := {
 	"leoes_aguias":       {"distancia": 6,  "perigo": 0.10},
 	"leoes_rosa":         {"distancia": 10, "perigo": 0.13},
 
-	# as bordas do mundo, onde a lei não chega
+	# as bordas do mundo, onde a lei não chega. A estrada é PIOR (salteador
+	# não pergunta de quem é a terra), mas o que espera no fim dela é mais
+	# fraco: sem soberano não há guarnição paga nem muro mantido. São duas
+	# perguntas diferentes — "é perigoso ir?" e "é difícil vencer?" — e a
+	# interface passou a separar as duas em vez de chamar tudo de "risco".
 	"rosa_sem_rei":       {"distancia": 8,  "perigo": 0.20},
 	"aguias_sem_rei":     {"distancia": 12, "perigo": 0.25},
 

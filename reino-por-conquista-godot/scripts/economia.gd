@@ -210,6 +210,32 @@ static func vender(state: Dictionary, reino_id: String, g_id: String, qtd: int) 
 	empurrar_oferta(state, reino_id, g_id, qtd)
 	return {"ok": true, "msg": "Vendeu %d por %d de ouro." % [qtd, ganho]}
 
+## DESCARREGAR NO CELEIRO — o elo que faltava entre o comércio e a tropa.
+##
+## Trigo e madeira comprados ficavam parados na carroça, esperando para
+## serem revendidos: o exército passava fome com o celeiro cheio do lado.
+## Agora o que você carrega pode ser despejado na SUA terra, e é dali que
+## sai o upkeep. Mais grão e mais madeira = mais homens sustentados; o
+## celeiro no vermelho é que faz a moral cair e a tropa desertar.
+const DESCARREGAVEL := {"trigo": "alimento", "madeira": "madeira"}
+
+static func descarregar(state: Dictionary, g_id: String, qtd: int = -1) -> Dictionary:
+	if not DESCARREGAVEL.has(g_id):
+		return {"ok": false, "msg": "Isso não alimenta ninguém nem levanta muro."}
+	if state.get("terra") == null:
+		return {"ok": false,
+			"msg": "Sem terra não há celeiro: o mercenário carrega o que come."}
+	var tem: int = int(state.get("carga", {}).get(g_id, 0))
+	if tem <= 0:
+		return {"ok": false, "msg": "Você não carrega nada disso."}
+	var levar: int = tem if qtd < 0 else mini(qtd, tem)
+	state["carga"][g_id] = tem - levar
+	var cofre: String = str(DESCARREGAVEL[g_id])
+	state["terra"][cofre] = int(state["terra"][cofre]) + levar
+	return {"ok": true, "qtd": levar,
+		"msg": "%d de %s foram para os celeiros da sua terra." % [levar,
+			str(Dados.MERCADORIAS[g_id]["nome"]).to_lower()]}
+
 ## Despejar mercadoria numa praça derruba o preço dela. Público porque a
 ## exportação do celeiro (jogo.gd) também é despejo — e tem que pagar o
 ## mesmo preço em preço.
@@ -347,6 +373,29 @@ static func populacao_ativa(state: Dictionary) -> int:
 static func fator_gestao(state: Dictionary) -> float:
 	var g: int = int(state["jogador"].get("atributos", {}).get("gestao", 5))
 	return 1.0 + (g - 5) * 0.04
+
+## A COLHEITA DO MÊS, líquida do que a vila come. É a MESMA conta de
+## `tick_terra` — extraída para a barra do topo poder mostrar o saldo
+## antes de o mês virar, em vez de o jogador descobrir no susto.
+static func colheita_mensal(state: Dictionary) -> int:
+	var t = state.get("terra")
+	if t == null:
+		return 0
+	var trabalhando := populacao_ativa(state)
+	var producao: int = roundi(trabalhando * 1.5 * (1.0 + int(t["nivel"]) * 0.15)
+		* Estacoes.fator_comida(state))
+	if Cidadaos.oficio_ativo(state, "moleiro"):
+		producao = roundi(producao * 1.2)
+	var Pretendentes = load("res://scripts/pretendentes.gd")
+	producao = roundi(producao * Pretendentes.fator_colheita(state))
+	return producao - int(t["populacao"])
+
+## A lenha do mês — mesma fórmula do tick.
+static func lenha_mensal(state: Dictionary) -> int:
+	var t = state.get("terra")
+	if t == null:
+		return 0
+	return 2 + int(t["nivel"]) * 2 + int(populacao_ativa(state) / 12.0)
 
 static func imposto_mensal(state: Dictionary) -> int:
 	if state.get("terra") == null:

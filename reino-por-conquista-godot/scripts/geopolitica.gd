@@ -510,3 +510,51 @@ static func panorama(state: Dictionary) -> Array:
 static func _diz(log: Callable, msg: String) -> void:
 	if log.is_valid():
 		log.call(msg)
+
+## A CASA REAL de um reino — quem se senta ao lado do trono.
+##
+## Existe porque a Corte, depois de a porta se abrir, mostrava exatamente
+## a mesma tela do portão: entrar não mudava nada além de com quem se
+## fala. A casa é DERIVADA (nome do rei + semente do reino), não guardada
+## no save: nenhum campo novo, e a mesma casa toda partida — é a família
+## daquele rei, não um sorteio a cada abertura de aba.
+static func casa_real(state: Dictionary, reino_id: String) -> Dictionary:
+	var r := reino_por_id(state, reino_id)
+	if r.is_empty():
+		return {"membros": []}
+	var rei: Dictionary = r.get("rei", {})
+	var semente: int = 0
+	for ch in str(rei.get("nome", reino_id)):
+		semente = (semente * 31 + ch.unicode_at(0)) % 100000
+	var rng := RandomNumberGenerator.new()
+	rng.seed = semente
+	var genero_rei := str(rei.get("genero", "m"))
+	var membros: Array = []
+	# o consorte: gênero oposto ao do soberano
+	var g_c := "f" if genero_rei == "m" else "m"
+	membros.append({
+		"nome": (Dados.NOMES_F[rng.randi() % Dados.NOMES_F.size()] if g_c == "f"
+			else Dados.NOMES_M[rng.randi() % Dados.NOMES_M.size()]) + " de " + str(r["capital"]),
+		"genero": g_c,
+		"papel": "consorte",
+		"nota": "Casou pela aliança, como se casa nesta casa. Ouve mais do que fala.",
+	})
+	# os filhos: de um a três, com idade e papel
+	var n_filhos: int = 1 + rng.randi() % 3
+	for i in n_filhos:
+		var g_f := "m" if rng.randi() % 2 == 0 else "f"
+		var idade: int = 6 + rng.randi() % 22
+		var papel := "herdeiro" if (i == 0 and g_f == "m") else (
+			"herdeira" if i == 0 else ("filho" if g_f == "m" else "filha"))
+		var nota := "%d anos." % idade
+		if idade >= 16:
+			nota += " Em idade de casar — e uma aliança de sangue vale mais que um tratado."
+		else:
+			nota += " Ainda criança; a corte já disputa quem o educa." if g_f == "m" \
+				else " Ainda criança; a corte já disputa quem a educa."
+		membros.append({
+			"nome": (Dados.NOMES_M[rng.randi() % Dados.NOMES_M.size()] if g_f == "m"
+				else Dados.NOMES_F[rng.randi() % Dados.NOMES_F.size()]),
+			"genero": g_f, "papel": papel, "nota": nota, "idade": idade,
+		})
+	return {"membros": membros, "rei": rei}

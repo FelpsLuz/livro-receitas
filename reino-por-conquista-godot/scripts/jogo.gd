@@ -39,7 +39,7 @@ static func _molde_de_estado() -> Dictionary:
 		"choques": [], "flagras": {}, "informantes": [], "marchas": [],
 		"minuto": 0, "empregos": {}, "afetos": {}, "mapa_comercial": null,
 		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
-		"licencas": {},
+		"licencas": {}, "avisos_ocultos": {},
 		"familia": {"conjuge": null, "filhos": []},
 		"terra": null, "fim": null,
 	}
@@ -83,6 +83,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"mapa_comercial": null,    # licença de negociar, 1 mês (economia.gd)
 		"progresso_atributo": {},  # dias de ofício rumo ao próximo ponto
 		"licencas": {},            # selo da guilda por praça (economia.gd)
+		"avisos_ocultos": {},      # "não mostrar de novo" por aviso (UI)
 		"intel": {},               # o que o espião revelou (intel.gd)
 		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
 	}

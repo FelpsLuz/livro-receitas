@@ -723,10 +723,41 @@ func _montar_hud(j: Dictionary) -> void:
 	if int(j["guardas"]) > 0:
 		_celula_hud("escudo", str(int(j["guardas"])),
 			"Guardas de elite na sua casa")
+	# CELEIRO E MADEIREIRA no topo, com o SALDO DO MÊS na dica.
+	#
+	# O jogador via os números só na aba Terra, e não via para onde eles
+	# iam: o exército come todo mês, a colheita repõe, e a diferença entre
+	# as duas contas é o que decide se a tropa deserta. Agora os dois
+	# recursos ficam na barra, e passar o mouse mostra a conta inteira.
 	var t = state.get("terra")
 	if t != null:
-		_celula_hud("trigo", str(int(t["alimento"])), "Celeiro",
-			int(t["alimento"]) <= 0)
+		var up: Dictionary = Economia.upkeep_de(j["tropas"],
+			2.0 - Economia.fator_gestao(state),
+			Cidadaos.oficio_ativo(state, "ferreiro"))
+		var colheita: int = Economia.colheita_mensal(state)
+		var lenha: int = Economia.lenha_mensal(state)
+		var saldo_g: int = colheita - int(up["comida"])
+		var saldo_m: int = lenha - int(up["madeira"])
+		_celula_hud("trigo", str(int(t["alimento"])),
+			"Celeiro: %d\n+%d da colheita, −%d que a tropa come\nsaldo do mês: %s%d"
+				% [int(t["alimento"]), colheita, int(up["comida"]),
+					"+" if saldo_g >= 0 else "", saldo_g],
+			int(t["alimento"]) <= 0 or saldo_g < 0)
+		_celula_hud("madeira", str(int(t["madeira"])),
+			"Madeireira: %d\n+%d cortados, −%d de manutenção\nsaldo do mês: %s%d"
+				% [int(t["madeira"]), lenha, int(up["madeira"]),
+					"+" if saldo_m >= 0 else "", saldo_m],
+			int(t["madeira"]) <= 0 or saldo_m < 0)
+		_celula_hud("saco", str(Economia.imposto_mensal(state)),
+			"Imposto do mês: %d de ouro\n%d camponeses trabalhando · gestão %d"
+				% [Economia.imposto_mensal(state), Economia.populacao_ativa(state),
+					int(j.get("atributos", {}).get("gestao", 5))])
+	else:
+		# sem terra o mercenário compra tudo na estrada — e é bom saber quanto
+		var up_s: Dictionary = Economia.upkeep_de(j["tropas"], 1.0, false)
+		_celula_hud("moedas", "−%d" % int(up_s["ouro"]),
+			"Soldo do mês do seu exército. Sem terra, comida e madeira saem da estrada.",
+			int(up_s["ouro"]) > int(j["ouro"]))
 	# a estação pinta o próprio chip: a UI muda de temperatura com o mundo.
 	# Na leva hi-bit cada estação tem símbolo próprio (flor, sol, folha,
 	# floco — como o floco da referência); sem a arte, o calendário tingido.
@@ -1326,6 +1357,17 @@ func _aba_mercado(c: Container) -> void:
 			Jogo.salvar(state)
 			atualizar(), "fantasma", 88)
 		b_vender.disabled = carga < 5 or not tem_mapa
+		# grão e madeira também SUSTENTAM: o que você carrega pode ir para
+		# o celeiro da sua terra, e é de lá que o exército come
+		if Economia.DESCARREGAVEL.has(g_id) and state["terra"] != null:
+			var b_desc := Kit.botao_mini(cel[5], "Ao celeiro", func():
+				var r: Dictionary = Economia.descarregar(state, g_id)
+				Sfx.tocar(self, "pagina" if r["ok"] else "alerta")
+				_aviso(str(r["msg"]))
+				Jogo.salvar(state)
+				atualizar(), "fantasma", 88)
+			b_desc.disabled = carga <= 0
+			b_desc.tooltip_text = "Descarrega tudo na sua terra: mais celeiro sustenta mais tropa"
 
 func _aba_taverna(c: Container) -> void:
 	_titulo_secao(c, str(TAVERNAS.get(str(state.get("local", "")),
@@ -1937,7 +1979,44 @@ func _vaga_de_emprego(c: Container, reino_id: String, vaga: Dictionary) -> void:
 		Kit.botao_mini(acao, "%dd" % dias, func():
 			_trabalhar(reino_id, id_vaga, dias), "fantasma", 40)
 
+## Avisos que o jogador já entendeu e não quer rever. Ficam no `state`
+## (e portanto no save), com a chave do aviso — é preferência de partida,
+## não de instalação.
+func _aviso_silenciado(chave: String) -> bool:
+	return bool(state.get("avisos_ocultos", {}).get(chave, false))
+
+func _silenciar_aviso(chave: String) -> void:
+	if not (state.get("avisos_ocultos") is Dictionary):
+		state["avisos_ocultos"] = {}
+	state["avisos_ocultos"][chave] = true
+	Jogo.salvar(state)
+
+## O TURNO CONSOME O DIA — e isso precisa ser dito ANTES, não descoberto.
+##
+## O jogador clicava "2d" e o calendário andava sozinho; parecia bug. O
+## aviso explica a troca uma vez e oferece não repetir, porque na décima
+## vez ele vira obstáculo em vez de ajuda.
 func _trabalhar(reino_id: String, emprego_id: String, dias: int) -> void:
+	if not _aviso_silenciado("turno_consome_dia"):
+		var e_av: Dictionary = Empregos.por_id(emprego_id)
+		_modal("O turno come o mês",
+			"Trabalhar %d %s faz o calendário andar %d %s: é o mesmo tempo que uma viagem ou um contrato custariam.\n\n%s paga %d por dia — e o mês só tem %d." % [
+				dias, "dia" if dias == 1 else "dias", dias,
+				"dia" if dias == 1 else "dias", str(e_av.get("nome", "O ofício")),
+				int(e_av.get("paga", 0)), Jogo.DIAS_POR_MES],
+			[["Entendi, trabalhar", func():
+				overlay_modal.visible = false
+				_executar_turno(reino_id, emprego_id, dias)],
+			["Entendi, não avise mais", func():
+				_silenciar_aviso("turno_consome_dia")
+				overlay_modal.visible = false
+				_executar_turno(reino_id, emprego_id, dias)],
+			["Voltar", func(): atualizar()]],
+			Retratos.ilustracao("emprego"))
+		return
+	_executar_turno(reino_id, emprego_id, dias)
+
+func _executar_turno(reino_id: String, emprego_id: String, dias: int) -> void:
 	var r: Dictionary = Empregos.trabalhar(state, reino_id, emprego_id, dias,
 		Jogo.log_para(state))
 	if not bool(r.get("ok", false)):
@@ -1987,7 +2066,35 @@ func _aba_corte(c: Container) -> void:
 	# escada de acesso (Parte 2): o guarda do portão é sempre o primeiro
 	# contato — o rei só atende em pessoa quando a relação (e, no Neutro, o
 	# título) já foi conquistada. quem_atende() devolve o card certo pronto.
-	_card_npc(c, Dialogo.quem_atende(state, reino["id"]))
+	var atende: Dictionary = Dialogo.quem_atende(state, reino["id"])
+	var no_portao: bool = str(atende.get("papel", "")) == "guarda"
+	if no_portao:
+		Kit.nota(c, "Você fala no PORTÃO. Ganhe a confiança da casa — ou pague o guarda — para entrar no salão.")
+	_card_npc(c, atende)
+
+	# ---- DENTRO DO SALÃO: a casa real, quando a porta abre ----
+	# Antes, "entrar" só mudava com quem você conversava — a tela era a
+	# mesma. Agora a corte se abre: o rei, quem se sentou ao lado dele e
+	# os filhos que herdam. É o que faz a entrada valer o preço.
+	if not no_portao:
+		Kit.respiro(c, Tema.E2)
+		Kit.subsecao(c, "No salão de %s" % str(reino["capital"]))
+		var casa_r: Dictionary = Geopolitica.casa_real(state, str(reino["id"]))
+		if (casa_r.get("membros", []) as Array).is_empty():
+			Kit.nota(c, "O trono está só. Nem consorte, nem herdeiro — e uma casa sem herdeiro é uma guerra esperando a hora.")
+		for membro in casa_r.get("membros", []):
+			var hc := _card(c)
+			Kit.retrato(hc, Retratos.textura_cidadao({
+				"nome": str(membro["nome"]), "oficio": "senhor", "riqueza": 500,
+				"genero": str(membro.get("genero", "f")), "lealdade": 60,
+				"lorde": true}, true,
+				str(Retratos.REIS.get("rei_" + str(reino["id"]), {}).get("fundo", ""))), 32)
+			var vc := Kit.coluna(hc, 0)
+			vc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			var lc := Kit.fila(vc, Tema.E3)
+			Kit.texto(lc, str(membro["nome"]))
+			Kit.selo(lc, str(membro["papel"]), Tema.TEXTO_2, Tema.ELEVADO)
+			Kit.nota(vc, str(membro["nota"]))
 
 	# ---- a SUA corte: gente que nasceu durante a partida ----
 	# Cada retrato é gerado a partir do NOME do notável, então a lista muda a
@@ -2081,6 +2188,30 @@ func _card_npc(c: Container, npc: Dictionary, destaque: bool = true) -> void:
 	_botao(acao, "Conversar", func(): abrir_conversa(npc),
 		"primario" if destaque else "")
 
+## As três classes, por extenso — "arq" e "cav" são chave de tabela, não
+## coisa que se mostre a quem está escolhendo tropa.
+func _nome_classe(cl: String) -> String:
+	match cl:
+		"arq": return "atiradores"
+		"cav": return "cavalaria"
+	return "infantaria"
+
+## Para que serve cada unidade, em uma linha. É a pergunta que a tabela de
+## números não responde: o jogador vê "atq 150" e não sabe que a cavalaria
+## pesada quebra linha mas morre para lanceiro em muro.
+func _serve_para(tipo: String) -> String:
+	match tipo:
+		"campones": return "Carne barata: enche a linha e paga pouco soldo. Morre fácil."
+		"lanceiro": return "A parede. Segura carga de cavalaria melhor que ninguém."
+		"espadachim": return "Quem decide o corpo a corpo depois que as linhas se encontram."
+		"barbaro": return "Ataque puro, defesa nenhuma. Ganha rápido ou morre rápido."
+		"arqueiro": return "Fere antes do choque. Frágil se a cavalaria chegar."
+		"explorador": return "Não luta: enxerga. Ocupa dois de população."
+		"cav_leve": return "Persegue quem foge e volta com carga. Fraca em muro."
+		"arq_cavalo": return "Fere e recua. Cara de manter, difícil de encurralar."
+		"cav_pesada": return "Quebra a linha inimiga de uma vez — e come como três."
+	return ""
+
 func _aba_exercito(c: Container) -> void:
 	var j: Dictionary = state["jogador"]
 	var p := Combate.poder(j["tropas"], j["equip"])
@@ -2151,39 +2282,71 @@ func _aba_exercito(c: Container) -> void:
 
 	# ---- as unidades, em tabela ----
 	Kit.respiro(c, Tema.E2)
-	Kit.subsecao(c, "Recrutamento")
+	Kit.subsecao(c, "Recrutamento — os homens de armas")
+	# A DIFERENÇA QUE FALTAVA ESTAR ESCRITA: estes são os homens que
+	# MARCHAM. A guarda de elite (aba Casa) faz o contrário — nunca sai, e
+	# é ela que segura o portão quando alguém marcha contra a sua terra.
+	Kit.nota(c, "Estes homens partem em campanha: contrato, saque, cerco. Quem fica defendendo a sua casa é a guarda de elite, na aba Casa.")
+	Kit.nota(c, "Passe o mouse sobre a unidade para ver ataque, defesas, soldo e para que ela serve.")
 	var tab := Kit.tabela(c, [
 		{"t": "", "w": 34, "a": Kit.CENTRO},
 		{"t": "Unidade", "w": 0},
 		{"t": "Tem", "w": 60, "a": Kit.DIR},
 		{"t": "Custo", "w": 64, "a": Kit.DIR},
 		{"t": "Manut.", "w": 64, "a": Kit.DIR},
-		{"t": "Treino", "w": 76, "a": Kit.DIR},
+		{"t": "Ritmo", "w": 84, "a": Kit.DIR},
 		{"t": "", "w": 96, "a": Kit.DIR},
 	])
 	for tipo in Dados.TROPAS:
 		var n_tem: int = int(j["tropas"].get(tipo, 0))
+		var porta: Dictionary = Recrutamento.pode_recrutar(state, tipo)
+		var liberada: bool = bool(porta["ok"])
 		var cel := Kit.linha(tab, Tema.ACENTO_FUNDO if n_tem > 0 else null)
 		# a arte da unidade vem por cálculo: "tropa_" + a chave de Dados.TROPAS.
 		# Unidade nova no catálogo já nasce com retrato assim que o PNG existir,
 		# sem tocar nesta linha.
 		Kit.retrato(cel[0], Retratos.textura_tropa(tipo), 32)
-		Kit.texto(cel[1], str(Dados.TROPAS[tipo]["nome"]))
+		var l_un := Kit.fila(cel[1], Tema.E3)
+		Kit.texto(l_un, str(Dados.TROPAS[tipo]["nome"]),
+			Tema.TEXTO if liberada else Tema.TEXTO_3)
+		if not liberada:
+			Kit.selo(l_un, "exige %s" % str(Dados.NIVEIS_TERRA[
+				Recrutamento.nivel_exigido(tipo)]["nome"]), Tema.ATENCAO,
+				Tema.ATENCAO_FUNDO)
 		Kit.numero(cel[2], str(n_tem), Tema.TEXTO if n_tem > 0 else Tema.TEXTO_3)
 		Kit.numero(cel[3], str(Dados.TROPAS[tipo]["custo"]), Tema.ACENTO)
 		Kit.numero(cel[4], str(Dados.TROPAS[tipo]["manut"]), Tema.TEXTO_2)
-		# em DIAS, não em segundos: o "14s" era herança do Timer que girava o
-		# relógio em tempo real. Com uma unidade só no jogo, a coluna passa a
-		# falar a mesma língua do rodapé — e uma casa decimal separa o
-		# camponês (0,1) da cavalaria pesada (0,9)
-		Kit.numero(cel[5], "%.1f d" % Relogio.em_dias(
-			Recrutamento.tempo_de(state, tipo)), Tema.TEXTO_2)
-		Kit.botao_mini(cel[6], "Recrutar 5", func():
+		# HOMENS POR DIA, não "0,0 d". Com o treino por lote de cinco, todos
+		# os tempos caem abaixo de um dia e a coluna virava uma fileira de
+		# zeros. O ritmo responde à pergunta que o jogador de fato faz —
+		# "quanto tempo para duzentos arqueiros?" — por divisão simples.
+		var por_dia: float = float(Recrutamento.POR_LOTE) \
+			* Relogio.MINUTOS_POR_DIA / maxf(1.0, float(Recrutamento.tempo_de(state, tipo)))
+		var l_ritmo := Kit.numero(cel[5], "%d/dia" % roundi(por_dia), Tema.TEXTO_2)
+		l_ritmo.tooltip_text = "Quantos ficam prontos por dia. 200 deles levariam %s." \
+			% Relogio.texto_dias(roundi(200.0 / maxf(1.0, por_dia)) * Relogio.MINUTOS_POR_DIA)
+		var b_rec := Kit.botao_mini(cel[6], "Recrutar 5", func():
 			var r: Dictionary = Jogo.recrutar(state, tipo, 5)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 			_aviso(r["msg"])
 			Jogo.salvar(state)
 			atualizar(), "fantasma", 92)
+		b_rec.disabled = not liberada
+		# A FICHA DA UNIDADE na dica: sem ela o jogador escolhia tropa pelo
+		# preço, que é o único número que a tabela cabia mostrar. Aqui estão
+		# os três valores que decidem a batalha (ataque e as duas defesas),
+		# o que ela come, quanta gente ocupa e para que serve.
+		var d_un: Dictionary = Dados.TROPAS[tipo]
+		var ficha := "%s\n\nAtaque %d · classe %s\nDefesa contra: infantaria %d · cavalaria %d · flecha %d\nCusta %d · soldo %d/mês · come %d de trigo · %d de madeira\nOcupa %d de população · saque %d\n%s" % [
+			str(d_un["nome"]), int(d_un["atq"]), _nome_classe(str(d_un["classe"])),
+			int(d_un["dg"]), int(d_un["dc"]), int(d_un["da"]),
+			int(d_un["custo"]), int(d_un["manut"]), int(d_un["comida"]),
+			int(d_un["madeira"]), int(d_un.get("pop", 1)), int(d_un.get("saque", 0)),
+			_serve_para(tipo)]
+		if not liberada:
+			ficha += "\n\n%s" % str(porta["msg"])
+		cel[1].tooltip_text = ficha
+		b_rec.tooltip_text = ficha
 
 	# ---- fila do quartel ----
 	# Sem isto o jogador clica em "Recrutar" e não vê nada mudar, porque a
@@ -2360,14 +2523,20 @@ func _aba_exercito(c: Container) -> void:
 		# a estimativa de marcha aparece ANTES de decidir, e agora em COLUNA:
 		# dias e risco são o que se compara entre destinos, e comparar exige
 		# que os dois estejam no mesmo x de linha para linha
+		# DUAS PERGUNTAS DIFERENTES, DUAS COLUNAS. "Risco" sozinho misturava
+		# o perigo da ESTRADA (salteador, que é pior justamente onde não há
+		# rei) com a dificuldade do ALVO (guarnição, que é menor justamente
+		# onde não há rei). Lidas como uma coisa só, davam a impressão
+		# errada: as Terras Bárbaras pareciam mais duras que o Império.
 		var tab_m := Kit.tabela(c, [
 			{"t": "Destino", "w": 0},
-			{"t": "Marcha", "w": 96, "a": Kit.DIR},
-			{"t": "Risco", "w": 80, "a": Kit.DIR},
+			{"t": "Marcha", "w": 86, "a": Kit.DIR},
+			{"t": "Estrada", "w": 92, "a": Kit.DIR},
+			{"t": "Defesa", "w": 92, "a": Kit.DIR},
 			{"t": "", "w": 150, "a": Kit.DIR},
 		])
 		for alvo in Rotas.todos_os_nos():
-			if alvo == "jogador":
+			if alvo == "jogador" or alvo == Barbaros.ID:
 				continue
 			var metade := {}
 			for tipo in j["tropas"]:
@@ -2382,13 +2551,19 @@ func _aba_exercito(c: Container) -> void:
 			Kit.texto(v_alvo, Rotas.nome_do(state, alvo))
 			Kit.nota(v_alvo, str(est["trajeto"]))
 			Kit.numero(cel_m[1], Relogio.texto_dias(int(est["minutos"])), Tema.TEXTO_2)
-			Kit.texto(cel_m[2], str(est["risco"]),
+			var l_est := Kit.texto(cel_m[2], str(est["risco"]),
 				Tema.PERIGO if str(est["risco"]).begins_with("alt") else Tema.TEXTO_2,
 				Tema.MICRO)
+			l_est.tooltip_text = "Chance de emboscada no caminho. Terra sem lei tem estrada pior."
+			var def_txt := Marchas.rotulo_de_defesa(state, alvo)
+			var l_def := Kit.texto(cel_m[3], def_txt,
+				Tema.PERIGO if def_txt.begins_with("mui") or def_txt.begins_with("for")
+				else Tema.TEXTO_2, Tema.MICRO)
+			l_def.tooltip_text = "O que espera no fim da estrada. Sem rei não há guarnição paga: terra sem trono é a mais fraca do mapa."
 			var destino: String = alvo
 			var envio: Dictionary = metade
 			var cmd_id: String = str(state["jogador"].get("comandante_escolhido", "senhor"))
-			Kit.botao_mini(cel_m[3], "Saque", func():
+			Kit.botao_mini(cel_m[4], "Saque", func():
 				var r: Dictionary = Marchas.despachar(state, destino, envio, "saque", cmd_id)
 				Sfx.tocar(self, "tique" if r["ok"] else "alerta")
 				_aviso(r["msg"])
@@ -2425,11 +2600,8 @@ func _aba_exercito(c: Container) -> void:
 		_aviso(r["msg"])
 		Jogo.salvar(state)
 		atualizar())
-	_botao(melhorias, "Contratar 2 guardas de elite  ·  120 ouro", func():
-		var r: Dictionary = Jogo.contratar_guardas(state, 2)
-		_aviso(r["msg"])
-		Jogo.salvar(state)
-		atualizar())
+	# a guarda de elite saiu daqui: ela não é tropa de campanha, é a
+	# guarnição da SUA casa — e agora vive na aba Casa, onde pertence
 
 func _aba_clas(c: Container) -> void:
 	_titulo_secao(c, "Clãs Mercenários",
@@ -2631,6 +2803,39 @@ func _aba_familia(c: Container) -> void:
 		# nobre pela corte, a plebeia pelo salão da taverna (Bloco I)
 		Kit.nota(casa, "Casamento real exige 40+ de renome e boa relação — peça a mão em conversa na corte.")
 		Kit.nota(casa, "Sem coroa ao alcance, corteje uma moça no salão da taverna: casa plebeia, mas o ofício dela vem junto.")
+
+	# ---- A GUARDA DA CASA ----
+	# Ela morava na aba Tropas, entre "melhorar equipamento" e "contratar",
+	# como se fosse exército — e o jogador não tinha como saber que estes
+	# homens NÃO marcham. Aqui, na Casa, a função fica óbvia: são os que
+	# ficam. E agora eles lutam de verdade: entram na guarnição quando uma
+	# coluna inimiga chega à sua terra, valendo dois espadachins cada.
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Guarda da casa")
+	var card_g := _card(c)
+	var ic_g := Icones.imagem("escudo", 32)
+	if ic_g != null:
+		ic_g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		card_g.add_child(ic_g)
+	var vg := Kit.coluna(card_g, 0)
+	vg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var n_guardas: int = int(j.get("guardas", 0))
+	Kit.texto(vg, "%d guardas de elite" % n_guardas,
+		Tema.TEXTO if n_guardas > 0 else Tema.TEXTO_3)
+	Kit.nota(vg, "Nunca marcham. Defendem a sua terra quando alguém vem tomá-la — cada um vale dois espadachins no muro.")
+	if n_guardas > 0:
+		Kit.nota(vg, "Cuidado: guarda mal paga é guarda que escuta ofertas. Com a moral no chão, eles abrem o portão.")
+	var acao_g := Kit.fila(card_g, Tema.E3)
+	acao_g.size_flags_horizontal = Control.SIZE_SHRINK_END
+	acao_g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Kit.icone_valor(acao_g, "moedas", "120", Tema.ACENTO)
+	var b_g := Kit.botao_mini(acao_g, "Contratar 2", func():
+		var r: Dictionary = Jogo.contratar_guardas(state, 2)
+		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+		_aviso(str(r["msg"]))
+		Jogo.salvar(state)
+		atualizar(), "fantasma", 120)
+	b_g.disabled = int(j["ouro"]) < 120
 
 	Kit.respiro(c, Tema.E2)
 	Kit.subsecao(c, "Herdeiros")
@@ -3193,26 +3398,88 @@ func _modal_batalha(rel: Dictionary) -> void:
 		return
 	Sfx.tocar(self, "espada")
 	Sfx.tocar(self, "vitoria" if rel.get("vitoria", false) else "derrota")
-	var corpo := ""
+	var venceu: bool = bool(rel.get("vitoria", false))
+	var contexto := str(rel.get("contexto", "Batalha"))
+	var v := _painel_modal()
+	if _arte_de_batalha(contexto) != null:
+		var cc := CenterContainer.new()
+		v.add_child(cc)
+		Kit.ilustracao(cc, _arte_de_batalha(contexto), 120)
+	# ---- título com o selo do desfecho ----
+	var lt := Kit.fila(v, Tema.E3)
+	var ic_s := Icones.imagem("louros" if venceu else "caveira", 26)
+	if ic_s != null:
+		ic_s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		lt.add_child(ic_s)
+	var l_tit := Label.new()
+	l_tit.text = ("VITÓRIA — %s" if venceu else "DERROTA — %s") % contexto
+	var f_b := Tema.fonte_forte()
+	if f_b != null:
+		l_tit.add_theme_font_override("font", f_b)
+	l_tit.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
+	l_tit.add_theme_color_override("font_color", Tema.ACENTO if venceu else Tema.PERIGO)
+	l_tit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l_tit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_tit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lt.add_child(l_tit)
+
+	# ---- AS TRÊS FASES, EM TABELA ----
+	# Eram três frases longas coladas ("Disparo: 361 de ataque contra 310
+	# de defesa — baixas: você −24, inimigo −3"), e ninguém consegue
+	# comparar três linhas assim de bate-pronto. Em colunas, a fase que
+	# decidiu a batalha salta aos olhos.
+	Kit.subsecao(v, "Como foi")
+	var tabf := Kit.tabela(v, [
+		{"t": "Fase", "w": 0},
+		{"t": "Ataque", "w": 70, "a": Kit.DIR},
+		{"t": "Defesa", "w": 70, "a": Kit.DIR},
+		{"t": "Você", "w": 62, "a": Kit.DIR},
+		{"t": "Eles", "w": 62, "a": Kit.DIR},
+	])
 	for f in rel.get("fases", []):
-		corpo += "%s: %d de ataque contra %d de defesa — baixas: você −%d, inimigo −%d\n" % [
-			str(f.get("nome", f.get("fase", "?"))), int(f.get("ataque", 0)),
-			int(f.get("defesa", 0)), int(f.get("mortos_atacante", 0)),
-			int(f.get("mortos_defensor", 0))]
+		var celf := Kit.linha(tabf)
+		Kit.texto(celf[0], str(f.get("nome", f.get("fase", "?"))))
+		Kit.numero(celf[1], str(int(f.get("ataque", 0))), Tema.TEXTO_2)
+		Kit.numero(celf[2], str(int(f.get("defesa", 0))), Tema.TEXTO_2)
+		Kit.numero(celf[3], "−%d" % int(f.get("mortos_atacante", 0)), Tema.PERIGO)
+		Kit.numero(celf[4], "−%d" % int(f.get("mortos_defensor", 0)), Tema.GANHO)
 	match str(rel.get("debandada", "")):
 		"inimigo":
-			corpo += "O inimigo debandou!\n"
+			Kit.selo(v, "o inimigo debandou", Tema.GANHO, Tema.GANHO_FUNDO)
 		"jogador":
-			corpo += "Suas linhas quebraram!\n"
-	corpo += "Cada soldado conta: você perdeu %d homens; o inimigo, %d. Restam %d contra %d." % [
-		int(rel.get("baixas_jogador", 0)), int(rel.get("baixas_inimigo", 0)),
-		int(rel.get("vivos_jogador", 0)), int(rel.get("vivos_inimigo", 0))]
-	var contexto := str(rel.get("contexto", "Batalha"))
-	_modal("VITÓRIA — %s" % contexto if rel.get("vitoria", false) else "DERROTA — %s" % contexto,
-		corpo, [["Continuar", func():
-			Jogo.salvar(state)
-			atualizar()]], _arte_de_batalha(contexto),
-		"louros" if rel.get("vitoria", false) else "caveira")
+			Kit.selo(v, "suas linhas quebraram", Tema.PERIGO, Tema.PERIGO_FUNDO)
+
+	# ---- O SALDO, em dois blocos grandes ----
+	Kit.subsecao(v, "O saldo")
+	var placar := Kit.fila(v, Tema.E6)
+	for lado in [["Suas baixas", int(rel.get("baixas_jogador", 0)),
+				"De pé: %d" % int(rel.get("vivos_jogador", 0)), Tema.PERIGO],
+			["Baixas deles", int(rel.get("baixas_inimigo", 0)),
+				"De pé: %d" % int(rel.get("vivos_inimigo", 0)), Tema.GANHO]]:
+		var bloco := VBoxContainer.new()
+		bloco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bloco.add_theme_constant_override("separation", 0)
+		placar.add_child(bloco)
+		var rot := Kit.texto(bloco, str(lado[0]), Tema.TEXTO_3, Tema.MINI)
+		rot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var num := Kit.numero(bloco, "−%d" % int(lado[1]), lado[3] as Color, Tema.CORPO_G)
+		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var sub := Kit.texto(bloco, str(lado[2]), Tema.TEXTO_2, Tema.MICRO)
+		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# ---- o que a vitória rendeu (ou o que a derrota custou) ----
+	if rel.has("ganho_ouro") or rel.has("ganho_renome"):
+		var lg := Kit.fila(v, Tema.E4)
+		if int(rel.get("ganho_ouro", 0)) != 0:
+			Kit.icone_valor(lg, "moedas", "+%d" % int(rel["ganho_ouro"]), Tema.ACENTO)
+		if int(rel.get("ganho_renome", 0)) != 0:
+			Kit.icone_valor(lg, "renome", "+%d" % int(rel["ganho_renome"]), Tema.GANHO)
+		if int(rel.get("ganho_honra", 0)) != 0:
+			Kit.icone_valor(lg, "honra", "+%d" % int(rel["ganho_honra"]), Tema.GANHO)
+	Kit.respiro(v, Tema.E2)
+	Kit.botao(v, "Continuar", func():
+		Jogo.salvar(state)
+		atualizar(), "primario")
 
 ## A ilustração sai do CONTEXTO que combate.gd já escreve ("Cerco a …",
 ## "Rebelião camponesa"…), então nenhuma chamada precisa passar arte à mão.

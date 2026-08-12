@@ -76,6 +76,26 @@ static func estimar(state: Dictionary, alvo: String, tropas: Dictionary,
 		"risco": rotulo_de_risco(float(rota["perigo"])),
 	}
 
+## O QUE ESPERA NO FIM DA ESTRADA — em palavras, e sem revelar o número.
+##
+## Existe porque "risco" sozinho misturava duas coisas opostas: a estrada
+## para o Reino sem Rei é a pior do mapa (salteador não pergunta de quem é
+## a terra) e a defesa de lá é a mais fraca (sem soberano não há guarnição
+## paga nem muro mantido). Lidas como uma só, davam a impressão errada de
+## que terra sem trono é mais dura que reino inteiro.
+static func rotulo_de_defesa(state: Dictionary, alvo: String) -> String:
+	var g := _guarnicao_de(state, alvo)
+	var n := Combate.total_homens(g)
+	if n <= 0:
+		return "nenhuma"
+	if n < 40:
+		return "frouxa"
+	if n < 90:
+		return "moderada"
+	if n < 180:
+		return "forte"
+	return "muito forte"
+
 static func rotulo_de_risco(p: float) -> String:
 	if p <= 0.0:
 		return "nenhum"
@@ -590,6 +610,15 @@ static func _guarnicao_do_jogador(state: Dictionary) -> Dictionary:
 	for lorde in Cidadaos.lordes(state):
 		if not bool(lorde.get("capturado", false)):
 			g["lanceiro"] = int(g.get("lanceiro", 0)) + 4
+	# A GUARDA DE ELITE defende a CASA — é para isso que ela existe.
+	#
+	# Antes ela só aparecia no evento de traição: pagava-se por homens que
+	# nunca lutavam. Agora eles entram na guarnição quando alguém marcha
+	# contra a sua terra, e valem por dois espadachins cada: é a diferença
+	# entre a guarda da casa (fica) e os homens de armas (partem).
+	var elite: int = int(state["jogador"].get("guardas", 0))
+	if elite > 0:
+		g["espadachim"] = int(g.get("espadachim", 0)) + elite * 2
 	return g
 
 ## Guarnição de um alvo, derivada da força que a geopolítica já mantém.
