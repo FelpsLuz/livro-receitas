@@ -232,8 +232,19 @@ static func moldura_arte(c: Container) -> PanelContainer:
 # não se confunde com linha de tabela, com a barra logo abaixo e a folga
 # escrita por extenso.
 # ============================================================
+## `fracao` e `teto` fazem coisas diferentes, e a Corte é o caso que obrigou
+## a separá-los. A relação com um rei vai de −100 a +100: para a BARRA, o
+## valor útil é (rel+100)/200, senão um rei que te odeia apareceria com a
+## barra vazia — que lê como "ainda não começou", e não como "ele te quer
+## morto". Mas o NÚMERO tem que continuar sendo a relação: a primeira versão
+## imprimiu "100 / 200" para uma relação de zero, o que não quer dizer nada
+## para quem joga.
+##
+##   fracao >= 0  a barra usa esta fração, e o número segue sendo `valor`
+##   teto <= 0    não imprime o "/ N" — a grandeza não tem teto para mostrar
 static func destaque(c: Container, rotulo: String, valor: int, teto: int,
-		cor: Color, glosa: String = "", id: String = "") -> VBoxContainer:
+		cor: Color, glosa: String = "", id: String = "",
+		fracao: float = -1.0) -> VBoxContainer:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", Tema.E2)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -261,18 +272,23 @@ static func destaque(c: Container, rotulo: String, valor: int, teto: int,
 	h.add_child(grande)
 	# o teto entra apagado e alinhado pela BASE: "182" e "/ 200" no mesmo
 	# tamanho seriam dois números concorrendo, e o que está em jogo é o 182
-	var t_l := Label.new()
-	t_l.text = "/ %d" % teto
-	var f_t := Tema.fonte_numero()
-	if f_t != null:
-		t_l.add_theme_font_override("font", f_t)
-	t_l.add_theme_font_size_override("font_size", Tema.CORPO_G)
-	t_l.add_theme_color_override("font_color", Tema.TEXTO_3)
-	t_l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	t_l.size_flags_vertical = Control.SIZE_SHRINK_END
-	h.add_child(t_l)
+	if teto > 0:
+		var t_l := Label.new()
+		t_l.text = "/ %d" % teto
+		var f_t := Tema.fonte_numero()
+		if f_t != null:
+			t_l.add_theme_font_override("font", f_t)
+		t_l.add_theme_font_size_override("font_size", Tema.CORPO_G)
+		t_l.add_theme_color_override("font_color", Tema.TEXTO_3)
+		t_l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		t_l.size_flags_vertical = Control.SIZE_SHRINK_END
+		h.add_child(t_l)
 
-	var barra := medidor(v, valor, maxf(1, teto), 0, 8, cor)
+	# a barra trabalha sempre em centésimos: assim ela aceita tanto o par
+	# valor/teto quanto uma fração calculada de fora, sem dois caminhos
+	var f_barra: float = fracao if fracao >= 0.0 \
+		else float(valor) / maxf(1.0, float(teto))
+	var barra := medidor(v, clampf(f_barra, 0.0, 1.0) * 100.0, 100.0, 0, 8, cor)
 	if glosa != "":
 		var g := Label.new()
 		g.text = glosa
@@ -281,7 +297,7 @@ static func destaque(c: Container, rotulo: String, valor: int, teto: int,
 		g.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(g)
 	if id != "":
-		correr(grande, id, valor, barra)
+		correr(grande, id, valor, barra, clampf(f_barra, 0.0, 1.0) * 100.0)
 	return v
 
 # ============================================================
@@ -308,9 +324,18 @@ static var _ultimos: Dictionary = {}
 static func esquecer_valores() -> void:
 	_ultimos.clear()
 
-static func correr(l: Label, id: String, valor: int, barra: ProgressBar = null) -> void:
+## `alvo_barra` existe porque o número e a barra nem sempre estão na mesma
+## escala: numa relação de −100 a +100 a barra anda de 0 a 100 enquanto o
+## número anda de −100 a +100. Guardar só o valor do número faria a barra
+## saltar do lugar errado. Por isso a posição anterior da barra tem chave
+## própria, derivada da mesma id.
+static func correr(l: Label, id: String, valor: int, barra: ProgressBar = null,
+		alvo_barra: float = -1.0) -> void:
 	var anterior: int = int(_ultimos.get(id, valor))
 	_ultimos[id] = valor
+	var alvo_b: float = alvo_barra if alvo_barra >= 0.0 else float(valor)
+	var antes_b: float = float(_ultimos.get(id + "#b", alvo_b))
+	_ultimos[id + "#b"] = alvo_b
 	if anterior == valor or not l.is_inside_tree():
 		return
 	var tw := l.create_tween()
@@ -324,8 +349,8 @@ static func correr(l: Label, id: String, valor: int, barra: ProgressBar = null) 
 		var tb := barra.create_tween()
 		tb.set_ease(Tween.EASE_OUT)
 		tb.set_trans(Tween.TRANS_CUBIC)
-		tb.tween_property(barra, "value", float(valor), DURACAO_CORRIDA) \
-			.from(clampf(float(anterior), 0.0, barra.max_value))
+		tb.tween_property(barra, "value", alvo_b, DURACAO_CORRIDA) \
+			.from(clampf(antes_b, 0.0, barra.max_value))
 
 ## O ±n colorido. Sálvia sobe, terracota desce, e o zero fica apagado em vez
 ## de verde — "não mudou" não é uma boa notícia, é ausência de notícia.

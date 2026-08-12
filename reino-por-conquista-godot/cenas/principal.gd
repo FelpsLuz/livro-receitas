@@ -1175,14 +1175,64 @@ func _aba_terra(c: Container) -> void:
 		var _fim := nivel_cap
 
 func _aba_mapa(c: Container) -> void:
-	_titulo_secao(c, "Os Seis Reinos",
+	Kit.titulo_tela(c, "Os Seis Reinos",
 		"Clique num domínio para viajar. A cor da estrada conta o perigo dela.")
-	# o MAPA, antes da lista: a rede de estradas é a informação que a
-	# tabela nunca conseguiu dar — onde ficam os gargalos do continente
+	# ---- O NÚMERO DO MAPA: o risco de hoje ----
+	#
+	# A tela do mapa dizia quantas guerras havia no continente e deixava o
+	# jogador deduzir o que isso custava A ELE. Mas o custo existe e é
+	# diário: `Inimizade.risco_do_dia` rola um dado toda vez que o dia
+	# passa, e a chance depende de ONDE ele está parado — 75% na capital de
+	# quem o odeia, 0% sob o teto de um aliado, 15% na estrada sem terra.
+	#
+	# Esse número estava calculado, aplicado e invisível. É a informação
+	# mais acionável da tela, porque é a única que muda conforme a próxima
+	# coisa que o jogador vai fazer: viajar.
+	var risco: Dictionary = Inimizade.risco_do_dia(state)
+	var pct: int = roundi(float(risco["chance"]) * 100.0)
+	var meus_inimigos: Array = Inimizade.inimigos(state)
+	var grupo_m := Kit.sulco(c, Tema.E4, Tema.E3)
+	var glosa_m := "Ninguém no continente tem motivo para te emboscar."
+	if pct > 0:
+		match str(risco["tipo"]):
+			"captura":
+				glosa_m = "Você está na capital de %s, que te declarou guerra. Quem é reconhecido aqui sai a ferros." % Rotas.nome_do(state, str(risco["por"]))
+			"ataque_terra":
+				glosa_m = "Com terra e inimigo, a coluna de %s pode aparecer no seu portão a qualquer amanhecer." % Rotas.nome_do(state, str(risco["por"]))
+			_:
+				glosa_m = "Homens de %s vigiam a estrada. Sem casa para onde recuar, quem perde acorda numa cela." % Rotas.nome_do(state, str(risco["por"]))
+	elif not meus_inimigos.is_empty():
+		glosa_m = "Você tem inimigos, mas aqui está sob teto que não deixa te pegarem."
+	# A manchete só aparece quando existe manchete. Sem inimigo nenhum, um
+	# "0 / 100" com a barra verde ocuparia noventa pixels para não dizer
+	# nada — e noventa pixels aqui é o que empurra o mapa para fora da tela.
+	if not meus_inimigos.is_empty():
+		Kit.destaque(grupo_m, "Risco de emboscada hoje", pct, 100,
+			Tema.cor_de_saude(1.0 - float(pct) / 100.0), glosa_m, "mapa_risco")
+	var fatos_m := Kit.fila(grupo_m, Tema.E6)
+	Kit.fato(fatos_m, "espada", "%d" % meus_inimigos.size(), "inimigos seus",
+		Tema.PERIGO if not meus_inimigos.is_empty() else Tema.TEXTO,
+		"Reinos em guerra COM VOCÊ. Cada um é uma rolagem de dado por dia.")
+	Kit.fato(fatos_m, "guerra", "%d" % state["guerras"].size(),
+		"guerras no continente", Tema.TEXTO,
+		"Todas as guerras em curso, suas e de terceiros.")
+	var aliados := 0
+	for r_a in state["reinos"]:
+		if int(state["tags"].get("rei_" + str(r_a["id"]), {"relacao": 0})["relacao"]) >= 60:
+			aliados += 1
+	Kit.fato(fatos_m, "alianca", "%d" % aliados, "cortes que te abrigam",
+		Tema.GANHO if aliados > 0 else Tema.TEXTO,
+		"Relação 60 ou mais: nessa corte a chance de emboscada é zero.")
+
+	# o MAPA vem DEPOIS do risco, e essa ordem foi invertida de propósito.
+	# A rede de estradas é a informação que a tabela nunca conseguiu dar,
+	# mas ela responde "para onde dá para ir"; o risco responde "o que
+	# custa ir". A segunda pergunta manda na primeira.
 	var mapa := MapaMundi.new()
 	c.add_child(mapa)
 	mapa.reino_clicado.connect(_popup_dominio)
 	mapa.montar(state)
+
 	_fronteira_selvagem(c)
 	# o juramento é o contrato que rege o resto do mapa: enquanto vale, o
 	# suserano não marcha — e leva um quinto do seu ouro todo mês
@@ -1329,7 +1379,7 @@ func _aba_mercado(c: Container) -> void:
 	# disparava um erro por mercadoria e mostrava preço 0 em tudo, o que
 	# fazia "Comprar 5" custar zero: ouro infinito por um clique.
 	if not Economia.tem_praca(state, str(state.get("local", ""))):
-		_titulo_secao(c, "Sem mercado aqui",
+		Kit.titulo_tela(c, "Sem mercado aqui",
 			Economia.AVISO_SEM_PRACA)
 		var sp := Kit.card(c, Tema.ATENCAO)
 		Kit.texto(sp, "Não há feitor, armazém nem livro-razão nesta terra.",
@@ -1341,7 +1391,7 @@ func _aba_mercado(c: Container) -> void:
 	for g in state["guerras"]:
 		if g["a"] == state["local"] or g["b"] == state["local"]:
 			em_guerra = true
-	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"],
+	Kit.titulo_tela(c, "Livro-Razão — Mercado de %s" % reino["nome"],
 		"Compre onde há fartura, venda onde há guerra e fome.")
 	# O SELO DA GUILDA — uma licença POR PRAÇA, permanente e cara. É o
 	# degrau que faz o mercador nascer devagar: cada cidade nova custa a
@@ -1371,6 +1421,45 @@ func _aba_mercado(c: Container) -> void:
 		var av := Kit.card(c, Tema.ATENCAO)
 		Kit.texto(av, "Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.",
 			Tema.ATENCAO, Tema.MICRO)
+
+	# ---- O NÚMERO DA FEIRA: o que a carga vale AQUI ----
+	#
+	# O mercador não decide olhando o preço de uma mercadoria: ele decide
+	# olhando quanto do patrimônio dele está preso em coisa que ainda não
+	# virou ouro. Carga é aposta; ouro é liberdade — e a tela não dizia a
+	# proporção entre os dois em lugar nenhum.
+	#
+	# O teto é o patrimônio (ouro + carga), então a barra lê como "quanto do
+	# que eu tenho está imobilizado". Encher a barra é ficar sem margem de
+	# manobra, e por isso a cor inverte a escala de saúde.
+	if tem_mapa:
+		var ouro_f: int = int(state["jogador"]["ouro"])
+		var valor_carga := 0
+		for g_v in state["carga"]:
+			valor_carga += int(state["carga"][g_v]) \
+				* Economia.preco_de(state, state["local"], str(g_v))
+		var patrimonio: int = maxi(1, ouro_f + valor_carga)
+		var grupo_f := Kit.sulco(c, Tema.E4, Tema.E3)
+		var glosa_f := "Tudo o que você tem está em ouro. Livre para comprar, e sem nada a vender."
+		if valor_carga > 0:
+			glosa_f = "%d%% do seu patrimônio está em mercadoria — e mercadoria só vira ouro na praça certa." % \
+				roundi(100.0 * float(valor_carga) / float(patrimonio))
+		Kit.destaque(grupo_f, "Sua carga vale aqui", valor_carga, patrimonio,
+			Tema.cor_de_saude(1.0 - float(valor_carga) / float(patrimonio)),
+			glosa_f, "feira_carga")
+		var fatos_f := Kit.fila(grupo_f, Tema.E6)
+		Kit.fato(fatos_f, "moedas", str(ouro_f), "no cofre", Tema.ACENTO,
+			"Ouro livre — é com isto que se compra.")
+		# a MAIOR margem do continente, que é a razão de a feira existir.
+		# O retrato de preços já era calculado e só aparecia no mapa comercial
+		var retrato: Array = Economia.retrato_de_precos(state)
+		if not retrato.is_empty():
+			var melhor: Dictionary = retrato[0]
+			Kit.fato(fatos_f, "carroca", "+%d" % int(melhor["margem"]),
+				"por %s" % str(melhor["bem"]).to_lower(), Tema.GANHO,
+				"%s: %d em %s, %d em %s. A maior diferença do continente hoje." % [
+					melhor["bem"], int(melhor["barato"]), melhor["barato_em"],
+					int(melhor["caro"]), melhor["caro_em"]])
 
 	var tab := Kit.tabela(c, [
 		{"t": "", "w": 26, "a": Kit.CENTRO},
@@ -1422,8 +1511,34 @@ func _aba_mercado(c: Container) -> void:
 			b_desc.tooltip_text = "Descarrega tudo na sua terra: mais celeiro sustenta mais tropa"
 
 func _aba_taverna(c: Container) -> void:
-	_titulo_secao(c, str(TAVERNAS.get(str(state.get("local", "")),
+	Kit.titulo_tela(c, str(TAVERNAS.get(str(state.get("local", "")),
 		"Taverna do Javali Manco")), "Mural de contratos")
+
+	# ---- a taverna NÃO ganha destaque, e isso é decisão ----
+	#
+	# A regra da rodada é que cada aba promove UM número — o par valor/teto
+	# que decide o que se pode fazer ali. A taverna não tem esse par: o
+	# mural é uma lista que muda, e renome não tem teto. Inventar um seria
+	# exatamente o defeito que a rodada veio corrigir, só que ao contrário —
+	# dar peso de manchete a um número que não manda em nada.
+	#
+	# O que ela tem é CONTEXTO, e o contexto que falta aqui é a moral: os
+	# serviços humilhantes deste balcão custam moral, e moral abaixo de 35 é
+	# o exército desertando na aba ao lado. Os dois viviam em telas
+	# diferentes sem nunca se citarem.
+	var moral_t: int = Economia.moral(state)
+	var grupo_t := Kit.sulco(c, Tema.E4, Tema.E3)
+	var fatos_t := Kit.fila(grupo_t, Tema.E6)
+	Kit.fato(fatos_t, "moral", str(moral_t), "de moral",
+		Tema.cor_de_saude(float(moral_t) / 100.0),
+		"Serviço humilhante paga em ouro e cobra em moral. Abaixo de 35 os homens desertam.")
+	Kit.fato(fatos_t, "renome", str(int(state["jogador"]["renome"])), "de renome",
+		Tema.TEXTO, "Contrato cumprido sobe; palavra quebrada derruba.")
+	Kit.fato(fatos_t, "honra", str(int(state["jogador"].get("honra", 50))), "de honra",
+		Tema.PERIGO if int(state["jogador"].get("honra", 50)) <= 25 else Tema.TEXTO,
+		"Honra baixa fecha a porta dos empregos de confiança.")
+	Kit.fato(fatos_t, "pergaminho", "%d" % Contratos.do_local(state).size(),
+		"no mural", Tema.TEXTO, "Contratos oferecidos nesta praça hoje.")
 	# O pagamento e o renome eram dois números no fim de uma frase de três
 	# linhas, e a "dificuldade" era uma string repetida que saía VAZIA na
 	# tela (`"".repeat(n)` repete nada n vezes). Aqui o pagamento é coluna, o
@@ -2175,13 +2290,72 @@ func _servico(c: Container, rosto: Texture2D, titulo: String, desc: String,
 
 func _aba_corte(c: Container) -> void:
 	var reino := _reino_local()
-	_titulo_secao(c, "Corte de %s" % reino["capital"],
+	Kit.titulo_tela(c, "Corte de %s" % reino["capital"],
 		"Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
 	# escada de acesso (Parte 2): o guarda do portão é sempre o primeiro
 	# contato — o rei só atende em pessoa quando a relação (e, no Neutro, o
 	# título) já foi conquistada. quem_atende() devolve o card certo pronto.
 	var atende: Dictionary = Dialogo.quem_atende(state, reino["id"])
 	var no_portao: bool = str(atende.get("papel", "")) == "guarda"
+
+	# ---- O NÚMERO DA CORTE: a relação com quem manda ----
+	#
+	# Ela já governava tudo nesta tela — quem te atende, se o portão abre, se
+	# a corte te abriga quando você tem inimigo, se o rei te prende — e
+	# aparecia como uma barrinha de 90px perdida numa linha do card do reino.
+	#
+	# A escala é de −100 a +100, então o medidor recebe rel+100 sobre 200: um
+	# valor negativo com barra vazia leria como "ainda não começou", quando o
+	# que ele diz é "ele te quer morto".
+	var rel_rei: int = int(state["tags"].get("rei_" + str(reino["id"]),
+		{"relacao": 0})["relacao"])
+	var grupo_c := Kit.sulco(c, Tema.E4, Tema.E3)
+	var glosa_c := "Neutro: ele te recebe, mas nada te deve."
+	if rel_rei >= 60:
+		glosa_c = "Aliado. Sob este teto, inimigo nenhum te pega — e o portão está aberto."
+	elif rel_rei >= 25:
+		glosa_c = "Ele te ouve. Mais alguns favores e esta casa te abriga."
+	elif rel_rei <= -60:
+		glosa_c = "Ele te quer a ferros. Pisar nesta capital em guerra é entregar o pescoço."
+	elif rel_rei <= -25:
+		glosa_c = "A casa está contra você. O portão só abre com ouro ou com medo."
+	# teto 0: relação não tem teto para imprimir ("0 / 200" não quer dizer
+	# nada). A barra recebe a fração deslocada; o número, a relação crua.
+	Kit.destaque(grupo_c, "Relação com %s" % str(reino["rei"]["nome"]),
+		rel_rei, 0,
+		Tema.PERIGO if rel_rei <= -25 else (Tema.GANHO if rel_rei >= 25 else Tema.ATENCAO),
+		glosa_c, "corte_relacao_" + str(reino["id"]),
+		float(rel_rei + 100) / 200.0)
+	# Os fatos são NÚMEROS, e essa restrição é do componente: `fato` põe o
+	# valor na fonte de número, no tamanho de número. Pôr "Desconfiado" ou
+	# "sim" ali seria usar o peso do algarismo para carregar uma palavra.
+	var casa_peso: Dictionary = Geopolitica.casa_real(state, str(reino["id"]))
+	var membros_c: Array = casa_peso.get("membros", [])
+	# a média PONDERADA da casa: é ela que `_tick_influencia_corte` usa para
+	# empurrar o rei ±3 por mês, e abaixo de −60 ela pede a sua prisão.
+	# Estava calculada e invisível.
+	var soma_c := 0.0
+	var peso_total := 0.0
+	for m_c in membros_c:
+		var p_c := float(int(m_c.get("peso", 1)))
+		soma_c += float(int(state["tags"].get(str(m_c["id"]), {"relacao": 0})["relacao"])) * p_c
+		peso_total += p_c
+	var media_casa: int = roundi(soma_c / maxf(1.0, peso_total))
+	var fatos_c := Kit.fila(grupo_c, Tema.E6)
+	Kit.fato(fatos_c, "familia", "%d" % membros_c.size(), "na casa real",
+		Tema.TEXTO,
+		"Consorte e herdeiros. Falam ao ouvido do rei todo mês — a favor ou contra.")
+	Kit.fato(fatos_c, "intriga", "%d" % media_casa, "de peso da casa",
+		Tema.PERIGO if media_casa <= -25 else (Tema.GANHO if media_casa >= 25 else Tema.TEXTO_2),
+		"A média ponderada da casa empurra a relação do rei em até 3 por mês. Abaixo de −60, eles pedem a sua prisão.")
+	var guerras_reino := 0
+	for g_c in state["guerras"]:
+		if str(g_c.get("a", "")) == str(reino["id"]) or str(g_c.get("b", "")) == str(reino["id"]):
+			guerras_reino += 1
+	Kit.fato(fatos_c, "guerra", "%d" % guerras_reino, "guerras desta casa",
+		Tema.ATENCAO if guerras_reino > 0 else Tema.TEXTO,
+		"Reino em guerra compra caro, recruta muito e escuta quem traz homens.")
+
 	if no_portao:
 		Kit.nota(c, "Você fala no PORTÃO. Ganhe a confiança da casa — ou pague o guarda — para entrar no salão.")
 	_card_npc(c, atende)
@@ -2352,7 +2526,7 @@ func _aba_exercito(c: Container) -> void:
 	# "Manutenção —" sem número acontece no primeiro mês, antes de a economia
 	# rodar uma vez. Melhor dizer isso do que mostrar um travessão solto.
 	var manut = j.get("ultima_manut", null)
-	_titulo_secao(c, "Quartel",
+	Kit.titulo_tela(c, "Quartel",
 		("Último soldo pago: %d de ouro." % int(manut)) if manut != null
 			else "Nenhum soldo pago ainda.")
 
@@ -2367,20 +2541,36 @@ func _aba_exercito(c: Container) -> void:
 	# fim do mês — a Corte teria efeito invisível até o soldo cair.
 	var up: Dictionary = Economia.upkeep_de(j["tropas"], 1.0,
 		Cidadaos.oficio_ativo(state, "ferreiro"))
-	var painel := Kit.card(c)
+	# ---- O NÚMERO DO QUARTEL: a moral ----
+	#
+	# Ela é o único número desta tela com um LIMIAR mecânico: abaixo de 35 os
+	# homens desertam e `Combate.fator_moral` corta a força em campo. Era um
+	# medidor de 6px de altura ao lado de outro, com o mesmo peso do sustento.
+	#
+	# E é a ponte com a Taverna, que é onde ela se gasta: cada dia de serviço
+	# humilhante cobra moral, e as duas telas nunca se citavam.
+	var painel := Kit.sulco(c, Tema.E4, Tema.E3)
+	Kit.destaque(painel, "Moral do exército", moral, 100,
+		Tema.cor_de_saude(float(moral) / 100.0),
+		("Lutam a %d%% da força em campo. Abaixo de 35, começam a desertar."
+			% roundi(Combate.fator_moral(moral) * 100.0)) if moral > 35
+		else "Eles já estão indo embora, e lutam a %d%% da força. Vitória, soldo em dia e descanso trazem de volta."
+			% roundi(Combate.fator_moral(moral) * 100.0),
+		"quartel_moral")
+
+	# o bloco de quatro números que este trecho montava à mão era o `fato`
+	# antes de o `fato` existir: rótulo em versalete pequeno, número acima.
+	# Passa a ser o componente — e ganha a dica de para que cada um serve.
 	var topo := Kit.fila(painel, Tema.E6)
-	for par_p in [["Ataque", roundi(p["atq"])], ["Defesa", roundi(p["def"])],
-			["Homens", p["homens"]], ["Equipamento", j["equip"]]]:
-		var bloco := VBoxContainer.new()
-		bloco.add_theme_constant_override("separation", 0)
-		topo.add_child(bloco)
-		var rot := Label.new()
-		rot.text = str(par_p[0]).to_upper()
-		rot.add_theme_font_size_override("font_size", Tema.MINI)
-		rot.add_theme_color_override("font_color", Tema.TEXTO_3)
-		bloco.add_child(rot)
-		Kit.numero(bloco, ("%d/3" % int(par_p[1])) if par_p[0] == "Equipamento"
-			else str(par_p[1]), Tema.TEXTO, Tema.CORPO_G)
+	Kit.fato(topo, "espada", str(roundi(p["atq"])), "de ataque", Tema.TEXTO,
+		"Força de choque somada, já com equipamento e moral.")
+	Kit.fato(topo, "escudo", str(roundi(p["def"])), "de defesa", Tema.TEXTO,
+		"O que segura carga inimiga. Lanceiro pesa aqui.")
+	Kit.fato(topo, "tropa", str(p["homens"]), "homens", Tema.TEXTO,
+		"Cabeças em armas. Cada uma come, bebe e recebe soldo.")
+	Kit.fato(topo, "martelo", "%d/3" % int(j["equip"]), "de equipamento",
+		Tema.ATENCAO if int(j["equip"]) == 0 else Tema.TEXTO,
+		"Da forja: couro batido, malha de ferro, placas. Multiplica a força em campo.")
 	# a manutenção do mês, à direita: é o que o exército CUSTA, e custo fica
 	# separado de força para as duas leituras não se misturarem
 	var custo := Kit.fila(topo, Tema.E4)
@@ -2393,7 +2583,6 @@ func _aba_exercito(c: Container) -> void:
 	Kit.nota(custo, "por mês")
 
 	var medidores := Kit.fila(painel, Tema.E6)
-	Kit.medidor_rotulado(medidores, "Moral do exército", moral, 100, "/100")
 	# "Sustento da terra", não "população comprometida": a aba Terra já usa
 	# esse segundo nome para OUTRA conta (homens em armas sobre a base ativa).
 	# Dois medidores quase homônimos com denominadores diferentes eram uma
@@ -2438,7 +2627,7 @@ func _aba_exercito(c: Container) -> void:
 
 	Kit.medidor_rotulado(medidores, "Sustento da terra",
 		Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state),
-		" de %d" % Recrutamento.pop_maxima(state), Tema.TEXTO_2)
+		" de %d" % Recrutamento.pop_maxima(state), Tema.TEXTO_2, "quartel_sustento")
 	# A MORAL AGORA VALE NA BATALHA, e o jogador tem que saber disso — e
 	# saber como se recupera, que era a metade invisível da mecânica.
 	if moral <= 35:
@@ -2830,8 +3019,34 @@ func _aba_exercito(c: Container) -> void:
 	# guarnição da SUA casa — e agora vive na aba Casa, onde pertence
 
 func _aba_clas(c: Container) -> void:
-	_titulo_secao(c, "Clãs Mercenários",
+	Kit.titulo_tela(c, "Clãs Mercenários",
 		"Envie um mensageiro com sua oferta; a resposta chega na virada do mês. Oferta generosa convence.")
+
+	# Sem destaque, e pelo mesmo motivo da taverna: contratar clã é uma
+	# decisão de ouro contra tempo, não um valor correndo para um teto.
+	# O que faltava era o estado da mesa — quantos já servem e quantas
+	# ofertas estão no ar, que o jogador só descobria contando os cards.
+	var sob_contrato := 0
+	var melhor_rel := -100
+	for cla_r in Clas.CLAS:
+		if not Clas.ativo(state, cla_r["id"]).is_empty():
+			sob_contrato += 1
+		melhor_rel = maxi(melhor_rel,
+			int(state["tags"].get(str(cla_r["id"]), {"relacao": 0})["relacao"]))
+	var grupo_cl := Kit.sulco(c, Tema.E4, Tema.E3)
+	var fatos_cl := Kit.fila(grupo_cl, Tema.E6)
+	Kit.fato(fatos_cl, "tropa", "%d/%d" % [sob_contrato, Clas.CLAS.size()],
+		"clãs a soldo", Tema.GANHO if sob_contrato > 0 else Tema.TEXTO,
+		"Clã sob contrato marcha com você enquanto o soldo durar.")
+	Kit.fato(fatos_cl, "viagem", "%d" % state["mensageiros"].size(),
+		"mensageiros na estrada", Tema.ATENCAO if not state["mensageiros"].is_empty() else Tema.TEXTO,
+		"Oferta enviada. A resposta chega na virada do mês.")
+	Kit.fato(fatos_cl, "moedas", str(int(state["jogador"]["ouro"])), "no cofre",
+		Tema.ACENTO, "Clã não fia: a oferta sai do cofre na hora do aceite.")
+	Kit.fato(fatos_cl, "alianca", "%d" % melhor_rel, "melhor relação",
+		Tema.GANHO if melhor_rel >= 25 else Tema.TEXTO_2,
+		"Relação alta baixa o preço que o clã aceita.")
+
 	for cla in Clas.CLAS:
 		var contrato := Clas.ativo(state, cla["id"])
 		var pendente := false
@@ -2898,8 +3113,30 @@ func _aba_clas(c: Container) -> void:
 		Kit.texto(hc, str(carta), Tema.TEXTO_2, Tema.MICRO)
 
 func _aba_intrigas(c: Container) -> void:
-	_titulo_secao(c, "Mesa de Intrigas",
+	Kit.titulo_tela(c, "Mesa de Intrigas",
 		"Segredo é moeda: o que se sabe de um rei vale mais que o que se toma dele.")
+
+	# O que a mesa tem em caixa. Segredo GUARDADO é a única moeda que ela
+	# aceita, e o jogador contava os cards para saber quantos ainda valiam.
+	var por_usar := 0
+	for seg_c in state["segredos"]:
+		if not bool(seg_c.get("usado", false)):
+			por_usar += 1
+	var grupo_i := Kit.sulco(c, Tema.E4, Tema.E3)
+	var fatos_i := Kit.fila(grupo_i, Tema.E6)
+	Kit.fato(fatos_i, "pergaminho", "%d" % por_usar, "segredos por gastar",
+		Tema.ACENTO if por_usar > 0 else Tema.TEXTO_3,
+		"Cada um vale uma chantagem — ouro, casamento forçado ou casus belli. Só serve uma vez.")
+	Kit.fato(fatos_i, "guerra", "%d" % state["casus_belli"].size(),
+		"casus belli na mão", Tema.ATENCAO if not state["casus_belli"].is_empty() else Tema.TEXTO,
+		"Pretexto de guerra. Sem ele, declarar guerra derruba honra e assusta as outras cortes.")
+	Kit.fato(fatos_i, "carisma", str(int(state["jogador"]["atributos"].get("carisma", 5))),
+		"de carisma", Tema.TEXTO,
+		"Decide se o espião volta com o segredo ou volta com a cabeça na cesta.")
+	Kit.fato(fatos_i, "honra", str(int(state["jogador"].get("honra", 50))), "de honra",
+		Tema.PERIGO if int(state["jogador"].get("honra", 50)) <= 25 else Tema.TEXTO,
+		"Toda intriga descoberta cobra aqui.")
+
 	if state["chantagem_pendente"] != null:
 		var cb_card := Kit.card(c, Tema.ATENCAO)
 		Kit.texto(cb_card, "Chantagem em curso — escolha sua exigência:", Tema.ATENCAO)
@@ -2993,7 +3230,46 @@ func _ficha_atributos(c: Container, a: Dictionary) -> void:
 func _aba_familia(c: Container) -> void:
 	var f: Dictionary = state["familia"]
 	var j: Dictionary = state["jogador"]
-	_titulo_secao(c, "Sua Casa")
+	Kit.titulo_tela(c, "Sua Casa")
+
+	# ---- O NÚMERO DA CASA: a chance de não ver o ano que vem ----
+	#
+	# Este jogo termina quando o jogador morre, e a idade estava escrita como
+	# apoio de um retrato ("22 anos · Conde"), no tamanho de uma legenda.
+	#
+	# O que vai na manchete NÃO é a idade: é o RISCO que ela carrega, porque
+	# é ele que muda de verdade. `Jogo._envelhecer` rola 4% ao ano depois dos
+	# 45, 10% depois dos 55 e 25% depois dos 65 — três degraus que ninguém
+	# via chegar. Uma barra de idade contra um teto fixo mentiria duas vezes:
+	# ficaria cheia antes da hora e estouraria depois dela.
+	var idade_j: int = int(j["idade"])
+	var risco_ano: int = 25 if idade_j > 65 else (10 if idade_j > 55
+		else (4 if idade_j > 45 else 0))
+	var grupo_h := Kit.sulco(c, Tema.E4, Tema.E3)
+	var herdeiros: int = (f["filhos"] as Array).size()
+	# Mesma regra do mapa: manchete só quando há manchete. Aos 22 anos o
+	# risco é ZERO, e um "0 / 100" de barra vazia gastaria noventa pixels
+	# para não dizer nada — que é o defeito que esta rodada veio corrigir,
+	# só que ao contrário.
+	if risco_ano > 0:
+		var glosa_h := "A cada virada de ano o dado é lançado. "
+		glosa_h += "A casa tem quem herde." if herdeiros > 0 else \
+			"E sem herdeiro, a sua morte encerra a casa e tudo que ela juntou."
+		Kit.destaque(grupo_h, "Risco de morrer este ano", risco_ano, 100,
+			Tema.cor_de_saude(1.0 - float(risco_ano) / 30.0),
+			glosa_h, "casa_risco")
+	var fatos_h := Kit.fila(grupo_h, Tema.E6)
+	Kit.fato(fatos_h, "ampulheta", "%d" % idade_j, "anos", Tema.TEXTO,
+		"Aos 46 o risco vira 4% ao ano; aos 56, 10%; aos 66, 25%.")
+	Kit.fato(fatos_h, "familia", "%d" % herdeiros, "filhos",
+		Tema.GANHO if herdeiros > 0 else Tema.PERIGO,
+		"Aos 8 anos cada um é educado no seu atributo mais forte.")
+	Kit.fato(fatos_h, "renome", str(int(j["renome"])), "de renome", Tema.TEXTO,
+		"O que a casa vale aos olhos do continente.")
+	Kit.fato(fatos_h, "caveira", "%d" % int(j.get("crueldade", 0)), "de crueldade",
+		Tema.PERIGO if int(j.get("crueldade", 0)) >= 3 else Tema.TEXTO,
+		"Seis meses de povo contente (felicidade 65+) apagam um ponto.")
+
 	var colunas := Kit.duas_colunas(c, 0.5)
 	var esq: VBoxContainer = colunas[0]
 	var dir: VBoxContainer = colunas[1]
@@ -3110,12 +3386,36 @@ func _aba_familia(c: Container) -> void:
 ## fica a pergunta que o jogador faz toda virada de mês — quem luta contra
 ## quem, de que lado eu estou, e o que essa casa me deve.
 func _aba_guerras(c: Container) -> void:
-	_titulo_secao(c, "Guerras e Juramentos",
+	Kit.titulo_tela(c, "Guerras e Juramentos",
 		"Quem sangra com quem — e o que a sua palavra vale hoje.")
 
 	# ---- as SUAS guerras primeiro: é a linha que decide o seu mês ----
 	var minhas: Array = state["guerras"].filter(func(g):
 		return str(g["a"]) == "jogador" or str(g["b"]) == "jogador")
+
+	# O placar da mesa, antes dos cards. Sem destaque: a guerra não tem um
+	# par valor/teto — o que ela tem é DURAÇÃO, e a mais longa é o número
+	# que diz se o continente está se estabilizando ou se afundando.
+	var mais_longa := 0
+	for g_l in state["guerras"]:
+		mais_longa = maxi(mais_longa, int(g_l["meses"]))
+	var grupo_g := Kit.sulco(c, Tema.E4, Tema.E3)
+	var fatos_g := Kit.fila(grupo_g, Tema.E6)
+	Kit.fato(fatos_g, "espada", "%d" % minhas.size(), "guerras suas",
+		Tema.PERIGO if not minhas.is_empty() else Tema.GANHO,
+		"Cada uma é uma rolagem de emboscada por dia, onde quer que você esteja.")
+	Kit.fato(fatos_g, "guerra", "%d" % (state["guerras"].size() - minhas.size()),
+		"guerras alheias", Tema.TEXTO,
+		"Guerra dos outros encarece o trigo e enche o mural de contratos.")
+	Kit.fato(fatos_g, "ampulheta", "%d" % mais_longa, "meses, a mais longa",
+		Tema.ATENCAO if mais_longa >= 12 else Tema.TEXTO,
+		"Guerra longa esgota os dois lados — e abre a porta para um terceiro.")
+	var vs_g: Dictionary = Vassalagem.resumo(state)
+	Kit.fato(fatos_g, "vassalo",
+		"%d" % (int(vs_g.get("meses", 0)) if bool(vs_g.get("vassalo", false)) else 0),
+		"meses de juramento",
+		Tema.ATENCAO if bool(vs_g.get("vassalo", false)) else Tema.TEXTO,
+		"Enquanto o juramento vale, o suserano não marcha contra você — e leva um quinto do seu ouro.")
 	if not minhas.is_empty():
 		Kit.subsecao(c, "Você está em guerra")
 		for g in minhas:
@@ -3201,7 +3501,7 @@ func _aba_guerras(c: Container) -> void:
 			str(vs["proximo_cargo"]), int(vs["proximo_meses"]), int(vs["proximo_relacao"])])
 
 func _aba_cronica(c: Container) -> void:
-	_titulo_secao(c, "Crônica da Casa", "A mais recente no alto.")
+	Kit.titulo_tela(c, "Crônica da Casa", "A mais recente no alto.")
 	if state["cronica"].is_empty():
 		Kit.nota(c, "Nada digno de registro. Ainda.")
 		return
@@ -3264,15 +3564,11 @@ func _montar_conversa() -> void:
 	var cab := HBoxContainer.new()
 	cab.add_theme_constant_override("separation", Tema.E5)
 	v.add_child(cab)
-	var moldura := PanelContainer.new()
-	var sb_m := StyleBoxFlat.new()
-	sb_m.bg_color = Color("100d0b")
-	sb_m.border_color = Tema.BORDA
-	sb_m.set_border_width_all(1)
-	sb_m.set_corner_radius_all(0)
-	moldura.add_theme_stylebox_override("panel", sb_m)
+	# a MESMA moldura de madeira da ilustração da Terra. Aqui ela vale
+	# ainda mais: a conversa é a tela em que só existem duas coisas — o
+	# rosto e o que se diz a ele —, e o rosto estava num retângulo de 1px.
+	var moldura := Kit.moldura_arte(cab)
 	moldura.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	cab.add_child(moldura)
 	conversa_retrato = TextureRect.new()
 	# 128 = 2× o nativo de 64. Fator inteiro: nenhum pixel do retrato é
 	# interpolado nem descartado.
@@ -3288,9 +3584,12 @@ func _montar_conversa() -> void:
 	v_cab.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cab.add_child(v_cab)
 	conversa_titulo = Label.new()
-	conversa_titulo.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
+	# nome de quem está na sua frente = nome de LUGAR na gramática desta
+	# interface: é a resposta para "onde estou". Vai na capitular, no
+	# tamanho de título de tela.
+	conversa_titulo.add_theme_font_size_override("font_size", Tema.TITULO_TELA - 4)
 	conversa_titulo.add_theme_color_override("font_color", Tema.ACENTO)
-	var f_conv := Tema.fonte_forte()
+	var f_conv := Tema.fonte_titulo()
 	if f_conv != null:
 		conversa_titulo.add_theme_font_override("font", f_conv)
 	v_cab.add_child(conversa_titulo)
