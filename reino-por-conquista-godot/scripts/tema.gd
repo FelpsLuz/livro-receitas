@@ -142,92 +142,187 @@ const LINHA_H := 34
 const LINHA_H_RETRATO := 60
 
 # ============================================================
-# TIPOGRAFIA — fonte de INTERFACE, não de pixel art.
+# TIPOGRAFIA — Cinzel para o LUGAR, Spectral para o que se LÊ.
 #
-# As duas fontes pixel saíram. A razão não é que fossem ruins — foram
-# escolhidas medindo 361 candidatas, e o critério estava certo. A razão é
-# que ESTE jogo é uma planilha: onze abas de tabela, preço, carga, prazo e
-# moral. Fonte pixel obriga o texto inteiro a viver na grade de 960×540 e
-# a ser ampliado com o resto, e é isso que fazia a interface parecer
-# protótipo por mais bonita que a arte ficasse.
+# ---- o defeito que este bloco corrigiu ----
 #
-# Com `stretch/mode = canvas_items` (ver project.godot), o texto passa a
-# renderizar na resolução REAL do monitor. Aí uma fonte vetorial de
-# interface não é concessão: é a única que aproveita isso.
+# A versão anterior escolhia DejaVu com um critério bem escrito e um erro
+# fatal embaixo: ela NUNCA carregou. O `.import` das três DejaVu apontava
+# para um `.fontdata` que só o editor gera, `.godot/imported/` está vazio no
+# repositório, e `load()` devolvia null em silêncio. `_fonte()` retornava
+# null, `criar()` pulava o `if corpo != null`, e o jogo inteiro rodou na
+# fonte embutida da engine — uma grotesca neutra de sistema.
 #
-# O critério antigo sobrevive, e é o que decide o par:
+# Ou seja: a tela não parecia genérica apesar da escolha de tipografia. Ela
+# parecia genérica porque não havia escolha de tipografia nenhuma chegando
+# na tela.
 #
-#   · DejaVu Sans        TEXTO. Altura de x generosa, e os pares que
-#                        arruínam leitura vêm resolvidos de fábrica —
-#                        o "1" tem base e esporão, o "l" é reto, o "I"
-#                        tem serifa. Cobre os 15 acentos do português.
-#   · DejaVu Sans Mono   NÚMERO E TABELA. Monoespaçada, então a coluna de
-#                        preço alinha sozinha, sem tabular-figures e sem
-#                        contar caractere. Num jogo em que o jogador
-#                        compara 1.240 com 980 na vertical, isso não é
-#                        estética — é a leitura.
-#   · DejaVu Sans Bold   TÍTULO. Mesma família: hierarquia por peso, não
-#                        por troca de tipo. Duas famílias numa interface
-#                        de gerenciamento já são uma a mais.
+# A correção tem duas partes, e a segunda é a que impede a recaída:
 #
-# Licença Bitstream Vera / DejaVu — uso comercial liberado.
+#   1. carregar por BYTES (`FileAccess` + `FontFile.data`), exatamente como
+#      `tex_hibit` já fazia com as texturas e pela mesma razão — `load()`
+#      exige o passo de importação do editor, e `res://` vira PCK/APK no
+#      build exportado. Bytes funcionam em editor, headless, CI e export.
+#   2. sidecar `importer="keep"` em cada .ttf, senão o exportador substitui
+#      o arquivo original pelo .fontdata e os bytes somem do pacote.
+#
+# ---- por que estas duas, e não uma família só ----
+#
+#   · Cinzel     O LUGAR e o VERBO. Capitular romana lapidar — as
+#                minúsculas do desenho SÃO versaletes, então "Vale do
+#                Corvo" sai em caixa alta e versalete sem uma linha de
+#                OpenType. É a diferença entre um título e um rótulo.
+#                Aparece em quatro lugares e em nenhum outro: nome da
+#                tela, cabeçalho de seção, aba, botão primário.
+#   · Spectral   TUDO QUE SE LÊ. Serifada desenhada para tela (não uma
+#                Garamond de papel espremida), haste firme a 15px, e —
+#                medido — algarismo TABULAR de fábrica: "1111" e "8888"
+#                ocupam os mesmos 35px. A coluna de preço alinha sozinha,
+#                que era o único serviço que a monoespaçada prestava.
+#
+# A regra que separa as duas, e que vale mais que as duas: Cinzel marca
+# ONDE VOCÊ ESTÁ e O QUE A TELA FAZ. Se o texto é para ser lido — prosa,
+# rótulo de linha, número, glosa — é Spectral. Uma tela onde a capitular
+# invade o corpo vira convite de casamento.
+#
+# Ambas OFL (SIL Open Font License) — uso comercial liberado, redistribuição
+# com a licença junto, que é o que os dois OFL-*.txt em assets/fontes fazem.
 # ============================================================
 const PASTA_FONTES := "res://assets/fontes/"
 
 ## Escala tipográfica, em unidades da viewport base (960×540).
-## Razão ~1,25 entre degraus: o suficiente para hierarquia sem degrau
-## intermediário que ninguém distingue.
-const MINI := 11               # cabeçalho de COLUNA, em caixa alta espacejada
-const MICRO := 12              # rótulo de aba, legenda, unidade
+##
+## O que mudou de verdade aqui não foram os números pequenos: foi o ALCANCE.
+## A escala antiga ia de 11 a 22 no jogo (o 44 só existia na tela de título),
+## e uma tela cujo maior texto tem o dobro do menor não tem hierarquia — tem
+## variação. Agora o nome do lugar é 30 e o número que carrega a tela é 34,
+## contra 15 do corpo: a razão passa de 1,5× para ~2,3×, e é isso que faz o
+## olho saber onde pousar antes de começar a ler.
+const MINI := 11               # cabeçalho de COLUNA, caixa alta espacejada
+const MICRO := 13              # rótulo de aba, legenda, unidade
 const CORPO := 15              # texto corrido e item de lista
-const NUMERO := 16             # dígito em tabela — mono, um degrau acima
-const CORPO_G := 19            # destaque dentro de um painel
-const TITULO_SECAO := 22       # cabeçalho de aba
-const TITULO_JOGO := 44        # tela de título, só ali
+const NUMERO := 17             # dígito em tabela
+const CORPO_G := 20            # destaque dentro de um painel
+const TITULO_SECAO := 16       # cabeçalho de seção — Cinzel, caixa alta
+const TITULO_TELA := 30        # o nome do lugar, no topo da aba
+const NUMERO_G := 34           # O número. Um por tela, no que está em jogo.
+const TITULO_JOGO := 46        # tela de título, só ali
+
+## Cinzel é variável no eixo `wght` (400..900). O peso entra por
+## `FontVariation`, e a chave do dicionário é a TAG OpenType como inteiro
+## big-endian — string não é aceita, e passar "wght" falha em silêncio
+## devolvendo sempre o peso 400 (medido: as quatro larguras vinham iguais).
+static func _tag(s: String) -> int:
+	var v := 0
+	for i in 4:
+		v = (v << 8) | s.unicode_at(i)
+	return v
+
+## Uma fonte carregada custa parse de um .ttf inteiro, e `fonte_forte()` é
+## chamada dezesseis vezes só na montagem das abas. O cache é por arquivo.
+static var _fontes: Dictionary = {}
 
 static func _fonte(arquivo: String) -> FontFile:
-	var caminho := PASTA_FONTES + arquivo
-	if not ResourceLoader.exists(caminho):
+	if _fontes.has(arquivo):
+		return _fontes[arquivo]
+	var bytes := FileAccess.get_file_as_bytes(PASTA_FONTES + arquivo)
+	if bytes.is_empty():
+		_fontes[arquivo] = null
 		return null
-	var f = load(caminho)
-	if not (f is FontFile):
-		return null
-	# Estas linhas desligavam anti-alias, hinting e posicionamento subpixel.
-	# Estavam CERTAS para as fontes pixel: bitmap suavizado vira borrão, e
-	# meia posição de pixel destrói a grade.
+	var f := FontFile.new()
+	f.data = bytes
+	# Anti-alias LIGADO, e isto não é descuido herdado das fontes pixel: com
+	# `canvas_items` o texto rasteriza na resolução do monitor, e serrilhar
+	# uma serifada a 15px joga fora exatamente esse ganho.
 	#
-	# Para uma fonte VETORIAL são exatamente o contrário. Desligar o
-	# anti-alias de uma DejaVu a 15px devolve letra serrilhada — jogando
-	# fora justamente o ganho do canvas_items, que existe para o texto
-	# renderizar na resolução do monitor.
-	#
-	# HINTING_LIGHT alinha à grade vertical sem engordar a haste, que é o
-	# que mantém a coluna de números regular.
+	# HINTING_LIGHT alinha à grade vertical sem engordar a haste — numa
+	# serifada, hinting cheio engrossa a serifa e a linha vira negrito falso.
 	f.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
 	f.hinting = TextServer.HINTING_LIGHT
 	f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
 	f.force_autohinter = false
 	f.generate_mipmaps = false
+	# emoji e qualquer glifo fora do Latino caem no sistema em vez de virar
+	# retângulo vazio
+	f.allow_system_fallback = true
+	_fontes[arquivo] = f
 	return f
 
-## A fonte de NÚMERO. Monoespaçada: a coluna alinha sozinha.
+static var _variacoes: Dictionary = {}
+
+## Cinzel num peso, com espacejamento opcional.
 ##
-## Prosa NÃO usa esta fonte: monoespaçada em parágrafo lê como terminal.
-## Só dígito, tabela e HUD.
+## `tracking` existe porque caixa alta pede ar: as capitulares têm todas a
+## mesma altura e sem espaço extra entre elas "RECURSOS" vira um bloco só.
+## Dois pixels a 12px são +30% de largura — medido — e é a diferença entre
+## um cabeçalho e uma mancha.
+static func _cinzel(peso: int, tracking: int = 0) -> Font:
+	var chave := "%d/%d" % [peso, tracking]
+	if _variacoes.has(chave):
+		return _variacoes[chave]
+	var base := _fonte("Cinzel.ttf")
+	if base == null:
+		_variacoes[chave] = null
+		return null
+	var fv := FontVariation.new()
+	fv.base_font = base
+	fv.variation_opentype = {_tag("wght"): peso}
+	if tracking != 0:
+		fv.spacing_glyph = tracking
+	_variacoes[chave] = fv
+	return fv
+
+## A fonte de NÚMERO. Spectral SemiBold: algarismo tabular de fábrica, então
+## a coluna de preço alinha sem `tnum` e sem contar caractere.
+##
+## O peso é escolha, não sobra: o número é a informação e o rótulo ao lado
+## dele é o índice. Se os dois tivessem o mesmo peso a linha leria como
+## frase, e não como medida.
 static func fonte_numero() -> FontFile:
-	return _fonte("DejaVuSansMono.ttf")
+	return _fonte("Spectral-SemiBold.ttf")
 
-## A fonte de TEXTO. Sem serifa: numa tela de gerenciamento a serifa
-## disputa atenção com o número, que é quem manda.
+## O número GRANDE — o que a tela existe para dizer. Bold, e só ele.
+static func fonte_numero_g() -> FontFile:
+	return _fonte("Spectral-Bold.ttf")
+
+## A fonte de TEXTO.
 static func fonte_corpo() -> FontFile:
-	return _fonte("DejaVuSans.ttf")
+	return _fonte("Spectral-Regular.ttf")
 
-## Títulos, rótulos e botões — a mesma família do corpo, em tamanho maior.
+## Rótulo, botão comum, célula que precisa pesar mais que a vizinha.
+## Medium e não Bold: entre vinte linhas de tabela, negrito em cada rótulo
+## devolve a mancha que a zebra tinha acabado de resolver.
 static func fonte_forte() -> FontFile:
-	return _fonte("DejaVuSans-Bold.ttf")
+	return _fonte("Spectral-Medium.ttf")
 
-static func fonte_titulo() -> FontFile:
-	return fonte_forte()
+## O nome do lugar. Cinzel 700 com um fio de tracking.
+static func fonte_titulo() -> Font:
+	var f := _cinzel(700, 1)
+	return f if f != null else fonte_numero_g()
+
+## Cabeçalho de seção: Cinzel 600, bem espacejado.
+static func fonte_cabecalho() -> Font:
+	var f := _cinzel(600, 2)
+	return f if f != null else fonte_forte()
+
+## Rótulo de ABA. Mesmo desenho do cabeçalho, com um pixel a menos de
+## espacejamento, e a razão é aritmética e não gosto: as onze abas somam
+## 971px com tracking 2 numa faixa de 944, e a `TabBar` responde a isso
+## escondendo as últimas atrás de um par de setinhas — num jogo cuja
+## navegação inteira são as abas, perder "Crônica" e "Guerra" é perder duas
+## telas. Com tracking 1 a soma cai para ~911 e sobra folga.
+##
+## Serve à hierarquia também: cabeçalho de seção é esparso porque tem a
+## tela toda; aba é densa porque divide a faixa com outras dez.
+static func fonte_aba() -> Font:
+	var f := _cinzel(600, 1)
+	return f if f != null else fonte_forte()
+
+## Cabeçalho de COLUNA de tabela: o mesmo desenho, um grau mais leve, para
+## ceder o brilho ao número que ele rotula.
+static func fonte_coluna() -> Font:
+	var f := _cinzel(500, 2)
+	return f if f != null else fonte_forte()
 
 # ============================================================
 # ACERVO HI-BIT — as texturas de interface geradas (PixelLab)
@@ -319,6 +414,119 @@ static func textura_vinheta() -> Texture2D:
 			img.set_pixel(x, y, Color(0, 0, 0, a * a * 0.38))
 	return ImageTexture.create_from_image(img)
 
+# ============================================================
+# PROFUNDIDADE — por que um painel chapado lê como planilha
+#
+# O terreno já tinha quatro degraus de umbra e a tela continuava parecendo
+# um documento. O motivo não é a cor: é que cada degrau era um retângulo de
+# UMA cor só, e superfície de cor única não tem direção de luz. O olho lê
+# profundidade por dois sinais, e a tela não dava nenhum dos dois:
+#
+#   1. a superfície é mais clara em cima do que embaixo (luz vem de cima);
+#   2. a aresta de cima brilha e a de baixo escurece.
+#
+# `StyleBoxFlat` não faz nenhum dos dois: tem uma cor de fundo e UMA cor de
+# borda para os quatro lados. Então o painel passa a ser uma textura gerada
+# em código — oito por quarenta e oito pixels, esticada em 9-slice, com a
+# rampa no meio e as duas arestas nas bordas que o 9-slice NÃO estica.
+#
+# É o mesmo truque de `textura_fundo()`, que o arquivo já usava para a tela
+# inteira e nunca tinha aplicado ao painel. Custa 1,5 KB de imagem e é a
+# diferença entre "escuro" e "dentro de alguma coisa".
+# ============================================================
+static func _textura_superficie(base: Color, topo_luz: float, borda: Color) -> ImageTexture:
+	var larg := 8
+	var alt := 48
+	var img := Image.create(larg, alt, false, Image.FORMAT_RGBA8)
+	# a rampa: um degrau acima em cima, um abaixo embaixo. Três por cento de
+	# luminância — invisível como gradiente, legível como volume.
+	var c_topo := base.lightened(topo_luz)
+	var c_base := base.darkened(topo_luz * 0.7)
+	for y in alt:
+		var linha := c_topo.lerp(c_base, float(y) / float(alt - 1))
+		for x in larg:
+			img.set_pixel(x, y, linha)
+	# arestas. A de cima é a borda CLAREADA e a de baixo a borda escurecida:
+	# é o par que diz de onde vem a luz. As laterais ficam na borda pura,
+	# senão o painel ganha um contorno brilhante fechado e vira botão.
+	for x in larg:
+		img.set_pixel(x, 0, borda.lightened(0.18))
+		img.set_pixel(x, alt - 1, borda.darkened(0.35))
+	for y in range(1, alt - 1):
+		img.set_pixel(0, y, borda)
+		img.set_pixel(larg - 1, y, borda)
+	return ImageTexture.create_from_image(img)
+
+## O painel de conteúdo, com volume. `margem_conteudo` é o respiro interno.
+static func estilo_painel(margem_conteudo: int = E5) -> StyleBoxTexture:
+	var sb := StyleBoxTexture.new()
+	sb.texture = _textura_superficie(SUPERFICIE, 0.055, BORDA)
+	# 1px em cada lado fora do esticamento: é o que mantém a aresta com
+	# um pixel de espessura em qualquer tamanho de painel
+	for lado in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sb.set_texture_margin(lado, 1)
+	sb.set_content_margin_all(margem_conteudo)
+	return sb
+
+## A SUPERFÍCIE REBAIXADA — o grupo dentro do painel.
+##
+## É a peça que faltava para a tela ter dois níveis em vez de um. O painel
+## sobe, o grupo desce: um bloco de linhas de tabela dentro de um sulco lê
+## como conjunto, e é assim que "Recursos e população" deixa de ser cinco
+## controles soltos e passa a ser uma coisa só.
+##
+## Aqui a luz INVERTE — aresta escura em cima, clara embaixo. Um sulco é um
+## relevo de cabeça para baixo, e trocar as duas arestas é literalmente
+## tudo o que separa os dois.
+static func estilo_sulco(margem_conteudo: int = E4) -> StyleBoxTexture:
+	var larg := 8
+	var alt := 48
+	var img := Image.create(larg, alt, false, Image.FORMAT_RGBA8)
+	var base := Color("191512")
+	var c_topo := base.darkened(0.20)
+	var c_base := base.lightened(0.06)
+	for y in alt:
+		var linha := c_topo.lerp(c_base, float(y) / float(alt - 1))
+		for x in larg:
+			img.set_pixel(x, y, linha)
+	for x in larg:
+		img.set_pixel(x, 0, HAIRLINE.darkened(0.45))
+		img.set_pixel(x, alt - 1, HAIRLINE.lightened(0.10))
+	for y in range(1, alt - 1):
+		img.set_pixel(0, y, HAIRLINE)
+		img.set_pixel(larg - 1, y, HAIRLINE)
+	var sb := StyleBoxTexture.new()
+	sb.texture = ImageTexture.create_from_image(img)
+	for lado in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sb.set_texture_margin(lado, 1)
+	sb.set_content_margin_all(margem_conteudo)
+	return sb
+
+## A MOLDURA DA ARTE.
+##
+## A ilustração da terra é a melhor peça da tela e estava tratada como
+## célula de tabela: 400×224 encostados na borda esquerda, sem moldura, sem
+## sombra. `ui_painel_madeira` já existia no acervo — madeira com cantoneira
+## de metal nos quatro cantos — e estava servindo só aos modais.
+##
+## A margem de CONTEÚDO tem que ser >= a margem de TEXTURA, e essa é a parte
+## que a primeira tentativa errou: com textura 18 e conteúdo 6, o 9-slice
+## desenhava 18px de madeira e a arte era posicionada 6px para dentro — ou
+## seja, a ilustração cobria doze dos dezoito pixels da moldura pelos quatro
+## lados, e no render sobrava um fio escuro de 6px que não parecia moldura
+## nenhuma. As duas margens andam juntas.
+static func estilo_moldura_arte() -> StyleBox:
+	var m := _sbt("ui_painel_madeira", 20, 20, 20)
+	if m != null:
+		return m
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("2b2118")
+	sb.border_color = Color("6b512f")
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(0)
+	sb.set_content_margin_all(4)
+	return sb
+
 static func criar() -> Theme:
 	var t := Theme.new()
 
@@ -327,25 +535,23 @@ static func criar() -> Theme:
 	if corpo != null:
 		t.default_font = corpo
 		t.default_font_size = CORPO
-		# títulos e rótulos de botão em peso forte: hierarquia sem trocar de família
 		var forte := fonte_forte()
 		if forte != null:
 			t.set_font("font", "Button", forte)
-			t.set_font_size("font_size", "Button", MICRO + 2)
-			# abas também: são rótulos, não números
-			t.set_font("font", "TabContainer", forte)
-			t.set_font_size("font_size", "TabContainer", MICRO + 2)
+			t.set_font_size("font_size", "Button", MICRO)
+		# A aba é o único rótulo de NAVEGAÇÃO da tela: ela não diz o que
+		# você faz, diz onde você está. Por isso é a capitular, e por isso
+		# ela é a única peça do tema que troca de família.
+		var aba_fonte := fonte_aba()
+		if aba_fonte != null:
+			t.set_font("font", "TabContainer", aba_fonte)
+			t.set_font_size("font_size", "TabContainer", MICRO)
 
 	# CANTO RETO EM TUDO. `corner_radius` desenha uma curva anti-aliased: um
 	# arco suavizado no canto de um painel é o mesmo crime que a fonte vetorial.
 	# Aqui é ESCOLHA e não imposição da pixel art: canto vivo lê como
 	# instrumento e como livro-razão, que é o que o jogo é.
-	var painel := StyleBoxFlat.new()
-	painel.bg_color = SUPERFICIE
-	painel.border_color = BORDA
-	painel.set_border_width_all(1)
-	painel.set_corner_radius_all(0)
-	painel.set_content_margin_all(E5)
+	var painel := estilo_painel(E5)
 	t.set_stylebox("panel", "PanelContainer", painel)
 
 	# Nada de StyleBoxTexture aqui. O painel é CHAPADO, em código.
@@ -467,10 +673,8 @@ static func criar() -> Theme:
 	# o painel da aba fica CHAPADO mesmo na leva hi-bit: a moldura de
 	# madeira aqui virava uma faixa clara solta entre as abas e o conteúdo
 	# (só o topo dela aparecia). A madeira tem escala nos MODAIS.
-	var aba_painel := painel.duplicate()
 	# o conteúdo da aba encosta menos: quem dá a margem interna é o card
-	aba_painel.set_content_margin_all(E4)
-	t.set_stylebox("panel", "TabContainer", aba_painel)
+	t.set_stylebox("panel", "TabContainer", estilo_painel(E4))
 
 	# barra de rolagem: a padrão da engine tem cantos arredondados e cinza de
 	# sistema — no meio deste terreno ela é a última peça de "site" na tela.
@@ -664,6 +868,11 @@ static func estilo_card_marcado(cor: Color) -> StyleBoxFlat:
 ## caixas em vez de ler números. A zebra separa com meio por cento de
 ## luminância e some assim que a leitura começa — que é exatamente o que um
 ## separador de tabela deve fazer.
+##
+## O respiro vertical continua em 6, e uma tentativa de subi-lo para E3 foi
+## revertida: 2px por lado × duas dezenas de linhas custam duas mercadorias
+## por tela na Feira, e a descendente da serifada — que era o motivo — cabe
+## nos 6 sem encostar na linha seguinte. Medido no render, não estimado.
 static func estilo_linha(par: bool) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = ELEVADO if par else SUPERFICIE

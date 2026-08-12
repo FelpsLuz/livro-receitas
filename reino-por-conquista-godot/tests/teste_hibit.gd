@@ -188,15 +188,32 @@ func _frente1() -> void:
 	var corpo: FontFile = Tema.fonte_corpo()
 	ok(num != null and corpo != null, "as duas fontes carregam")
 	if num != null:
-		# monoespaçada: a coluna de preço alinha sozinha. Se o "1" e o "8"
-		# tiverem larguras diferentes, a tabela desalinha e ninguém compara
-		# 1.240 com 980 na vertical.
+		# ALGARISMO TABULAR, e não monoespaçada — a asserção mudou junto com
+		# a fonte, e vale registrar por quê.
+		#
+		# O contrato que a tabela precisa é UM: todo dígito ocupa a mesma
+		# largura, para que 1.240 e 980 alinhem casa por casa na vertical.
+		# Monoespaçada entrega isso, mas cobra caro — obriga a letra a ter a
+		# largura do dígito, e é por isso que uma coluna de rótulos em mono
+		# lê como terminal.
+		#
+		# Spectral tem figura tabular de fábrica: "1" e "8" medem igual, e o
+		# "W" continua largo como deve. Testar `l1 == lW` seria testar a
+		# monoespaçada, que é o MEIO, e não o alinhamento, que é o FIM.
 		var l1 := num.get_string_size("1", 0, -1, 16).x
 		var l8 := num.get_string_size("8", 0, -1, 16).x
+		var l4 := num.get_string_size("4", 0, -1, 16).x
 		var lw := num.get_string_size("W", 0, -1, 16).x
-		ok(is_equal_approx(l1, l8) and is_equal_approx(l1, lw),
-			"fonte de número é MONOESPAÇADA",
-			"1=%.1f 8=%.1f W=%.1f" % [l1, l8, lw])
+		ok(is_equal_approx(l1, l8) and is_equal_approx(l1, l4),
+			"algarismo do número é TABULAR (a coluna alinha sozinha)",
+			"1=%.1f 4=%.1f 8=%.1f" % [l1, l4, l8])
+		ok(lw > l1 * 1.4, "e mesmo assim NÃO é monoespaçada (a letra respira)",
+			"W=%.1f contra dígito=%.1f" % [lw, l1])
+		# as duas colunas de uma tabela de dez linhas têm que fechar na mesma
+		# largura, que é a prova prática do que está acima
+		ok(is_equal_approx(num.get_string_size("1111", 0, -1, 16).x,
+				num.get_string_size("8888", 0, -1, 16).x),
+			"quatro dígitos quaisquer medem o mesmo")
 	if corpo != null:
 		# prosa em monoespaçada lê como terminal: o corpo TEM que ser
 		# proporcional, senão a diferença entre as duas some
@@ -206,11 +223,64 @@ func _frente1() -> void:
 			"i=%.1f M=%.1f" % [i_l, m_l])
 		ok(corpo.get_string_size("ÇÃÕáéíóúâêô", 0, -1, 16).x > 0,
 			"acentuação do português coberta")
-	ok(Tema.NUMERO > Tema.MICRO and Tema.TITULO_SECAO > Tema.CORPO
-		and Tema.TITULO_JOGO > Tema.TITULO_SECAO,
+	ok(Tema.NUMERO > Tema.MICRO and Tema.TITULO_TELA > Tema.CORPO_G
+		and Tema.TITULO_JOGO > Tema.TITULO_TELA,
 		"escala tipográfica é monotônica",
-		"%d < %d < %d < %d" % [Tema.MICRO, Tema.CORPO, Tema.TITULO_SECAO,
+		"%d < %d < %d < %d" % [Tema.MICRO, Tema.CORPO_G, Tema.TITULO_TELA,
 			Tema.TITULO_JOGO])
+	# ALCANCE, e não só ordem. A escala anterior ia de 11 a 22 dentro do
+	# jogo: uma tela cujo maior texto tem o dobro do menor não hierarquiza,
+	# varia. Abaixo de 2× o olho não sabe onde pousar antes de ler.
+	ok(float(Tema.NUMERO_G) / float(Tema.CORPO) >= 2.0,
+		"a escala tem ALCANCE de verdade (maior >= 2x o corpo)",
+		"%d / %d = %.2fx" % [Tema.NUMERO_G, Tema.CORPO,
+			float(Tema.NUMERO_G) / float(Tema.CORPO)])
+
+	# ---- AS FONTES CHEGAM MESMO NA TELA ----
+	#
+	# Esta seção existe por causa de um defeito que ficou meses invisível: o
+	# `.import` das fontes apontava para um `.fontdata` que só o editor gera,
+	# `load()` devolvia null em silêncio, `criar()` pulava o `if != null` e o
+	# jogo rodava na fonte embutida da engine. Nenhum teste acusava, porque
+	# nenhum teste perguntava se a fonte ESCOLHIDA era a fonte USADA.
+	#
+	# Três asserções, e a terceira é a que importa: o Theme montado tem que
+	# devolver a nossa fonte, não a da engine.
+	for arq in ["Cinzel.ttf", "Spectral-Regular.ttf", "Spectral-Medium.ttf",
+			"Spectral-SemiBold.ttf", "Spectral-Bold.ttf"]:
+		ok(not FileAccess.get_file_as_bytes("res://assets/fontes/" + arq).is_empty(),
+			"o arquivo da fonte é legível por BYTES (sobrevive ao PCK)", arq)
+	ok(corpo != null and corpo.get_font_name() == "Spectral",
+		"fonte_corpo() devolve Spectral de verdade",
+		"veio: %s" % ("NULO" if corpo == null else corpo.get_font_name()))
+	var tema_montado: Theme = Tema.criar()
+	var f_padrao := tema_montado.default_font
+	ok(f_padrao != null and f_padrao != ThemeDB.get_default_theme().default_font,
+		"o Theme montado NÃO caiu na fonte embutida da engine",
+		"default_font = %s" % ("NULO" if f_padrao == null else str(f_padrao.get_font_name())))
+	# a capitular carrega e responde ao eixo de peso (a chave do
+	# `variation_opentype` é a tag OpenType como INTEIRO — com string ela
+	# falha em silêncio e todos os pesos saem iguais)
+	var cinzel_400: Font = Tema._cinzel(400)
+	var cinzel_700: Font = Tema._cinzel(700)
+	ok(cinzel_400 != null and cinzel_700 != null, "a capitular carrega nos dois pesos")
+	if cinzel_400 != null and cinzel_700 != null:
+		ok(cinzel_700.get_string_size("REINO", 0, -1, 22).x
+			> cinzel_400.get_string_size("REINO", 0, -1, 22).x,
+			"o eixo de peso da capitular RESPONDE (700 mais largo que 400)",
+			"400=%.0f 700=%.0f" % [cinzel_400.get_string_size("REINO", 0, -1, 22).x,
+				cinzel_700.get_string_size("REINO", 0, -1, 22).x])
+	# as ONZE abas cabem na faixa sem a TabBar entrar em modo de rolagem —
+	# esconder "Crônica" e "Guerra" atrás de setinhas é perder duas telas
+	var f_aba: Font = Tema.fonte_aba()
+	if f_aba != null:
+		var soma := 0.0
+		for nome_aba in ["Terra", "Mapa", "Feira", "Taverna", "Corte", "Tropas",
+				"Clãs", "Intriga", "Casa", "Crônica", "Guerra"]:
+			# rótulo + ícone de 12 + as duas margens E3 da plaqueta
+			soma += f_aba.get_string_size(nome_aba, 0, -1, Tema.MICRO).x + 12 + 2 * Tema.E3
+		ok(soma <= 916.0, "as onze abas cabem sem rolagem",
+			"soma %.0f de 916 úteis" % soma)
 	# fonte VETORIAL com anti-alias. A herança das fontes pixel desligava
 	# isto, e desligado ele devolve DejaVu serrilhada a 15px — jogando fora
 	# o ganho do canvas_items sem que nada acuse.

@@ -53,8 +53,13 @@ static func secao(c: Container, titulo: String, apoio: String = "") -> VBoxConta
 	v.add_theme_constant_override("separation", Tema.E2)
 	c.add_child(v)
 	var l := Label.new()
+	# O texto entra como foi escrito, em caixa mista, e sai em CAIXA ALTA E
+	# VERSALETE — as minúsculas do Cinzel são versaletes de desenho. Nada de
+	# `.to_upper()`: caixa alta chapada dá a todas as letras a mesma altura e
+	# o cabeçalho vira uma barra; com versalete, a inicial ainda marca onde a
+	# palavra começa.
 	l.text = titulo
-	var f := Tema.fonte_forte()
+	var f := Tema.fonte_cabecalho()
 	if f != null:
 		l.add_theme_font_override("font", f)
 	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
@@ -76,9 +81,17 @@ static func secao(c: Container, titulo: String, apoio: String = "") -> VBoxConta
 ## seção; "Exércitos em marcha" dentro dela é subseção — e usar o mesmo
 ## latão de 22px nos dois achatava a árvore inteira, que era o estado
 ## anterior. Caixa alta pequena hierarquiza sem gastar tamanho.
+## O espacejamento saiu do `" ".join(...)`. Aquilo inseria um ESPAÇO DE
+## VERDADE entre cada caractere — o que dá quebra de linha no meio da
+## palavra, quebra busca e seleção, e espaça igual entre "AV" e "II" quando
+## os dois pares pedem ajustes opostos. Agora quem espaceja é a fonte
+## (`spacing_glyph`), que é onde isso mora.
 static func subsecao(c: Container, titulo: String) -> Label:
 	var l := Label.new()
-	l.text = " ".join(titulo.to_upper().split(""))  # espacejamento por caractere
+	l.text = titulo
+	var f := Tema.fonte_coluna()
+	if f != null:
+		l.add_theme_font_override("font", f)
 	l.add_theme_font_size_override("font_size", Tema.MINI)
 	l.add_theme_color_override("font_color", Tema.TEXTO_3)
 	c.add_child(l)
@@ -115,9 +128,15 @@ static func texto(c: Container, txt: String, cor: Color = Tema.TEXTO,
 static func nota(c: Container, txt: String) -> Label:
 	return texto(c, txt, Tema.TEXTO_2, Tema.MICRO)
 
-## Número. SEMPRE na monoespaçada — é o contrato que faz a coluna alinhar.
+## Número. SEMPRE no algarismo tabular do Spectral — é o contrato que faz a
+## coluna alinhar sem monoespaçada e sem `tnum`.
+##
+## `id` liga o movimento: com um identificador estável, o número CORRE do
+## valor anterior até o novo em vez de trocar de golpe. Só faz sentido em
+## número que muda por ação do jogador (ouro, celeiro, moral) — o preço de
+## uma linha de mercado que some e volta com outro nome animaria lixo.
 static func numero(c: Container, txt: String, cor: Color = Tema.TEXTO,
-		tamanho: int = Tema.NUMERO) -> Label:
+		tamanho: int = Tema.NUMERO, id: String = "") -> Label:
 	var l := Label.new()
 	l.text = txt
 	var f := Tema.fonte_numero()
@@ -127,7 +146,186 @@ static func numero(c: Container, txt: String, cor: Color = Tema.TEXTO,
 	l.add_theme_color_override("font_color", cor)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	c.add_child(l)
+	if id != "" and txt.is_valid_int():
+		correr(l, id, int(txt))
 	return l
+
+## O NOME DO LUGAR — o maior texto da aba, e o único que não é informação.
+##
+## O que ele conserta: o título da aba estava no mesmo latão de 22px que
+## todo cabeçalho de seção usa, e por isso "Vale do Corvo — Burgo" lia como
+## mais uma seção da tela em vez de dizer ONDE o jogador está. Aqui ele sobe
+## para 30 na capitular e ganha uma régua de latão embaixo.
+##
+## A régua vai a 2px e em latão (a de seção tem 1px e é hairline): é o único
+## traço colorido da tela e serve de linha de base para o título, que sem ela
+## flutuaria sobre a ilustração.
+static func titulo_tela(c: Container, txt: String, apoio: String = "") -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", Tema.E2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.add_child(v)
+	var l := Label.new()
+	l.text = txt
+	var f := Tema.fonte_titulo()
+	if f != null:
+		l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", Tema.TITULO_TELA)
+	l.add_theme_color_override("font_color", Tema.ACENTO)
+	# nome de lugar longo encolhe em vez de estourar a coluna: "Fortaleza do
+	# Passo Alto — Cidade Murada" mede 560px em Cinzel 30 e a coluna tem 440
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.clip_text = true
+	v.add_child(l)
+	if apoio != "":
+		var s := Label.new()
+		s.text = apoio
+		s.add_theme_font_size_override("font_size", Tema.MICRO)
+		s.add_theme_color_override("font_color", Tema.TEXTO_2)
+		v.add_child(s)
+	var r := regua(Tema.ACENTO_FUNDO)
+	r.custom_minimum_size = Vector2(0, 2)
+	v.add_child(r)
+	return v
+
+## O GRUPO REBAIXADO. Devolve a coluna onde o conteúdo entra.
+##
+## É o segundo nível de profundidade que a tela não tinha: o painel sobe, o
+## sulco desce, e um bloco de linhas dentro dele lê como UMA coisa em vez de
+## cinco controles empilhados por acaso.
+static func sulco(c: Container, margem: int = Tema.E4, sep: int = Tema.E3) -> VBoxContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", Tema.estilo_sulco(margem))
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", sep)
+	p.add_child(v)
+	return v
+
+## A ILUSTRAÇÃO, EMOLDURADA. Devolve a moldura — quem chama põe a arte
+## dentro, seja um TextureRect ou o SubViewport da vila.
+##
+## A arte é a melhor peça da tela e estava num retângulo de 1px encostado na
+## borda esquerda. `ui_painel_madeira` — madeira com cantoneira de metal —
+## já existia no acervo servindo só aos modais.
+static func moldura_arte(c: Container) -> PanelContainer:
+	var m := PanelContainer.new()
+	m.add_theme_stylebox_override("panel", Tema.estilo_moldura_arte())
+	m.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	c.add_child(m)
+	return m
+
+# ============================================================
+# O NÚMERO QUE CARREGA A TELA
+#
+# Toda aba deste jogo tem UM número que é a razão de ela existir, e até aqui
+# ele aparecia com o mesmo peso dos outros. Na Terra são os homens em armas
+# contra o que a terra sustenta: 182 de 200 significa que faltam dezoito
+# para o recrutamento começar a recusar — e isso estava distribuído em duas
+# linhas de tabela idênticas, uma na primeira posição e outra na quarta, com
+# a mesma fonte e o mesmo tamanho do imposto.
+#
+# O jogador descobria o teto quando o botão de recrutar falhava.
+#
+# `destaque` é a peça que junta os dois: valor sobre teto, num tamanho que
+# não se confunde com linha de tabela, com a barra logo abaixo e a folga
+# escrita por extenso.
+# ============================================================
+static func destaque(c: Container, rotulo: String, valor: int, teto: int,
+		cor: Color, glosa: String = "", id: String = "") -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", Tema.E2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.add_child(v)
+
+	var r := Label.new()
+	r.text = rotulo
+	var f_r := Tema.fonte_coluna()
+	if f_r != null:
+		r.add_theme_font_override("font", f_r)
+	r.add_theme_font_size_override("font_size", Tema.MINI)
+	r.add_theme_color_override("font_color", Tema.TEXTO_3)
+	v.add_child(r)
+
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", Tema.E2)
+	v.add_child(h)
+	var grande := Label.new()
+	grande.text = str(valor)
+	var f_g := Tema.fonte_numero_g()
+	if f_g != null:
+		grande.add_theme_font_override("font", f_g)
+	grande.add_theme_font_size_override("font_size", Tema.NUMERO_G)
+	grande.add_theme_color_override("font_color", cor)
+	h.add_child(grande)
+	# o teto entra apagado e alinhado pela BASE: "182" e "/ 200" no mesmo
+	# tamanho seriam dois números concorrendo, e o que está em jogo é o 182
+	var t_l := Label.new()
+	t_l.text = "/ %d" % teto
+	var f_t := Tema.fonte_numero()
+	if f_t != null:
+		t_l.add_theme_font_override("font", f_t)
+	t_l.add_theme_font_size_override("font_size", Tema.CORPO_G)
+	t_l.add_theme_color_override("font_color", Tema.TEXTO_3)
+	t_l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	t_l.size_flags_vertical = Control.SIZE_SHRINK_END
+	h.add_child(t_l)
+
+	var barra := medidor(v, valor, maxf(1, teto), 0, 8, cor)
+	if glosa != "":
+		var g := Label.new()
+		g.text = glosa
+		g.add_theme_font_size_override("font_size", Tema.MICRO)
+		g.add_theme_color_override("font_color", Tema.TEXTO_2)
+		g.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.add_child(g)
+	if id != "":
+		correr(grande, id, valor, barra)
+	return v
+
+# ============================================================
+# MOVIMENTO
+#
+# A tela inteira era estática, e metade do que separa "planilha" de "jogo"
+# é isto: quando o dia passa e o celeiro cai de 260 para 244, o número que
+# TROCA sem avisar não é lido — o jogador vê 244 e não sabe que perdeu 16.
+# O número que CORRE de um valor ao outro conta a história sozinho.
+#
+# A dificuldade é que `atualizar()` reconstrói a aba do zero a cada refresh:
+# o Label é um nó novo, sem memória do que exibia. Por isso o valor anterior
+# mora aqui, num dicionário estático indexado por um `id` estável — e a
+# primeira montagem, que não tem anterior, não anima nada (senão a tela
+# abriria com onze números subindo de zero).
+# ============================================================
+const DURACAO_CORRIDA := 0.45
+
+static var _ultimos: Dictionary = {}
+
+## Esquece os valores anteriores. Vai no carregamento de save e no início de
+## partida: sem isso, entrar num save com 3872 de ouro depois de outro com 40
+## faria o número escalar a tela inteira sem nada ter acontecido.
+static func esquecer_valores() -> void:
+	_ultimos.clear()
+
+static func correr(l: Label, id: String, valor: int, barra: ProgressBar = null) -> void:
+	var anterior: int = int(_ultimos.get(id, valor))
+	_ultimos[id] = valor
+	if anterior == valor or not l.is_inside_tree():
+		return
+	var tw := l.create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_method(func(x: float): l.text = str(roundi(x)),
+		float(anterior), float(valor), DURACAO_CORRIDA)
+	if barra != null:
+		# a barra corre junto e no mesmo tempo: número e barra que discordam
+		# por meio segundo leem como dois dados diferentes
+		var tb := barra.create_tween()
+		tb.set_ease(Tween.EASE_OUT)
+		tb.set_trans(Tween.TRANS_CUBIC)
+		tb.tween_property(barra, "value", float(valor), DURACAO_CORRIDA) \
+			.from(clampf(float(anterior), 0.0, barra.max_value))
 
 ## O ±n colorido. Sálvia sobe, terracota desce, e o zero fica apagado em vez
 ## de verde — "não mudou" não é uma boa notícia, é ausência de notícia.
@@ -178,9 +376,12 @@ static func tabela(c: Container, colunas: Array) -> VBoxContainer:
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", Tema.E3)
 		cab.add_child(h)
+		var f_col := Tema.fonte_coluna()
 		for col in colunas:
 			var l := Label.new()
-			l.text = str(col.get("t", "")).to_upper()
+			l.text = str(col.get("t", ""))
+			if f_col != null:
+				l.add_theme_font_override("font", f_col)
 			l.add_theme_font_size_override("font_size", Tema.MINI)
 			l.add_theme_color_override("font_color", Tema.TEXTO_3)
 			_medir(l, col)
@@ -432,7 +633,7 @@ static func _pintar_botao(b: Button, variante: String) -> void:
 ## nenhum saltaria quando importasse.
 static func chip(c: Container, icone: String, valor: String,
 		cor: Color = Tema.TEXTO, fundo: Color = Tema.SUPERFICIE,
-		dica: String = "") -> PanelContainer:
+		dica: String = "", id: String = "") -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", Tema.estilo_chip(fundo))
 	p.tooltip_text = dica
@@ -446,8 +647,40 @@ static func chip(c: Container, icone: String, valor: String,
 		if ic != null:
 			ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			h.add_child(ic)
-	numero(h, valor, cor, Tema.NUMERO - 1)
+	numero(h, valor, cor, Tema.NUMERO - 1, id)
 	return p
+
+## FATO: ícone e número em cima, rótulo embaixo. Dois ou três lado a lado.
+##
+## Existe para o caso em que uma tabela é desperdício. Uma tabela de DUAS
+## linhas gasta 84px de altura, cabeçalho, zebra e hairline para dizer dois
+## números — e numa tela de 540 essa é a altura que decide se o resto cabe.
+## Em fila, os mesmos dois números ocupam 26px e continuam comparáveis,
+## porque ficam lado a lado em vez de um sobre o outro.
+##
+## A regra de quando usar cada um: TABELA quando as linhas são uma lista que
+## cresce (mercadorias, tropas, contratos); FATO quando são dois ou três
+## números fixos que a tela sempre mostra.
+static func fato(c: Container, icone: String, valor: String, rotulo: String,
+		cor: Color = Tema.TEXTO, dica: String = "") -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 0)
+	v.tooltip_text = dica
+	c.add_child(v)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", Tema.E2 + 1)
+	v.add_child(h)
+	var ic := Icones.imagem(icone, 20)
+	if ic != null:
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(ic)
+	numero(h, valor, cor, Tema.NUMERO)
+	var l := Label.new()
+	l.text = rotulo
+	l.add_theme_font_size_override("font_size", Tema.MINI)
+	l.add_theme_color_override("font_color", Tema.TEXTO_3)
+	v.add_child(l)
+	return v
 
 ## Ícone + número soltos, sem terreno — para dentro de uma célula de tabela,
 ## onde o chip acrescentaria uma caixa em cima da linha que já é uma caixa.
@@ -493,7 +726,8 @@ static func medidor(c: Container, valor: float, maximo: float,
 ## Medidor com rótulo em cima e valor à direita — o bloco completo, que é
 ## como ele aparece nove em cada dez vezes.
 static func medidor_rotulado(c: Container, rotulo: String, valor: float,
-		maximo: float, sufixo: String = "", cor: Variant = null) -> VBoxContainer:
+		maximo: float, sufixo: String = "", cor: Variant = null,
+		id: String = "") -> VBoxContainer:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", Tema.E2)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -507,9 +741,26 @@ static func medidor_rotulado(c: Container, rotulo: String, valor: float,
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	topo.add_child(l)
 	var f: float = valor / maxf(1.0, maximo)
-	numero(topo, "%d%s" % [int(valor), sufixo],
+	var n := numero(topo, "%d%s" % [int(valor), sufixo],
 		cor if cor is Color else Tema.cor_de_saude(f), Tema.MICRO + 1)
-	medidor(v, valor, maximo, 0, 6, cor)
+	var b := medidor(v, valor, maximo, 0, 6, cor)
+	# com sufixo o texto não é um inteiro puro, então `numero()` não anima
+	# sozinho: o movimento entra aqui, reescrevendo o rótulo inteiro a cada
+	# quadro para o sufixo ("/100", " de 260") acompanhar o dígito
+	if id != "":
+		var anterior: int = int(_ultimos.get(id, int(valor)))
+		_ultimos[id] = int(valor)
+		if anterior != int(valor) and n.is_inside_tree():
+			var tw := n.create_tween()
+			tw.set_ease(Tween.EASE_OUT)
+			tw.set_trans(Tween.TRANS_CUBIC)
+			tw.tween_method(func(x: float): n.text = "%d%s" % [roundi(x), sufixo],
+				float(anterior), valor, DURACAO_CORRIDA)
+			var tb := b.create_tween()
+			tb.set_ease(Tween.EASE_OUT)
+			tb.set_trans(Tween.TRANS_CUBIC)
+			tb.tween_property(b, "value", valor, DURACAO_CORRIDA) \
+				.from(clampf(float(anterior), 0.0, b.max_value))
 	return v
 
 ## A ESCALA INTEIRA mais próxima do tamanho pedido.

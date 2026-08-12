@@ -408,6 +408,10 @@ func _entrar_no_jogo() -> void:
 	tela_jogo.visible = true
 	cidade_view.estado = state
 	cidade_view.semear_npcs()
+	# a memória dos números anteriores é de UMA partida. Sem esta linha,
+	# carregar um save de 3872 de ouro logo depois de ter jogado outro com 40
+	# faria o HUD inteiro escalar na abertura sem nada ter acontecido.
+	Kit.esquecer_valores()
 	atualizar()
 
 # ---------------- ESTRUTURA DO JOGO ----------------
@@ -482,7 +486,9 @@ func _montar_jogo() -> void:
 			# 12, não 16: cada pixel × 11 abas é a folga que faz as ONZE
 			# plaquetas caberem nos 916px úteis sem setas de rolagem
 			tabs.set_tab_icon_max_width(i, 12)
-	tabs.tab_changed.connect(func(_i): atualizar())
+	tabs.tab_changed.connect(func(_i):
+		atualizar()
+		_entrada_de_aba())
 	# o som de aba fica no CLIQUE, não no tab_changed: o código troca de aba
 	# sozinho (voltar da conversa, abrir evento) e essas trocas não são um
 	# gesto do jogador — soar nelas viraria ruído de máquina
@@ -698,8 +704,12 @@ func _passar_mes() -> void:
 ## se colore. Se o ouro fosse sempre dourado, o trigo sempre trigo e a moral
 ## sempre verde, o HUD seria um arco-íris permanente e nenhum deles saltaria
 ## no dia em que virasse problema — que é o único dia em que precisa saltar.
+## `id` é o que faz o número CORRER quando muda. Ele não pode ser o nome do
+## ícone: "moedas" serve tanto ao ouro no cofre quanto ao soldo negativo do
+## mercenário sem terra, e os dois no mesmo id fariam um saltar para o valor
+## do outro toda vez que o jogador comprasse ou vendesse a terra.
 func _celula_hud(icone: String, valor: String, dica: String,
-		alarme: bool = false, destaque: bool = false) -> void:
+		alarme: bool = false, destaque: bool = false, id: String = "") -> void:
 	var cor: Color = Tema.TEXTO_2
 	var fundo: Color = Tema.ELEVADO
 	if alarme:
@@ -707,7 +717,7 @@ func _celula_hud(icone: String, valor: String, dica: String,
 		fundo = Tema.PERIGO_FUNDO
 	elif destaque:
 		cor = Tema.ACENTO
-	Kit.chip(hud, icone, valor, cor, fundo, dica)
+	Kit.chip(hud, icone, valor, cor, fundo, dica, id)
 
 func _montar_hud(j: Dictionary) -> void:
 	for filho in hud.get_children():
@@ -715,20 +725,22 @@ func _montar_hud(j: Dictionary) -> void:
 	var moral: int = Economia.moral(state)
 	# o ouro é o único chip com destaque permanente: é o recurso que toda
 	# decisão do jogo consulta, e o HUD tem que ter uma âncora
-	_celula_hud("moedas", str(int(j["ouro"])), "Ouro no cofre", false, true)
-	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])), "Homens em armas")
+	_celula_hud("moedas", str(int(j["ouro"])), "Ouro no cofre", false, true, "hud_ouro")
+	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])), "Homens em armas",
+		false, false, "hud_tropa")
 	_celula_hud("moral", "%d" % moral,
-		"Moral do exército — abaixo de 35 os homens desertam", moral <= 35)
-	_celula_hud("renome", str(int(j["renome"])), "Renome")
+		"Moral do exército — abaixo de 35 os homens desertam", moral <= 35,
+		false, "hud_moral")
+	_celula_hud("renome", str(int(j["renome"])), "Renome", false, false, "hud_renome")
 	# HONRA abre e fecha portas de emprego (e, no futuro, de vassalagem):
 	# vira alarme quando cai a ponto de a corte fechar a porta
 	var honra: int = int(j.get("honra", 50))
 	_celula_hud("honra" if Icones.ilustrado("honra") != null else "pergaminho", str(honra),
 		"Honra — reputação: portas de trabalho e de corte abrem e fecham por ela",
-		honra <= 25)
+		honra <= 25, false, "hud_honra")
 	if int(j["guardas"]) > 0:
 		_celula_hud("escudo", str(int(j["guardas"])),
-			"Guardas de elite na sua casa")
+			"Guardas de elite na sua casa", false, false, "hud_guardas")
 	# CELEIRO E MADEIREIRA no topo, com o SALDO DO MÊS na dica.
 	#
 	# O jogador via os números só na aba Terra, e não via para onde eles
@@ -748,16 +760,17 @@ func _montar_hud(j: Dictionary) -> void:
 			"Celeiro: %d\n+%d da colheita, −%d que a tropa come\nsaldo do mês: %s%d"
 				% [int(t["alimento"]), colheita, int(up["comida"]),
 					"+" if saldo_g >= 0 else "", saldo_g],
-			int(t["alimento"]) <= 0 or saldo_g < 0)
+			int(t["alimento"]) <= 0 or saldo_g < 0, false, "hud_trigo")
 		_celula_hud("madeira", str(int(t["madeira"])),
 			"Madeireira: %d\n+%d cortados, −%d de manutenção\nsaldo do mês: %s%d"
 				% [int(t["madeira"]), lenha, int(up["madeira"]),
 					"+" if saldo_m >= 0 else "", saldo_m],
-			int(t["madeira"]) <= 0 or saldo_m < 0)
+			int(t["madeira"]) <= 0 or saldo_m < 0, false, "hud_madeira")
 		_celula_hud("saco", str(Economia.imposto_mensal(state)),
 			"Imposto do mês: %d de ouro\n%d camponeses trabalhando · gestão %d"
 				% [Economia.imposto_mensal(state), Economia.populacao_ativa(state),
-					int(j.get("atributos", {}).get("gestao", 5))])
+					int(j.get("atributos", {}).get("gestao", 5))],
+			false, false, "hud_imposto")
 	else:
 		# sem terra o mercenário compra tudo na estrada — e é bom saber quanto
 		var up_s: Dictionary = Economia.upkeep_de(j["tropas"], 1.0, false)
@@ -778,6 +791,29 @@ func _montar_hud(j: Dictionary) -> void:
 
 func _conteudo_aba() -> VBoxContainer:
 	return tabs.get_current_tab_control().get_node("Conteudo")
+
+## A ENTRADA DA ABA. Onze telas que aparecem prontas, sem transição nenhuma,
+## leem como troca de planilha: o olho não sabe que a tela mudou, só que o
+## conteúdo é outro.
+##
+## Meio segundo é demais para algo que o jogador faz cem vezes por partida —
+## uma transição que se percebe vira imposto. Doze centésimos e três pixels
+## de subida bastam para o movimento existir e não custar tempo.
+const ENTRADA_ABA := 0.12
+
+func _entrada_de_aba() -> void:
+	var alvo := tabs.get_current_tab_control()
+	if alvo == null or not alvo.is_inside_tree():
+		return
+	alvo.modulate.a = 0.0
+	# `position` não serve: o filho da TabContainer é posicionado pelo pai a
+	# cada layout, e o container sobrescreveria o deslocamento no mesmo quadro
+	alvo.pivot_offset = Vector2.ZERO
+	var tw := alvo.create_tween()
+	tw.set_parallel(true)
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(alvo, "modulate:a", 1.0, ENTRADA_ABA)
 
 func atualizar() -> void:
 	if state.is_empty():
@@ -980,7 +1016,7 @@ func _aviso(msg: String) -> void:
 func _aba_terra(c: Container) -> void:
 	_painel_cadeia(c)
 	var t = state["terra"]
-	_titulo_secao(c, ("%s — %s" % [t["nome"], Dados.NIVEIS_TERRA[t["nivel"]]["nome"]]) if t != null else "Acampamento Mercenário")
+	Kit.titulo_tela(c, ("%s — %s" % [t["nome"], Dados.NIVEIS_TERRA[t["nivel"]]["nome"]]) if t != null else "Acampamento Mercenário")
 
 	# duas colunas: a estampa da vila à esquerda, o estado dela à direita. A
 	# imagem tem 400px de largura nativa e a tela tem 930 úteis — em coluna
@@ -995,16 +1031,9 @@ func _aba_terra(c: Container) -> void:
 	# próprio e esticá-lo não aumenta a imagem — o SubViewportContainer com
 	# `stretch = false` desenha a textura no tamanho nativo e o resto do
 	# retângulo fica vazio.
-	var quadro_vila := PanelContainer.new()
-	var sb_v := StyleBoxFlat.new()
-	sb_v.bg_color = Color("100d0b")
-	sb_v.border_color = Tema.BORDA
-	sb_v.set_border_width_all(1)
-	sb_v.set_corner_radius_all(0)
-	sb_v.set_content_margin_all(1)
-	quadro_vila.add_theme_stylebox_override("panel", sb_v)
-	quadro_vila.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	col_esq.add_child(quadro_vila)
+	# A moldura de madeira com cantoneira de metal, no lugar do retângulo de
+	# 1px que tratava a melhor arte da tela como célula de tabela.
+	var quadro_vila := Kit.moldura_arte(col_esq)
 	quadro_vila.add_child(cidade_view)
 
 	if t == null:
@@ -1030,39 +1059,52 @@ func _aba_terra(c: Container) -> void:
 		var armas: int = Economia.pop_em_armas(state)
 		var nivel_cap: int = clampi(int(t["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
 
-		var res := Kit.fila(col_dir, Tema.E4)
+		var teto: int = Recrutamento.pop_maxima(state)
+		var folga: int = teto - armas
+
+		Kit.secao(col_dir, "Recursos e população")
+		# tudo o que descreve a vila vive dentro de UM sulco: antes eram
+		# cinco controles empilhados soltos no painel, e empilhado não é
+		# agrupado — o olho lia cinco coisas em vez de uma.
+		var grupo := Kit.sulco(col_dir, Tema.E4, Tema.E3)
+
+		var res := Kit.fila(grupo, Tema.E5)
 		Kit.icone_valor(res, "populacao", "%d" % int(t["populacao"]), Tema.TEXTO)
 		Kit.icone_valor(res, "trigo", "%d" % alim,
 			Tema.PERIGO if alim <= 0 else Tema.TEXTO)
 		Kit.icone_valor(res, "madeira", "%d" % int(t["madeira"]), Tema.TEXTO)
 
-		# os dois medidores que dizem se a vila vai bem, sem obrigar a ler
-		Kit.medidor_rotulado(col_dir, "Felicidade do povo", fel, 100, "/100")
-		Kit.medidor_rotulado(col_dir, "População comprometida em armas",
-			armas, maxf(1, ativa + armas), " de %d" % (ativa + armas),
-			Tema.ATENCAO if armas > ativa else Tema.TEXTO_2)
+		# ---- O NÚMERO DA TELA ----
+		# "Em armas 182" e "Tropa que a terra sustenta 200" eram a primeira e
+		# a quarta linha de uma tabela de quatro, na mesma fonte e no mesmo
+		# tamanho do imposto. São os dois números que decidem se dá para
+		# recrutar, e ninguém os comparava porque nada dizia que eram um par.
+		#
+		# A cor INVERTE a escala de saúde: encostar no teto é a má notícia
+		# aqui, ao contrário de felicidade ou celeiro.
+		var cor_armas: Color = Tema.cor_de_saude(float(folga) / maxf(1.0, teto))
+		var glosa := "Faltam %d para o limite que a terra sustenta." % folga
+		if folga <= 0:
+			glosa = "A terra não sustenta mais ninguém: evolua a terra ou alugue baia no armazém antes de recrutar."
+		Kit.destaque(grupo, "Homens em armas", armas, teto, cor_armas,
+			glosa, "terra_armas")
 
-		# O DILEMA: quem pega em armas some da base de imposto. A tabela de
-		# duas colunas é o que põe os dois números um sobre o outro — em
-		# texto corrido eles eram uma frase, e frase não se compara.
-		# cada linha do dilema com o seu ícone ilustrado, como na referência:
-		# foice para o campo, elmo para as armas, saco para o imposto, tenda
-		# para a capacidade
-		var tab := Kit.tabela(col_dir, [{"t": "", "w": 26, "a": Kit.CENTRO},
-			{"t": "", "w": 0}, {"t": "", "w": 96, "a": Kit.DIR}])
-		for par_l in [["foice", "Trabalhando nos campos", "%d" % ativa],
-				["elmo", "Em armas", "%d" % armas],
-				["saco", "Imposto por mês", "%d" % Economia.imposto_mensal(state)],
-				["tenda", "Tropa que a terra sustenta", "%d" % Recrutamento.pop_maxima(state)]]:
-			var cel := Kit.linha(tab)
-			var ic_l := Icones.imagem(str(par_l[0]), 22)
-			if ic_l != null:
-				ic_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-				cel[0].add_child(ic_l)
-			Kit.texto(cel[1], str(par_l[1]), Tema.TEXTO_2, Tema.MICRO)
-			Kit.numero(cel[2], str(par_l[2]))
-		if armas > 0:
-			Kit.nota(col_dir, "Cada homem em armas é um pagador de imposto a menos.")
+		Kit.medidor_rotulado(grupo, "Felicidade do povo", fel, 100, "/100",
+			null, "terra_felicidade")
+
+		# O DILEMA: quem pega em armas some da base de imposto. Sobraram as
+		# duas CONTAGENS — o teto subiu para o destaque e "em armas" com
+		# ele, senão o mesmo número apareceria duas vezes na mesma coluna.
+		#
+		# Em FATO e não em tabela: duas linhas de tabela custam 84px de
+		# altura numa coluna que tem 290, e era esse o estouro que mandava
+		# o imposto para baixo da dobra.
+		var fatos := Kit.fila(grupo, Tema.E6)
+		Kit.fato(fatos, "foice", "%d" % ativa, "nos campos",
+			Tema.TEXTO, "Camponeses que ainda lavram — e que pagam imposto.")
+		Kit.fato(fatos, "saco", "%d" % Economia.imposto_mensal(state),
+			"de imposto por mês", Tema.TEXTO,
+			"Cada homem em armas é um pagador de imposto a menos.")
 
 		# ---- avisos: o que exige uma decisão AGORA ----
 		if alim <= 0:
