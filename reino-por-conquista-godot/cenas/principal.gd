@@ -38,6 +38,8 @@ const Relogio = preload("res://scripts/relogio.gd")
 const Rotas = preload("res://scripts/rotas.gd")
 const Cerco = preload("res://scripts/cerco.gd")
 const Intel = preload("res://scripts/intel.gd")
+const Equipar = preload("res://scripts/equipar.gd")
+const Armazem = preload("res://scripts/armazem.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
@@ -1002,8 +1004,8 @@ func _aba_terra(c: Container) -> void:
 	quadro_vila.add_child(cidade_view)
 
 	if t == null:
-		_par(col_dir, "Sem terras, sem raízes. Junte 25 de renome e 300 de ouro para comprar seu primeiro pedaço de chão.")
-		_botao(col_dir, "Comprar terra  ·  300 ouro", func():
+		_par(col_dir, "Sem terras, sem raízes. Junte 25 de renome e %d de ouro para comprar seu primeiro pedaço de chão." % Dados.PRECO_TERRA)
+		_botao(col_dir, "Comprar terra  ·  %d ouro" % Dados.PRECO_TERRA, func():
 			var r: Dictionary = Jogo.comprar_terra(state)
 			if r["ok"]:
 				Sfx.tocar(self, "moeda")
@@ -1595,7 +1597,7 @@ func _modal_fundar() -> void:
 	campo_cap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r_cap.add_child(campo_cap)
 	Kit.respiro(v, Tema.E1)
-	Kit.botao(v, "Erguer o estandarte", func():
+	_botao_modal(v, "Erguer o estandarte", func():
 		var r: Dictionary = Barbaros.fundar_reino(state, campo_casa.text,
 			campo_cap.text, Jogo.log_para(state))
 		overlay_modal.visible = false
@@ -1642,7 +1644,7 @@ func _modal_mapa_comercial(r: Dictionary) -> void:
 	if str(r.get("msg", "")) != "":
 		Kit.nota(v, str(r["msg"]))
 	Kit.respiro(v, Tema.E2)
-	Kit.botao(v, "Guardar na memória e queimar", func(): atualizar(), "primario")
+	_botao_modal(v, "Guardar na memória e queimar", func(): atualizar(), "primario")
 
 ## O POPUP DO DOMÍNIO — o que o clique no castelo abre.
 ##
@@ -1719,10 +1721,10 @@ func _popup_dominio(id: String) -> void:
 
 	# ---- as decisões, todas nesta janela ----
 	if not aqui:
-		Kit.botao(v, "Viajar até aqui", func(): _abrir_viagem(id), "primario", 200)
+		_botao_modal(v, "Viajar até aqui", func(): _abrir_viagem(id), "primario", 200)
 	if not reino.is_empty():
 		if not Intel.tem(state, id):
-			Kit.botao(v, "Mandar espião  ·  80 ouro", func():
+			_botao_modal(v, "Mandar espião  ·  80 ouro", func():
 				var r: Dictionary = Intriga.espionar(state, id)
 				if int(r.get("prender", 0)) > 0:
 					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
@@ -1732,7 +1734,7 @@ func _popup_dominio(id: String) -> void:
 				_aviso(str(r["msg"])), "fantasma", 200)
 		if str(state["jogador"]["rei_de"]) != id:
 			var tem_cb: bool = state["casus_belli"].has(id)
-			Kit.botao(v, "Declarar guerra" if tem_cb else "Atacar sem casus belli",
+			_botao_modal(v, "Declarar guerra" if tem_cb else "Atacar sem casus belli",
 				func():
 					var r: Dictionary = Intriga.declarar_guerra(state, id,
 						Jogo.log_para(state))
@@ -1742,7 +1744,7 @@ func _popup_dominio(id: String) -> void:
 					_aviso(str(r["msg"])), "perigo", 200)
 	else:
 		Kit.nota(v, "Sem trono não há corte para espionar nem guerra para declarar. Aqui se chega andando — e se resolve com aço, na aba Tropas.")
-	Kit.botao(v, "Fechar", func(): atualizar(), "", 200)
+	_botao_modal(v, "Fechar", func(): atualizar(), "", 200)
 
 ## A VIAGEM — o popup que o clique no mapa abre.
 ##
@@ -2082,6 +2084,7 @@ func _aba_corte(c: Container) -> void:
 		var casa_r: Dictionary = Geopolitica.casa_real(state, str(reino["id"]))
 		if (casa_r.get("membros", []) as Array).is_empty():
 			Kit.nota(c, "O trono está só. Nem consorte, nem herdeiro — e uma casa sem herdeiro é uma guerra esperando a hora.")
+		Kit.nota(c, "Eles falam ao ouvido do rei todo mês. Quem tem a casa do lado tem o trono; quem tem a casa contra sai daqui a ferros.")
 		for membro in casa_r.get("membros", []):
 			var hc := _card(c)
 			Kit.retrato(hc, Retratos.textura_cidadao({
@@ -2094,7 +2097,25 @@ func _aba_corte(c: Container) -> void:
 			var lc := Kit.fila(vc, Tema.E3)
 			Kit.texto(lc, str(membro["nome"]))
 			Kit.selo(lc, str(membro["papel"]), Tema.TEXTO_2, Tema.ELEVADO)
+			var rel_m: int = int(state["tags"].get(str(membro["id"]),
+				{"relacao": 0})["relacao"])
+			Kit.medidor(lc, float(rel_m + 100), 200.0, 90, 5,
+				Tema.PERIGO if rel_m <= -25 else (Tema.GANHO if rel_m >= 25 else Tema.TEXTO_3))
+			Kit.texto(lc, "%s (%d)" % [Dialogo.nome_relacao(rel_m), rel_m],
+				Tema.TEXTO_3, Tema.MICRO)
 			Kit.nota(vc, str(membro["nota"]))
+			# quem herda pesa mais no ouvido do rei — e o card diz isso
+			var peso_m: int = int(membro.get("peso", 1))
+			Kit.nota(vc, "Peso na corte: %s" % ["fraco", "moderado", "grande"][
+				clampi(peso_m - 1, 0, 2)])
+			var npc_membro := {"id": str(membro["id"]), "nome": str(membro["nome"]),
+				"personalidade": str(membro.get("personalidade", "calculista")),
+				"papel": "casa", "reino_id": str(reino["id"]),
+				"intencoes_permitidas": null}
+			var acao_c := Kit.fila(hc, Tema.E3)
+			acao_c.size_flags_horizontal = Control.SIZE_SHRINK_END
+			acao_c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_botao(acao_c, "Conversar", func(): abrir_conversa(npc_membro), "fantasma")
 
 	# ---- a SUA corte: gente que nasceu durante a partida ----
 	# Cada retrato é gerado a partir do NOME do notável, então a lista muda a
@@ -2266,6 +2287,43 @@ func _aba_exercito(c: Container) -> void:
 	# Dois medidores quase homônimos com denominadores diferentes eram uma
 	# pegadinha; este mede contra o teto que a terra sustenta — o mesmo
 	# número da linha "Tropa que a terra sustenta" da aba Terra.
+	# ---- O DEPÓSITO: o teto de tropas antes de ter terra ----
+	# Sem chão o bando era travado em vinte homens, e terra custa 5.000:
+	# não havia como crescer para pegar contrato médio. A baia alugada é a
+	# ponte — dez espaços por 5 de ouro POR DIA, cobrados no passar do dia.
+	var esp_arm: int = Armazem.espacos(state)
+	var card_arm := _card(c, Tema.ATENCAO if Armazem.aluguel_diario(state) > 0 else null)
+	var ic_arm := Icones.imagem("carroca", 32)
+	if ic_arm != null:
+		ic_arm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		card_arm.add_child(ic_arm)
+	var v_arm := Kit.coluna(card_arm, 0)
+	v_arm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Kit.texto(v_arm, "%s — %d baias, %d espaços" % [
+		"Depósito próprio" if Armazem.proprio(state) else "Armazém alugado",
+		Armazem.baias(state), esp_arm])
+	if Armazem.aluguel_diario(state) > 0:
+		Kit.nota(v_arm, "Custa %d de ouro POR DIA. Três dias sem pagar e o feitor fica com uma baia — e com o que houver nela."
+			% Armazem.aluguel_diario(state))
+	elif Armazem.proprio(state):
+		Kit.nota(v_arm, "Construído na sua terra: não cobra diária.")
+	else:
+		Kit.nota(v_arm, "Cada baia sustenta mais 10 homens e guarda o que os alimenta. É assim que se cresce antes de ter terra.")
+	var acao_arm := Kit.fila(card_arm, Tema.E3)
+	acao_arm.size_flags_horizontal = Control.SIZE_SHRINK_END
+	acao_arm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var custo_arm: int = Armazem.custo_proxima(state) * (2 if state["terra"] != null else 1)
+	Kit.icone_valor(acao_arm, "moedas", str(custo_arm), Tema.ACENTO)
+	var b_arm := Kit.botao_mini(acao_arm,
+		"Construir baia" if state["terra"] != null else "Alugar baia", func():
+		var r: Dictionary = Armazem.construir(state) if state["terra"] != null \
+			else Armazem.alugar(state)
+		Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+		_aviso(str(r["msg"]))
+		Jogo.salvar(state)
+		atualizar(), "fantasma", 140)
+	b_arm.disabled = int(j["ouro"]) < custo_arm
+
 	Kit.medidor_rotulado(medidores, "Sustento da terra",
 		Recrutamento.pop_usada(state), Recrutamento.pop_maxima(state),
 		" de %d" % Recrutamento.pop_maxima(state), Tema.TEXTO_2)
@@ -2593,13 +2651,69 @@ func _aba_exercito(c: Container) -> void:
 			Jogo.salvar(state)
 			atualizar(), "primario" if j["formacao"] == f_id else "fantasma", 150)
 		_com_icone(b_f, str(icone_formacao.get(f_id, "")))
-	var melhorias := Kit.fila(c, Tema.E3)
-	_botao(melhorias, "Melhorar equipamento  ·  %d ouro"
-			% (200 * (int(j["equip"]) + 1)), func():
-		var r: Dictionary = Jogo.melhorar_equip(state)
-		_aviso(r["msg"])
-		Jogo.salvar(state)
-		atualizar())
+	# ---- A FERRARIA: aço por HOMEM, não um número do exército ----
+	# "Melhorar equipamento" era um botão que subia `equip` de 0 a 3 e
+	# valia para todos ao mesmo tempo: duzentos camponeses viravam
+	# veteranos junto com a cavalaria. Agora cada leva se equipa sozinha,
+	# e a decisão é ONDE gastar o ferro.
+	Kit.respiro(c, Tema.E2)
+	Kit.subsecao(c, "Ferraria")
+	Kit.nota(c, "O aço é por homem. Melhorar tira a leva da linha enquanto o ferreiro trabalha — tropa na bigorna não marcha.")
+	var fila_f: Array = Equipar.fila(state)
+	if not fila_f.is_empty():
+		for item in fila_f:
+			var h_forja := _card(c, Tema.ATENCAO)
+			var vf2 := Kit.coluna(h_forja, 0)
+			vf2.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			Kit.texto(vf2, "%d %s na bigorna" % [int(item["qtd"]),
+				str(Dados.TROPAS[str(item["tipo"])]["nome"]).to_lower()], Tema.ATENCAO)
+			Kit.nota(vf2, "Saem em %s, com %s." % [
+				Relogio.texto_dias(int(item["restante"])),
+				str(Equipar.NIVEIS[mini(int(item["de"]) + 1, Equipar.MAX_NIVEL)]["nome"])])
+	var tab_eq := Kit.tabela(c, [
+		{"t": "Unidade", "w": 0},
+		{"t": "Sem aço", "w": 74, "a": Kit.DIR},
+		{"t": "Couro", "w": 74, "a": Kit.DIR},
+		{"t": "Malha", "w": 74, "a": Kit.DIR},
+		{"t": "Placas", "w": 74, "a": Kit.DIR},
+		{"t": "", "w": 210, "a": Kit.DIR},
+	])
+	for tipo_eq in Dados.TROPAS:
+		if int(j["tropas"].get(tipo_eq, 0)) <= 0:
+			continue
+		var dist: Array = Equipar.distribuicao(state, tipo_eq)
+		var cel_eq := Kit.linha(tab_eq)
+		Kit.texto(cel_eq[0], str(Dados.TROPAS[tipo_eq]["nome"]))
+		for n_eq in range(0, Equipar.MAX_NIVEL + 1):
+			Kit.numero(cel_eq[1 + n_eq], str(int(dist[n_eq])),
+				Tema.TEXTO if int(dist[n_eq]) > 0 else Tema.TEXTO_3)
+		# o degrau oferecido é o MAIS BAIXO que ainda tem gente: é onde o
+		# ferro rende mais, e evita uma coluna de cinco botões por linha
+		var de_eq := -1
+		for n_eq in range(0, Equipar.MAX_NIVEL):
+			if int(dist[n_eq]) > 0:
+				de_eq = n_eq
+				break
+		if de_eq < 0:
+			Kit.nota(cel_eq[5], "tudo em placas")
+			continue
+		var lote_eq: int = mini(5, int(dist[de_eq]))
+		var preco_eq: int = Equipar.custo(tipo_eq, de_eq, lote_eq)
+		var tipo_fix: String = tipo_eq
+		var de_fix: int = de_eq
+		var lote_fix: int = lote_eq
+		var b_eq := Kit.botao_mini(cel_eq[5], "%d → %s · %d" % [lote_eq,
+			str(Equipar.NIVEIS[de_eq + 1]["nome"]), preco_eq], func():
+			var r: Dictionary = Equipar.encomendar(state, tipo_fix, de_fix, lote_fix)
+			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+			_aviso(str(r["msg"]))
+			Jogo.salvar(state)
+			atualizar(), "fantasma", 206)
+		b_eq.disabled = int(j["ouro"]) < preco_eq
+		b_eq.tooltip_text = "Sobe %d homens de %s para %s. Leva %s, e eles ficam fora da linha até acabar." % [
+			lote_eq, str(Equipar.NIVEIS[de_eq]["nome"]),
+			str(Equipar.NIVEIS[de_eq + 1]["nome"]),
+			Relogio.texto_dias(Equipar.minutos(tipo_eq, de_eq, lote_eq))]
 	# a guarda de elite saiu daqui: ela não é tropa de campanha, é a
 	# guarnição da SUA casa — e agora vive na aba Casa, onde pertence
 
@@ -3253,6 +3367,18 @@ func _montar_modal() -> void:
 	overlay_modal.add_child(modal_centro)
 
 ## Painel do modal: fundo opaco e largura fixa. Devolve o VBox de conteúdo.
+## BOTÃO DE MODAL — fecha a janela ANTES de agir, sempre.
+##
+## `_modal()` já embrulhava os botões dele assim, mas os painéis montados
+## à mão (`_painel_modal()` + Kit.botao) não: o popup do domínio e o mapa
+## comercial ficavam presos na tela, e como o overlay come o clique, o
+## jogo travava de vez. Um helper só, e nenhum painel pode esquecer.
+func _botao_modal(v: Container, texto: String, cb: Callable,
+		variante: String = "", largura: int = 0) -> Button:
+	return Kit.botao(v, texto, func():
+		overlay_modal.visible = false
+		cb.call(), variante, largura)
+
 func _painel_modal() -> VBoxContainer:
 	for filho in modal_centro.get_children():
 		filho.queue_free()
@@ -3477,7 +3603,7 @@ func _modal_batalha(rel: Dictionary) -> void:
 		if int(rel.get("ganho_honra", 0)) != 0:
 			Kit.icone_valor(lg, "honra", "+%d" % int(rel["ganho_honra"]), Tema.GANHO)
 	Kit.respiro(v, Tema.E2)
-	Kit.botao(v, "Continuar", func():
+	_botao_modal(v, "Continuar", func():
 		Jogo.salvar(state)
 		atualizar(), "primario")
 

@@ -21,6 +21,7 @@ const Marchas = preload("res://scripts/marchas.gd")
 const Intel = preload("res://scripts/intel.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
+const Armazem = preload("res://scripts/armazem.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -40,6 +41,8 @@ static func _molde_de_estado() -> Dictionary:
 		"minuto": 0, "empregos": {}, "afetos": {}, "mapa_comercial": null,
 		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
 		"licencas": {}, "avisos_ocultos": {},
+		"armazem": {"baias": 0, "proprio": false, "atraso": 0},
+		"equipamento": {}, "fila_ferraria": [],
 		"familia": {"conjuge": null, "filhos": []},
 		"terra": null, "fim": null,
 	}
@@ -127,6 +130,7 @@ static func passar_dia(state: Dictionary, log_ext: Callable = Callable()) -> Dic
 	if state["fim"] != null or state["evento_pendente"] != null:
 		return {"recrutas": 0, "marchas": []}
 	var log := log_ext if log_ext.is_valid() else log_para(state)
+	Armazem.tick_dia(state, log)          # o feitor cobra por DIA, não por mês
 	var r := Relogio.avancar(state, Relogio.MINUTOS_POR_DIA, log)
 	state["dia"] = int(state.get("dia", 1)) + 1
 	if int(state["dia"]) > DIAS_POR_MES:
@@ -286,6 +290,8 @@ static func comprar_terra(state: Dictionary) -> Dictionary:
 	state["jogador"]["ouro"] -= Dados.PRECO_TERRA
 	state["terra"] = {"nome": "Vale " + Dados.rnd(["Sereno", "das Pedras", "do Corvo", "Dourado", "Frio"]),
 		"nivel": 0, "populacao": 20, "alimento": 80, "madeira": 20, "felicidade": 60}
+	# o depósito que você alugava passa a ser SEU: para de cobrar diária
+	Armazem.assentar(state)
 	return {"ok": true, "msg": "Terra adquirida!"}
 
 static func melhorar_terra(state: Dictionary) -> Dictionary:

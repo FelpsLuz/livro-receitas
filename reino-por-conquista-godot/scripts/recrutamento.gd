@@ -76,12 +76,23 @@ static func pop_usada(state: Dictionary) -> int:
 ## população. Construir é o que libera exército — sem isso, nada impede
 ## enfileirar dez mil homens no segundo dia. A população continua limitando
 ## por outro caminho: quem vira soldado deixa de pagar imposto.
+## O TETO DE TROPAS — e ele agora depende do ESTOQUE, não só da terra.
+##
+## Sem terra o bando era travado em vinte homens, e terra custa 5.000: o
+## jogador sem chão não tinha como crescer nem para pegar contrato médio.
+## O armazém (alugado por 5 de ouro/dia, dez espaços por baia) é a ponte:
+## quem paga o depósito sustenta mais gente antes de ter um palmo de terra.
 static func pop_maxima(state: Dictionary) -> int:
+	var Armazem = load("res://scripts/armazem.gd")
+	var do_deposito: int = Armazem.espacos(state)
 	if state.get("terra") == null:
-		return 20                      # o bando que um mercenário sem terra sustenta
+		return 20 + do_deposito        # o bando que um mercenário sustenta
 	var nivel: int = clampi(int(state["terra"]["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
-	# o teto é o menor entre o que a infraestrutura comporta e o que há de gente
-	return mini(int(Dados.NIVEIS_TERRA[nivel]["cap"]), int(state["terra"]["populacao"]))
+	# o teto é o menor entre o que a infraestrutura comporta e o que há de
+	# gente — e o depósito soma dos dois lados, porque ele guarda o que
+	# alimenta a tropa
+	return mini(int(Dados.NIVEIS_TERRA[nivel]["cap"]) + do_deposito,
+		int(state["terra"]["populacao"]) + do_deposito)
 
 static func fila(state: Dictionary) -> Array:
 	if not state.has("fila_recrutamento"):

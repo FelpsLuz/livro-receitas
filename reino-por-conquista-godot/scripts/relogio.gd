@@ -21,6 +21,7 @@
 extends RefCounted
 
 const Recrutamento = preload("res://scripts/recrutamento.gd")
+const Equipar = preload("res://scripts/equipar.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 
 ## UM RELÓGIO SÓ, e o DIA é o átomo dele.
@@ -46,6 +47,7 @@ static func avancar(state: Dictionary, minutos: int, log: Callable = Callable())
 		return {"recrutas": 0, "marchas": []}
 	state["minuto"] = agora(state) + minutos
 	var recrutas := Recrutamento.avancar(state, minutos, log)
+	Equipar.avancar(state, minutos, log)   # a bigorna anda no mesmo relógio
 	var eventos := Marchas.avancar(state, minutos, log)
 	return {"recrutas": recrutas, "marchas": eventos}
 

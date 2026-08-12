@@ -92,7 +92,21 @@ static func fator_moral(moral: int) -> float:
 ## acampamento, e não a do quartel que ficou em casa. Sem argumento, vale
 ## a do exército do jogador.
 static func bonus_de(state: Dictionary, tropas: Dictionary, moral: int = -1) -> float:
+	# EQUIPAMENTO POR UNIDADE: a média ponderada do aço que ESTES homens
+	# carregam, não um nível único do exército inteiro. `equip` fica como
+	# piso para saves antigos, que não têm a tabela por tropa.
+	var Equipar = load("res://scripts/equipar.gd")
 	var b := 1.0 + int(state["jogador"].get("equip", 0)) * 0.15
+	var soma_eq := 0.0
+	var homens_eq := 0
+	for tipo_eq in tropas:
+		var n_eq: int = int(tropas[tipo_eq])
+		if n_eq <= 0:
+			continue
+		homens_eq += n_eq
+		soma_eq += Equipar.fator(state, tipo_eq) * n_eq
+	if homens_eq > 0:
+		b *= soma_eq / float(homens_eq)
 	for a in state.get("clas_ativos", []):
 		var esp: String = str(a.get("especialidade", ""))
 		if esp == "":

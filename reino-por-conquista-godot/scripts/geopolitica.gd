@@ -146,6 +146,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 	_tick_declaracao_jogador(state, log)
 	_tick_ataques_jogador(state, log)
 	_tick_conquistas(state, log)
+	_tick_influencia_corte(state, log)
 
 ## Tesouro, celeiro e madeireira rendem; o EXÉRCITO consome. Um rei NPC
 ## joga pelas mesmas regras do jogador: se não paga, a moral cai e os homens
@@ -532,12 +533,17 @@ static func casa_real(state: Dictionary, reino_id: String) -> Dictionary:
 	var membros: Array = []
 	# o consorte: gênero oposto ao do soberano
 	var g_c := "f" if genero_rei == "m" else "m"
+	# personalidade FIXA por papel: o consorte é quem calcula, o herdeiro é
+	# quem se exibe. Sem isso a conversa com eles sairia igual à do rei.
 	membros.append({
+		"id": "casa_%s_consorte" % reino_id,
 		"nome": (Dados.NOMES_F[rng.randi() % Dados.NOMES_F.size()] if g_c == "f"
 			else Dados.NOMES_M[rng.randi() % Dados.NOMES_M.size()]) + " de " + str(r["capital"]),
 		"genero": g_c,
 		"papel": "consorte",
-		"nota": "Casou pela aliança, como se casa nesta casa. Ouve mais do que fala.",
+		"personalidade": "calculista",
+		"peso": 3,
+		"nota": "Casou pela aliança, como se casa nesta casa. Ouve mais do que fala — e o que ouve chega ao travesseiro do rei.",
 	})
 	# os filhos: de um a três, com idade e papel
 	var n_filhos: int = 1 + rng.randi() % 3
@@ -553,8 +559,56 @@ static func casa_real(state: Dictionary, reino_id: String) -> Dictionary:
 			nota += " Ainda criança; a corte já disputa quem o educa." if g_f == "m" \
 				else " Ainda criança; a corte já disputa quem a educa."
 		membros.append({
+			"id": "casa_%s_filho%d" % [reino_id, i],
 			"nome": (Dados.NOMES_M[rng.randi() % Dados.NOMES_M.size()] if g_f == "m"
 				else Dados.NOMES_F[rng.randi() % Dados.NOMES_F.size()]),
 			"genero": g_f, "papel": papel, "nota": nota, "idade": idade,
+			"personalidade": "orgulhoso" if i == 0 else "romantica",
+			# o herdeiro pesa mais que um filho caçula: quem vai herdar o
+			# trono tem o ouvido do pai
+			"peso": 2 if i == 0 else 1,
 		})
 	return {"membros": membros, "rei": rei}
+
+
+## A CASA FALA COM O REI — todo mês.
+##
+## Conversar com o consorte e com os herdeiros deixou de ser enfeite: a
+## opinião deles empurra a do rei, para cima ou para baixo, com peso
+## diferente (o consorte pesa três, o herdeiro dois, um caçula um). É a
+## porta lateral da corte: quem não consegue a confiança do trono pode
+## conquistar quem dorme ao lado dele.
+##
+## E o inverso vale: uma casa que te odeia convence o rei a mandar
+## prender. Aí a única saída é a fiança — ou a estrada.
+static func _tick_influencia_corte(state: Dictionary, log: Callable) -> void:
+	var Dialogo = load("res://scripts/dialogo.gd")
+	for r in state["reinos"]:
+		if not vivo(r):
+			continue
+		var casa := casa_real(state, str(r["id"]))
+		var soma := 0.0
+		var peso_total := 0.0
+		for m in casa.get("membros", []):
+			var t: Dictionary = Dialogo.tags_de(state, str(m["id"]))
+			var rel_m: int = int(t["relacao"])
+			if rel_m == 0:
+				continue                 # quem não te conhece não opina
+			var peso: float = float(m.get("peso", 1))
+			soma += rel_m * peso
+			peso_total += peso
+		if peso_total <= 0.0:
+			continue
+		var media: float = soma / peso_total
+		# empurrão pequeno e mensal: a corte convence devagar
+		var delta: int = clampi(roundi(media / 25.0), -3, 3)
+		if delta != 0:
+			Dialogo.mudar_relacao(state, "rei_" + str(r["id"]), delta,
+				"a casa fala aos ouvidos do rei")
+		# a casa inteira contra você, e o rei manda prender
+		if media <= -60.0 and randf() < 0.10:
+			var Jogo = load("res://scripts/jogo.gd")
+			if not Jogo.esta_preso(state) and str(state.get("local", "")) == str(r["id"]):
+				Jogo.prender(state, 2, log)
+				_diz(log, "A casa de %s convenceu o rei: os guardas te esperavam na saída."
+					% str(r["nome"]))
