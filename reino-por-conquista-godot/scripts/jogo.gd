@@ -22,6 +22,7 @@ const Intel = preload("res://scripts/intel.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
 const Armazem = preload("res://scripts/armazem.gd")
+const Inimizade = preload("res://scripts/inimizade.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -136,6 +137,13 @@ static func passar_dia(state: Dictionary, log_ext: Callable = Callable()) -> Dic
 	if int(state["dia"]) > DIAS_POR_MES:
 		state["dia"] = 1
 		passar_mes(state, false)
+	# TER INIMIGO DÓI TODO DIA. O evento volta para a UI abrir o modal —
+	# guardá-lo em `evento_pendente` travaria o relógio, e este é um
+	# acontecimento do dia que JÁ passou.
+	if state["fim"] == null:
+		var ataque := Inimizade.tick_dia(state, log)
+		if not ataque.is_empty():
+			r["inimizade"] = ataque
 	return r
 
 static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:

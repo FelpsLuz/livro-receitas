@@ -32,6 +32,43 @@ const ATRIBUTO_MAX := 10
 ## Os doze ofícios. `nivel` é a faixa da região (1 pobre, 3 rica);
 ## `honra_min`/`honra_max` são o filtro de reputação: o conselho real não
 ## contrata um bandido conhecido, e O Corvo não confia num santo.
+## OS SERVIÇOS DAS TERRAS SEM LEI (nível 0).
+##
+## O Reino sem Rei e as Terras Bárbaras não têm conselho, guilda nem
+## corte: não há ofício com nome, só o que ninguém quer fazer. Pagam três
+## a cinco moedas por dia e NÃO cobram nada — sem risco de morte, de
+## prisão, de honra. É o fundo do poço com uma porta: quem chega quebrado
+## nessas terras consegue comer, e só. Ninguém enriquece limpando latrina.
+##
+## Existem para o mundo não ter buraco: antes, chegar lá sem dinheiro era
+## um beco sem ação nenhuma.
+const EMPREGOS_SEM_LEI := [
+	{"id": "latrinas", "nome": "Esvaziar as latrinas", "papel": "Um homem de cara amarrada",
+		"atributo": "forca", "paga": 3, "nivel": 0, "riscos": {},
+		"desc": "Balde, corda e o poço atrás das tendas. Ninguém conversa com você durante.",
+		"aviso": "O cheiro fica na roupa por dias. É só isso."},
+	{"id": "carregador_corpos", "nome": "Carregar os mortos", "papel": "A velha que conta os dias",
+		"atributo": "forca", "paga": 5, "nivel": 0, "riscos": {},
+		"desc": "Levar para a vala quem morreu na noite. Aqui morre gente toda noite.",
+		"aviso": "Alguns ainda estão quentes. Não pergunte."},
+	{"id": "esfolador", "nome": "Esfolar o que caçaram", "papel": "O caçador manco",
+		"atributo": "forca", "paga": 4, "nivel": 0, "riscos": {},
+		"desc": "Tirar o couro do que os outros mataram, na beira do rio gelado.",
+		"aviso": "Faca cega e mão dormente. Você aprende rápido."},
+	{"id": "revirar_cinzas", "nome": "Revirar as cinzas", "papel": "O sujeito sem nome",
+		"atributo": "intriga", "paga": 4, "nivel": 0, "riscos": {},
+		"desc": "Procurar metal no que sobrou das casas queimadas do último saque.",
+		"aviso": "O que você achar, metade é dele. Ele conta."},
+	{"id": "agua_do_poco", "nome": "Puxar água o dia inteiro", "papel": "A mulher do balde",
+		"atributo": "forca", "paga": 3, "nivel": 0, "riscos": {},
+		"desc": "Do poço até as tendas, e de volta, até o sol cair.",
+		"aviso": "Os ombros ardem no segundo dia. No terceiro, não sentem mais."},
+	{"id": "vigia_cadaveres", "nome": "Velar a vala comum", "papel": "O coveiro bêbado",
+		"atributo": "carisma", "paga": 5, "nivel": 0, "riscos": {},
+		"desc": "Sentar a noite toda espantando bicho e ladrão de dente de ouro.",
+		"aviso": "Você vai ouvir coisas. Quase sempre é o vento."},
+]
+
 const EMPREGOS := [
 	{"id": "lenhador", "nome": "Lenhador da fronteira", "papel": "Ancião da vila",
 		"atributo": "forca", "paga": 18, "nivel": 1,
@@ -96,6 +133,9 @@ const EMPREGOS := [
 ]
 
 static func por_id(id: String) -> Dictionary:
+	for e in EMPREGOS_SEM_LEI:
+		if str(e["id"]) == id:
+			return e
 	for e in EMPREGOS:
 		if e["id"] == id:
 			return e
@@ -126,6 +166,24 @@ static func _niveis_de(fator: float) -> Array:
 ## sorteio é por hash do reino, não por dado), para o jogador aprender
 ## onde fica cada ofício — e diferente em cada reino, que é o pedido.
 static func do_reino(state: Dictionary, reino_id: String) -> Array:
+	# TERRA SEM TRONO tem o próprio quadro: serviço humilhante, paga de
+	# fome e nenhuma consequência. Não há guilda para exigir honra nem
+	# guarda para prender quem esvazia latrina.
+	var Geopolitica_e = load("res://scripts/geopolitica.gd")
+	if Geopolitica_e.reino_por_id(state, reino_id).is_empty():
+		var sem_lei: Array = []
+		for i in 3:
+			var e: Dictionary = EMPREGOS_SEM_LEI[
+				_hash(reino_id + "|semlei|" + str(i)) % EMPREGOS_SEM_LEI.size()]
+			if sem_lei.any(func(v): return str(v["id"]) == str(e["id"])):
+				e = EMPREGOS_SEM_LEI[(_hash(reino_id + "|alt|" + str(i))
+					+ i) % EMPREGOS_SEM_LEI.size()]
+			var v2: Dictionary = e.duplicate(true)
+			v2["patrao"] = str(e["papel"])
+			v2["paga_dia"] = int(e["paga"])
+			if not sem_lei.any(func(x): return str(x["id"]) == str(v2["id"])):
+				sem_lei.append(v2)
+		return sem_lei
 	var fator: float = fator_reino(state, reino_id)
 	var vagas: Array = []
 	var usados: Array[String] = []

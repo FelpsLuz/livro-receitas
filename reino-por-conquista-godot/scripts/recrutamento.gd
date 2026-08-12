@@ -94,6 +94,45 @@ static func pop_maxima(state: Dictionary) -> int:
 	return mini(int(Dados.NIVEIS_TERRA[nivel]["cap"]) + do_deposito,
 		int(state["terra"]["populacao"]) + do_deposito)
 
+## O ESTOQUE QUE SUSTENTA A TROPA — some a terra e a carga do armazém.
+##
+## Antes só a terra contava, e quem não tinha chão não tinha celeiro
+## nenhum: recrutava com o depósito vazio e descobria no fim do mês. Com
+## o armazém alugado, o mercenário sem terra guarda o que compra na Feira
+## — e é DAÍ que o quartel tira o grão dos recrutas.
+static func reserva_de(state: Dictionary) -> Dictionary:
+	var comida := 0
+	var madeira := 0
+	var t = state.get("terra")
+	if t != null:
+		comida += int(t.get("alimento", 0))
+		madeira += int(t.get("madeira", 0))
+	# a carga só conta se houver onde guardá-la
+	var Armazem = load("res://scripts/armazem.gd")
+	if Armazem.espacos(state) > 0:
+		comida += int(state.get("carga", {}).get("trigo", 0))
+		madeira += int(state.get("carga", {}).get("madeira", 0))
+	return {"comida": comida, "madeira": madeira}
+
+## Tira primeiro da terra (o celeiro é o que se repõe sozinho), depois da
+## carga guardada no armazém.
+static func _gastar_reserva(state: Dictionary, comida: int, madeira: int) -> void:
+	var t = state.get("terra")
+	for par in [["alimento", "trigo", comida], ["madeira", "madeira", madeira]]:
+		var cofre: String = str(par[0])
+		var bem: String = str(par[1])
+		var falta: int = int(par[2])
+		if falta <= 0:
+			continue
+		if t != null:
+			var tira: int = mini(falta, int(t.get(cofre, 0)))
+			t[cofre] = int(t.get(cofre, 0)) - tira
+			falta -= tira
+		if falta > 0:
+			var carga: Dictionary = state.get("carga", {})
+			var tira2: int = mini(falta, int(carga.get(bem, 0)))
+			carga[bem] = int(carga.get(bem, 0)) - tira2
+
 static func fila(state: Dictionary) -> Array:
 	if not state.has("fila_recrutamento"):
 		state["fila_recrutamento"] = []
@@ -118,6 +157,25 @@ static func enfileirar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
 	if pop_usada(state) + precisa > teto:
 		return {"ok": false, "msg": "Sua terra não sustenta tanta gente (%d/%d)."
 			% [pop_usada(state) + precisa, teto]}
+	# ---- O CELEIRO TEM QUE ESTAR CHEIO ANTES DA TROPA EXISTIR ----
+	# Recrutar cobrava só ouro, e dava para levantar um exército sem um
+	# grão no depósito: no fim do mês a moral desabava e o jogador não
+	# tinha como saber por quê. Agora o quartel exige de ENTRADA o que
+	# esses homens vão comer no primeiro mês — em grão e em madeira, dos
+	# seus estoques (terra ou armazém).
+	var reserva := reserva_de(state)
+	var custo_mes: Dictionary = Dados.TROPAS[tipo]
+	var comida_ent: int = int(custo_mes.get("comida", 0)) * qtd
+	var madeira_ent: int = int(custo_mes.get("madeira", 0)) * qtd
+	if comida_ent > int(reserva["comida"]):
+		return {"ok": false,
+			"msg": "Sem grão não se levanta tropa: %d de trigo para alimentar esses homens, e você tem %d."
+				% [comida_ent, int(reserva["comida"])]}
+	if madeira_ent > int(reserva["madeira"]):
+		return {"ok": false,
+			"msg": "Falta madeira para haste, escudo e flecha: %d, e você tem %d."
+				% [madeira_ent, int(reserva["madeira"])]}
+	_gastar_reserva(state, comida_ent, madeira_ent)
 
 	state["jogador"]["ouro"] -= custo
 	var f := fila(state)

@@ -31,9 +31,10 @@ static func espionar(state: Dictionary, reino_id: String) -> Dictionary:
 				int(alvo.get("forca", 0)))
 			for tipo in alvo.get("tropas", {}):
 				contagem += int(alvo["tropas"][tipo])
-		return {"ok": true, "revelou": contagem,
-			"msg": "SEGREDO descoberto sobre o rei de %s. Seu espião contou %d homens sob as bandeiras dele."
-				% [reino_id, contagem]}
+		return {"ok": true, "revelou": contagem, "sucesso": true,
+			"titulo": "O espião voltou",
+			"relato": "Ele entrou como carroceiro e saiu três noites depois. Contou %d homens sob as bandeiras de %s e trouxe um segredo do rei — algo que a corte inteira finge não saber.\n\nA partir de agora a força desse reino aparece no mapa em vez de \"???\", e o segredo pode virar chantagem numa conversa com ele." % [contagem, reino_id],
+			"msg": "Segredo descoberto: %d homens contados em %s." % [contagem, reino_id]}
 
 	if not state.has("flagras"):
 		state["flagras"] = {}
@@ -43,9 +44,14 @@ static func espionar(state: Dictionary, reino_id: String) -> Dictionary:
 	if n >= 3:
 		state["flagras"][reino_id] = 0
 		# devolve a pena: quem executa é jogo.gd, para não criar ciclo de import
-		return {"ok": true, "prender": 3,
-			"msg": "Terceiro espião capturado. Desta vez vieram atrás de VOCÊ."}
-	return {"ok": true, "msg": "Espião CAPTURADO (%d de 3). Relação -15." % n}
+		return {"ok": true, "prender": 3, "sucesso": false,
+			"titulo": "Pegaram o terceiro",
+			"relato": "O terceiro homem que você manda a essa corte é pego com a mesma bolsa de cera e os mesmos selos. Desta vez eles não se contentaram em enforcá-lo: seguiram a trilha até você.\n\nTrês meses a ferros. O tempo corre, as contas também.",
+			"msg": "Terceiro espião capturado. Vieram atrás de VOCÊ."}
+	return {"ok": true, "sucesso": false,
+		"titulo": "O espião não voltou",
+		"relato": "Pegaram-no na cozinha do castelo, com o ouvido na parede errada. Ele não falou o seu nome — mas todo mundo sabe de quem ele era.\n\nA corte de %s te olha pior: relação −15. Este é o %dº de três; ao terceiro, eles vêm atrás de você." % [reino_id, n],
+		"msg": "Espião capturado (%d de 3). Relação −15." % n}
 
 ## ---------- FABRICAR INTRIGA ----------
 ## Sai do flavor text: planta uma discórdia REAL entre dois reinos NPCs,
@@ -138,9 +144,15 @@ static func forjar_documento(state: Dictionary, reino_id: String) -> Dictionary:
 	state["jogador"]["ouro"] -= 150
 	if randf() < 0.35 + state["jogador"]["atributos"]["intriga"] * 0.06:
 		state["casus_belli"].append(reino_id)
-		return {"ok": true, "msg": "Reivindicação forjada com sucesso!", "sucesso": true}
+		return {"ok": true, "sucesso": true,
+			"titulo": "O documento está pronto",
+			"relato": "O falsário trabalhou duas noites: pergaminho envelhecido em chá, tinta de galha e o selo da casa refeito em cera. O papel diz que a avó do seu avô tinha direito de sangue sobre essas terras — e diz isso bem o bastante para um arauto ler em voz alta sem gaguejar.\n\nVocê ganhou um CASUS BELLI sobre %s: um pretexto que os outros reinos aceitam. Atacar agora é reivindicar o que é seu, e não agressão — os seis reinos não vão se voltar contra você por isso." % reino_id,
+			"msg": "Casus belli forjado sobre %s." % reino_id}
 	Dialogo.mudar_relacao(state, "rei_" + reino_id, -30, "falsificação exposta")
-	return {"ok": true, "msg": "Falsificação EXPOSTA! Relação -30.", "sucesso": false}
+	return {"ok": true, "sucesso": false,
+		"titulo": "A cera não enganou ninguém",
+		"relato": "O selo estava um dedo torto e o arauto da casa percebeu na primeira leitura. O documento virou fogueira na praça, com o seu nome dito em voz alta ao lado da palavra \"ladrão\".\n\nNenhum pretexto, 150 de ouro no lixo e relação −30 com %s." % reino_id,
+		"msg": "Falsificação exposta. Relação −30."}
 
 ## Tabela de pagamento por rei (documento "Era do Aço", Parte 5 — "Chantagem:
 ## o que cada um paga"). `bem` é sempre um dos dois `producao` do próprio
@@ -362,6 +374,36 @@ static func _educar(state: Dictionary, log: Callable) -> void:
 		filho["atributos"][attr] = clampi(int(filho["atributos"][attr]) + 2, 1, 10)
 		_diz(log, "%s completa 8 anos e é criado %s, como o pai."
 			% [str(filho["nome"]), str(EDUCACOES[melhor]["nome"])])
+
+## TOMAR O TRONO — e isso EXIGE estar diante dos muros.
+##
+## Era um clique no mapa que resolvia a batalha na hora, de qualquer canto
+## do continente: o jogador apertava "Conquistar" em Aurora Alta estando em
+## Covil Negro e recebia o relatório da batalha. Nem viagem, nem dias, nem
+## exército em marcha — a conquista pulava o jogo inteiro.
+##
+## Agora há duas portas, e as duas custam tempo: ou você ESTÁ na capital
+## (viajou até lá, gastou os dias da estrada), ou manda uma coluna de cerco
+## pela aba Tropas — que anda dias, pode ser emboscada e volta com
+## relatório. Esta função é a primeira porta.
+static func assaltar_trono(state: Dictionary, reino_id: String, log: Callable) -> Dictionary:
+	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.esta_preso(state):
+		return Jogo.recusa_preso(state)
+	if str(state.get("local", "")) != reino_id:
+		var Rotas = load("res://scripts/rotas.gd")
+		return {"ok": false, "longe": true,
+			"msg": "Trono não se toma por mensageiro. Viaje até %s, ou mande uma coluna de cerco pela aba Tropas."
+				% Rotas.nome_do(state, reino_id)}
+	if Combate.total_homens(state["jogador"]["tropas"]) < 20:
+		return {"ok": false,
+			"msg": "Vinte homens não tomam uma capital. Recrute antes de bater no portão."}
+	if int(state.get("dia", 1)) + 1 > Jogo.DIAS_POR_MES + 1:
+		return {"ok": false, "sem_tempo": true,
+			"msg": "Um assalto leva o dia inteiro, e o mês acabou. Feche o mês antes."}
+	var rel_a := declarar_guerra(state, reino_id, log)
+	Jogo.passar_dia(state, log)
+	return rel_a
 
 static func declarar_guerra(state: Dictionary, reino_id: String, log: Callable) -> Dictionary:
 	var tem_cb: bool = state["casus_belli"].has(reino_id)

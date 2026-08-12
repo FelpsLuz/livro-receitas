@@ -39,6 +39,7 @@ const Rotas = preload("res://scripts/rotas.gd")
 const Cerco = preload("res://scripts/cerco.gd")
 const Intel = preload("res://scripts/intel.gd")
 const Equipar = preload("res://scripts/equipar.gd")
+const Inimizade = preload("res://scripts/inimizade.gd")
 const Armazem = preload("res://scripts/armazem.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
@@ -679,6 +680,9 @@ func _passar_dia() -> void:
 	atualizar()
 	# a estrada conta o que houve NELA — era o Timer quem fazia isso
 	_narrar_estrada(r.get("marchas", []))
+	# e o inimigo cobra o dia: coluna no portão, emboscada ou captura
+	if r.has("inimizade"):
+		_modal_inimizade(r["inimizade"])
 
 ## Mantido para os testes de cena e para quem quiser pular o mês inteiro.
 func _passar_mes() -> void:
@@ -1257,8 +1261,12 @@ func _aba_mapa(c: Container) -> void:
 			var tem_cb: bool = state["casus_belli"].has(reino["id"])
 			# atacar sem casus belli é a decisão irreversível da tela: ela
 			# ganha a variante de perigo, e é a única aqui que a tem
-			_botao(lb, "Conquistar" if tem_cb else "Atacar sem casus belli", func():
-				var rel_batalha: Dictionary = Intriga.declarar_guerra(state, reino["id"], Jogo.log_para(state))
+			_botao(lb, "Tomar o trono" if aqui else "Tomar o trono (é preciso estar lá)", func():
+				var rel_batalha: Dictionary = Intriga.assaltar_trono(state, reino["id"], Jogo.log_para(state))
+				if not bool(rel_batalha.get("ok", true)):
+					Sfx.tocar(self, "alerta")
+					_aviso(str(rel_batalha.get("msg", "")))
+					return
 				Jogo.salvar(state)
 				_modal_batalha(rel_batalha), "" if tem_cb else "perigo")
 
@@ -1606,6 +1614,59 @@ func _modal_fundar() -> void:
 		_aviso(str(r["msg"]))
 		atualizar(), "primario")
 
+## O DIA EM QUE O INIMIGO APARECE.
+##
+## Ter guerra declarada deixou de ser um número numa aba: todo dia há
+## chance de alguém cobrar. Onde você está decide o quê — coluna no seu
+## portão, emboscada na estrada, ou a mão da guarda na sua gola dentro da
+## capital de quem te odeia.
+func _modal_inimizade(ev: Dictionary) -> void:
+	Sfx.tocar(self, "alerta")
+	var tipo := str(ev.get("tipo", ""))
+	if tipo == "captura":
+		# na corte inimiga não há escolha: são muitos e o portão fechou
+		Jogo.prender(state, 2, Jogo.log_para(state))
+		Jogo.salvar(state)
+		_modal(str(ev["titulo"]), "%s\n\nDois meses a ferros. A fiança está na aba Terra." % str(ev["texto"]),
+			[["Que seja", func(): atualizar()]], Retratos.ilustracao("traicao"))
+		return
+	var botoes: Array = [
+		["Sair com o exército", func():
+			var rel: Dictionary = Inimizade.enfrentar(state, ev, Jogo.log_para(state))
+			Jogo.salvar(state)
+			_modal_batalha(rel)],
+	]
+	if tipo == "ataque_terra":
+		botoes.append(["Trancar tudo e deixar a guarda", func():
+			var rel: Dictionary = Inimizade.deixar_a_guarda(state, ev, Jogo.log_para(state))
+			Jogo.salvar(state)
+			_modal_batalha(rel)])
+	else:
+		botoes.append(["Tentar escapar pela mata", func():
+			# fugir custa carga e um pedaço do ouro, mas não a liberdade
+			var perdido: int = roundi(int(state["jogador"]["ouro"]) * 0.20)
+			state["jogador"]["ouro"] = maxi(0, int(state["jogador"]["ouro"]) - perdido)
+			Jogo.salvar(state)
+			_modal("Vocês correram", "Deixaram para trás %d de ouro e boa parte do orgulho — mas ninguém foi para a cela." % perdido,
+				[["Seguir", func(): atualizar()]])])
+	_modal(str(ev["titulo"]), str(ev["texto"]), botoes,
+		Retratos.ilustracao("emboscada" if tipo == "emboscada" else "cerco"))
+
+## RELATÓRIO DE OPERAÇÃO — espionagem e falsificação contando o que houve.
+##
+## Antes as duas devolviam uma linha no rodapé e um casus belli aparecia do
+## nada na aba Intriga, sem explicação nenhuma do que tinha acontecido.
+func _modal_operacao(r: Dictionary) -> void:
+	if not r.has("relato"):
+		_aviso(str(r.get("msg", "")))
+		atualizar()
+		return
+	var venceu: bool = bool(r.get("sucesso", false))
+	_modal(str(r.get("titulo", "Operação")), str(r["relato"]),
+		[["Entendi", func(): atualizar()]],
+		Retratos.ilustracao("juramento" if venceu else "traicao"),
+		"louros" if venceu else "caveira")
+
 ## O MAPA COMERCIAL, aberto uma vez só.
 ##
 ## É informação perecível: o cartógrafo desenha os preços de hoje, o
@@ -1730,18 +1791,27 @@ func _popup_dominio(id: String) -> void:
 					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
 				Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
 				Jogo.salvar(state)
-				_popup_dominio(id)          # o resultado volta NESTA janela
-				_aviso(str(r["msg"])), "fantasma", 200)
+				_modal_operacao(r), "fantasma", 200)
 		if str(state["jogador"]["rei_de"]) != id:
 			var tem_cb: bool = state["casus_belli"].has(id)
-			_botao_modal(v, "Declarar guerra" if tem_cb else "Atacar sem casus belli",
-				func():
-					var r: Dictionary = Intriga.declarar_guerra(state, id,
-						Jogo.log_para(state))
-					Sfx.tocar(self, "espada" if r["ok"] else "alerta")
-					Jogo.salvar(state)
-					_popup_dominio(id)
-					_aviso(str(r["msg"])), "perigo", 200)
+			var b_ass := _botao_modal(v, "Tomar o trono", func():
+				var r: Dictionary = Intriga.assaltar_trono(state, id, Jogo.log_para(state))
+				Jogo.salvar(state)
+				if not bool(r.get("ok", true)):
+					Sfx.tocar(self, "alerta")
+					_aviso(str(r["msg"]))
+					atualizar()
+					return
+				Sfx.tocar(self, "espada")
+				_modal_batalha(r), "perigo", 200)
+			b_ass.disabled = not aqui
+			b_ass.tooltip_text = ("Assalto aos muros: gasta o dia inteiro." if aqui
+				else "Você precisa ESTAR na capital. Viaje até lá, ou mande uma coluna de cerco pela aba Tropas.")
+			# o casus belli explicado onde ele importa: na hora de atacar
+			if tem_cb:
+				Kit.nota(v, "Você tem CASUS BELLI aqui: um pretexto que as outras cortes aceitam. Atacar não vai virar o mapa inteiro contra você.")
+			else:
+				Kit.nota(v, "SEM casus belli: atacar é agressão pura, e os seis reinos reagem (relação −35 com todos, −60 com este). Forje um documento na Mesa de Intrigas antes.")
 	else:
 		Kit.nota(v, "Sem trono não há corte para espionar nem guerra para declarar. Aqui se chega andando — e se resolve com aço, na aba Tropas.")
 	_botao_modal(v, "Fechar", func(): atualizar(), "", 200)
@@ -2817,6 +2887,10 @@ func _aba_intrigas(c: Container) -> void:
 
 	Kit.respiro(c, Tema.E2)
 	Kit.subsecao(c, "Operações")
+	# CASUS BELLI EXPLICADO onde ele é fabricado. O termo aparecia como
+	# selo e como nome de botão, e em lugar nenhum dizia o que era.
+	Kit.nota(c, "CASUS BELLI é o PRETEXTO para atacar sem virar pária: um documento que prova direito antigo sobre a terra do outro.")
+	Kit.nota(c, "Com ele, os outros cinco reinos aceitam o seu ataque como reivindicação. Sem ele, atacar é agressão: −60 de relação com o atacado e −35 com TODOS os outros.")
 	var tab := Kit.tabela(c, [
 		{"t": "", "w": 24, "a": Kit.CENTRO},
 		{"t": "", "w": 0},
@@ -2838,14 +2912,16 @@ func _aba_intrigas(c: Container) -> void:
 			# abreviação que só quem escreveu o código entendia
 			Kit.selo(l_nome, "casus belli", Color("e8917a"), Tema.PERIGO_FUNDO)
 		Kit.botao_mini(cel[2], "Espionar · 80", func():
-			_aviso(Intriga.espionar(state, reino["id"])["msg"])
+			var r_esp: Dictionary = Intriga.espionar(state, reino["id"])
+			if int(r_esp.get("prender", 0)) > 0:
+				Jogo.prender(state, int(r_esp["prender"]), Jogo.log_para(state))
 			Jogo.salvar(state)
-			atualizar(), "fantasma", 104)
+			_modal_operacao(r_esp), "fantasma", 104)
 		if not tem_cb:
-			Kit.botao_mini(cel[2], "Forjar documento · 150", func():
-				_aviso(Intriga.forjar_documento(state, reino["id"])["msg"])
+			Kit.botao_mini(cel[2], "Forjar casus belli · 150", func():
+				var r_fj: Dictionary = Intriga.forjar_documento(state, reino["id"])
 				Jogo.salvar(state)
-				atualizar(), "fantasma", 150)
+				_modal_operacao(r_fj), "fantasma", 176)
 
 ## Os quatro atributos, com ícone e medidor.
 ##
