@@ -572,6 +572,9 @@ static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
 		return {
 			"id": "rei_" + reino_id, "reino_id": reino_id, "papel": "conquistado",
 			"nome": "o trono vazio de %s" % str(reino.get("capital", reino_id)),
+			# quem guarda um trono tomado é a tropa do vencedor, não o rei
+			# deposto: a cara aqui também não pode ser a da coroa
+			"retrato": "capitao",
 			"personalidade": "guarda", "intencoes_permitidas": [],
 			"recusa": "Não há mais rei aqui. %s tomou este trono — fale com ele, se tiver coragem." % senhor,
 		}
@@ -579,9 +582,23 @@ static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
 	# `intencoes_permitidas` sempre existe, mesmo que null (acesso liberado):
 	# um dict sem a chave quebraria `npc["intencoes_permitidas"]` em runtime
 	# (GDScript não devolve null sozinho pra `[]`, só `.get()` faz isso).
+	# `retrato` existe separado de `id`, e a separação é o conserto de um
+	# defeito visível: o guarda do portão aparecia com A CARA DO REI.
+	#
+	# O `id` do guarda é "rei_<reino>" DE PROPÓSITO — a relação que se ganha
+	# no portão é a relação com a casa, e ela tem que ser a mesma chave que
+	# o rei consulta lá dentro. Só que quem desenha o rosto usava o mesmo
+	# campo, e o resultado era o monarca de coroa e arminho dizendo "não
+	# anuncio, volte quando seu nome valer alguma coisa".
+	#
+	# Com o campo separado, a chave de relação continua uma só e o rosto
+	# passa a ser o de quem realmente está falando. E a troca que o portão
+	# encena — guarda primeiro, rei depois — passa a ser visível: é a mesma
+	# escada de `quem_atende`, agora com duas caras em vez de uma.
 	var guarda := {
 		"id": "rei_" + reino_id, "reino_id": reino_id, "papel": "guarda",
 		"nome": "o guarda de %s" % str(reino.get("capital", reino_id)),
+		"retrato": "capitao",
 		"personalidade": "guarda", "intencoes_permitidas": null,
 	}
 	var rei := {

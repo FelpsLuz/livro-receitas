@@ -170,6 +170,10 @@ var conversa_texto := ""
 var tela_titulo: Control
 var tela_jogo: Control
 var status_label: Label
+## A data mora no rodapé, colada no botão que a faz andar — e não mais na
+## barra de cima, onde era o pedaço da linha de identidade que sempre
+## sobrava cortado.
+var data_label: Label
 var hud: HBoxContainer
 var tabs: TabContainer
 var cidade_view: Control
@@ -503,11 +507,33 @@ func _montar_jogo() -> void:
 	var rodape := HBoxContainer.new()
 	rodape.add_theme_constant_override("separation", Tema.E3)
 	v.add_child(rodape)
+	# A DATA mudou de lugar, e a razão é de layout e de sentido ao mesmo
+	# tempo. De layout: a linha de identidade era "Aldric de Vau · Conde ·
+	# 22 anos · dia 1 de Março, Ano 1" espremida à direita dos chips, e
+	# saía cortada — "dia 1 d…" — em toda tela que a barra ficava cheia.
+	# De sentido: a data é a única coisa da tela que o botão ao lado dela
+	# faz andar. Ela pertence ao verbo, não ao nome do jogador.
+	data_label = Label.new()
+	data_label.add_theme_font_size_override("font_size", Tema.MICRO)
+	data_label.add_theme_color_override("font_color", Tema.TEXTO_2)
+	# Spectral, e NÃO a capitular — apesar de "Dia 1 de Março, Ano 1" em
+	# versalete ficar bonito. O Cinzel é uma inscricional romana: o
+	# algarismo 1 dele é desenhado como um I, e no render a data saiu
+	# "Dia I de Março, Ano I". Charmoso e ambíguo: "Dia 11" viraria "II".
+	#
+	# É também a regra da casa se aplicando a ela mesma — a capitular marca
+	# LUGAR e VERBO. Data é dado, e dado se lê no algarismo tabular.
+	var f_data := Tema.fonte_numero()
+	if f_data != null:
+		data_label.add_theme_font_override("font", f_data)
+	data_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rodape.add_child(data_label)
 	var dica := Label.new()
 	dica.text = "Enter passa o dia"
 	dica.add_theme_font_size_override("font_size", Tema.MINI)
 	dica.add_theme_color_override("font_color", Tema.TEXTO_3)
 	dica.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dica.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	dica.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rodape.add_child(dica)
 	b_som = Kit.botao_icone(rodape, "som", "Som", _alternar_som, "fantasma", 34)
@@ -723,24 +749,34 @@ func _montar_hud(j: Dictionary) -> void:
 	for filho in hud.get_children():
 		filho.queue_free()
 	var moral: int = Economia.moral(state)
-	# o ouro é o único chip com destaque permanente: é o recurso que toda
-	# decisão do jogo consulta, e o HUD tem que ter uma âncora
-	_celula_hud("moedas", str(int(j["ouro"])), "Ouro no cofre", false, true, "hud_ouro")
+	# ---- A BARRA EM QUATRO GRUPOS ----
+	#
+	# Eram nove chips iguais em fila, e nove coisas do mesmo peso não são
+	# uma barra de estado: são uma lista. Só que elas não são do mesmo tipo.
+	# São quatro perguntas diferentes, e agora um fio de 1px separa cada
+	# uma da seguinte:
+	#
+	#   1. O QUE VOCÊ TEM        ouro — sozinho, e maior que todo o resto
+	#   2. O QUE VOCÊ COMANDA    homens, moral, guardas
+	#   3. O QUE A TERRA DÁ      celeiro, madeireira, imposto
+	#   4. QUEM VOCÊ É / O MUNDO renome, honra, estação
+	#
+	# O ouro fica no primeiro grupo sozinho porque ele é a única grandeza
+	# que TODA aba consulta — é a âncora, e âncora que tem o tamanho do
+	# vizinho não ancora nada.
+	Kit.chip_ancora(hud, "moedas", str(int(j["ouro"])), "Ouro no cofre", "hud_ouro")
+	Kit.divisor_vertical(hud)
+
 	_celula_hud("tropa", str(Combate.total_homens(j["tropas"])), "Homens em armas",
 		false, false, "hud_tropa")
 	_celula_hud("moral", "%d" % moral,
 		"Moral do exército — abaixo de 35 os homens desertam", moral <= 35,
 		false, "hud_moral")
-	_celula_hud("renome", str(int(j["renome"])), "Renome", false, false, "hud_renome")
-	# HONRA abre e fecha portas de emprego (e, no futuro, de vassalagem):
-	# vira alarme quando cai a ponto de a corte fechar a porta
-	var honra: int = int(j.get("honra", 50))
-	_celula_hud("honra" if Icones.ilustrado("honra") != null else "pergaminho", str(honra),
-		"Honra — reputação: portas de trabalho e de corte abrem e fecham por ela",
-		honra <= 25, false, "hud_honra")
 	if int(j["guardas"]) > 0:
 		_celula_hud("escudo", str(int(j["guardas"])),
 			"Guardas de elite na sua casa", false, false, "hud_guardas")
+	Kit.divisor_vertical(hud)
+
 	# CELEIRO E MADEIREIRA no topo, com o SALDO DO MÊS na dica.
 	#
 	# O jogador via os números só na aba Terra, e não via para onde eles
@@ -777,6 +813,19 @@ func _montar_hud(j: Dictionary) -> void:
 		_celula_hud("moedas", "−%d" % int(up_s["ouro"]),
 			"Soldo do mês do seu exército. Sem terra, comida e madeira saem da estrada.",
 			int(up_s["ouro"]) > int(j["ouro"]))
+	Kit.divisor_vertical(hud)
+
+	# ---- quem você é, e o mundo lá fora ----
+	# Renome e honra saíram do meio dos recursos: eles não medem o que você
+	# TEM, medem o que dizem de você — e é essa distinção que os grupos
+	# desenham. As duas portas que eles abrem estão na dica.
+	_celula_hud("renome", str(int(j["renome"])),
+		"Renome — o que o continente sabe do seu nome. Abre contrato melhor e casamento real.",
+		false, false, "hud_renome")
+	var honra: int = int(j.get("honra", 50))
+	_celula_hud("honra" if Icones.ilustrado("honra") != null else "pergaminho", str(honra),
+		"Honra — reputação: portas de trabalho e de corte abrem e fecham por ela",
+		honra <= 25, false, "hud_honra")
 	# a estação pinta o próprio chip: a UI muda de temperatura com o mundo.
 	# Na leva hi-bit cada estação tem símbolo próprio (flor, sol, folha,
 	# floco — como o floco da referência); sem a arte, o calendário tingido.
@@ -828,9 +877,13 @@ func atualizar() -> void:
 	# Primavera" ao lado de um chip que diz "Primavera" era a mesma
 	# informação duas vezes na mesma barra. Sobra a IDENTIDADE, que é o que
 	# esta linha sempre quis ser.
-	status_label.text = "%s · %s%s · %d anos · dia %d de %s, Ano %d" % [
-		j["nome"], Contratos.titulo(state), selo, j["idade"],
-		int(state.get("dia", 1)), MESES[state["mes"] - 1], state["ano"]]
+	# A DATA saiu daqui e foi para o rodapé: com ela, esta linha media 340px
+	# e a barra cortava o fim em toda tela — "dia 1 d…". Sem ela, cabe.
+	status_label.text = "%s · %s%s · %d anos" % [
+		j["nome"], Contratos.titulo(state), selo, j["idade"]]
+	if data_label != null:
+		data_label.text = "Dia %d de %s, Ano %d" % [
+			int(state.get("dia", 1)), MESES[state["mes"] - 1], state["ano"]]
 	if b_dia != null:
 		var ultimo := int(state.get("dia", 1)) >= Jogo.DIAS_POR_MES
 		b_dia.text = "Fechar o mês" if ultimo else "Passar o dia (%d/%d)" % [
@@ -1651,12 +1704,25 @@ func _fronteira_selvagem(c: Container) -> void:
 	# coisa que se vê da fronteira, em qualquer estado dela
 	var pano := Retratos.peca("barbaros_panorama")
 	if pano != null:
-		var cc := CenterContainer.new()
-		c.add_child(cc)
+		# a mesma moldura de madeira da vila e do retrato de conversa: é a
+		# terceira ilustração que carrega uma tela inteira, e as três agora
+		# se apresentam do mesmo jeito
+		var cc := Kit.moldura_arte(c)
 		var tr_p := TextureRect.new()
-		tr_p.texture = pano
+		# A arte vem com letterbox CINEMATOGRÁFICO assado: 30px de preto
+		# chapado em cima e 30 embaixo, medidos no PNG — sobra 400×164 de
+		# imagem. Solto na tela aquilo passava por escolha de composição;
+		# dentro da moldura de madeira vira moldura DUPLA, e as duas
+		# tarjas pretas leem como falha de carregamento.
+		#
+		# `AtlasTexture` recorta na exibição sem tocar no arquivo: se a
+		# arte for regerada sem tarja um dia, basta apagar estas linhas.
+		var recorte := AtlasTexture.new()
+		recorte.atlas = pano
+		recorte.region = Rect2(0, 30, 400, 164)
+		tr_p.texture = recorte
 		tr_p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		tr_p.custom_minimum_size = Vector2(400, 224)
+		tr_p.custom_minimum_size = Vector2(400, 164)
 		tr_p.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr_p.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cc.add_child(tr_p)
@@ -2475,9 +2541,19 @@ func _aba_corte(c: Container) -> void:
 ## primário é o certo: é o verbo pelo qual a aba existe. A Taverna tem TRÊS
 ## fregueses em lista, e três botões de latão empilhados não hierarquizam
 ## nada: eles só gastam o latão, que é o recurso mais escasso da paleta.
+## Qual ROSTO desenhar para um NPC.
+##
+## Não é `npc["id"]`, e a diferença custou um bug visível: no portão, o
+## guarda aparecia com a cara do rei. O `id` é a chave de RELAÇÃO — o
+## guarda usa "rei_<reino>" porque a simpatia ganhada no portão é simpatia
+## da casa, e tem que ser a mesma que o rei consulta lá dentro. Quem fala é
+## outra pessoa, e é isso que `retrato` diz.
+func _id_retrato(npc: Dictionary) -> String:
+	return str(npc.get("retrato", npc.get("id", "")))
+
 func _card_npc(c: Container, npc: Dictionary, destaque: bool = true) -> void:
 	var h := _card(c)
-	_retrato(h, npc["id"], 64)
+	_retrato(h, _id_retrato(npc), 64)
 	var v := Kit.coluna(h, Tema.E2)
 	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var nome := Kit.texto(v, str(npc["nome"]), Tema.TEXTO, Tema.CORPO_G)
@@ -3683,9 +3759,11 @@ func _atualizar_cab_conversa() -> void:
 	Kit.texto(conversa_relacao, "%s (%d)" % [Dialogo.nome_relacao(rel), rel],
 		cor, Tema.MICRO)
 	# o retrato muda de expressão com a relação: é o mesmo `humor` que a
-	# Corte usa, e é o único traço que muda para o mesmo personagem
-	conversa_retrato.texture = Retratos.textura(npc_atual["id"],
-		Retratos.humor_de(state, npc_atual["id"]))
+	# Corte usa, e é o único traço que muda para o mesmo personagem.
+	# O ROSTO vem de `_id_retrato` e o HUMOR do `id`: quem fala pode ser o
+	# guarda, mas a simpatia que ele demonstra é a da casa.
+	conversa_retrato.texture = Retratos.textura(_id_retrato(npc_atual),
+		Retratos.humor_de(state, str(npc_atual["id"])))
 
 func enviar_texto(texto: String) -> void:
 	# emoji do teclado do celular viraria tofu na fonte do jogo — o mesmo

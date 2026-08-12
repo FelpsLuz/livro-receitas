@@ -707,6 +707,61 @@ static func fato(c: Container, icone: String, valor: String, rotulo: String,
 	v.add_child(l)
 	return v
 
+## O CHIP-ÂNCORA do HUD.
+##
+## Existe porque nove chips idênticos numa faixa não hierarquizam nada: o
+## ouro — o recurso que TODA decisão do jogo consulta — tinha o mesmo
+## tamanho, o mesmo terreno e o mesmo peso do imposto do mês. A diferença
+## de cor sozinha não resolve: numa barra em que três chips já são
+## coloridos por alarme, mais um dourado é só mais um colorido.
+##
+## Aqui o degrau é de TAMANHO e de MOLDURA, que é o par que o olho lê antes
+## de ler o número: ícone maior, dígito num degrau acima, e a placa de
+## pedra da leva hi-bit com um fio de latão em volta.
+static func chip_ancora(c: Container, icone: String, valor: String,
+		dica: String = "", id: String = "") -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Tema.ACENTO_FUNDO.darkened(0.55)
+	sb.border_color = Tema.ACENTO_FUNDO
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(0)
+	sb.content_margin_left = Tema.E4
+	sb.content_margin_right = Tema.E4
+	sb.content_margin_top = Tema.E2
+	sb.content_margin_bottom = Tema.E2
+	p.add_theme_stylebox_override("panel", sb)
+	p.tooltip_text = dica
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	c.add_child(p)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", Tema.E3)
+	p.add_child(h)
+	var ic := Icones.imagem(icone, 22)
+	if ic != null:
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(ic)
+	numero(h, valor, Tema.ACENTO_FORTE, Tema.CORPO_G, id)
+	return p
+
+## O separador VERTICAL da barra de estado.
+##
+## A barra tinha nove chips em fila e nenhuma junta: ouro, tropa, moral,
+## renome, honra, celeiro, madeireira, imposto e estação liam como uma
+## lista de nove coisas do mesmo tipo, quando são quatro tipos diferentes —
+## o que você tem, o que você comanda, o que a terra dá, e o mundo lá fora.
+## Um fio de 1px entre os grupos é o mais barato que existe para dizer isso.
+static func divisor_vertical(c: Container, altura: int = 20) -> Control:
+	var d := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Tema.BORDA
+	sb.set_corner_radius_all(0)
+	d.add_theme_stylebox_override("panel", sb)
+	d.custom_minimum_size = Vector2(1, altura)
+	d.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	c.add_child(d)
+	return d
+
 ## Ícone + número soltos, sem terreno — para dentro de uma célula de tabela,
 ## onde o chip acrescentaria uma caixa em cima da linha que já é uma caixa.
 static func icone_valor(c: Container, icone: String, valor: String,

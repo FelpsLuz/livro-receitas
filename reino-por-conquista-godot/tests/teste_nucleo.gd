@@ -374,6 +374,37 @@ func _init() -> void:
 	var ra4 := Dialogo.falar(sa4, qa4, "quero um contrato de trabalho")
 	ok(ra4["resposta"].contains("coroa"), "contrato é negado pelo guarda sem título")
 
+	# ---- O ROSTO do guarda não é o rosto do rei ----
+	#
+	# O `id` do guarda é "rei_<reino>" DE PROPÓSITO: a simpatia ganha no
+	# portão é simpatia da casa, e tem que ser a mesma chave que o rei
+	# consulta lá dentro. Só que quem desenhava o retrato usava o mesmo
+	# campo — e o monarca de coroa e arminho aparecia dizendo "não anuncio,
+	# volte quando seu nome valer alguma coisa".
+	#
+	# `retrato` separa as duas coisas. As três asserções cobrem o contrato
+	# inteiro: o guarda tem rosto próprio, a chave de relação NÃO mudou, e
+	# quando a porta abre o rosto volta a ser o do rei.
+	ok(str(qa4.get("retrato", "")) != "" and str(qa4["retrato"]) != str(qa4["id"]),
+		"o guarda do portão tem rosto PRÓPRIO, não o do rei (retrato=%s · id=%s)"
+			% [qa4.get("retrato", "(ausente)"), qa4["id"]])
+	ok(str(qa4["id"]) == "rei_touros",
+		"e a chave de relação continua a da casa — o portão dá simpatia ao rei")
+	# o mesmo reino com título já conquistado: o rei atende, e o rosto
+	# volta a ser o dele (sem campo `retrato`, o desenho cai no `id`)
+	var s_rosto := Jogo.novo_jogo("Rosto")
+	s_rosto["jogador"]["renome"] = 50
+	var qa_rei := Dialogo.quem_atende(s_rosto, "touros")
+	ok(str(qa_rei["papel"]) == "rei"
+		and str(qa_rei.get("retrato", str(qa_rei["id"]))) == str(qa_rei["id"]),
+		"quando o rei atende em pessoa, o rosto volta a ser o dele")
+	var Retratos = load("res://scripts/retratos.gd")
+	var tex_guarda: Texture2D = Retratos.textura("capitao")
+	var tex_rei: Texture2D = Retratos.textura("rei_touros")
+	ok(tex_guarda != null and tex_rei != null
+		and tex_guarda.get_image().get_data() != tex_rei.get_image().get_data(),
+		"e as duas artes são de fato diferentes em disco")
+
 	# Neutro com título (Capitão Mercenário+): rei em pessoa, mas seco e limitado
 	var sa5 := Jogo.novo_jogo("Acesso5")
 	sa5["jogador"]["renome"] = 50
