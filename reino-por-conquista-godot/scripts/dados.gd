@@ -100,10 +100,28 @@ const TROPAS := {
 
 ## Segundos de treino. Cavalaria demora muito mais que lança — é o que faz
 ## o jogador escolher entre um exército rápido e um exército bom.
+## TEMPO DE TREINO, em minutos do relógio (200 = um dia, 600 = um mês).
+##
+## Os números antigos vinham de quando o quartel tinha relógio próprio em
+## segundos reais. Com tudo em dias, 105 por arqueiro significava meio dia
+## POR HOMEM: duzentos arqueiros levariam anos de calendário. Aqui o
+## treino passa a ser por LOTE de cinco (é assim que o quartel recruta) e
+## a escala cabe numa vida: um lote de camponeses sai no mesmo dia, um
+## lote de cavalaria pesada leva pouco mais de um mês.
 const TEMPO_TREINO := {
-	"campones": 20, "lanceiro": 60, "espadachim": 90, "barbaro": 75,
-	"arqueiro": 105, "explorador": 45, "cav_leve": 240, "arq_cavalo": 300,
-	"cav_pesada": 420,
+	"campones": 12, "lanceiro": 25, "espadachim": 35, "barbaro": 30,
+	"arqueiro": 40, "explorador": 20, "cav_leve": 90, "arq_cavalo": 110,
+	"cav_pesada": 150,
+}
+
+## NÍVEL DE TERRA que cada tropa exige. Cavalo pede pasto, ferreiro e
+## cocheira — coisas que um acampamento de mercenário não tem. É a razão
+## de a cavalaria não aparecer para quem ainda não comprou terra, e é o
+## que dá degrau ao "comprar terra e evoluir".
+##   2 = Aldeia (cavalaria leve)   3 = Vila (arqueiro a cavalo)
+##   4 = Burgo (cavalaria pesada)
+const NIVEL_MINIMO_TROPA := {
+	"cav_leve": 2, "arq_cavalo": 3, "cav_pesada": 4,
 }
 
 ## Nome das três fases do combate, para o relatório de batalha.
@@ -212,16 +230,27 @@ const FORMACOES := {
 #
 # `cap` e `imposto` continuam estritamente crescentes (teste_reino cobra).
 # ---------------------------------------------------------------
+## A ESCADA DA TERRA — e ela é cara de propósito.
+##
+## Terra custava 300 e o primeiro degrau, 80: quem trabalhava dois meses
+## na taverna já era senhor, e a promessa de "começar do zero e escalar"
+## virava um atalho de meia hora. Agora a primeira gleba custa 5.000 (é a
+## meta de uma campanha inteira de trabalho e contrato) e cada degrau
+## acima custa 35% mais que o anterior — a curva que o pedido definiu.
+##
+## Os números foram gerados por essa regra e escritos à mão aqui para a
+## tabela continuar legível de bater o olho.
+const PRECO_TERRA := 5000
 const NIVEIS_TERRA := [
-	{"nome": "Acampamento",   "custo_ouro": 0,    "custo_madeira": 0,    "cap": 30,  "imposto": 0.35},
-	{"nome": "Paliçada",      "custo_ouro": 80,   "custo_madeira": 25,   "cap": 50,  "imposto": 0.44},
-	{"nome": "Aldeia",        "custo_ouro": 200,  "custo_madeira": 55,   "cap": 85,  "imposto": 0.55},
-	{"nome": "Vila",          "custo_ouro": 380,  "custo_madeira": 105,  "cap": 135, "imposto": 0.70},
-	{"nome": "Burgo",         "custo_ouro": 650,  "custo_madeira": 175,  "cap": 200, "imposto": 0.88},
-	{"nome": "Vila de Pedra", "custo_ouro": 1050, "custo_madeira": 270,  "cap": 290, "imposto": 1.10},
-	{"nome": "Cidade Murada", "custo_ouro": 1600, "custo_madeira": 400,  "cap": 410, "imposto": 1.40},
-	{"nome": "Cidadela",      "custo_ouro": 2400, "custo_madeira": 600,  "cap": 590, "imposto": 1.80},
-	{"nome": "Castelo",       "custo_ouro": 3600, "custo_madeira": 900,  "cap": 900, "imposto": 2.40},
+	{"nome": "Acampamento",   "custo_ouro": 0,     "custo_madeira": 0,    "cap": 30,  "imposto": 0.35},
+	{"nome": "Paliçada",      "custo_ouro": 1200,  "custo_madeira": 60,   "cap": 50,  "imposto": 0.44},
+	{"nome": "Aldeia",        "custo_ouro": 1620,  "custo_madeira": 110,  "cap": 85,  "imposto": 0.55},
+	{"nome": "Vila",          "custo_ouro": 2187,  "custo_madeira": 180,  "cap": 135, "imposto": 0.70},
+	{"nome": "Burgo",         "custo_ouro": 2952,  "custo_madeira": 280,  "cap": 200, "imposto": 0.88},
+	{"nome": "Vila de Pedra", "custo_ouro": 3986,  "custo_madeira": 420,  "cap": 290, "imposto": 1.10},
+	{"nome": "Cidade Murada", "custo_ouro": 5381,  "custo_madeira": 620,  "cap": 410, "imposto": 1.40},
+	{"nome": "Cidadela",      "custo_ouro": 7264,  "custo_madeira": 900,  "cap": 590, "imposto": 1.80},
+	{"nome": "Castelo",       "custo_ouro": 9807,  "custo_madeira": 1300, "cap": 900, "imposto": 2.40},
 ]
 
 # ---------------------------------------------------------------

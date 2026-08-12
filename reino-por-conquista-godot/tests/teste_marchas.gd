@@ -495,20 +495,31 @@ func _init() -> void:
 	ok("terra em nível 1 ainda não habilita o jogador como alvo",
 		not guerra_nivel1)
 
-	var sd3 := Jogo.novo_jogo("Elegibilidade3")
-	sd3["terra"] = {"nome": "Vila", "nivel": 2, "populacao": 100,
-		"alimento": 600, "madeira": 200, "felicidade": 60, "pressao": 0.0}
-	Dialogo.mudar_relacao(sd3, "rei_touros", -100, "teste")
+	# O rei DECLARA e depois MARCHA — as duas pontas do "o jogador pode ser
+	# atacado". A asserção é probabilística por natureza, então o teste
+	# tenta em MUNDOS NOVOS em vez de esticar um só: `_tick_declaracao_jogador`
+	# para de declarar quando já há três guerras no mapa, e um mundo velho
+	# vive congestionado — esticar o laço tornava a falha MAIS provável, não
+	# menos, que foi como este teste passou a mentir.
 	var guerra_apareceu := false
 	var marcha_apareceu := false
-	for i in 80:
-		Geopolitica.tick(sd3, Jogo.log_para(sd3))
-		for g in sd3["guerras"]:
-			if (g["a"] == "touros" and g["b"] == "jogador") or (g["b"] == "touros" and g["a"] == "jogador"):
-				guerra_apareceu = true
-		for marcha in sd3["marchas"]:
-			if str(marcha.get("origem", "")) == "touros" and str(marcha.get("alvo", "")) == "jogador":
-				marcha_apareceu = true
+	for tentativa in 8:
+		var sd3 := Jogo.novo_jogo("Elegibilidade3")
+		sd3["terra"] = {"nome": "Vila", "nivel": 2, "populacao": 100,
+			"alimento": 600, "madeira": 200, "felicidade": 60, "pressao": 0.0}
+		Dialogo.mudar_relacao(sd3, "rei_touros", -100, "teste")
+		for i in 60:
+			Geopolitica.tick(sd3, Jogo.log_para(sd3))
+			for g in sd3["guerras"]:
+				if (g["a"] == "touros" and g["b"] == "jogador") \
+						or (g["b"] == "touros" and g["a"] == "jogador"):
+					guerra_apareceu = true
+			for marcha in sd3["marchas"]:
+				if str(marcha.get("origem", "")) == "touros" \
+						and str(marcha.get("alvo", "")) == "jogador":
+					marcha_apareceu = true
+			if marcha_apareceu:
+				break
 		if marcha_apareceu:
 			break
 	ok("com terra nível ≥2 e relação péssima, o reino acaba declarando guerra ao jogador",

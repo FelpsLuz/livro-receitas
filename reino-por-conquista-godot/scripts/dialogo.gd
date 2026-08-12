@@ -436,12 +436,24 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			elif state["jogador"]["ouro"] >= custo:
 				state["jogador"]["ouro"] -= custo
 				efeitos.append("[−%d ouro]" % custo)
+				# SUBORNAR O GUARDA ABRE O PORTÃO — de verdade.
+				#
+				# Antes o suborno só somava relação, e a escada de acesso lê
+				# relação ≥ 20: quem pagava com relação 0 subia para 15, ouvia
+				# "pode entrar" e voltava a encontrar o mesmo guarda. A palavra
+				# dele não valia nada. Agora fica uma FLAG na porta, e ela vale
+				# o mês corrente — guarda subornado não é amigo para sempre.
+				if str(npc.get("papel", "")) == "guarda":
+					var t_g: Dictionary = tags_de(state, npc["id"])
+					t_g["flags"]["portao_aberto_ate"] = \
+						int(state["ano"]) * 12 + int(state["mes"])
+					efeitos.append("[o portão se abre — até a virada do mês]")
 				if aceita_com_rancor:
 					efeitos.append(mudar_relacao(state, npc["id"], -10, "suborno aceito com rancor"))
 					resposta = "*pega o ouro sem te olhar* Precisamos. Não pense que isso nos torna amigos."
 				else:
 					efeitos.append(mudar_relacao(state, npc["id"], 15, "suborno"))
-					resposta = "*faz as moedas desaparecerem* Um investimento sensato. Prossiga."
+					resposta = "*faz as moedas desaparecerem* Um investimento sensato. Pode subir — o rei atende quem paga a espera."
 			else:
 				resposta = "Pouco. Muito pouco. (Você precisaria de %d de ouro.)" % custo
 		"pedir_paz":
@@ -578,6 +590,13 @@ static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
 		"personalidade": str(rei_dados.get("personalidade", "honrado")),
 		"intencoes_permitidas": null,
 	}
+
+	# O PORTÃO COMPRADO vale acima da escada de relação — é para isso que
+	# se suborna. Dura o mês corrente: no mês seguinte o guarda volta a ser
+	# guarda, e a conversa recomeça do zero.
+	if int(tags_de(state, "rei_" + reino_id)["flags"].get("portao_aberto_ate", -1)) \
+			>= int(state["ano"]) * 12 + int(state["mes"]) and rel > -60:
+		return rei
 
 	if rel <= -60:
 		# Odiado: nada. Nem o guarda cede — é o "ameaça de prisão" do documento.

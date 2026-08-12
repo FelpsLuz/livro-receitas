@@ -88,23 +88,26 @@ static func _melhor_rota(state: Dictionary) -> Dictionary:
 
 ## Revela o melhor par comprar/vender de um bem AGORA. É informação que o
 ## jogador poderia obter viajando — só que viajar custa meses.
+## O MAPA COMERCIAL é um RETRATO, não uma assinatura.
+##
+## Ele deixou de ser a licença de negociar (isso agora é o selo da guilda,
+## comprado praça a praça) e voltou a ser o que o nome diz: onde cada bem
+## está barato e onde está caro, HOJE. O cartógrafo desenha uma vez; quando
+## o jogador fecha o relatório, o papel já não vale — quem quiser olhar de
+## novo compra outro. É informação perecível, e é isso que a torna cara.
 static func comprar_rota(state: Dictionary) -> Dictionary:
 	if int(state["jogador"]["ouro"]) < PRECO_ROTA:
 		return {"ok": false, "msg": "Cartógrafos bêbados custam %d." % PRECO_ROTA}
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - PRECO_ROTA
-	# o mapa É a licença de negociar, e vale UM mês: sem ele nenhum feitor
-	# abre o armazém. É o custo recorrente que segura a arbitragem infinita
-	Economia.renovar_mapa(state, 1)
+	var linhas: Array = Economia.retrato_de_precos(state)
 	var melhor := _melhor_rota(state)
-	if melhor.is_empty():
-		return {"ok": true,
-			"msg": "Mapa selado e válido por um mês. Mas ninguém sabe de rota boa esta noite."}
-	melhor["ok"] = true
-	melhor["msg"] = "Mapa válido por um mês. \"%s: compre em %s por %d, venda em %s por %d. Lucro de %d por unidade.\"" % [
-		Dados.MERCADORIAS[melhor["bem"]]["nome"],
-		_nome_reino(state, melhor["compra"]), melhor["preco_compra"],
-		_nome_reino(state, melhor["venda"]), melhor["preco_venda"], melhor["lucro"]]
-	return melhor
+	var msg := "O cartógrafo desenha de memória, e a memória dele é de hoje."
+	if not melhor.is_empty():
+		msg = "\"%s: compre em %s por %d, venda em %s por %d — %d de lucro por unidade.\"" % [
+			Dados.MERCADORIAS[melhor["bem"]]["nome"],
+			_nome_reino(state, melhor["compra"]), melhor["preco_compra"],
+			_nome_reino(state, melhor["venda"]), melhor["preco_venda"], melhor["lucro"]]
+	return {"ok": true, "msg": msg, "linhas": linhas, "melhor": melhor}
 
 # ------------------------------------------------------------
 # 3. Informante permanente

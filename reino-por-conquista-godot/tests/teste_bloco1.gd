@@ -205,7 +205,8 @@ func _init() -> void:
 	m["jogador"]["ouro"] = 2000
 	ok("sem Mapa Comercial ninguém negocia",
 		not Economia.comprar(m, "touros", "madeira", 10)["ok"])
-	ok("o cartógrafo da taverna vende a licença", bool(Taverna.comprar_rota(m)["ok"]))
+	ok("o selo da guilda abre a praça onde você está",
+		bool(Economia.comprar_licenca(m, "touros")["ok"]))
 	ok("e agora o armazém abre", bool(Economia.comprar(m, "touros", "madeira", 10)["ok"]))
 	ok("a carga entrou de verdade", int(m["carga"].get("madeira", 0)) == 10)
 	# vender onde é escasso: o produtor tem oferta alta, o não-produtor não
@@ -213,6 +214,7 @@ func _init() -> void:
 	var preco_fora: int = Economia.preco_de(m, "imperio", "madeira")
 	ok("madeira é mais barata em quem a produz",
 		preco_casa < preco_fora, "%d vs %d" % [preco_casa, preco_fora])
+	Economia.comprar_licenca(m, "imperio")   # cada praça pede o seu selo
 	var r_viagem: Dictionary = Viagem.viajar(m, "imperio", Jogo.log_para(m))
 	ok("a viagem leva você até a praça cara", bool(r_viagem["ok"])
 		and str(m["local"]) == "imperio")
@@ -223,8 +225,10 @@ func _init() -> void:
 		"+%d" % (int(m["jogador"]["ouro"]) - ouro_m))
 	m["evento_pendente"] = null
 	Jogo.passar_mes(m)
-	ok("o mapa vence na virada — a rota tem custo recorrente",
-		not Economia.mapa_valido(m))
+	ok("o selo é permanente: comprado uma vez, a praça segue aberta",
+		Economia.tem_licenca(m, "imperio"))
+	ok("mas a praça sem selo continua fechada",
+		not Economia.tem_licenca(m, "aguias"))
 	# O FREIO ELÁSTICO, travado por número: encher a carroça de uma vez
 	# tem que encarecer o próprio preço. Era a única defesa contra a
 	# arbitragem infinita, e é o que a sonda de balanceamento afere —
@@ -232,7 +236,8 @@ func _init() -> void:
 	var me := Jogo.novo_jogo("Elastico")
 	me["local"] = "touros"
 	me["jogador"]["ouro"] = 20000
-	Economia.renovar_mapa(me)
+	Economia.comprar_licenca(me, "touros")
+	Economia.comprar_licenca(me, "imperio")
 	var p0: int = Economia.preco_de(me, "touros", "madeira")
 	for i_e in 20:
 		Economia.comprar(me, "touros", "madeira", 5)

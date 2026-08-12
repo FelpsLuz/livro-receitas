@@ -89,26 +89,39 @@ func _pos_de(id: String) -> Vector2:
 	# margem interna: o disco do domínio não pode encostar na borda
 	return Vector2(48.0 + p.x * (size.x - 96.0), 34.0 + p.y * (size.y - 68.0))
 
+## O ALVO DE CLIQUE É O CASTELO INTEIRO, não só o rótulo.
+##
+## O botão era uma plaqueta de 150×22 posicionada ACIMA ou ABAIXO do
+## domínio: quem clicava no castelo — que é justamente o que parece
+## clicável — não acertava nada, e nas Terras Bárbaras e no Reino sem Rei
+## isso lia como "não dá para viajar para lá". Agora o botão é uma área
+## invisível que cobre marcador E rótulo, e o nome é DESENHADO no mapa
+## (com sombra), livre de qualquer regra de layout de Button.
 func _posicionar() -> void:
 	if state.is_empty():
 		return
 	for id in _botoes:
 		var b: Button = _botoes[id]
-		b.text = Rotas.nome_do(state, str(id))
-		var aqui: bool = str(state.get("local", "")) == str(id)
-		b.add_theme_color_override("font_color",
-			Tema.ACENTO if aqui else Tema.TEXTO_2)
-		b.tooltip_text = "Clique para viajar até %s" % b.text
+		b.text = ""
+		b.flat = true
+		var nome := Rotas.nome_do(state, str(id))
+		b.tooltip_text = "Abrir %s" % nome
 		if str(id) == "jogador":
 			b.tooltip_text = "Suas terras"
-		b.size = Vector2(150, 22)
 		var p := _pos_de(str(id))
-		# rótulo ACIMA nos nós da metade de cima e abaixo nos de baixo: no
-		# meio do caminho ele encostava no domínio vizinho
 		var acima: bool = POSICOES[id].y < 0.5
+		# a caixa cobre do topo do castelo até o fim do rótulo
+		b.size = Vector2(150, RAIO_DOMINIO * 2.0 + 26.0)
 		b.position = Vector2(p.x - 75.0,
-			p.y - RAIO_DOMINIO - 22.0 if acima else p.y + RAIO_DOMINIO + 4.0)
+			p.y - RAIO_DOMINIO - 26.0 if acima else p.y - RAIO_DOMINIO)
 	queue_redraw()
+
+## Onde o nome de cada domínio é escrito — a mesma conta que posiciona a
+## caixa de clique, para os dois nunca saírem de sincronia.
+func _pos_do_rotulo(id: String) -> Vector2:
+	var p := _pos_de(id)
+	var acima: bool = POSICOES[id].y < 0.5
+	return Vector2(p.x, p.y - RAIO_DOMINIO - 12.0 if acima else p.y + RAIO_DOMINIO + 18.0)
 
 ## Cor da casa — a mesma heráldica dos retratos, para o mapa e a corte
 ## falarem a mesma língua. Sem rei conhecido, cinza de terra de ninguém.
@@ -187,6 +200,22 @@ func _draw() -> void:
 	var aqui: String = str(state.get("local", ""))
 	if POSICOES.has(aqui):
 		draw_arc(_pos_de(aqui), RAIO_DOMINIO - 4.0, 0.0, TAU, 36, Tema.ACENTO, 2.0, true)
+
+	# ---- os nomes, desenhados (o botão virou área de clique invisível) ----
+	var fonte := get_theme_default_font()
+	if fonte == null:
+		return
+	for id in POSICOES:
+		var nome := Rotas.nome_do(state, str(id))
+		var largura := fonte.get_string_size(nome, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			Tema.MICRO).x
+		var pos := _pos_do_rotulo(str(id)) - Vector2(largura * 0.5, 0)
+		# sombra dura de 1px: o rótulo cruza estrada e disco colorido, e sem
+		# ela o texto claro sobre o vermelho da estrada some
+		draw_string(fonte, pos + Vector2(1, 1), nome, HORIZONTAL_ALIGNMENT_LEFT,
+			-1, Tema.MICRO, Color(0, 0, 0, 0.85))
+		draw_string(fonte, pos, nome, HORIZONTAL_ALIGNMENT_LEFT, -1, Tema.MICRO,
+			Tema.ACENTO if str(state.get("local", "")) == str(id) else Tema.TEXTO_2)
 
 func _partes(chave: String) -> PackedStringArray:
 	# as chaves são "a_b" e os ids podem ter underscore ("sem_rei"): o

@@ -42,30 +42,86 @@ static func fator_sazonal(state: Dictionary, g_id: String) -> float:
 		return 1.0
 	return float(tabela.get(Estacoes.atual(state), 1.0))
 
-## O MAPA COMERCIAL — a licença de negociar, comprada na taverna e válida
-## por UM mês.
+## A LICENÇA DE COMÉRCIO — uma por reino, e ela é o portão da Feira.
 ##
-## É o freio da arbitragem infinita que o teste alfa mediu (150 → 22.000
-## de ouro em 24 meses sem risco nenhum): agora o comércio tem custo fixo
-## recorrente e obriga a voltar à taverna. Quem compra e vende pouco não
-## paga o mapa; quem vive de rota, paga todo mês.
+## Antes havia UM "Mapa Comercial" mensal que abria o comércio no mundo
+## inteiro. Duas coisas erradas nisso: o mapa é INFORMAÇÃO (onde está
+## caro, onde está barato) e não licença; e um único pagamento não podia
+## abrir a praça de seis casas diferentes. Agora são coisas separadas —
+## a licença é permanente, comprada praça a praça, e cara: é o degrau que
+## faz o mercador nascer devagar.
+##
+## O preço acompanha a riqueza do reino (o mesmo fator que escala empregos
+## e contratos), partindo de 300 no mais pobre.
+const LICENCA_BASE := 300
+
+## 300 é o PISO — o preço da praça mais pobre do mapa. Daí para cima, cada
+## cidade cobra conforme o que ela vale: entrar no mercado do Império custa
+## o dobro de entrar no Covil Negro, e é isso que faz o mercador crescer
+## de fora para dentro, começando pelas bordas.
+static func preco_licenca(state: Dictionary, reino_id: String) -> int:
+	var Empregos = load("res://scripts/empregos.gd")
+	return roundi(LICENCA_BASE * maxf(1.0, Empregos.fator_reino(state, reino_id)))
+
+static func tem_licenca(state: Dictionary, reino_id: String) -> bool:
+	return bool(state.get("licencas", {}).get(reino_id, false))
+
+static func comprar_licenca(state: Dictionary, reino_id: String) -> Dictionary:
+	if not tem_praca(state, reino_id):
+		return {"ok": false, "msg": AVISO_SEM_PRACA}
+	if tem_licenca(state, reino_id):
+		return {"ok": false, "msg": "Você já negocia nesta praça."}
+	var custo := preco_licenca(state, reino_id)
+	if int(state["jogador"]["ouro"]) < custo:
+		return {"ok": false,
+			"msg": "A guilda cobra %d de ouro pelo selo desta praça." % custo}
+	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - custo
+	if not (state.get("licencas") is Dictionary):
+		state["licencas"] = {}
+	state["licencas"][reino_id] = true
+	return {"ok": true, "custo": custo,
+		"msg": "Selo da guilda comprado por %d. Esta praça abre para você." % custo}
+
+## O MAPA COMERCIAL é INFORMAÇÃO, não licença: um retrato dos preços do
+## continente no dia em que foi comprado. Ele abre um relatório, e quando
+## o relatório fecha, acabou — quem quiser olhar de novo compra outro.
+static func retrato_de_precos(state: Dictionary) -> Array:
+	var linhas: Array = []
+	for g_id in Dados.MERCADORIAS:
+		var barato := {"reino": "", "preco": 999999}
+		var caro := {"reino": "", "preco": -1}
+		for r in state["reinos"]:
+			if str(r.get("dominado_por", "")) != "":
+				continue
+			var p := preco_de(state, str(r["id"]), g_id)
+			if p <= 0:
+				continue
+			if p < int(barato["preco"]):
+				barato = {"reino": str(r["nome"]), "preco": p}
+			if p > int(caro["preco"]):
+				caro = {"reino": str(r["nome"]), "preco": p}
+		if str(barato["reino"]) == "" or str(caro["reino"]) == "":
+			continue
+		linhas.append({"bem": str(Dados.MERCADORIAS[g_id]["nome"]),
+			"barato_em": str(barato["reino"]), "barato": int(barato["preco"]),
+			"caro_em": str(caro["reino"]), "caro": int(caro["preco"]),
+			"margem": int(caro["preco"]) - int(barato["preco"])})
+	linhas.sort_custom(func(a, b): return int(a["margem"]) > int(b["margem"]))
+	return linhas
+
+## Compatibilidade: o resto do código pergunta "posso negociar aqui?" —
+## a resposta agora é a licença DESTA praça.
 static func mapa_valido(state: Dictionary) -> bool:
-	var m = state.get("mapa_comercial")
-	if not (m is Dictionary):
-		return false
-	var absoluto: int = int(state["ano"]) * 12 + int(state["mes"])
-	return int(m.get("ate", 0)) >= absoluto
+	return tem_licenca(state, str(state.get("local", "")))
 
 static func mapa_meses_restantes(state: Dictionary) -> int:
-	var m = state.get("mapa_comercial")
-	if not (m is Dictionary):
-		return 0
-	return maxi(0, int(m.get("ate", 0)) - (int(state["ano"]) * 12 + int(state["mes"])) + 1)
+	return 1 if mapa_valido(state) else 0
 
-## Renova (ou compra) o mapa: vale este mês e o próximo vira sozinho.
-static func renovar_mapa(state: Dictionary, meses: int = 1) -> void:
-	state["mapa_comercial"] = {
-		"ate": int(state["ano"]) * 12 + int(state["mes"]) + maxi(0, meses - 1)}
+## Usada por testes e pelo caminho antigo: libera a praça onde se está.
+static func renovar_mapa(state: Dictionary, _meses: int = 1) -> void:
+	if not (state.get("licencas") is Dictionary):
+		state["licencas"] = {}
+	state["licencas"][str(state.get("local", ""))] = true
 
 ## Existe armazém aqui? `state["mercados"]` só tem os SEIS reinos — o Reino
 ## sem Rei e as Terras Bárbaras são nós do mapa onde se viaja, se luta e se

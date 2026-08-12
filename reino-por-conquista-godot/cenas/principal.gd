@@ -1102,7 +1102,7 @@ func _aba_mapa(c: Container) -> void:
 	# tabela nunca conseguiu dar — onde ficam os gargalos do continente
 	var mapa := MapaMundi.new()
 	c.add_child(mapa)
-	mapa.reino_clicado.connect(_abrir_viagem)
+	mapa.reino_clicado.connect(_popup_dominio)
 	mapa.montar(state)
 	_fronteira_selvagem(c)
 	# o juramento é o contrato que rege o resto do mapa: enquanto vale, o
@@ -1260,21 +1260,30 @@ func _aba_mercado(c: Container) -> void:
 			em_guerra = true
 	_titulo_secao(c, "Livro-Razão — Mercado de %s" % reino["nome"],
 		"Compre onde há fartura, venda onde há guerra e fome.")
-	# O MAPA COMERCIAL é a licença de negociar, e vale um mês. Sem ele os
-	# botões ficam CINZAS — a mesma regra do "Vender 5" sem carga — e o
-	# cartão vermelho acima diz o porquê e onde comprar a licença. Botão
-	# vivo que o feitor recusa é convite a um clique frustrado.
-	var tem_mapa := Economia.mapa_valido(state)
+	# O SELO DA GUILDA — uma licença POR PRAÇA, permanente e cara. É o
+	# degrau que faz o mercador nascer devagar: cada cidade nova custa a
+	# entrada, e a entrada acompanha a riqueza dela.
+	var local_f: String = str(state["local"])
+	var tem_mapa := Economia.tem_licenca(state, local_f)
 	if not tem_mapa:
 		var sem := Kit.card(c, Tema.PERIGO)
-		Kit.texto(sem, "Sem Mapa Comercial: nenhum armazém abre para você.",
+		Kit.texto(sem, "Você não tem o selo da guilda desta praça.",
 			Tema.PERIGO, Tema.MICRO)
-		Kit.nota(sem, "O cartógrafo da taverna sela um por %d de ouro — vale o mês corrente."
-			% Taverna.PRECO_ROTA)
+		Kit.nota(sem, "Sem ele nenhum feitor te vende nem te compra AQUI. O selo é para sempre — e só vale nesta cidade.")
+		var l_sel := Kit.fila(sem, Tema.E3)
+		var preco_sel: int = Economia.preco_licenca(state, local_f)
+		Kit.icone_valor(l_sel, "moedas", str(preco_sel), Tema.ACENTO)
+		var b_sel := Kit.botao_mini(l_sel, "Comprar o selo", func():
+			var r: Dictionary = Economia.comprar_licenca(state, local_f)
+			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+			_aviso(str(r["msg"]))
+			Jogo.salvar(state)
+			atualizar(), "primario", 150)
+		b_sel.disabled = int(state["jogador"]["ouro"]) < preco_sel
 	else:
 		var com_mapa := Kit.fila(c, Tema.E3)
-		Kit.selo(com_mapa, "mapa comercial válido", Tema.GANHO, Tema.GANHO_FUNDO)
-		Kit.nota(com_mapa, "Vence na virada do mês.")
+		Kit.selo(com_mapa, "selo da guilda", Tema.GANHO, Tema.GANHO_FUNDO)
+		Kit.nota(com_mapa, "Você negocia nesta praça. Cada cidade pede o seu.")
 	if em_guerra:
 		var av := Kit.card(c, Tema.ATENCAO)
 		Kit.texto(av, "Reino em guerra: trigo com ágio de contrabando (+30%), mas patrulhas confiscam cargas.",
@@ -1386,14 +1395,17 @@ func _aba_taverna(c: Container) -> void:
 			_aviso(r["msg"])
 			Jogo.salvar(state)
 			atualizar())
-	_servico(c, Retratos.sprite_gerado("cartografo"), "Rota comercial",
-		"Onde comprar barato e onde vender caro, hoje.",
+	_servico(c, Retratos.sprite_gerado("cartografo"), "Mapa comercial",
+		"O retrato dos preços do continente, hoje. Depois de lido, o papel já não vale.",
 		Taverna.PRECO_ROTA, "Comprar mapa", func():
 			var r: Dictionary = Taverna.comprar_rota(state)
 			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
-			_aviso(r["msg"])
 			Jogo.salvar(state)
-			atualizar())
+			if bool(r["ok"]):
+				_modal_mapa_comercial(r)
+			else:
+				_aviso(str(r["msg"]))
+				atualizar())
 	_servico(c, Retratos.sprite_gerado("informante"),
 		"Informante em %s" % _reino_local()["nome"],
 		"Notícia da corte todo mês, por mais 25 de soldo.%s" % (
@@ -1549,6 +1561,146 @@ func _modal_fundar() -> void:
 		Jogo.salvar(state)
 		_aviso(str(r["msg"]))
 		atualizar(), "primario")
+
+## O MAPA COMERCIAL, aberto uma vez só.
+##
+## É informação perecível: o cartógrafo desenha os preços de hoje, o
+## jogador lê, e ao fechar o papel já não vale. Nada fica guardado no
+## estado de propósito — quem quiser olhar de novo compra outro mapa.
+func _modal_mapa_comercial(r: Dictionary) -> void:
+	var v := _painel_modal()
+	var l := Label.new()
+	l.text = "Mapa Comercial"
+	var f := Tema.fonte_forte()
+	if f != null:
+		l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
+	l.add_theme_color_override("font_color", Tema.ACENTO)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(l)
+	Kit.nota(v, "O que o cartógrafo viu HOJE. Ao fechar, o papel vira lenha.")
+	var linhas: Array = r.get("linhas", [])
+	if linhas.is_empty():
+		Kit.texto(v, "Ninguém sabe de nada esta noite.", Tema.TEXTO_2)
+	else:
+		var tab := Kit.tabela(v, [
+			{"t": "Mercadoria", "w": 0},
+			{"t": "Barato em", "w": 150},
+			{"t": "Caro em", "w": 150},
+			{"t": "Margem", "w": 70, "a": Kit.DIR},
+		])
+		for ln in linhas.slice(0, 8):
+			var cel := Kit.linha(tab, Tema.GANHO_FUNDO if int(ln["margem"]) >= 8 else null)
+			Kit.texto(cel[0], str(ln["bem"]))
+			Kit.texto(cel[1], "%s · %d" % [str(ln["barato_em"]), int(ln["barato"])],
+				Tema.GANHO, Tema.MICRO)
+			Kit.texto(cel[2], "%s · %d" % [str(ln["caro_em"]), int(ln["caro"])],
+				Tema.ATENCAO, Tema.MICRO)
+			Kit.numero(cel[3], "+%d" % int(ln["margem"]), Tema.ACENTO)
+	if str(r.get("msg", "")) != "":
+		Kit.nota(v, str(r["msg"]))
+	Kit.respiro(v, Tema.E2)
+	Kit.botao(v, "Guardar na memória e queimar", func(): atualizar(), "primario")
+
+## O POPUP DO DOMÍNIO — o que o clique no castelo abre.
+##
+## Antes o clique ia direto para a viagem, e todo o resto (quem manda ali,
+## espionar, atacar) morava numa lista de cards abaixo do mapa. Agora o
+## mapa é a porta: uma janela só, que diz de quem é a terra e encadeia as
+## decisões DENTRO dela — clicar em "Espionar" mostra o resultado na mesma
+## janela, e de lá dá para atacar ou viajar sem recomeçar.
+func _popup_dominio(id: String) -> void:
+	var v := _painel_modal()
+	var reino: Dictionary = {}
+	for r in state["reinos"]:
+		if str(r["id"]) == id:
+			reino = r
+	var aqui: bool = str(state.get("local", "")) == id
+	var nome := Rotas.nome_do(state, id)
+
+	# ---- cabeçalho: retrato de quem manda + nome do domínio ----
+	var topo := Kit.fila(v, Tema.E4)
+	var rosto: Texture2D = Retratos.textura("rei_" + id) if not reino.is_empty() else null
+	if rosto != null:
+		Kit.retrato(topo, rosto, 64)
+	var vt := Kit.coluna(topo, 0)
+	vt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var l_nome := Kit.texto(vt, nome, Tema.ACENTO, Tema.TITULO_SECAO)
+	var f_t := Tema.fonte_forte()
+	if f_t != null:
+		l_nome.add_theme_font_override("font", f_t)
+	if reino.is_empty():
+		# Reino sem Rei e Terras Bárbaras: não há trono, e é isso que
+		# muda TUDO — não se espiona uma corte que não existe
+		Kit.nota(vt, "Terra sem soberano. Ninguém cobra imposto, ninguém organiza defesa.")
+	else:
+		var rei_d: Dictionary = reino.get("rei", {})
+		Kit.nota(vt, "%s · %s" % [str(rei_d.get("nome", "?")),
+			str(reino.get("capital", ""))])
+		var rel_d: int = int(state["tags"].get("rei_" + id, {"relacao": 0})["relacao"])
+		var lr := Kit.fila(vt, Tema.E3)
+		Kit.medidor(lr, float(rel_d + 100), 200.0, 110, 5,
+			Tema.PERIGO if rel_d <= -25 else (Tema.GANHO if rel_d >= 25 else Tema.TEXTO_3))
+		Kit.texto(lr, "%s (%d)" % [Dialogo.nome_relacao(rel_d), rel_d],
+			Tema.TEXTO_2, Tema.MICRO)
+		if str(reino.get("dominado_por", "")) != "":
+			Kit.selo(vt, "dominado por %s"
+				% Rotas.nome_do(state, str(reino["dominado_por"])),
+				Tema.PERIGO, Tema.PERIGO_FUNDO)
+
+	# ---- o que se sabe da força dali ----
+	var vis: Dictionary = Intel.sobre(state, id) if not reino.is_empty() else {}
+	if not reino.is_empty():
+		var lf := Kit.fila(v, Tema.E3)
+		Kit.texto(lf, "Força:", Tema.TEXTO_3, Tema.MICRO)
+		Kit.texto(lf, str(vis.get("texto", "???")),
+			Tema.TEXTO_2 if bool(vis.get("conhecido", false)) else Tema.TEXTO_3, Tema.MICRO)
+		if bool(vis.get("conhecido", false)):
+			var det: Array = Intel.detalhar(state, id)
+			var partes: Array = []
+			for l in det.slice(0, 3):
+				partes.append("%d %s" % [int(l["n"]), str(l["nome"]).to_lower()])
+			if not partes.is_empty():
+				Kit.nota(v, ", ".join(partes))
+
+	# ---- a estrada até lá ----
+	if not aqui:
+		var est: Dictionary = Viagem.estimar(state, id)
+		if bool(est.get("ok", false)):
+			Kit.nota(v, "%s — %d %s de estrada · assalto: %s" % [str(est["trajeto"]),
+				int(est["dias"]), "dia" if int(est["dias"]) == 1 else "dias",
+				str(est["risco_txt"])])
+	else:
+		Kit.selo(v, "você está aqui", Tema.ACENTO, Tema.ACENTO_FUNDO)
+
+	Kit.respiro(v, Tema.E2)
+
+	# ---- as decisões, todas nesta janela ----
+	if not aqui:
+		Kit.botao(v, "Viajar até aqui", func(): _abrir_viagem(id), "primario", 200)
+	if not reino.is_empty():
+		if not Intel.tem(state, id):
+			Kit.botao(v, "Mandar espião  ·  80 ouro", func():
+				var r: Dictionary = Intriga.espionar(state, id)
+				if int(r.get("prender", 0)) > 0:
+					Jogo.prender(state, int(r["prender"]), Jogo.log_para(state))
+				Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+				Jogo.salvar(state)
+				_popup_dominio(id)          # o resultado volta NESTA janela
+				_aviso(str(r["msg"])), "fantasma", 200)
+		if str(state["jogador"]["rei_de"]) != id:
+			var tem_cb: bool = state["casus_belli"].has(id)
+			Kit.botao(v, "Declarar guerra" if tem_cb else "Atacar sem casus belli",
+				func():
+					var r: Dictionary = Intriga.declarar_guerra(state, id,
+						Jogo.log_para(state))
+					Sfx.tocar(self, "espada" if r["ok"] else "alerta")
+					Jogo.salvar(state)
+					_popup_dominio(id)
+					_aviso(str(r["msg"])), "perigo", 200)
+	else:
+		Kit.nota(v, "Sem trono não há corte para espionar nem guerra para declarar. Aqui se chega andando — e se resolve com aço, na aba Tropas.")
+	Kit.botao(v, "Fechar", func(): atualizar(), "", 200)
 
 ## A VIAGEM — o popup que o clique no mapa abre.
 ##

@@ -62,7 +62,7 @@ func _init() -> void:
 	# máximo" — uma mensagem que era mentira, e que nenhum teste pegava
 	# porque a função devolvia `ok: false` educadamente.
 	var subindo := com_terra(0, 100)
-	subindo["jogador"]["ouro"] = 999999
+	subindo["jogador"]["ouro"] = 9999999
 	subindo["terra"]["madeira"] = 999999
 	var degraus := 0
 	while degraus < Dados.NIVEIS_TERRA.size() + 5:

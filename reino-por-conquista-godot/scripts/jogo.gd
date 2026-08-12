@@ -39,6 +39,7 @@ static func _molde_de_estado() -> Dictionary:
 		"choques": [], "flagras": {}, "informantes": [], "marchas": [],
 		"minuto": 0, "empregos": {}, "afetos": {}, "mapa_comercial": null,
 		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
+		"licencas": {},
 		"familia": {"conjuge": null, "filhos": []},
 		"terra": null, "fim": null,
 	}
@@ -81,6 +82,7 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"afetos": {},              # cortejo em andamento (pretendentes.gd)
 		"mapa_comercial": null,    # licença de negociar, 1 mês (economia.gd)
 		"progresso_atributo": {},  # dias de ofício rumo ao próximo ponto
+		"licencas": {},            # selo da guilda por praça (economia.gd)
 		"intel": {},               # o que o espião revelou (intel.gd)
 		"chantagens_ano": {},      # cooldown de 1x/ano por rei (intriga.gd)
 	}
@@ -277,9 +279,10 @@ static func comprar_terra(state: Dictionary) -> Dictionary:
 		return {"ok": false, "msg": "Você já tem terras."}
 	if state["jogador"]["renome"] < 25:
 		return {"ok": false, "msg": "Renome insuficiente (25)."}
-	if state["jogador"]["ouro"] < 300:
-		return {"ok": false, "msg": "Terra custa 300 de ouro."}
-	state["jogador"]["ouro"] -= 300
+	if state["jogador"]["ouro"] < Dados.PRECO_TERRA:
+		return {"ok": false,
+			"msg": "Terra custa %d de ouro. Trabalhe, cumpra contratos, negocie." % Dados.PRECO_TERRA}
+	state["jogador"]["ouro"] -= Dados.PRECO_TERRA
 	state["terra"] = {"nome": "Vale " + Dados.rnd(["Sereno", "das Pedras", "do Corvo", "Dourado", "Frio"]),
 		"nivel": 0, "populacao": 20, "alimento": 80, "madeira": 20, "felicidade": 60}
 	return {"ok": true, "msg": "Terra adquirida!"}

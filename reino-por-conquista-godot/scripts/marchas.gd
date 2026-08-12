@@ -21,6 +21,7 @@ const Combate = preload("res://scripts/combate.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Cerco = preload("res://scripts/cerco.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
+const Barbaros = preload("res://scripts/barbaros.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 
 ## Enquanto marcha, o exército testa a sorte uma vez por dia de estrada.
@@ -110,6 +111,17 @@ static func despachar(state: Dictionary, alvo: String, tropas: Dictionary,
 		var Jogo_m = load("res://scripts/jogo.gd")
 		if Jogo_m.esta_preso(state):
 			return Jogo_m.recusa_preso(state)
+		# ÀS TERRAS BÁRBARAS NÃO SE MANDA COLUNA. Elas não estão em
+		# state["reinos"] e têm caminho PRÓPRIO (batedor + atravessar a
+		# fronteira, com os três clãs em sequência): mandar um cerco para
+		# lá fazia a marcha ir, não encontrar guarnição nenhuma e voltar
+		# MUDA — sem relatório, sem baixas, sem nada ter acontecido.
+		#
+		# O Reino sem Rei continua valendo como alvo: lá há gente para
+		# saquear, só que mal defendida — é o que `_guarnicao_de` já dá.
+		if alvo == Barbaros.ID:
+			return {"ok": false, "sem_alvo": true,
+				"msg": "Aos clãs não se manda coluna às cegas: vá até a fronteira, pague o batedor e atravesse você mesmo."}
 	var fonte := _tropas_de(state, origem)
 	var soma := 0
 	for tipo in tropas:

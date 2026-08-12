@@ -88,8 +88,11 @@ func _init() -> void:
 	var r2 := Recrutamento.enfileirar(s2, "lanceiro", 8)
 	ok("teto de população conta a fila, não só o exército", not r2["ok"], str(r2["msg"]))
 
-	# fila sobrevive a save/load — a regressão mais cara de todas
-	var s3 := com_terra(2)
+	# fila sobrevive a save/load — a regressão mais cara de todas.
+	# Terra nível 4 (Burgo) porque cavalaria pesada agora EXIGE isso: cavalo
+	# pede pasto, ferreiro e cocheira, e é esse degrau que dá sentido a
+	# comprar terra e evoluir.
+	var s3 := com_terra(4)
 	s3["jogador"]["ouro"] = 5000
 	Recrutamento.enfileirar(s3, "cav_pesada", 3)
 	Jogo.salvar(s3)
@@ -307,9 +310,14 @@ func _init() -> void:
 	# rota comercial aponta um lucro que existe
 	tv["jogador"]["ouro"] = 3000
 	var rota := Taverna.comprar_rota(tv)
-	ok("rota comercial devolve par comprar/vender com lucro",
-		rota.get("ok", false) and int(rota.get("lucro", 0)) > 0,
+	# o mapa virou RETRATO de preços: uma tabela do que está barato e do
+	# que está caro HOJE, lida uma vez e queimada
+	ok("o mapa comercial devolve o retrato de preços do continente",
+		bool(rota.get("ok", false)) and (rota.get("linhas", []) as Array).size() > 0,
 		str(rota.get("msg", "")).substr(0, 60))
+	var l0: Dictionary = (rota["linhas"] as Array)[0]
+	ok("e cada linha diz onde comprar barato e onde vender caro",
+		int(l0["caro"]) >= int(l0["barato"]) and str(l0["barato_em"]) != "")
 
 	# informante cobra e some sem soldo
 	tv["jogador"]["ouro"] = 500
@@ -905,15 +913,18 @@ func _init() -> void:
 	ok("sem mapa, nenhum armazém abre", not bool(r_sem["ok"]), str(r_sem["msg"]))
 	sm["carga"]["trigo"] = 10
 	ok("e também não se vende", not bool(Economia.vender(sm, "touros", "trigo", 5)["ok"]))
-	var r_mapa: Dictionary = Taverna.comprar_rota(sm)
-	ok("o cartógrafo da taverna sela o mapa", bool(r_mapa["ok"])
-		and Economia.mapa_valido(sm), str(r_mapa["msg"]))
-	ok("com mapa, o comércio abre", bool(Economia.comprar(sm, "touros", "trigo", 5)["ok"]))
-	ok("o mapa vale o mês corrente", Economia.mapa_meses_restantes(sm) == 1)
+	# A LICENÇA é o selo da guilda, comprado PRAÇA A PRAÇA e permanente —
+	# o mapa comercial é outra coisa (informação, não autorização).
+	var r_sel: Dictionary = Economia.comprar_licenca(sm, "touros")
+	ok("o selo da guilda abre a praça", bool(r_sel["ok"])
+		and Economia.tem_licenca(sm, "touros"), str(r_sel["msg"]))
+	ok("com o selo, o comércio abre", bool(Economia.comprar(sm, "touros", "trigo", 5)["ok"]))
+	ok("o selo é caro: sai do que o reino vale", int(r_sel["custo"]) >= Economia.LICENCA_BASE)
+	ok("e o selo NÃO abre a praça vizinha", not Economia.tem_licenca(sm, "imperio"))
 	sm["evento_pendente"] = null
 	Jogo.passar_mes(sm)
-	ok("e vence na virada do mês — renovar é custo recorrente",
-		not Economia.mapa_valido(sm))
+	ok("comprado uma vez, o selo não vence na virada",
+		Economia.tem_licenca(sm, "touros"))
 
 	# sazonalidade: a MESMA praça, o MESMO bem, preços diferentes por estação
 	var ss := Jogo.novo_jogo("Sazonal")

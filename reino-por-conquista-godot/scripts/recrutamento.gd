@@ -23,12 +23,38 @@ const Sinais = preload("res://scripts/sinais.gd")
 const SEG_POR_MES := 600
 
 ## Quartel melhor treina mais rápido: -8% por nível de terra, com piso.
+## Minutos por LOTE de cinco recrutas (é assim que o quartel contrata) —
+## não por homem. Terra evoluída treina mais rápido: quartel de verdade,
+## instrutor de verdade.
+const POR_LOTE := 5
+
 static func tempo_de(state: Dictionary, tipo: String) -> int:
-	var base: int = int(Dados.TEMPO_TREINO.get(tipo, 60))
+	var base: int = int(Dados.TEMPO_TREINO.get(tipo, 25))
 	var nivel: int = 0
 	if state.get("terra") != null:
 		nivel = int(state["terra"]["nivel"])
-	return maxi(5, roundi(base * (1.0 - nivel * 0.08)))
+	return maxi(3, roundi(base * (1.0 - nivel * 0.08)))
+
+## A terra dá (ou não) o que a tropa exige. Cavalo pede pasto e cocheira:
+## sem Aldeia não há cavalaria leve, sem Burgo não há cavalaria pesada.
+static func nivel_exigido(tipo: String) -> int:
+	return int(Dados.NIVEL_MINIMO_TROPA.get(tipo, 0))
+
+static func pode_recrutar(state: Dictionary, tipo: String) -> Dictionary:
+	var exige := nivel_exigido(tipo)
+	if exige <= 0:
+		return {"ok": true}
+	var t = state.get("terra")
+	if t == null:
+		return {"ok": false,
+			"msg": "Cavalo não se cria em acampamento: compre terras primeiro."}
+	if int(t["nivel"]) < exige:
+		return {"ok": false,
+			"msg": "%s exige %s — a sua terra ainda é %s." % [
+				str(Dados.TROPAS[tipo]["nome"]),
+				str(Dados.NIVEIS_TERRA[exige]["nome"]),
+				str(Dados.NIVEIS_TERRA[int(t["nivel"])]["nome"])]}
+	return {"ok": true}
 
 ## População já comprometida: tropas prontas MAIS tudo que está na fila.
 ## Sem contar a fila, o jogador enfileira 500 cavaleiros com 20 camponeses.
@@ -73,6 +99,9 @@ static func enfileirar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
 		return {"ok": false, "msg": "Custa %d de ouro." % custo}
 	if tipo == "campones" and state.get("terra") == null:
 		return {"ok": false, "msg": "Camponeses vêm da SUA terra — e você não tem uma."}
+	var porta := pode_recrutar(state, tipo)
+	if not bool(porta["ok"]):
+		return porta
 	var precisa: int = int(Dados.TROPAS[tipo].get("pop", 1)) * qtd
 	var teto := pop_maxima(state)
 	if pop_usada(state) + precisa > teto:
@@ -84,8 +113,10 @@ static func enfileirar(state: Dictionary, tipo: String, qtd: int) -> Dictionary:
 	# `restante` é o que falta para a PRÓXIMA unidade sair. Só o lote da
 	# frente tem cronômetro andando; os de trás esperam a vez (um quartel só).
 	f.append({"tipo": tipo, "restantes": qtd, "restante": tempo_de(state, tipo)})
-	return {"ok": true, "msg": "%d× %s em treinamento (%d min cada)."
-		% [qtd, Dados.TROPAS[tipo]["nome"], tempo_de(state, tipo)]}
+	var Relogio = load("res://scripts/relogio.gd")
+	return {"ok": true, "msg": "%d× %s em treinamento — o lote sai em %s."
+		% [qtd, Dados.TROPAS[tipo]["nome"],
+			Relogio.texto_dias(tempo_de(state, tipo) * maxi(1, ceili(float(qtd) / POR_LOTE)))]}
 
 # ------------------------------------------------------------
 # NÚCLEO GENÉRICO DA FILA
