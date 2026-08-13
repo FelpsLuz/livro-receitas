@@ -399,11 +399,130 @@ func _init() -> void:
 		and str(qa_rei.get("retrato", str(qa_rei["id"]))) == str(qa_rei["id"]),
 		"quando o rei atende em pessoa, o rosto volta a ser o dele")
 	var Retratos = load("res://scripts/retratos.gd")
-	var tex_guarda: Texture2D = Retratos.textura("capitao")
+	var tex_guarda: Texture2D = Retratos.textura(str(qa4["retrato"]))
 	var tex_rei: Texture2D = Retratos.textura("rei_touros")
 	ok(tex_guarda != null and tex_rei != null
 		and tex_guarda.get_image().get_data() != tex_rei.get_image().get_data(),
 		"e as duas artes são de fato diferentes em disco")
+	# o rosto do portão é sorteado entre dois veteranos pelo id do reino:
+	# a arte tem que existir para QUALQUER reino, não só para o testado
+	var faltando_guarda: Array[String] = []
+	for rid in ["imperio", "touros", "leoes", "aguias", "rosa", "alvorecer"]:
+		var q_r: Dictionary = Dialogo.quem_atende(Jogo.novo_jogo("R"), rid)
+		if Retratos.textura(str(q_r.get("retrato", ""))) == null:
+			faltando_guarda.append(rid)
+	ok(faltando_guarda.is_empty(),
+		"todo portão tem rosto em disco (sem arte: %s)"
+			% ("nenhum" if faltando_guarda.is_empty() else ", ".join(faltando_guarda)))
+
+	# ============================================================
+	# A DIPLOMACIA É PRESENCIAL
+	#
+	# O furo mais grave da auditoria: `_reino_local()` devolvia o Império
+	# quando o jogador não estava em nenhum dos seis reinos, e a aba Corte
+	# entregava a conversa com Felippe no meio das Terras Bárbaras. Dali dava
+	# para chantageá-lo, subornar o portão dele, casar na casa dele e mediar
+	# a paz dele — à distância, num jogo em que todo o resto exige presença.
+	#
+	# A tranca da interface (a aba Corte) não dá para testar aqui, porque é
+	# cena. O que dá — e é a tranca que vale para qualquer porta futura — é
+	# a de `Dialogo.falar`.
+	# ============================================================
+	print("\n=== A DIPLOMACIA É PRESENCIAL ===")
+	var s_pres := Jogo.novo_jogo("Ausente")
+	s_pres["local"] = "barbaros"                  # fora dos seis reinos
+	var rei_pres: Dictionary = Dialogo.quem_atende(s_pres, "touros")
+	Dialogo.tags_de(s_pres, "rei_touros")["relacao"] = 80
+	var ouro_pres: int = int(s_pres["jogador"]["ouro"])
+	# As frases são escolhidas para cair numa intenção SÓ. "eu juro lealdade
+	# a você, meu rei" empata jurar_lealdade com saudação (por causa do "meu
+	# rei") e a saudação vence o desempate — o guarda estaria certo em deixar
+	# passar, e o teste é que estaria medindo a coisa errada.
+	for frase in ["quero propor casamento com sua filha",
+			"te dou ouro para abrir o portão",
+			"juro lealdade a esta casa"]:
+		var rp: Dictionary = Dialogo.falar(s_pres, rei_pres, frase)
+		ok(str(rp["resposta"]).contains("na minha frente"),
+			"de longe, '%s' é recusada com o convite de vir em pessoa" % frase.substr(0, 24))
+	ok(int(s_pres["jogador"]["ouro"]) == ouro_pres,
+		"e nenhuma delas mexeu no cofre")
+	var Vassalagem_p = load("res://scripts/vassalagem.gd")
+	ok(not Vassalagem_p.e_vassalo(s_pres),
+		"jurar lealdade por recado não sela juramento nenhum")
+	# e o contrário: as intenções que SEMPRE puderam viajar continuam viajando
+	var r_elogio: Dictionary = Dialogo.falar(s_pres, rei_pres, "você é um grande rei")
+	ok(not str(r_elogio["resposta"]).contains("na minha frente"),
+		"elogio continua passando de longe — recado sempre existiu")
+
+	# ============================================================
+	# A CONVERSA DEIXOU DE SER FÁBRICA DE RENOME
+	# ============================================================
+	print("\n=== A CONVERSA NÃO IMPRIME MAIS RENOME ===")
+	var s_farm := Jogo.novo_jogo("Bajulador")
+	var rei_farm: Dictionary = Dialogo.quem_atende(s_farm, str(s_farm["local"]))
+	for i in 30:
+		Dialogo.falar(s_farm, rei_farm, "você é magnífico, meu senhor")
+	var rel_farm: int = int(Dialogo.tags_de(s_farm, rei_farm["id"])["relacao"])
+	ok(rel_farm < 60,
+		"trinta elogios não chegam à relação 60 (deu %d)" % rel_farm)
+	var rel_antes_s: int = int(Dialogo.tags_de(s_farm, rei_farm["id"])["relacao"])
+	for i in 10:
+		Dialogo.falar(s_farm, rei_farm, "olá")
+	ok(int(Dialogo.tags_de(s_farm, rei_farm["id"])["relacao"]) - rel_antes_s <= 3,
+		"e dez saudações rendem no máximo três de cortesia")
+
+	# a mediação de paz: vale sempre, mas o RENOME é uma vez por casa
+	var s_paz := Jogo.novo_jogo("Mediador")
+	var alvo_paz: String = str(s_paz["local"])
+	Dialogo.tags_de(s_paz, "rei_" + alvo_paz)["relacao"] = 60
+	var rei_paz: Dictionary = Dialogo.quem_atende(s_paz, alvo_paz)
+	var renome_0: int = int(s_paz["jogador"]["renome"])
+	var guerras_encerradas := 0
+	for i in 3:
+		s_paz["guerras"] = [{"a": alvo_paz, "b": "aguias", "meses": 4}]
+		Dialogo.falar(s_paz, rei_paz, "venho pedir paz entre vocês")
+		if (s_paz["guerras"] as Array).is_empty():
+			guerras_encerradas += 1
+	ok(guerras_encerradas == 3,
+		"mediar continua encerrando a guerra todas as vezes")
+	ok(int(s_paz["jogador"]["renome"]) - renome_0 == 15,
+		"mas o renome sai UMA vez por casa (ganhou %d)"
+			% (int(s_paz["jogador"]["renome"]) - renome_0))
+
+	# ============================================================
+	# O CHEAT SAIU E NÃO PODE VOLTAR
+	# ============================================================
+	ok(not ("CAMAFEUS" in Dialogo),
+		"a tabela de códigos de teste não existe mais em Dialogo")
+
+	# ============================================================
+	# A INIMIZADE MORDE QUEM AGE
+	#
+	# `Jogo.passar_dia` tem sete chamadores e só o botão lia o retorno. O
+	# acontecimento agora fica parado numa fila no estado, e a interface a
+	# drena depois de qualquer ação.
+	# ============================================================
+	print("\n=== A INIMIZADE ALCANÇA QUEM AGE ===")
+	var s_ini := Jogo.novo_jogo("Caçado")
+	s_ini["guerras"] = [{"a": "jogador", "b": "touros", "meses": 1}]
+	s_ini["local"] = "touros"                 # capital inimiga: 75% ao dia
+	seed(99)
+	var achou_fila := false
+	for i in 12:
+		s_ini["dia"] = 1
+		Jogo.passar_dia(s_ini)                # sem ninguém ler o retorno
+		if not (s_ini.get("inimizade_fila", []) as Array).is_empty():
+			achou_fila = true
+			break
+	ok(achou_fila,
+		"o acontecimento fica no estado mesmo quando o chamador ignora o retorno")
+	var ev_ini: Dictionary = Jogo.puxar_inimizade(s_ini)
+	ok(not ev_ini.is_empty() and str(ev_ini.get("tipo", "")) != "",
+		"e a interface consegue puxá-lo da fila")
+	ok((s_ini.get("inimizade_fila", []) as Array).is_empty(),
+		"puxar esvazia — o mesmo encontro não abre dois modais")
+	ok(Jogo.puxar_inimizade(s_ini).is_empty(),
+		"e a fila vazia devolve vazio, sem quebrar")
 
 	# Neutro com título (Capitão Mercenário+): rei em pessoa, mas seco e limitado
 	var sa5 := Jogo.novo_jogo("Acesso5")

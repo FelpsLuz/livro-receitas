@@ -712,9 +712,11 @@ func _passar_dia() -> void:
 	atualizar()
 	# a estrada conta o que houve NELA — era o Timer quem fazia isso
 	_narrar_estrada(r.get("marchas", []))
-	# e o inimigo cobra o dia: coluna no portão, emboscada ou captura
-	if r.has("inimizade"):
-		_modal_inimizade(r["inimizade"])
+	# o inimigo cobra o dia (coluna no portão, emboscada ou captura). A
+	# leitura de `r["inimizade"]` saiu daqui: quem drena é `atualizar()`,
+	# pela fila do estado, e assim vale para os SETE caminhos que passam o
+	# dia — não só para este botão.
+	_checar_inimizade()
 
 ## Mantido para os testes de cena e para quem quiser pular o mês inteiro.
 func _passar_mes() -> void:
@@ -921,6 +923,32 @@ func atualizar() -> void:
 		_modal_fim()
 	elif state["evento_pendente"] != null:
 		_modal_evento()
+	else:
+		_checar_inimizade()
+
+## O INIMIGO COBRA O DIA — em qualquer caminho que gaste dia.
+##
+## `Jogo.passar_dia` tem sete chamadores e só o botão "Passar o dia" lia o
+## retorno; trabalhar, viajar, cumprir contrato, cortejar, invadir e espiar
+## descartavam o acontecimento inteiro. Agora ele fica parado numa fila no
+## estado, e este dreno roda depois de toda ação.
+##
+## Um item por vez, de propósito: um turno de trabalho passa até três dias e
+## pode enfileirar três encontros. Empilhar três modais um sobre o outro é
+## ilegível — o jogador resolve um, `atualizar()` roda de novo no fim da
+## escolha, e o próximo aparece.
+##
+## Não abre por cima de fim de jogo, de evento pendente ou de outro modal
+## já na tela: o véu do overlay come o clique, e dois modais empilhados é
+## exatamente o "bug irreversível" que já apareceu neste projeto.
+func _checar_inimizade() -> void:
+	if state.is_empty() or state["fim"] != null or state["evento_pendente"] != null:
+		return
+	if overlay_modal != null and overlay_modal.visible:
+		return
+	var ev: Dictionary = Jogo.puxar_inimizade(state)
+	if not ev.is_empty():
+		_modal_inimizade(ev)
 
 # ---------------- utilitários de UI ----------------
 ## Estes quatro sobrevivem como ATALHOS para o kit. Eles são chamados em ~120
@@ -1668,17 +1696,27 @@ func _aba_taverna(c: Container) -> void:
 			else:
 				_aviso(str(r["msg"]))
 				atualizar())
-	_servico(c, Retratos.sprite_gerado("informante"),
-		"Informante em %s" % _reino_local()["nome"],
-		"Notícia da corte todo mês, por mais 25 de soldo.%s" % (
-			(" Ouvidos ativos: %d." % ouvidos.size()) if not ouvidos.is_empty() else ""),
-		Taverna.PRECO_INFORMANTE,
-		"" if ouvidos.has(state["local"]) else "Contratar", func():
-			var r: Dictionary = Taverna.contratar_informante(state, str(state["local"]))
-			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
-			_aviso(r["msg"])
-			Jogo.salvar(state)
-			atualizar())
+	# O rótulo dizia "Informante em Império Central" em qualquer taverna do
+	# mapa, porque lia `_reino_local()["nome"]` — que mentia — enquanto
+	# contratava `state["local"]`, que é o lugar certo. O nome de exibição
+	# agora vem da mesma fonte que a contratação.
+	#
+	# E onde não há corte, não há o que um informante escute: o serviço
+	# cobrava 120 de entrada mais 25 por mês para nunca entregar notícia
+	# nenhuma. Some do balcão em vez de vender o que não existe.
+	var tem_corte: bool = not _reino_local().is_empty()
+	if tem_corte:
+		_servico(c, Retratos.sprite_gerado("informante"),
+			"Informante em %s" % Rotas.nome_do(state, str(state["local"])),
+			"Notícia da corte todo mês, por mais 25 de soldo.%s" % (
+				(" Ouvidos ativos: %d." % ouvidos.size()) if not ouvidos.is_empty() else ""),
+			Taverna.PRECO_INFORMANTE,
+			"" if ouvidos.has(state["local"]) else "Contratar", func():
+				var r: Dictionary = Taverna.contratar_informante(state, str(state["local"]))
+				Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+				_aviso(r["msg"])
+				Jogo.salvar(state)
+				atualizar())
 
 	var fregueses: Array = _fregueses_do_local()
 	if not fregueses.is_empty():
@@ -2354,8 +2392,46 @@ func _servico(c: Container, rosto: Texture2D, titulo: String, desc: String,
 	else:
 		Kit.botao_mini(acao, rotulo_botao, cb, "fantasma", 118)
 
+## A CORTE DE UMA TERRA QUE NÃO TEM TRONO.
+##
+## Antes esta tela abria a corte do Império em qualquer lugar do mapa que não
+## fosse um dos seis reinos. Agora ela diz a verdade — e a verdade tinha que
+## vir com um caminho, senão a aba vira um beco.
+##
+## Nos dois casos o caminho existe e já estava escrito noutra aba: nas Terras
+## Bárbaras, a fronteira selvagem do Mapa (espiar, invadir, fundar a própria
+## casa); no Reino sem Rei, o trono vazio que ninguém reclamou.
+func _corte_sem_trono(c: Container) -> void:
+	var e_barbaro: bool = str(state.get("local", "")) == Barbaros.ID
+	Kit.titulo_tela(c, "Sem corte aqui",
+		"Terra sem soberano não tem salão, não tem guarda de portão e não tem com quem negociar.")
+	var card := Kit.card(c, Tema.ATENCAO)
+	if e_barbaro:
+		Kit.texto(card, "Os clãs não mandam recado: mandam cavaleiros.",
+			Tema.ATENCAO, Tema.CORPO_G)
+		Kit.nota(card, "Aqui não há rei para elogiar, chantagear ou pedir paz. O que existe são três clãs — geleira, estepe e lama — e eles só entendem duas linguagens: o batedor que você paga para olhar, e a coluna que você manda entrar.")
+		Kit.nota(card, "A fronteira selvagem fica na aba Mapa: espiar, invadir e, se o seu nome pesar o bastante, fundar a sua própria casa neste chão.")
+	else:
+		Kit.texto(card, "O trono está vazio, e ninguém sentou nele.",
+			Tema.ATENCAO, Tema.CORPO_G)
+		Kit.nota(card, "Não há rei, não há consorte, não há herdeiro — e por isso não há relação a construir nem favor a cobrar. A relação que você acumula nas outras cortes não vale nada aqui.")
+		Kit.nota(card, "O que esta terra tem é o que qualquer um pode tomar. Veja o domínio no Mapa.")
+	var ir := Kit.fila(c, Tema.E3)
+	_botao(ir, "Abrir o Mapa", func():
+		tabs.current_tab = 1
+		atualizar(), "primario")
+	# renda de fundo de poço, que existe justamente nestes dois nós
+	_botao(ir, "Ver os serviços da taverna", func():
+		tabs.current_tab = 3
+		atualizar())
+
 func _aba_corte(c: Container) -> void:
 	var reino := _reino_local()
+	# `_reino_local` devolve vazio fora dos seis reinos. Antes ela devolvia o
+	# Império e esta tela inteira rodava com o reino errado.
+	if reino.is_empty():
+		_corte_sem_trono(c)
+		return
 	Kit.titulo_tela(c, "Corte de %s" % reino["capital"],
 		"Escreva o que quiser: elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. O NPC entende — e LEMBRA.")
 	# escada de acesso (Parte 2): o guarda do portão é sempre o primeiro
@@ -3595,11 +3671,28 @@ func _aba_cronica(c: Container) -> void:
 			Tema.TEXTO_3, Tema.MICRO)
 		Kit.texto(cel[1], str(entrada["msg"]), Tema.TEXTO_2, Tema.MICRO)
 
+## O reino onde o jogador está — ou VAZIO, quando ele não está em nenhum.
+##
+## Esta função devolvia `state["reinos"][0]` no caso de não achar, e esse
+## fallback silencioso era o furo mais grave do jogo. Ele não falhava: ele
+## MENTIA, e devolvia o Império Central com a cara de "o lugar onde você
+## está". Nas Terras Bárbaras e no Reino sem Rei — que não são reinos e não
+## têm trono — a aba Corte então abria a corte imperial e entregava a
+## conversa com Felippe. Dali dava para chantageá-lo, subornar o portão
+## dele, casar na casa dele e mediar a paz dele, do meio da estepe.
+##
+## A diplomacia deste jogo é PRESENCIAL em todo o resto — juramento, assalto
+## ao trono, contrato, emprego e mercado exigem estar lá. A corte era a única
+## porta que não exigia, e exatamente por acidente.
+##
+## Devolver vazio obriga quem chama a decidir o que fazer, que é o certo:
+## são três chamadores, e cada um tem uma resposta diferente para "não há
+## reino aqui".
 func _reino_local() -> Dictionary:
 	for r in state["reinos"]:
 		if r["id"] == state["local"]:
 			return r
-	return state["reinos"][0]
+	return {}
 
 # ---------------- CONVERSA (ponderar + máquina de escrever) ----------------
 # ---------------- CONVERSA ----------------

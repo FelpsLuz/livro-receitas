@@ -1020,14 +1020,21 @@ func _init() -> void:
 		Vassalagem3.e_vassalo(sj), str(r_j["resposta"]))
 	ok("e a fala explica o que aconteceu", not r_j["efeitos"].is_empty())
 
-	# camafeus de teste
+	# ---- OS CAMAFEUS SAÍRAM, e a asserção INVERTEU ----
+	#
+	# Estas duas linhas cobravam que "camafeu de morango" desse 10.000 de ouro
+	# e "camafeu de uva" encerrasse a partida. Eram códigos de teste vivendo
+	# na caixa de conversa — a porta por onde o jogador fala com todo NPC num
+	# jogo cuja proposta é escrever o que quiser.
+	#
+	# Agora o teste cobra o contrário: que a frase seja tratada como frase.
 	var sk := Jogo.novo_jogo("Testador")
 	var ouro_k: int = int(sk["jogador"]["ouro"])
 	Dialogo.falar(sk, rei_j, "camafeu de morango")
-	ok("camafeu de morango enche o cofre",
-		int(sk["jogador"]["ouro"]) == ouro_k + 10000)
+	ok("frase de cheat não mexe no cofre",
+		int(sk["jogador"]["ouro"]) == ouro_k, "ouro %d" % int(sk["jogador"]["ouro"]))
 	Dialogo.falar(sk, rei_j, "camafeu de uva")
-	ok("camafeu de uva encerra a partida na hora", sk["fim"] != null)
+	ok("frase de cheat não encerra a partida", sk.get("fim") == null)
 
 	# ---------------- BLOCO I: VIAGEM PELO MAPA ----------------
 	var Viagem3 = load("res://scripts/viagem.gd")

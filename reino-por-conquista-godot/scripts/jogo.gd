@@ -41,7 +41,7 @@ static func _molde_de_estado() -> Dictionary:
 		"choques": [], "flagras": {}, "informantes": [], "marchas": [],
 		"minuto": 0, "empregos": {}, "afetos": {}, "mapa_comercial": null,
 		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
-		"licencas": {}, "avisos_ocultos": {},
+		"licencas": {}, "avisos_ocultos": {}, "inimizade_fila": [],
 		"armazem": {"baias": 0, "proprio": false, "atraso": 0},
 		"equipamento": {}, "fila_ferraria": [],
 		"familia": {"conjuge": null, "filhos": []},
@@ -137,14 +137,45 @@ static func passar_dia(state: Dictionary, log_ext: Callable = Callable()) -> Dic
 	if int(state["dia"]) > DIAS_POR_MES:
 		state["dia"] = 1
 		passar_mes(state, false)
-	# TER INIMIGO DÓI TODO DIA. O evento volta para a UI abrir o modal —
-	# guardá-lo em `evento_pendente` travaria o relógio, e este é um
-	# acontecimento do dia que JÁ passou.
+	# ---- TER INIMIGO DÓI TODO DIA, INCLUSIVE NOS DIAS EM QUE VOCÊ AGE ----
+	#
+	# O acontecimento continua voltando no retorno — guardá-lo em
+	# `evento_pendente` travaria o relógio, e este é um acontecimento do dia
+	# que JÁ passou. Mas o retorno sozinho não bastava, e esse era o furo:
+	#
+	# `passar_dia` tem sete chamadores. Só UM — o botão "Passar o dia" —
+	# lia `r["inimizade"]`. Trabalhar, viajar, cumprir contrato, cortejar,
+	# invadir e espiar chamam o mesmo dia e descartavam o retorno inteiro.
+	# Resultado: o único sistema que faz a guerra doer no cotidiano era
+	# desligado por qualquer ação produtiva, e trabalhar três dias era
+	# estritamente mais seguro que passar três dias parado.
+	#
+	# Agora o acontecimento também é PARADO NO ESTADO. Quem chama não
+	# precisa saber que ele existe; a interface drena a fila no próximo
+	# `atualizar()`, que roda depois de toda ação. A fila é uma lista porque
+	# um turno de trabalho passa até três dias de uma vez, e cada um deles
+	# rola o próprio dado.
 	if state["fim"] == null:
 		var ataque := Inimizade.tick_dia(state, log)
 		if not ataque.is_empty():
 			r["inimizade"] = ataque
+			var fila: Array = state.get("inimizade_fila", [])
+			fila.append(ataque)
+			state["inimizade_fila"] = fila
 	return r
+
+## Tira o próximo acontecimento de inimizade da fila, ou {} se não há.
+##
+## A interface é a única consumidora: ela abre o modal e o jogador escolhe
+## enfrentar ou trancar as portas. Enquanto a fila tiver item, a próxima
+## chamada de `atualizar()` volta a abrir.
+static func puxar_inimizade(state: Dictionary) -> Dictionary:
+	var fila: Array = state.get("inimizade_fila", [])
+	if fila.is_empty():
+		return {}
+	var ev: Dictionary = fila.pop_front()
+	state["inimizade_fila"] = fila
+	return ev
 
 static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 	if state["fim"] != null or state["evento_pendente"] != null:

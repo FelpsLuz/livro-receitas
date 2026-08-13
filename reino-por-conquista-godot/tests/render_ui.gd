@@ -186,6 +186,17 @@ func _initialize() -> void:
 	await _quadro(jogo, "modal_invadir")
 	jogo.overlay_modal.visible = false
 
+	# A CORTE DE UMA TERRA SEM TRONO. Aqui a aba abria a corte do IMPÉRIO —
+	# `_reino_local()` devolvia `reinos[0]` quando não achava o lugar — e a
+	# tela dizia "Corte de Trono Verde" no meio das Terras Bárbaras, com a
+	# conversa com Felippe funcionando. É o furo mais grave da auditoria, e
+	# não havia um único quadro que passasse por ele.
+	st["local"] = "barbaros"
+	await _tirar(jogo, 4, "corte_barbaros")
+	st["local"] = "sem_rei"
+	await _tirar(jogo, 4, "corte_sem_rei")
+	st["local"] = "imperio"
+
 	print("pronto — PNGs em ", ProjectSettings.globalize_path("user://"))
 	quit()
 

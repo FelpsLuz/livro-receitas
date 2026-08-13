@@ -39,13 +39,24 @@ const INTENCOES := [
 		"quero te servir", "quero servir", "meu juramento", "sirvo a voce"]},
 ]
 
-## CÓDIGOS DE TESTE — ditos na conversa da corte, como o desenvolvedor
-## pediu. Ficam aqui, e não num menu escondido, porque a conversa livre já
-## é o console do jogo: qualquer texto entra por ela.
-const CAMAFEUS := {
-	"camafeu de uva": "fim",
-	"camafeu de morango": "ouro",
-}
+## OS CAMAFEUS SAÍRAM.
+##
+## Eram dois códigos de teste — "camafeu de morango" dava 10.000 de ouro,
+## "camafeu de uva" encerrava a partida — e o comentário antigo defendia o
+## lugar deles com um argumento que era, na verdade, a acusação: "a conversa
+## livre já é o console do jogo, qualquer texto entra por ela".
+##
+## É exatamente por isso que não podiam ficar. A caixa de conversa é a porta
+## por onde o jogador fala com TODO NPC do jogo, num jogo cuja proposta é
+## escrever o que quiser. Um cheat ali não é um menu escondido: é uma frase
+## que qualquer pessoa digita por acaso, e que a primeira transmissão ao vivo
+## espalha. Para as lojas curadas que são o alvo deste projeto, é um defeito
+## de produto, não uma conveniência de desenvolvimento.
+##
+## Se um dia voltar a ser necessário testar por dentro, o lugar é um
+## argumento de linha de comando (`OS.get_cmdline_args()`) num build de
+## debug — que não existe no pacote que o jogador recebe.
+## `tests/teste_nucleo.gd` guarda a asserção que impede a volta.
 
 const VOZES := {
 	"orgulhoso": {
@@ -125,6 +136,21 @@ const INSULTO_DELTA := {
 ## mesmo com o portão fechado — é assim que "Odiado" ainda consegue reagir a
 ## uma ameaça, por exemplo.
 const INTENCOES_PRIVILEGIADAS := ["perguntar_guerra", "perguntar_preco", "pedir_contrato", "pedir_paz", "chantagear"]
+
+## As intenções que EXIGEM o jogador na capital do NPC. São as que mudam o
+## mapa ou o cofre de alguém — o resto (insulto, elogio, saudação, pergunta)
+## sempre pôde viajar por recado, e continua podendo.
+const INTENCOES_PRESENCIAIS := ["chantagear", "subornar", "pedir_paz",
+	"pedir_casamento", "jurar_lealdade"]
+
+## O nome da capital de um reino, para a recusa dizer ONDE ir. Cai no nome do
+## reino quando o id não é de um dos seis — assim a frase nunca sai vazia.
+static func _capital_de(state: Dictionary, reino_id: String) -> String:
+	for r in state.get("reinos", []):
+		if str(r["id"]) == reino_id:
+			return str(r.get("capital", r.get("nome", reino_id)))
+	var Rotas = load("res://scripts/rotas.gd")
+	return str(Rotas.nome_do(state, reino_id))
 
 ## Título mínimo pra um Neutro falar com o rei em pessoa (Parte 2): "Capitão
 ## Mercenário" ou acima. Espelha Contratos.titulo(), que só devolve uma
@@ -346,9 +372,6 @@ static func nome_relacao(r: int) -> String:
 
 # ---------- fala principal ----------
 static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictionary:
-	var codigo := _camafeu(state, texto)
-	if not codigo.is_empty():
-		return codigo
 	var tags := tags_de(state, npc["id"])
 	var intencoes := detectar_intencoes(texto)
 	var sent := sentimento(intencoes)
@@ -357,6 +380,29 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 	var acoes: Array = []
 	var resposta := ""
 	var principal: String = intencoes[0]["id"] if intencoes.size() > 0 else ""
+
+	# ---- A DIPLOMACIA É PRESENCIAL ----
+	#
+	# Este guarda é a segunda tranca do mesmo furo. A primeira é a aba Corte,
+	# que parou de abrir a corte do Império quando o jogador está numa terra
+	# sem trono; esta aqui vale para qualquer outra porta que leve à conversa
+	# — hoje e amanhã.
+	#
+	# A regra vem do resto do jogo, não de mim: juramento, assalto ao trono,
+	# contrato, emprego e mercado JÁ exigem estar no lugar. A conversa era a
+	# única porta que mudava o mundo à distância, e era assim por acidente.
+	#
+	# A lista é curta de propósito. Insultar, elogiar, saudar e perguntar
+	# passam de longe — carta e recado sempre existiram. O que exige o corpo
+	# presente é o que muda o mapa ou o cofre de alguém: chantagem, suborno,
+	# mediação de paz, proposta de casamento e juramento.
+	var reino_npc: String = str(npc.get("reino_id", ""))
+	if reino_npc != "" and INTENCOES_PRESENCIAIS.has(principal) \
+			and str(state.get("local", "")) != reino_npc:
+		tags["flags"]["ultimo_topico"] = principal
+		return {"resposta": "Isso não se trata por recado. Venha até %s e diga na minha frente." \
+				% _capital_de(state, reino_npc),
+			"efeitos": [], "acoes": [], "intencao": principal}
 
 	# escada de acesso (Parte 2): `quem_atende` pode restringir o falante a
 	# um punhado de intenções privilegiadas. Fora dessa lista, tudo passa —
@@ -390,11 +436,27 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			if (npc["id"] as String).begins_with("rei_"):
 				efeitos.append("[Preços no reino dele aumentaram para você]")
 		"elogio":
+			# O PISO ERA 2, E O PISO É QUE ERA O FURO.
+			#
+			# `maxi(2, ...)` garantia que o quinto, o vigésimo e o milésimo
+			# elogio ainda rendessem +2 de relação cada. Relação 60 dá −15%
+			# em todo preço e abriga contra emboscada; relação 30 destrava a
+			# mediação de paz. Tudo isso era alcançável digitando a mesma
+			# frase bonita quantas vezes o jogador tivesse paciência.
+			#
+			# Com piso ZERO a curva termina: 10, 8, 6, 4, 2, e depois nada.
+			# O elogio continua sendo uma abertura legítima — só deixa de ser
+			# uma esteira. Quem quer chegar aos 60 vai ter que fazer algo por
+			# esse rei.
 			tags["flags"]["elogiou"] = int(tags["flags"].get("elogiou", 0)) + 1
-			var rendimento: int = maxi(2, 10 - tags["flags"]["elogiou"] * 2
+			var rendimento: int = maxi(0, 10 - tags["flags"]["elogiou"] * 2
 				- (4 if npc["personalidade"] == "calculista" else 0))
-			efeitos.append(mudar_relacao(state, npc["id"], rendimento, "elogio"))
-			resposta = Dados.rnd(voz["elogio"])
+			if rendimento > 0:
+				efeitos.append(mudar_relacao(state, npc["id"], rendimento, "elogio"))
+				resposta = Dados.rnd(voz["elogio"])
+			else:
+				# a recusa é em personagem: ele não fica bravo, fica entediado
+				resposta = "Você já disse isso, e do mesmo jeito. Elogio repetido é ruído."
 		"ameaca":
 			tags["flags"]["ameacou"] = int(tags["flags"].get("ameacou", 0)) + 1
 			_reagir_ameaca(state, npc, tags, efeitos)
@@ -406,8 +468,13 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			for ef in rch.get("efeitos", []):
 				efeitos.append(ef)
 		"saudacao":
+			# +1 por "olá", sem teto, era a versão lenta do mesmo furo do
+			# elogio. Cortesia abre porta uma vez; da quarta em diante é só
+			# alguém repetindo bom-dia.
 			resposta = Dados.rnd(voz["saudacao"])
-			if tags["relacao"] > -10:
+			var saudou: int = int(tags["flags"].get("saudou", 0))
+			if tags["relacao"] > -10 and saudou < 3:
+				tags["flags"]["saudou"] = saudou + 1
 				efeitos.append(mudar_relacao(state, npc["id"], 1, "cortesia"))
 		"despedida":
 			resposta = "Vá. E reze para não cruzarmos de novo." if tags["relacao"] < -25 else "Até a próxima."
@@ -533,11 +600,28 @@ static func _resposta_paz(state: Dictionary, npc: Dictionary, efeitos: Array) ->
 			break
 	if idx < 0:
 		return "Já estamos em paz. Não force minha sorte."
-	if tags_de(state, npc["id"])["relacao"] >= 30:
+	var tags_paz: Dictionary = tags_de(state, npc["id"])
+	if tags_paz["relacao"] >= 30:
 		state["guerras"].remove_at(idx)
-		state["jogador"]["renome"] += 15
 		efeitos.append("[Guerra encerrada por mediação sua]")
-		efeitos.append("[+15 Renome]")
+		# O RENOME AGORA É UMA VEZ POR CASA.
+		#
+		# Eram +15 por mediação, repetíveis — e como as guerras voltam
+		# sozinhas pelo tique da geopolítica, bastava esperar a próxima e
+		# mediar de novo. Renome é o portão de terra (25), título (50), clã
+		# (35), casamento real (40) e fundação (60): o jogo inteiro tinha um
+		# atalho que não custava dia, ouro nem tropa.
+		#
+		# A mediação continua valendo sempre — encerrar uma guerra é um ato
+		# diplomático de verdade e o mundo sente. O que acabou foi a NOTÍCIA:
+		# a primeira vez que você senta um rei à mesa corre o continente; a
+		# décima é rotina, e rotina não faz nome.
+		if not bool(tags_paz["flags"].get("mediou_paz", false)):
+			tags_paz["flags"]["mediou_paz"] = true
+			state["jogador"]["renome"] = int(state["jogador"]["renome"]) + 15
+			efeitos.append("[+15 Renome]")
+		else:
+			efeitos.append("[Já esperavam isso de você — nenhum renome novo]")
 		return "Sua palavra tem peso comigo. Que seja. Mandarei emissários."
 	return "Paz se negocia entre iguais ou entre amigos. Você não é nenhum dos dois. Ainda."
 
@@ -598,7 +682,12 @@ static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
 	var guarda := {
 		"id": "rei_" + reino_id, "reino_id": reino_id, "papel": "guarda",
 		"nome": "o guarda de %s" % str(reino.get("capital", reino_id)),
-		"retrato": "capitao",
+		# Duas caras, sorteadas pelo id do reino: o portão de cada casa tem
+		# um veterano diferente. `retrato_capitao`, que estava servindo aqui
+		# na primeira tentativa, é uma capitã de rosto suave — armadura ela
+		# tem, mas quem diz "volte quando seu nome valer alguma coisa" não
+		# pode ter cara de quem vai te ajudar.
+		"retrato": "guarda_portao" if reino_id.hash() % 2 == 0 else "guarda_portao_2",
 		"personalidade": "guarda", "intencoes_permitidas": null,
 	}
 	var rei := {
@@ -848,26 +937,6 @@ static func _resposta_juramento(state: Dictionary, npc: Dictionary,
 	efeitos.append("[Você é vassalo desta casa — tributo mensal, e a proteção dela]")
 	acoes.append({"tipo": "atualizar"})
 	return "Então ajoelhe. Enquanto a sua palavra valer, esta casa é a sua também."
-
-## Os camafeus do desenvolvedor. Devolvem uma fala em personagem para não
-## quebrar a ficção enquanto testam o jogo por dentro.
-static func _camafeu(state: Dictionary, texto: String) -> Dictionary:
-	var t := norm(texto)
-	for chave in CAMAFEUS:
-		if not t.contains(chave):
-			continue
-		match str(CAMAFEUS[chave]):
-			"ouro":
-				state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + 10000
-				return {"resposta": "Um camafeu de morango troca de mãos. O cofre pesa mais.",
-					"efeitos": ["[+10.000 de ouro]"], "acoes": [{"tipo": "atualizar"}],
-					"intencao": "camafeu"}
-			"fim":
-				state["fim"] = {"tipo": "derrota", "causa": "camafeu"}
-				return {"resposta": "O camafeu de uva estala entre os dedos. A saga termina aqui.",
-					"efeitos": ["[Fim de jogo]"], "acoes": [{"tipo": "atualizar"}],
-					"intencao": "camafeu"}
-	return {}
 
 static func sanear_llm(texto: String, nome: String) -> String:
 	var t := texto.strip_edges()
