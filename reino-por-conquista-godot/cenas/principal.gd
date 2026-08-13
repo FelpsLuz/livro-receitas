@@ -1570,14 +1570,12 @@ func _aba_mapa(c: Container) -> void:
 			var tem_cb: bool = state["casus_belli"].has(reino["id"])
 			# atacar sem casus belli é a decisão irreversível da tela: ela
 			# ganha a variante de perigo, e é a única aqui que a tem
+			# ---- ASSALTO AO TRONO PASSA POR CONFIRMAÇÃO ----
+			# Era um clique e a batalha rolava: a decisão mais irreversível
+			# do jogo — declara guerra, gasta o dia, pode matar o
+			# personagem — tinha menos atrito que vender cinco de trigo.
 			_botao(lb, "Tomar o trono" if aqui else "Tomar o trono (é preciso estar lá)", func():
-				var rel_batalha: Dictionary = Intriga.assaltar_trono(state, reino["id"], Jogo.log_para(state))
-				if not bool(rel_batalha.get("ok", true)):
-					Sfx.tocar(self, "alerta")
-					_aviso(str(rel_batalha.get("msg", "")))
-					return
-				Jogo.salvar(state)
-				_modal_batalha(rel_batalha), "" if tem_cb else "perigo")
+				_modal_assalto(str(reino["id"])), "" if tem_cb else "perigo")
 
 ## O MERCADO — a tela que mais precisava de uma tabela e não tinha nenhuma.
 ##
@@ -1813,14 +1811,33 @@ func _aba_taverna(c: Container) -> void:
 	# os três serviços têm a MESMA forma — rosto, o que é, quanto custa,
 	# botão — então são três chamadas do mesmo molde em vez de três blocos
 	# escritos à mão com larguras diferentes, que era o estado anterior
-	_servico(c, Retratos.textura("taverneiro"), "Rumor de mercado",
-		"Um choque de preço antes de ele acontecer. Nem todo boato é verdade.",
-		Taverna.PRECO_RUMOR, "Ouvir", func():
-			var r: Dictionary = Taverna.comprar_rumor(state)
-			Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
-			_aviso(r["msg"])
-			Jogo.salvar(state)
-			atualizar())
+	# ---- A MESA DO VETERANO, onde ficava o rumor de mercado ----
+	# "Ouvir boato" e "Comprar mapa" eram a mesma compra de 60 de ouro sobre
+	# a mesma coisa (preço), e o jogador escolhia pelo retrato. O rumor saiu
+	# do balcão — continua vivo pelo Mercador leal, que entrega um por mês de
+	# graça — e no lugar dele entrou a única informação que o balcão pode dar
+	# e o mapa não: com que temperamento um rei manda formar.
+	var vets: Array = Taverna.veteranos_disponiveis(state)
+	if vets.is_empty():
+		_servico(c, Retratos.textura("taverneiro"), "Mesa do veterano",
+			"Você já pagou por todas as histórias que este balcão tinha. O resto se descobre com espião — ou no campo.",
+			0, "—", func(): pass)
+	else:
+		var alvo_v: Dictionary = vets[0]
+		_servico(c, Retratos.textura("taverneiro"),
+			"Mesa do veterano · %s" % str(alvo_v["nome"]),
+			"Um homem que serviu contra eles conta COMO aquele rei manda formar. Temperamento não muda — a formação do mês, sim.",
+			Taverna.PRECO_RUMOR, "Pagar a rodada", func():
+				var r: Dictionary = Taverna.comprar_doutrina(state, str(alvo_v["id"]))
+				Sfx.tocar(self, "moeda" if r["ok"] else "alerta")
+				Jogo.salvar(state)
+				if bool(r["ok"]):
+					_modal("A mesa do veterano", str(r["msg"]),
+						[["Entendido", func(): atualizar()]],
+						Retratos.ilustracao("emprego"))
+				else:
+					_aviso(str(r["msg"]))
+					atualizar())
 	_servico(c, Retratos.sprite_gerado("cartografo"), "Mapa comercial",
 		"O retrato dos preços do continente, hoje. Depois de lido, o papel já não vale.",
 		Taverna.PRECO_ROTA, "Comprar mapa", func():
@@ -2069,40 +2086,122 @@ func _modal_operacao(r: Dictionary) -> void:
 ## É informação perecível: o cartógrafo desenha os preços de hoje, o
 ## jogador lê, e ao fechar o papel já não vale. Nada fica guardado no
 ## estado de propósito — quem quiser olhar de novo compra outro mapa.
+## O MAPA COMERCIAL — e por que ele parecia quebrado.
+##
+## O dado sempre esteve certo: sete mercadorias, com onde está barato, onde
+## está caro e a margem. O que não estava certo era a MESA em que ele era
+## servido. `_painel_modal()` nasce com 480px de largura mínima, e esta
+## tabela pede 150 + 150 + 70 de colunas fixas mais a mercadoria mais as
+## margens do painel — perto de 520. As duas colunas do meio ("Garças de
+## Prata · 56") estouravam a célula e o texto era cortado no meio do nome do
+## reino, o que na tela lê como tabela quebrada.
+##
+## Três correções, e nenhuma é de dado:
+##   · o painel deste modal ganha largura própria (620), porque a tabela é o
+##     conteúdo e não um detalhe dentro do texto;
+##   · reino e preço passam a ser DUAS linhas na mesma célula, que é como se
+##     lê um par nome/número sem precisar de 150px numa linha só;
+##   · a tabela rola quando houver mais linha do que cabe, em vez de empurrar
+##     o botão de fechar para fora da tela.
 func _modal_mapa_comercial(r: Dictionary) -> void:
-	var v := _painel_modal()
-	var l := Label.new()
-	l.text = "Mapa Comercial"
-	var f := Tema.fonte_forte()
-	if f != null:
-		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", Tema.TITULO_SECAO)
-	l.add_theme_color_override("font_color", Tema.ACENTO)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(l)
-	Kit.nota(v, "O que o cartógrafo viu HOJE. Ao fechar, o papel vira lenha.")
+	var v := _painel_modal(620)
+	Kit.titulo_tela(v, "Mapa Comercial",
+		"O que o cartógrafo viu HOJE. Ao fechar, o papel vira lenha.")
 	var linhas: Array = r.get("linhas", [])
 	if linhas.is_empty():
 		Kit.texto(v, "Ninguém sabe de nada esta noite.", Tema.TEXTO_2)
 	else:
-		var tab := Kit.tabela(v, [
+		var rolo := ScrollContainer.new()
+		rolo.custom_minimum_size = Vector2(0, 260)
+		rolo.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		v.add_child(rolo)
+		var dentro := VBoxContainer.new()
+		dentro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rolo.add_child(dentro)
+		var tab := Kit.tabela(dentro, [
 			{"t": "Mercadoria", "w": 0},
-			{"t": "Barato em", "w": 150},
-			{"t": "Caro em", "w": 150},
-			{"t": "Margem", "w": 70, "a": Kit.DIR},
+			{"t": "Barato em", "w": 130},
+			{"t": "Caro em", "w": 130},
+			{"t": "Margem", "w": 64, "a": Kit.DIR},
 		])
-		for ln in linhas.slice(0, 8):
+		for ln in linhas:
 			var cel := Kit.linha(tab, Tema.GANHO_FUNDO if int(ln["margem"]) >= 8 else null)
 			Kit.texto(cel[0], str(ln["bem"]))
-			Kit.texto(cel[1], "%s · %d" % [str(ln["barato_em"]), int(ln["barato"])],
-				Tema.GANHO, Tema.MICRO)
-			Kit.texto(cel[2], "%s · %d" % [str(ln["caro_em"]), int(ln["caro"])],
-				Tema.ATENCAO, Tema.MICRO)
+			# nome em cima, preço embaixo: o par cabe em 130px sem cortar o
+			# nome do reino, que era o que fazia a tabela parecer defeituosa
+			Kit.texto(cel[1], str(ln["barato_em"]), Tema.TEXTO_2, Tema.MICRO)
+			Kit.texto(cel[1], "%d de ouro" % int(ln["barato"]), Tema.GANHO, Tema.MICRO)
+			Kit.texto(cel[2], str(ln["caro_em"]), Tema.TEXTO_2, Tema.MICRO)
+			Kit.texto(cel[2], "%d de ouro" % int(ln["caro"]), Tema.ATENCAO, Tema.MICRO)
 			Kit.numero(cel[3], "+%d" % int(ln["margem"]), Tema.ACENTO)
 	if str(r.get("msg", "")) != "":
 		Kit.nota(v, str(r["msg"]))
 	Kit.respiro(v, Tema.E2)
 	_botao_modal(v, "Guardar na memória e queimar", func(): atualizar(), "primario")
+
+## O POPUP DO ASSALTO AO TRONO.
+##
+## Tomar uma capital é a decisão mais irreversível do jogo: declara guerra,
+## queima o dia inteiro, pode matar o personagem e — sem casus belli — vira
+## os seis reinos contra você de uma vez. E era um clique seco, com menos
+## atrito do que vender cinco de trigo na feira.
+##
+## O popup não é cerimônia: ele traz os três números que decidem a jogada
+## (os seus homens, a estimativa deles, a sua formação contra a doutrina
+## conhecida da casa) e diz o que se perde se der errado.
+func _modal_assalto(id: String) -> void:
+	var reino: Dictionary = {}
+	for r in state["reinos"]:
+		if str(r["id"]) == id:
+			reino = r
+	if reino.is_empty():
+		return
+	var v := _painel_modal(560)
+	Kit.titulo_tela(v, "Assaltar %s" % str(reino.get("capital", reino["nome"])),
+		"Uma capital não muda de dono por acordo. Muda por escada e por sangue.")
+	var meus: int = Combate.total_homens(state["jogador"]["tropas"])
+	var tem_cb: bool = state["casus_belli"].has(id)
+	var intel: Dictionary = Intel.sobre(state, id)
+	var grupo := Kit.sulco(v, Tema.E4, Tema.E3)
+	var fatos := Kit.fila(grupo, Tema.E5)
+	Kit.fato(fatos, "tropa", "%d" % meus, "homens seus",
+		Tema.GANHO if meus >= 60 else Tema.PERIGO,
+		"Vinte é o mínimo para bater no portão. Sessenta é o mínimo para entrar.")
+	Kit.fato(fatos, "escudo",
+		"%d" % int(intel.get("homens", 0)) if bool(intel.get("conhecido", false)) else "???",
+		"homens deles", Tema.TEXTO,
+		"Sai do relatório de espião, e ele vence. Sem espião, é a neblina.")
+	var minha_f: String = str(state["jogador"].get("formacao", "linha"))
+	Kit.fato(fatos, "espada", str(Dados.FORMACOES[minha_f]["nome"]) if
+		Dados.FORMACOES.has(minha_f) else "—", "sua formação", Tema.TEXTO,
+		"Trocável na aba Tropas antes de bater.")
+	# a doutrina COMPRADA na taverna aparece aqui, que é onde ela decide algo
+	var dout: Dictionary = Taverna.doutrina_conhecida(state, id)
+	if not dout.is_empty():
+		Kit.nota(v, "Você pagou para saber: esta casa forma em %s. %s" % [
+			str(dout["formacao"]), str(dout["conselho"])])
+	else:
+		Kit.nota(v, "Você não sabe como esta casa manda formar. Um veterano na taverna conta por 60 de ouro.")
+	if tem_cb:
+		Kit.texto(Kit.card(v, Tema.GANHO), "Você tem CASUS BELLI: as outras cortes engolem esta guerra.",
+			Tema.GANHO)
+	else:
+		Kit.texto(Kit.card(v, Tema.PERIGO),
+			"SEM casus belli: agressão pura. Relação −35 com os seis reinos, −60 com este. Forje um documento na Mesa de Intrigas antes.",
+			Tema.PERIGO)
+	Kit.nota(v, "O assalto gasta o dia inteiro. Perder custa 20 de renome — e uma derrota esmagadora deixa ferida.")
+	Kit.respiro(v, Tema.E2)
+	_botao_modal(v, "Bater no portão", func():
+		var r: Dictionary = Intriga.assaltar_trono(state, id, Jogo.log_para(state))
+		Jogo.salvar(state)
+		if not bool(r.get("ok", true)):
+			Sfx.tocar(self, "alerta")
+			_aviso(str(r.get("msg", "")))
+			atualizar()
+			return
+		Sfx.tocar(self, "espada")
+		_modal_batalha(r), "perigo", 240)
+	_botao_modal(v, "Recuar por ora", func(): atualizar(), "fantasma", 240)
 
 ## O POPUP DO DOMÍNIO — o que o clique no castelo abre.
 ##
@@ -2192,18 +2291,11 @@ func _popup_dominio(id: String) -> void:
 		if str(state["jogador"]["rei_de"]) != id:
 			var tem_cb: bool = state["casus_belli"].has(id)
 			var b_ass := _botao_modal(v, "Tomar o trono", func():
-				var r: Dictionary = Intriga.assaltar_trono(state, id, Jogo.log_para(state))
-				Jogo.salvar(state)
-				if not bool(r.get("ok", true)):
-					Sfx.tocar(self, "alerta")
-					_aviso(str(r["msg"]))
-					atualizar()
-					return
-				Sfx.tocar(self, "espada")
-				_modal_batalha(r), "perigo", 200)
+				_modal_assalto(id), "perigo", 200)
 			b_ass.disabled = not aqui
 			b_ass.tooltip_text = ("Assalto aos muros: gasta o dia inteiro." if aqui
 				else "Você precisa ESTAR na capital. Viaje até lá, ou mande uma coluna de cerco pela aba Tropas.")
+			var _sem_uso := b_ass
 			# o casus belli explicado onde ele importa: na hora de atacar
 			if tem_cb:
 				Kit.nota(v, "Você tem CASUS BELLI aqui: um pretexto que as outras cortes aceitam. Atacar não vai virar o mapa inteiro contra você.")
@@ -2504,12 +2596,43 @@ func _executar_turno(reino_id: String, emprego_id: String, dias: int) -> void:
 		_aviso("Turno cumprido: +%d de ouro." % int(r["paga"]))
 		atualizar()
 		return
-	# consequência não é aviso de rodapé: é acontecimento, e ganha modal
-	Sfx.tocar(self, "alerta")
-	_modal(str(e["nome"]),
-		"Turno de %d %s: +%d de ouro.\n\n%s" % [dias, "dia" if dias == 1 else "dias",
-			int(r["paga"]), "\n".join(conseq)],
-		[["Seguir", func(): atualizar()]], Retratos.ilustracao("emprego"))
+	# ---- A ARTE DIZ QUAL DESFECHO FOI ----
+	# Todo turno com consequência abria a MESMA ilustração de taverna, fosse
+	# ela "o atributo subiu" ou "a guarda te levou". A imagem é a primeira
+	# coisa que o olho lê num modal, e ela estava dizendo a mesma coisa para
+	# um prêmio e para uma punição — o jogador levava dois segundos lendo
+	# texto para descobrir o que a arte deveria ter contado de imediato.
+	#
+	# Prêmio e castigo passam a ter cara própria, e o som acompanha.
+	var subiu: bool = str(r.get("subiu", "")) != ""
+	var arte_t: Texture2D = Retratos.ilustracao("emprego")
+	var som_t := "alerta"
+	if r.has("prender"):
+		arte_t = Retratos.ilustracao("emboscada")   # a guarda te levou
+	elif _conseq_tem(conseq, "honra"):
+		arte_t = Retratos.ilustracao("traicao")     # a história correu a praça
+	elif _conseq_tem(conseq, "moral"):
+		arte_t = Retratos.ilustracao("derrota")     # a tropa ouviu falar
+	elif subiu:
+		arte_t = Retratos.ilustracao("coroacao")    # MÉRITO: os anos aparecem
+		som_t = "vitoria"
+	Sfx.tocar(self, som_t)
+	var cabeca := "Turno de %d %s: +%d de ouro." % [dias,
+		"dia" if dias == 1 else "dias", int(r["paga"])]
+	if subiu:
+		cabeca = "O ofício deixou marca. " + cabeca
+	_modal(str(e["nome"]), "%s\n\n%s" % [cabeca, "\n".join(conseq)],
+		[["Seguir", func(): atualizar()]], arte_t)
+
+## As consequências vêm como frases prontas de `Empregos.trabalhar` (é lá que
+## elas sabem os números). Para escolher a ARTE basta saber de que tipo elas
+## são, e a palavra-chave está dentro da frase — mais barato que devolver um
+## campo novo por consequência e manter os dois em sincronia.
+func _conseq_tem(conseq: Array, chave: String) -> bool:
+	for c in conseq:
+		if str(c).to_lower().contains(chave):
+			return true
+	return false
 
 func _servico(c: Container, rosto: Texture2D, titulo: String, desc: String,
 		preco: int, rotulo_botao: String, cb: Callable) -> void:
@@ -2551,11 +2674,74 @@ func _corte_sem_trono(c: Container) -> void:
 		Kit.texto(card, "O trono está vazio, e ninguém sentou nele.",
 			Tema.ATENCAO, Tema.CORPO_G)
 		Kit.nota(card, "Não há rei, não há consorte, não há herdeiro — e por isso não há relação a construir nem favor a cobrar. A relação que você acumula nas outras cortes não vale nada aqui.")
-		Kit.nota(card, "O que esta terra tem é o que qualquer um pode tomar. Veja o domínio no Mapa.")
+		Kit.nota(card, "E é justamente por isso que esta é a porta mais barata do continente: não se depõe ninguém aqui. Ocupa-se.")
+	# ---- O TRONO VAZIO É UMA OFERTA, E A TELA TEM QUE FAZÊ-LA ----
+	#
+	# Esta tela dizia "não há com quem negociar" e mandava o jogador para o
+	# Mapa procurar sozinho o que fazer. Mas é justamente aqui que mora a
+	# fantasia de começar do zero: são as duas únicas terras do continente
+	# onde não se toma um trono de alguém — se FUNDA um. A porta estava a
+	# duas abas de distância de quem já estava parado na frente dela.
+	Kit.secao(c, "O que se faz com uma terra sem dono")
+	var passos := Kit.sulco(c, Tema.E4, Tema.E3)
+	# UMA fila para os três fatos, e não uma fila por fato: empilhados eles
+	# ocupavam três linhas de 60px e empurravam o botão — que é o assunto
+	# desta tela inteira — para baixo da dobra.
+	var f_passos := Kit.fila(passos, Tema.E5)
+	if e_barbaro:
+		var conq: bool = Barbaros.conquistado(state)
+		var pode_f: Dictionary = Barbaros.pode_fundar(state)
+		var f_reconhecido: bool = Barbaros.reconhecido(state)
+		Kit.fato(f_passos, "espiao",
+			"1" if not f_reconhecido else "✓", "mandar batedor",
+			Tema.GANHO if f_reconhecido else Tema.TEXTO,
+			"Sem batedor você não sabe quantos clãs há nem de que tamanho.")
+		Kit.fato(f_passos, "espada",
+			"2" if not conq else "✓", "atravessar a fronteira",
+			Tema.GANHO if conq else Tema.TEXTO,
+			"Três clãs. Cada um cai por vez, e cada um custa homens.")
+		Kit.fato(f_passos, "coroa",
+			"3" if not bool(pode_f.get("ok", false)) else "✓", "fundar a sua casa",
+			Tema.GANHO if bool(pode_f.get("ok", false)) else Tema.TEXTO,
+			"Requer %d de renome. Aqui você não herda coroa: faz uma." % Barbaros.RENOME_PARA_FUNDAR)
+		var linha_b := Kit.fila(c, Tema.E3)
+		if not conq:
+			Kit.botao(linha_b, "Atravessar a fronteira", func():
+				_modal_invadir(), "perigo", 210)
+			var b_esp := Kit.botao(linha_b, "Mandar batedor · 80", func():
+				var r: Dictionary = Barbaros.espiar(state, Jogo.log_para(state))
+				Sfx.tocar(self, "moeda" if r.get("ok", false) else "alerta")
+				_aviso(str(r.get("msg", "")))
+				Jogo.salvar(state)
+				atualizar(), "fantasma", 190)
+			b_esp.disabled = f_reconhecido
+		else:
+			var b_fund := Kit.botao(linha_b, "Fundar o seu reino", func():
+				_modal_fundar(), "primario", 210)
+			b_fund.disabled = not bool(pode_f.get("ok", false))
+			b_fund.tooltip_text = str(pode_f.get("msg",
+				"O chão é seu. Falta dar um nome à casa."))
+	else:
+		# O REINO SEM REI: um trono de verdade, vazio, sem exército de clã
+		# defendendo. É a porta mais barata do continente para quem quer a
+		# própria coroa — e ela não estava escrita em lugar nenhum.
+		var meus_h: int = Combate.total_homens(state["jogador"]["tropas"])
+		Kit.fato(f_passos, "coroa", "Vazio", "o trono", Tema.ACENTO,
+			"Ninguém defende o que ninguém quer. Não há rei para depor, só um salão para ocupar.")
+		Kit.fato(f_passos, "tropa", "%d" % meus_h, "homens seus",
+			Tema.GANHO if meus_h >= 20 else Tema.PERIGO,
+			"Vinte homens é o mínimo para ocupar um trono, mesmo um abandonado.")
+		var linha_s := Kit.fila(c, Tema.E3)
+		var b_tomar := Kit.botao(linha_s, "Ocupar o Trono Vazio", func():
+			_modal_assalto("sem_rei"), "primario", 230)
+		b_tomar.disabled = meus_h < 20
+		b_tomar.tooltip_text = ("Sem rei para depor, o assalto é contra o que restou da guarnição."
+			if meus_h >= 20 else "Vinte homens, no mínimo. Recrute antes.")
+	Kit.respiro(c, Tema.E2)
 	var ir := Kit.fila(c, Tema.E3)
 	_botao(ir, "Abrir o Mapa", func():
 		tabs.current_tab = 1
-		atualizar(), "primario")
+		atualizar(), "fantasma")
 	# renda de fundo de poço, que existe justamente nestes dois nós
 	_botao(ir, "Ver os serviços da taverna", func():
 		tabs.current_tab = 3
@@ -3593,7 +3779,7 @@ func _aba_familia(c: Container) -> void:
 			glosa_h, "casa_risco")
 	var fatos_h := Kit.fila(grupo_h, Tema.E6)
 	Kit.fato(fatos_h, "ampulheta", "%d" % idade_j, "anos", Tema.TEXTO,
-		"Aos 46 o risco vira 4% ao ano; aos 56, 10%; aos 66, 25%.")
+		"Febre, estrada e ferro matam em qualquer idade: 2% ao ano desde o primeiro. Aos 46 sobe 4 pontos; aos 56, 10; aos 66, 25.")
 	Kit.fato(fatos_h, "familia", "%d" % herdeiros, "filhos",
 		Tema.GANHO if herdeiros > 0 else Tema.PERIGO,
 		"Aos 8 anos cada um é educado no seu atributo mais forte; aos %d pode herdar." % Jogo.MAIORIDADE)
@@ -4222,14 +4408,18 @@ func _botao_modal(v: Container, texto: String, cb: Callable,
 		overlay_modal.visible = false
 		cb.call(), variante, largura)
 
-func _painel_modal() -> VBoxContainer:
+## `largura` existe para os modais cujo CONTEÚDO é uma tabela: 480px é a
+## medida certa para um parágrafo e dois botões, e é estreita demais para
+## quatro colunas — foi assim que o mapa comercial passou meses parecendo
+## quebrado quando o que estava errado era a mesa, não o dado.
+func _painel_modal(largura: int = 480) -> VBoxContainer:
 	for filho in modal_centro.get_children():
 		filho.queue_free()
 	overlay_modal.visible = true
 	Sfx.tocar(self, "abrir")
 	var painel := PanelContainer.new()
 	painel.add_theme_stylebox_override("panel", Tema.estilo_modal())
-	painel.custom_minimum_size = Vector2(480, 0)
+	painel.custom_minimum_size = Vector2(largura, 0)
 	modal_centro.add_child(painel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", Tema.E4)

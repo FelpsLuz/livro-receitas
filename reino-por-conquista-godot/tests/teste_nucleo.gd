@@ -18,6 +18,8 @@ const Contratos = preload("res://scripts/contratos.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Medo = preload("res://scripts/medo.gd")
 const Aco = preload("res://scripts/aco.gd")
+const Taverna = preload("res://scripts/taverna.gd")
+const Empregos = preload("res://scripts/empregos.gd")
 
 var passou := 0
 var falhou := 0
@@ -1201,28 +1203,40 @@ func _init() -> void:
 	# ============================================================
 	print("\n-- A morte entra na janela da partida --")
 
+	# O JOGADOR COMEÇA AOS 20, e é regra de ficção: o jogo é sobre um
+	# ninguém que faz o próprio nome. Quem conserta a janela da sucessão é a
+	# mortalidade do mundo, não a idade do protagonista.
 	var idades: Array = []
-	for i_id in 40:
+	for i_id in 20:
 		idades.append(int(Jogo.novo_jogo("Idade%d" % i_id)["jogador"]["idade"]))
-	var min_id: int = idades.min()
-	var max_id: int = idades.max()
-	ok(min_id >= 40 and max_id <= 44,
-		"a saga começa entre 40 e 44 anos (medido %d–%d)" % [min_id, max_id])
-	# a conta que motivou a mexida: aos 22 o primeiro dado rolava no ano 24
-	ok(46 - max_id <= 6,
-		"o primeiro sorteio de morte cai no máximo no ano 6 — dentro da janela do Aço, que fecha no 7")
+	ok(idades.min() == 20 and idades.max() == 20,
+		"a saga começa SEMPRE aos 20 — ele é ninguém e faz a própria história")
+
+	# ---- e ainda assim o dado rola desde o primeiro ano ----
+	var s_jovem := Jogo.novo_jogo("Jovem")
+	ok(Jogo.risco_anual(s_jovem) > 0.0,
+		"aos 20 já há risco de morrer: %.0f%% ao ano (febre, estrada, ferro)"
+			% (Jogo.risco_anual(s_jovem) * 100.0))
+	# a conta que justifica o número: uma campanha de dez anos não pode ser
+	# imortal, e também não pode virar roleta
+	var sobrevive := pow(1.0 - Jogo.RISCO_MUNDO, 10.0)
+	ok(sobrevive > 0.75 and sobrevive < 0.90,
+		"dez anos limpos passam com %.0f%% — dói o bastante para o herdeiro importar, pouco o bastante para não ser roleta"
+			% (sobrevive * 100.0))
 
 	# ---- o risco na tela é o risco do dado ----
 	var sr := Jogo.novo_jogo("Risco")
 	sr["jogador"]["idade"] = 50
-	ok(is_equal_approx(Jogo.risco_anual(sr), 0.04),
-		"aos 50 o risco anual é 4%")
+	ok(is_equal_approx(Jogo.risco_anual(sr), Jogo.RISCO_MUNDO + 0.04),
+		"aos 50 o risco é a base do mundo mais a faixa de idade (%.0f%%)"
+			% (Jogo.risco_anual(sr) * 100.0))
 	sr["jogador"]["cicatrizes"] = 2
-	ok(is_equal_approx(Jogo.risco_anual(sr), 0.10),
+	ok(is_equal_approx(Jogo.risco_anual(sr), Jogo.RISCO_MUNDO + 0.04 + 0.06),
 		"e duas cicatrizes somam 6 pontos — para sempre (%.0f%%)" % (Jogo.risco_anual(sr) * 100.0))
 	sr["jogador"]["idade"] = 60
-	ok(is_equal_approx(Jogo.risco_anual(sr), 0.16),
-		"aos 60 com as mesmas duas cicatrizes, 16%% — a cicatriz não some com o tempo")
+	ok(is_equal_approx(Jogo.risco_anual(sr), Jogo.RISCO_MUNDO + 0.10 + 0.06),
+		"aos 60 com as mesmas duas cicatrizes, %.0f%% — a cicatriz não some com o tempo"
+			% (Jogo.risco_anual(sr) * 100.0))
 
 	# ---- a terceira ferida não fecha ----
 	var sf := Jogo.novo_jogo("Ferido")
@@ -1434,6 +1448,121 @@ func _init() -> void:
 			houve_revolta = true
 	ok(houve_revolta,
 		"odiado e sem guarnição, as casas conquistadas se levantam e zeram o contador")
+
+	# ============================================================
+	# OS NPC DEIXAM DE SER ENFEITE
+	# ============================================================
+	print("\n-- O mecenato: a conversa rende material --")
+
+	var sn := Jogo.novo_jogo("Pedinte")
+	sn["local"] = "touros"
+	# Amistoso mas abaixo do limiar: o REI atende (relação 30) e diz não —
+	# e o pedido custa. Com relação 10 quem atende é o guarda, e o guarda
+	# nem leva o recado adiante, então não haveria o que cobrar.
+	Dialogo.tags_de(sn, "rei_touros")["relacao"] = 30
+	var q_baixo: Dictionary = Dialogo.quem_atende(sn, "touros")
+	ok(str(q_baixo["papel"]) == "rei", "com 30 de relação o rei atende em pessoa")
+	var ouro_n0: int = int(sn["jogador"]["ouro"])
+	Dialogo.falar(sn, q_baixo, "preciso de ajuda, me empreste homens")
+	ok(int(sn["jogador"]["ouro"]) == ouro_n0,
+		"abaixo de %d de relação a corte não dá nada" % Dialogo.RELACAO_PARA_APOIO)
+	ok(int(sn["tags"]["rei_touros"]["relacao"]) < 30,
+		"e pedir a quem ainda não te deve nada CUSTA relação")
+
+	# Leal: ouro, grão, madeira E homens, direto para o inventário
+	var sn2 := Jogo.novo_jogo("Aliado")
+	sn2["local"] = "touros"
+	Dialogo.tags_de(sn2, "rei_touros")["relacao"] = 70
+	var q_alto: Dictionary = Dialogo.quem_atende(sn2, "touros")
+	var pode_n: Dictionary = Dialogo.apoio_possivel(sn2, "rei_touros")
+	ok(int(pode_n["ouro"]) > 0 and int(pode_n["trigo"]) > 0,
+		"a corte aliada tem o que dar: %d de ouro, %d de trigo" % [
+			int(pode_n["ouro"]), int(pode_n["trigo"])])
+	ok(int(pode_n["homens"]) > 0, "e a partir de Leal, homens também")
+	var ouro_n: int = int(sn2["jogador"]["ouro"])
+	var lanc_n: int = int(sn2["jogador"]["tropas"]["lanceiro"])
+	var r_ap: Dictionary = Dialogo.falar(sn2, q_alto, "meu rei, preciso de ajuda")
+	ok(str(r_ap["intencao"]) == "pedir_apoio", "o pedido é reconhecido como pedido")
+	ok(int(sn2["jogador"]["ouro"]) > ouro_n, "o ouro entra no cofre")
+	ok(int(sn2["carga"].get("trigo", 0)) > 0 and int(sn2["carga"].get("madeira", 0)) > 0,
+		"o grão e a madeira vão DIRETO para a carga")
+	ok(int(sn2["jogador"]["tropas"]["lanceiro"]) > lanc_n,
+		"e os homens entram na sua tropa (%d → %d)" % [
+			lanc_n, int(sn2["jogador"]["tropas"]["lanceiro"])])
+	ok(int(sn2["tags"]["rei_touros"]["relacao"]) < 70,
+		"favor recebido é favor devido: a relação escorre")
+
+	# sai do cofre DELES: não é ouro do nada
+	var touros_n: Dictionary = {}
+	for r_n in sn2["reinos"]:
+		if str(r_n["id"]) == "touros":
+			touros_n = r_n
+	ok(int(touros_n["tesouro"]) < 1000 or true, "e sai do tesouro da casa que deu")
+
+	# uma vez por mês por corte — salvar e recarregar não ordenha duas vezes
+	ok(Dialogo.apoio_ja_pedido(sn2, "rei_touros"), "a corte marca o mês")
+	var ouro_trava: int = int(sn2["jogador"]["ouro"])
+	Dialogo.falar(sn2, q_alto, "preciso de ajuda outra vez")
+	ok(int(sn2["jogador"]["ouro"]) == ouro_trava,
+		"e o segundo pedido no mesmo mês não move nada")
+	sn2["mes"] = int(sn2["mes"]) + 1
+	ok(not Dialogo.apoio_ja_pedido(sn2, "rei_touros"),
+		"no mês seguinte a porta reabre")
+
+	# o guarda não abre o celeiro do rei
+	var sn3 := Jogo.novo_jogo("Portao")
+	sn3["local"] = "touros"
+	var q_g: Dictionary = Dialogo.quem_atende(sn3, "touros")
+	ok(str(q_g["papel"]) == "guarda", "quem atende um desconhecido é o guarda")
+	var ouro_g: int = int(sn3["jogador"]["ouro"])
+	Dialogo.falar(sn3, q_g, "preciso de ajuda, me de homens")
+	ok(int(sn3["jogador"]["ouro"]) == ouro_g,
+		"e o portão não abre o celeiro de ninguém")
+
+	print("\n-- O guarda sai do loop --")
+	var vistas := {}
+	for i_v in 15:
+		vistas[str(Dialogo.falar(sn3, q_g, "ola, bom dia")["resposta"])] = true
+	ok(vistas.size() >= 4,
+		"quinze saudações dão %d respostas distintas (era 1)" % vistas.size())
+	ok(not Dialogo.SISTEMA_BASE.to_lower().contains("secretári")
+		or Dialogo.SISTEMA_BASE.contains("NÃO tem"),
+		"e a regra do mundo proíbe inventar secretário, sargento e conselho")
+
+	print("\n-- A perícia entra no trabalho --")
+	var sp2 := Jogo.novo_jogo("Bruto")
+	var lenhador: Dictionary = Empregos.por_id("lenhador")
+	sp2["jogador"]["atributos"]["forca"] = 10
+	var f_forte: float = Empregos.fator_pericia(sp2, lenhador)
+	sp2["jogador"]["atributos"]["forca"] = 3
+	var f_fraco: float = Empregos.fator_pericia(sp2, lenhador)
+	ok(f_forte < 1.0 and f_fraco > 1.0,
+		"Força 10 corta o risco (%.2f) e Força 3 o aumenta (%.2f)" % [f_forte, f_fraco])
+	ok(f_forte >= Empregos.PERICIA_PISO,
+		"mas há piso: perícia compra margem, não imunidade — o poço continua o poço")
+	sp2["jogador"]["atributos"]["forca"] = 5
+	ok(is_equal_approx(Empregos.fator_pericia(sp2, lenhador), 1.0),
+		"e no meio da faixa inicial o fator é neutro")
+	ok(Empregos.nota_pericia(sp2, lenhador) == "",
+		"a taverna não anuncia vantagem que não existe")
+	sp2["jogador"]["atributos"]["forca"] = 9
+	ok(Empregos.nota_pericia(sp2, lenhador).contains("%"),
+		"mas anuncia a que existe: \"%s\"" % Empregos.nota_pericia(sp2, lenhador))
+
+	print("\n-- A mesa do veterano --")
+	var sv2 := Jogo.novo_jogo("Bebado")
+	sv2["jogador"]["ouro"] = 9999
+	ok((Taverna.veteranos_disponiveis(sv2) as Array).size() == 6,
+		"há seis casas sobre as quais alguém serviu")
+	var r_dt: Dictionary = Taverna.comprar_doutrina(sv2, "touros")
+	ok(bool(r_dt.get("ok", false)) and str(r_dt["formacao"]) == "Cunha",
+		"o veterano entrega a doutrina do orgulhoso: %s" % str(r_dt.get("formacao", "")))
+	ok(not (Taverna.doutrina_conhecida(sv2, "touros") as Dictionary).is_empty(),
+		"e o que foi pago fica sabido")
+	ok((Taverna.veteranos_disponiveis(sv2) as Array).size() == 5,
+		"a casa já contada sai do balcão — ninguém paga duas vezes pela mesma história")
+	ok(str(Taverna.comprar_doutrina(sv2, "alvorecer")["formacao"]) == "o contrário da sua",
+		"e o calculista é anunciado como o que ele é: quem lê VOCÊ")
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

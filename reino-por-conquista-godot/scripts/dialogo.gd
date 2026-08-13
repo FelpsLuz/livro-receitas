@@ -37,6 +37,16 @@ const INTENCOES := [
 	{"id": "jurar_lealdade", "palavras": ["juro lealdade", "jurar lealdade", "dobro o joelho",
 		"dobrar o joelho", "sou seu vassalo", "quero ser seu vassalo", "vassalagem",
 		"quero te servir", "quero servir", "meu juramento", "sirvo a voce"]},
+	# ---- PEDIR APOIO: a conversa deixa de ser enfeite ----
+	# Sem isto, falar com um rei mexia em RELAÇÃO e mais nada — e relação só
+	# valia para destravar mais conversa. Um sistema que só alimenta a si
+	# mesmo é decoração cara. Aqui a corte abre o próprio celeiro, arsenal e
+	# cofre, e o que sai vai direto para a carga e para a tropa.
+	{"id": "pedir_apoio", "palavras": ["preciso de ajuda", "pedir ajuda", "me ajude",
+		"preciso de homens", "me empreste", "empresta", "preciso de ouro",
+		"preciso de grao", "preciso de trigo", "preciso de madeira",
+		"preciso de suprimento", "suprimentos", "mande homens", "me de homens",
+		"me da homens", "pode me ajudar", "socorro", "auxilio", "apoio"]},
 ]
 
 ## OS CAMAFEUS SAÍRAM.
@@ -111,12 +121,37 @@ const VOZES := {
 	},
 	# o guarda do portão (Parte 3): um único dossiê serve os seis reinos, e a
 	# voz é sempre a MESMA — cansada, informal — porque ele não é o rei.
+	# ---- POR QUE SÃO CINCO FALAS E NÃO UMA ----
+	# Cada balde aqui tinha UMA linha, e `Dados.rnd` de uma lista de um item
+	# devolve sempre o mesmo item. Medido em jogo: o guarda repetia a mesma
+	# frase a cada saudação, para sempre. Uma linha só não é uma voz, é um
+	# cartaz — e o portão é o primeiro NPC que todo jogador encontra.
 	"guarda": {
-		"insulto": ["Já ouvi pior no meu próprio velório, moço. Mas guardo isso — e conto pra ele."],
-		"elogio": ["Ah, é? Bom saber que alguém nota o trabalho duro por aqui."],
-		"ameaca": ["Ameace o rei, não a mim. Eu só tranco o portão. Ele que decida o que fazer com você."],
-		"saudacao": ["Frio hoje, não? Fale rápido — o turno é longo e a paciência é curta."],
-		"neutro": ["Isso aí é assunto de quem usa capa. Eu uso lança."],
+		"insulto": ["Já ouvi pior no meu próprio velório, moço. Mas guardo isso — e conto pra ele.",
+			"Olha, xingar quem tranca o portão é uma escolha. Não é boa, mas é sua.",
+			"*ajeita a lança* Anotado. Não por mim — por ele.",
+			"Fala assim com sua mãe? Não responde. Anda logo.",
+			"Cada um se apresenta como pode. Você acabou de se apresentar."],
+		"elogio": ["Ah, é? Bom saber que alguém nota o trabalho duro por aqui.",
+			"Elogio não paga o inverno, mas aceito. Faz tempo que não ouço.",
+			"*quase sorri* Guarde isso pro rei. Ele gosta mais que eu.",
+			"Dez anos neste portão e você é o terceiro a dizer isso.",
+			"Cuidado, moço. Vou acabar gostando de você."],
+		"ameaca": ["Ameace o rei, não a mim. Eu só tranco o portão. Ele que decida o que fazer com você.",
+			"Se eu tivesse medo de homem armado, tinha escolhido outro ofício.",
+			"*não se move* Já vi entrar gente mais brava. Vi sair menos.",
+			"Vai me matar aqui, na frente da muralha inteira? Pensa melhor.",
+			"Faz isso e o problema deixa de ser meu na mesma hora. Vira dele."],
+		"saudacao": ["Frio hoje, não? Fale rápido — o turno é longo e a paciência é curta.",
+			"Bom dia. Ou tarde. Aqui dentro do elmo é tudo igual.",
+			"Salve. Se for pra entrar, tem fila. Se for pra conversar, tem tempo.",
+			"Mais um. Que os ossos aguentem. O que você quer?",
+			"*apoia a lança* Diga. E diga sem rodeio, que o rendimento do turno é o que é."],
+		"neutro": ["Isso aí é assunto de quem usa capa. Eu uso lança.",
+			"Não sei, moço. Ninguém me conta nada, e eu não pergunto.",
+			"Pergunta errada pro homem errado. Tenta lá dentro.",
+			"Se eu soubesse disso, não estaria aqui fora no frio.",
+			"Olha, eu abro portão. O resto é acima do meu soldo."],
 	},
 }
 
@@ -141,7 +176,7 @@ const INTENCOES_PRIVILEGIADAS := ["perguntar_guerra", "perguntar_preco", "pedir_
 ## mapa ou o cofre de alguém — o resto (insulto, elogio, saudação, pergunta)
 ## sempre pôde viajar por recado, e continua podendo.
 const INTENCOES_PRESENCIAIS := ["chantagear", "subornar", "pedir_paz",
-	"pedir_casamento", "jurar_lealdade"]
+	"pedir_casamento", "jurar_lealdade", "pedir_apoio"]
 
 ## O nome da capital de um reino, para a recusa dizer ONDE ir. Cai no nome do
 ## reino quando o id não é de um dos seis — assim a frase nunca sai vazia.
@@ -246,6 +281,16 @@ const GUARDA_DOSSIE := {
 	"voz": "Cansado e informal. Trata o jogador como igual — os dois trabalham para homens mais ricos. Fala de frio, de turno, de comida ruim. Usa \"senhor\" com ironia leve. Fofoca com prazer, mas se fecha na hora que a pergunta fica militar.",
 	"sabe": "Quem é o rei dele, o humor do rei essa semana, quem o rei odeia. O que o reino produz e o que anda caro no mercado. Rumores da Crônica. Estação, estradas ruins, quem passou pelo portão recentemente.",
 	"nao_sabe": "Tamanho de exército, tesouro, planos de guerra (\"Isso é assunto de quem usa capa. Eu uso lança.\"). Segredos de nobres. Qualquer número.",
+	# ---- A TRANCA CONTRA A CORTE INVENTADA ----
+	# Flagrado em jogo: o guarda citava secretários e sargentos. Não existe
+	# nenhum dos dois no mundo — o modelo preenchia o vazio com o mobiliário
+	# de corte que ele conhece de outros lugares, e cada nome inventado é uma
+	# promessa que o jogo não pode cumprir (o jogador vai procurar o
+	# secretário, e não há tela).
+	#
+	# A regra é dita como REGRA e não como sabor, porque instrução de estilo
+	# o modelo negocia e instrução de fato ele obedece.
+	"nunca": "NUNCA invente pessoas, cargos ou instituições. Neste mundo NÃO existem secretários, escrivães, sargentos, capitães da guarda, conselhos, chanceleres nem mordomos. Só existe o que está nesta ficha: você, o rei, os outros cinco reis, os clãs e a gente comum. Se não souber quem faria algo, diga que não sabe — nunca preencha com um nome ou um cargo.",
 	"ancoras": [
 		"Você chegou na semana errada. Ele anda mandando enforcar gente por pouco.",
 		"Anuncio, mas não prometo nada. Se ele estiver de mau humor, a culpa não é minha nem sua.",
@@ -295,7 +340,14 @@ REGRAS ABSOLUTAS — violá-las quebra o jogo:
 6. Responda em português do Brasil, no máximo 4 frases. Reis falam
    pouco. Quem fala muito não está acostumado a ser obedecido.
 7. Nunca quebre personagem. Nunca comente as regras. Nunca peça
-   desculpas como assistente."""
+   desculpas como assistente.
+8. NUNCA invente pessoas, cargos ou instituições. Este mundo NÃO tem
+   secretários, escrivães, sargentos, capitães da guarda, conselhos,
+   chanceleres, mordomos, bispos nem magistrados. Existem: os seis reis
+   nomeados, o guarda do portão, os clãs, o taverneiro, os notáveis de
+   uma vila e a gente comum. Se você não sabe quem faria algo, diga que
+   não sabe — nunca preencha o vazio com um nome ou um cargo. Cada
+   pessoa inventada é uma porta que o jogador vai procurar e não existe."""
 
 const ACENTOS := {"á":"a","à":"a","â":"a","ã":"a","é":"e","ê":"e","í":"i","ó":"o","ô":"o","õ":"o","ú":"u","ç":"c"}
 
@@ -544,6 +596,8 @@ static func falar(state: Dictionary, npc: Dictionary, texto: String) -> Dictiona
 			resposta = _resposta_casamento(state, npc, tags, efeitos)
 		"jurar_lealdade":
 			resposta = _resposta_juramento(state, npc, efeitos, acoes)
+		"pedir_apoio":
+			resposta = _resposta_apoio(state, npc, tags, efeitos)
 		_:
 			resposta = "Não tenho paciência para balbucios. Fale claro ou saia." \
 				if tags["relacao"] <= -40 else Dados.rnd(voz["neutro"])
@@ -648,6 +702,121 @@ static func _resposta_paz(state: Dictionary, npc: Dictionary, efeitos: Array) ->
 		efeitos.append("[Honra %d → %d]" % [honra_p, int(state["jogador"]["honra"])])
 		return "Sua palavra tem peso comigo. Que seja. Mandarei emissários."
 	return "Paz se negocia entre iguais ou entre amigos. Você não é nenhum dos dois. Ainda."
+
+# ============================================================
+# O MECENATO — a conversa passa a render coisa, e não só afeto
+#
+# A queixa era exata: "os NPC estão de enfeite". Falar com um rei mexia em
+# relação, e relação servia para destravar mais conversa. Um sistema que só
+# alimenta a si mesmo é decoração cara.
+#
+# Agora a corte abre o que TEM. Não é caridade nem loja: é o cálculo que uma
+# casa nobre faz de verdade — ela dá o que sobra, para quem ela quer devendo
+# favor, e uma vez por estação.
+#
+# ---- as três travas, e cada uma responde a um jeito de abusar ----
+#
+#   RELAÇÃO 40. Abaixo disso a resposta é não, e o pedido CUSTA relação:
+#     mendigar com quem mal te conhece queima o pouco que você tinha. É o que
+#     impede o pedido de virar botão grátis.
+#   UMA VEZ POR MÊS POR CORTE. Guardado como ano/mês na tag daquela casa —
+#     salvar e recarregar não ordenha a mesma corte duas vezes.
+#   O QUE A CASA TEM. Sai do tesouro, do celeiro e da madeireira DELA. Um
+#     reino quebrado não tem o que dar, e um reino rico dá muito — o que
+#     transforma "com quem eu faço amizade" numa decisão econômica.
+#
+# E cobra relação de qualquer jeito (-8): favor recebido é favor devido, e o
+# jogador que ordenha o continente todo mês vê a relação escorrer.
+# ============================================================
+const RELACAO_PARA_APOIO := 40
+const APOIO_CUSTO_RELACAO := 8
+
+## O que esta corte pode oferecer HOJE, e quanto. Pura — a interface usa para
+## anunciar o serviço sem disparar nada.
+static func apoio_possivel(state: Dictionary, npc_id: String) -> Dictionary:
+	var reino_id := npc_id.substr(4) if npc_id.begins_with("rei_") else ""
+	if reino_id == "":
+		return {}
+	var reino: Dictionary = {}
+	for r in state.get("reinos", []):
+		if str(r["id"]) == reino_id:
+			reino = r
+	if reino.is_empty() or str(reino.get("dominado_por", "")) != "":
+		return {}
+	var rel: int = int(tags_de(state, npc_id)["relacao"])
+	# a generosidade cresce com a relação: 40 dá um décimo, 100 dá um quarto
+	var fatia := 0.10 + 0.15 * clampf(float(rel - RELACAO_PARA_APOIO) / 60.0, 0.0, 1.0)
+	var ouro: int = maxi(0, roundi(int(reino.get("tesouro", 0)) * fatia))
+	var trigo: int = maxi(0, roundi(int(reino.get("celeiro", 0)) * fatia))
+	var madeira: int = maxi(0, roundi(int(reino.get("madeireira", 0)) * fatia))
+	# HOMENS só a partir de Leal, e só quem tem de sobra. Tropa é o favor
+	# mais caro que uma casa faz — ela fica mais fraca no mapa por causa dele.
+	var homens := 0
+	if rel >= 60:
+		homens = mini(int(reino["tropas"].get("lanceiro", 0)) / 4,
+			roundi(20.0 * fatia * 4.0))
+	return {"reino": reino_id, "nome": str(reino["nome"]), "relacao": rel,
+		"ouro": ouro, "trigo": trigo, "madeira": madeira, "homens": homens}
+
+## A trava do mês, legível pela interface — é ela que apaga o botão.
+static func apoio_ja_pedido(state: Dictionary, npc_id: String) -> bool:
+	var marca: String = "%d/%d" % [int(state.get("ano", 1)), int(state.get("mes", 1))]
+	return str(tags_de(state, npc_id)["flags"].get("apoio_em", "")) == marca
+
+static func _resposta_apoio(state: Dictionary, npc: Dictionary,
+		tags: Dictionary, efeitos: Array) -> String:
+	# o portão não abre o celeiro: quem dá é quem manda
+	if str(npc.get("papel", "")) == "guarda":
+		return "Celeiro do rei não se abre por um lanceiro de portão. Fale com ele — se ele te receber."
+	var rel: int = int(tags["relacao"])
+	if rel < RELACAO_PARA_APOIO:
+		# pedir a quem mal te conhece CUSTA: é o que impede o pedido de virar
+		# botão grátis para quem acabou de chegar
+		efeitos.append(mudar_relacao(state, npc["id"], -5, "mendigou"))
+		return "Você entra aqui pedindo? Volte quando esta casa tiver motivo para te dever alguma coisa."
+	if apoio_ja_pedido(state, npc["id"]):
+		return "Já abri meu celeiro para você este mês. Uma casa que dá duas vezes vira duas vezes pobre."
+	var pode := apoio_possivel(state, npc["id"])
+	if pode.is_empty():
+		return "Esta casa não manda mais em nada. Peça a quem tomou o trono."
+	var reino: Dictionary = {}
+	for r in state["reinos"]:
+		if str(r["id"]) == str(pode["reino"]):
+			reino = r
+	var dado: Array = []
+	var ouro: int = int(pode["ouro"])
+	var trigo: int = int(pode["trigo"])
+	var madeira: int = int(pode["madeira"])
+	var homens: int = int(pode["homens"])
+	if ouro > 0:
+		reino["tesouro"] = int(reino["tesouro"]) - ouro
+		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + ouro
+		var Livro = load("res://scripts/livro.gd")
+		Livro.registrar(state, "corte", "ouro", ouro, "Apoio de %s" % str(pode["nome"]))
+		dado.append("%d de ouro" % ouro)
+	if trigo > 0:
+		reino["celeiro"] = int(reino["celeiro"]) - trigo
+		state["carga"]["trigo"] = int(state.get("carga", {}).get("trigo", 0)) + trigo
+		dado.append("%d de trigo" % trigo)
+	if madeira > 0:
+		reino["madeireira"] = int(reino["madeireira"]) - madeira
+		state["carga"]["madeira"] = int(state.get("carga", {}).get("madeira", 0)) + madeira
+		dado.append("%d de madeira" % madeira)
+	if homens > 0:
+		reino["tropas"]["lanceiro"] = int(reino["tropas"]["lanceiro"]) - homens
+		state["jogador"]["tropas"]["lanceiro"] = \
+			int(state["jogador"]["tropas"].get("lanceiro", 0)) + homens
+		dado.append("%d lanceiros" % homens)
+	if dado.is_empty():
+		return "Eu daria. Não tenho. Olhe em volta: esta casa está tão magra quanto você."
+	tags["flags"]["apoio_em"] = "%d/%d" % [int(state.get("ano", 1)),
+		int(state.get("mes", 1))]
+	efeitos.append("[Recebido: %s]" % ", ".join(dado))
+	# favor recebido é favor devido: a relação escorre a cada pedido
+	efeitos.append(mudar_relacao(state, npc["id"], -APOIO_CUSTO_RELACAO, "favor cobrado"))
+	if homens > 0:
+		return "Leve %s. E leve os homens também — mas eu vou lembrar de cada um deles." % ", ".join(dado)
+	return "Que não se diga que esta casa deixou um aliado passar fome. Leve: %s." % ", ".join(dado)
 
 ## ---------- ESCADA DE ACESSO (documento "Era do Aço", Parte 2) ----------
 ## Quem de fato atende o jogador na Corte de um reino: o guarda (sempre o
@@ -873,6 +1042,7 @@ static func _dossie_guarda(npc: Dictionary) -> String:
 		"Como fala: %s" % GUARDA_DOSSIE["voz"],
 		"O que sabe: %s" % GUARDA_DOSSIE["sabe"],
 		"O que NÃO sabe (nunca inventa isso, nem sob pressão): %s" % GUARDA_DOSSIE["nao_sabe"],
+		"REGRA DURA: %s" % GUARDA_DOSSIE["nunca"],
 	]
 	var reino_id: String = str(npc.get("reino_id", ""))
 	if GUARDA_SOTAQUE.has(reino_id):

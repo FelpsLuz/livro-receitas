@@ -58,16 +58,22 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"ano": 1, "mes": 3, "dia": 1,
 		"jogador": {
 			"nome": nome if nome != "" else Dados.rnd(Dados.NOMES_M) + " " + Dados.rnd(Dados.SOBRENOMES),
-			# ---- POR QUE 40 E NÃO 22 ----
-			# Com 22, o primeiro sorteio de morte rolava aos 46: vinte e
-			# quatro anos de jogo, que a 3 dias por mês são 864 cliques de
-			# "passar o dia" antes de o dado ser lançado UMA vez. O Aço
-			# termina de chegar no ano 7. A morte, a sucessão e o herdeiro
-			# — o único laço que separa este jogo de um Mount & Blade —
-			# ficavam fora da janela em que a partida acontece.
-			# Começando entre 40 e 44, o dado começa a rolar entre o ano 2
-			# e o ano 6: dentro da campanha, e não depois dela.
-			"idade": Dados.ri(40, 44),
+			# ---- VINTE ANOS, E O RELÓGIO CONSERTADO DE OUTRO JEITO ----
+			#
+			# O jogo começa com um ninguém que precisa fazer a própria
+			# história: aos 40 ele já teria uma, e a fantasia do mercenário
+			# sem nome morre na tela de criação.
+			#
+			# Só que aos 20 o primeiro sorteio de morte rolava aos 46 —
+			# vinte e seis anos de jogo, que a 3 dias por mês são 936
+			# cliques antes de o dado ser lançado UMA vez. A sucessão, o
+			# herdeiro e a regência ficavam fora da janela da partida.
+			#
+			# A idade não é a resposta: a MORTALIDADE é. Este mundo mata
+			# jovem por doença, estrada e ferro (ver `RISCO_MUNDO`), e é
+			# isso que faz o herdeiro valer aos vinte e um anos de idade
+			# sem precisar envelhecer o protagonista.
+			"idade": 20,
 			"atributos": {"forca": Dados.ri(4, 7), "carisma": Dados.ri(4, 7),
 				"gestao": Dados.ri(4, 7), "intriga": Dados.ri(3, 6)},
 			"renome": 0, "ouro": 150, "crueldade": 0, "moral": 100,
@@ -492,12 +498,31 @@ static func progresso_conquista(state: Dictionary) -> Dictionary:
 ## +3% ao ano por cicatriz, para sempre. É o dano que não fecha.
 const RISCO_POR_CICATRIZ := 0.03
 
+## ---- O RISCO QUE NÃO VEM DA IDADE ----
+##
+## A escada de mortalidade era 0% até os 45, e o jogador começa aos 20. Isso
+## queria dizer vinte e seis anos de campanha — 936 cliques de "passar o dia"
+## — antes de o dado ser lançado uma única vez. O herdeiro, a regência e a
+## sucessão, que são o que separa esta saga de um Mount & Blade, ficavam
+## fora da janela em que a partida acontece.
+##
+## Envelhecer o protagonista resolveria e custaria a fantasia: o jogo é sobre
+## um ninguém que faz o próprio nome, e um ninguém tem vinte anos.
+##
+## Então o que muda é a régua. Este mundo mata jovem — febre no acampamento,
+## estrada ruim, ferida que infecciona, faca na taverna. Dois por cento ao
+## ano desde o primeiro: sozinho não é ameaça (uma campanha de dez anos passa
+## com 82% de chance), mas soma com ferida e cicatriz, e faz a pergunta "eu
+## tenho herdeiro?" existir aos vinte e um anos de idade em vez de aos
+## quarenta e seis.
+const RISCO_MUNDO := 0.02
+
 ## O risco de morrer neste ano, para o sorteio e para a interface — e é a
 ## MESMA função nos dois lugares, senão a barra da Casa mente.
 static func risco_anual(state: Dictionary) -> float:
 	var idade: int = int(state["jogador"]["idade"])
 	var base := 0.25 if idade > 65 else (0.10 if idade > 55 else (0.04 if idade > 45 else 0.0))
-	return minf(0.90, base + RISCO_POR_CICATRIZ * cicatrizes(state))
+	return minf(0.90, RISCO_MUNDO + base + RISCO_POR_CICATRIZ * cicatrizes(state))
 
 static func _envelhecer(state: Dictionary, log: Callable) -> void:
 	state["jogador"]["idade"] += 1

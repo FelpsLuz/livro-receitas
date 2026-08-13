@@ -25,12 +25,94 @@ const PRECO_RUMOR := 60
 const PRECO_ROTA := 60
 const PRECO_INFORMANTE := 120       # entrada; depois 25/mês
 
+# ============================================================
+# 1. A MESA DO VETERANO — o que se sabe de um rei, e não de um preço
+#
+# O balcão vendia DUAS informações de preço: "rumor de mercado" (um choque
+# vindouro num bem) e "mapa comercial" (onde cada bem está barato e caro).
+# Da cadeira do jogador é a mesma compra por 60 de ouro, e ele escolhe pela
+# arte do retrato — o rumor era o mapa com mais passos.
+#
+# O rumor virou outra coisa, e virou porque a formação de batalha passou a
+# depender da PERSONALIDADE de quem comanda: o orgulhoso carrega em cunha, o
+# honrado segura a linha, o calculista responde à sua formação, o cruel gira
+# pelo ciclo. Isso é conhecimento militar de valor real, e é exatamente o
+# tipo de coisa que um veterano bêbado sabe e um cartógrafo não.
+#
+# 60 de ouro contra os 180 do espião: o veterano diz o TEMPERAMENTO (que não
+# muda nunca), o espião diz a formação DESTE MÊS. Um é a régua, o outro é a
+# leitura — e contra o calculista nem o espião serve, porque ele lê você.
+# ============================================================
+static func veteranos_disponiveis(state: Dictionary) -> Array:
+	var lista: Array = []
+	for r in state["reinos"]:
+		if str(r.get("dominado_por", "")) != "" or bool(r.get("fundado_pelo_jogador", false)):
+			continue
+		if not bool(state.get("doutrinas", {}).get(str(r["id"]), false)):
+			lista.append(r)
+	return lista
+
+const DOUTRINA := {
+	"orgulhoso": {"formacao": "Cunha",
+		"txt": "Esse não manobra. Ele escolhe um ponto da sua linha e vai por dentro, sempre. Cunha, todo santo mês, faça chuva ou faça sol.",
+		"conselho": "Envolvimento come cunha. Traga os flancos."},
+	"honrado": {"formacao": "Linha de Escudos",
+		"txt": "Homem de manual. Linha de escudos, de frente, sem truque — ele acha que manobrar é trapaça.",
+		"conselho": "Cunha rompe linha. Concentre e fure."},
+	"calculista": {"formacao": "o contrário da sua",
+		"txt": "Esse é o perigoso. Ele não tem doutrina: ele tem espião. Manda formar o que ganha da SUA formação, e descobre qual é antes de você chegar.",
+		"conselho": "Contra ele espião não vale nada. Troque de formação e não repita."},
+	"cruel": {"formacao": "muda todo mês",
+		"txt": "Ninguém sabe. Nem os homens dele sabem até a manhã da batalha — ele troca por capricho, e enforca quem reclama.",
+		"conselho": "Contra ele o relatório de espião vale, e vale todo mês."},
+}
+
+static func comprar_doutrina(state: Dictionary, reino_id: String) -> Dictionary:
+	if int(state["jogador"]["ouro"]) < PRECO_RUMOR:
+		return {"ok": false, "msg": "O veterano não fia história de guerra."}
+	var reino: Dictionary = {}
+	for r in state["reinos"]:
+		if str(r["id"]) == reino_id:
+			reino = r
+	if reino.is_empty():
+		return {"ok": false, "msg": "Ninguém aqui serviu nesse lugar."}
+	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - PRECO_RUMOR
+	if not (state.get("doutrinas") is Dictionary):
+		state["doutrinas"] = {}
+	state["doutrinas"][reino_id] = true
+	var pers: String = str((reino.get("rei", {}) as Dictionary).get("personalidade", "cruel"))
+	var d: Dictionary = DOUTRINA.get(pers, DOUTRINA["cruel"])
+	Sinais.emitir(&"doutrina_comprada", {"reino": reino_id})
+	return {"ok": true, "reino": reino_id, "nome": str(reino["nome"]),
+		"rei": str((reino.get("rei", {}) as Dictionary).get("nome", "")),
+		"formacao": str(d["formacao"]), "conselho": str(d["conselho"]),
+		"msg": "\"%s? Servi contra ele. %s\"\n\n%s" % [
+			str((reino.get("rei", {}) as Dictionary).get("nome", "Ele")),
+			str(d["txt"]), str(d["conselho"])]}
+
+## O que o jogador já pagou para saber. A aba Guerra lê isto para mostrar a
+## doutrina ao lado de cada casa — informação comprada tem que ficar à vista,
+## senão o jogador paga duas vezes pela mesma coisa.
+static func doutrina_conhecida(state: Dictionary, reino_id: String) -> Dictionary:
+	if not bool(state.get("doutrinas", {}).get(reino_id, false)):
+		return {}
+	for r in state["reinos"]:
+		if str(r["id"]) == reino_id:
+			var pers: String = str((r.get("rei", {}) as Dictionary).get("personalidade", "cruel"))
+			var d: Dictionary = DOUTRINA.get(pers, DOUTRINA["cruel"])
+			return {"formacao": str(d["formacao"]), "conselho": str(d["conselho"])}
+	return {}
+
 # ------------------------------------------------------------
-# 1. Rumor de mercado
+# 1b. Rumor de mercado (mantido para o Mercador leal, ver `tick`)
 # ------------------------------------------------------------
 ## Compra um boato. Se for verdadeiro, o choque É agendado — o jogador soube
 ## antes do preço reagir. Se for falso, ele pagou por nada, e é isso que faz
 ## a informação valer alguma coisa.
+##
+## Saiu do balcão (era a mesma compra que o mapa comercial, com mais passos)
+## e continua vivo aqui porque o Mercador leal da sua vila entrega um por
+## mês de graça — ver `_tick_mercador`.
 static func comprar_rumor(state: Dictionary) -> Dictionary:
 	if int(state["jogador"]["ouro"]) < PRECO_RUMOR:
 		return {"ok": false, "msg": "O taverneiro não fia rumor."}

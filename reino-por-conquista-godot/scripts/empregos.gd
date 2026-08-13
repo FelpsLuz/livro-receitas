@@ -30,6 +30,58 @@ const FATOR_RISCO := [1.0, 1.5, 2.0]
 const PONTOS_POR_PONTO := 10
 const ATRIBUTO_MAX := 10
 
+# ============================================================
+# A PERÍCIA — o atributo deixa de ser um número na ficha
+#
+# O ofício SUBIA o atributo e nunca o LIA. Quem trabalhou dez dias de forja
+# ganhava um ponto de Força e continuava com exatamente a mesma chance de a
+# árvore cair em cima dele — o progresso era um troféu, não uma competência.
+# É a mesma doença das moedas mortas, só que na ficha do personagem.
+#
+# Agora o atributo que o ofício exige apara o risco DELE. Cada ponto acima de
+# 5 (o meio da faixa inicial) tira 9% do dado; cada ponto abaixo soma 9%.
+# Nos extremos: um bruto de Força 10 arrisca 55% do que arrisca um Força 5,
+# e um franzino de Força 3 arrisca 118%.
+#
+# ---- por que o piso é 0,45 e não zero ----
+#
+# Gladiador de poço tem 25% de morte. A 0,45, um gladiador de Força 10 ainda
+# rola 11% por turno — o poço continua sendo o poço. Perícia compra margem,
+# não imunidade, e nenhum ofício desta tabela deve virar renda segura.
+const PERICIA_BASE := 5
+const PERICIA_POR_PONTO := 0.09
+const PERICIA_PISO := 0.45
+const PERICIA_TETO := 1.30
+
+## Quanto o preparo do jogador multiplica o risco deste ofício. 1,0 é a
+## média; abaixo de 1 ele está acima do serviço, acima de 1 está abaixo dele.
+static func fator_pericia(state: Dictionary, e: Dictionary) -> float:
+	var atrib := str(e.get("atributo", ""))
+	if atrib == "":
+		return 1.0
+	var v: int = int(state["jogador"]["atributos"].get(atrib, PERICIA_BASE))
+	return clampf(1.0 - (v - PERICIA_BASE) * PERICIA_POR_PONTO,
+		PERICIA_PISO, PERICIA_TETO)
+
+## As chaves dos atributos são sem acento (é assim que o estado as guarda);
+## a tela não pode herdar isso — "Forca" na interface é erro de digitação aos
+## olhos do jogador, não detalhe de implementação.
+const NOME_ATRIBUTO := {"forca": "Força", "carisma": "Carisma",
+	"gestao": "Gestão", "intriga": "Intriga"}
+
+## O texto que a taverna mostra na vaga — o jogador precisa ver a competência
+## trabalhando, senão ela some dentro do dado como o atributo sumia antes.
+static func nota_pericia(state: Dictionary, e: Dictionary) -> String:
+	var f := fator_pericia(state, e)
+	var atrib := str(e.get("atributo", ""))
+	if atrib == "" or is_equal_approx(f, 1.0):
+		return ""
+	var nome: String = str(NOME_ATRIBUTO.get(atrib, atrib.capitalize()))
+	var pct: int = absi(roundi((1.0 - f) * 100.0))
+	if f < 1.0:
+		return "Sua %s corta %d%% do risco deste serviço." % [nome, pct]
+	return "Sua %s é baixa para isto: %d%% mais risco." % [nome, pct]
+
 ## Os doze ofícios. `nivel` é a faixa da região (1 pobre, 3 rica);
 ## `honra_min`/`honra_max` são o filtro de reputação: o conselho real não
 ## contrata um bandido conhecido, e O Corvo não confia num santo.
@@ -277,7 +329,7 @@ static func trabalhar(state: Dictionary, reino_id: String, emprego_id: String,
 		return {"ok": false, "msg": "Não sobra mês para esse turno. Passe o mês antes."}
 
 	var j: Dictionary = state["jogador"]
-	var fator: float = FATOR_RISCO[dias - 1]
+	var fator: float = FATOR_RISCO[dias - 1] * fator_pericia(state, e)
 	var ev: Dictionary = {"ok": true, "emprego": emprego_id, "dias": dias,
 		"paga": 0, "consequencias": [], "morreu": false}
 

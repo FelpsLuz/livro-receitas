@@ -10,6 +10,8 @@ extends SceneTree
 
 const Jogo = preload("res://scripts/jogo.gd")
 const Aco = preload("res://scripts/aco.gd")
+const Taverna = preload("res://scripts/taverna.gd")
+const Retratos = preload("res://scripts/retratos.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Llm = preload("res://scripts/llm.gd")
@@ -196,7 +198,32 @@ func _initialize() -> void:
 	await _tirar(jogo, 4, "corte_barbaros")
 	st["local"] = "sem_rei"
 	await _tirar(jogo, 4, "corte_sem_rei")
+
+	# ---- as três telas novas desta rodada ----
+	# O MAPA COMERCIAL parecia quebrado e o dado sempre esteve certo: o que
+	# estava errado era a largura da mesa. Sem um quadro, a correção não
+	# tem como ser conferida.
 	st["local"] = "imperio"
+	st["jogador"]["ouro"] = 4000
+	var r_mapa: Dictionary = Taverna.comprar_rota(st)
+	if bool(r_mapa.get("ok", false)):
+		jogo._modal_mapa_comercial(r_mapa)
+		await _quadro(jogo, "mapa_comercial")
+		jogo.overlay_modal.visible = false
+	else:
+		push_error("Invalid cartógrafo recusou no harness: %s" % str(r_mapa.get("msg", "")))
+	# O POPUP DO ASSALTO: a decisão mais irreversível do jogo passou meses
+	# sendo um clique seco.
+	jogo._modal_assalto("touros")
+	await _quadro(jogo, "assalto_trono")
+	jogo.overlay_modal.visible = false
+	# A MESA DO VETERANO, que substituiu o rumor de mercado
+	var r_dout: Dictionary = Taverna.comprar_doutrina(st, "touros")
+	if bool(r_dout.get("ok", false)):
+		jogo._modal("A mesa do veterano", str(r_dout["msg"]),
+			[["Entendido", func(): pass]], Retratos.ilustracao("emprego"))
+		await _quadro(jogo, "mesa_veterano")
+		jogo.overlay_modal.visible = false
 
 	# ---- O EIXO DO MEDO, nas duas telas onde ele aparece ----
 	# Com crueldade 0 (o padrão do harness) nada disso desenha: o cartão do
