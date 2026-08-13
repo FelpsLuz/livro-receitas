@@ -48,7 +48,23 @@ window/size/viewport_height=540
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/stretch/scale_mode="fractional"
-window/handheld/orientation=1
+
+; ORIENTAÇÃO: 0 = paisagem. Estava em 1 (retrato), e as duas declarações se
+; contradiziam — o canvas é 960×540 DEITADO.
+;
+; Com `aspect="expand"`, a escala é o menor dos dois fatores. Num celular em
+; pé de 1080×2340 isso dá min(1080/960, 2340/540) = 1,125, e o espaço lógico
+; vira 960×2080: o layout desenhado para 540 de altura era esticado para
+; quase quatro vezes isso, com o painel de conteúdo virando um corredor
+; vazio. Deitado, a mesma tela dá min(2340/960, 1080/540) = 2 e o espaço
+; lógico vira 1170×540 — o layout como foi desenhado, com folga de largura.
+;
+; Isto NÃO decide o futuro do jogo no celular. Retrato continua sendo a
+; orientação certa para um jogo de menu e tabela jogado com uma mão só — mas
+; retrato pede que as onze telas sejam refeitas em coluna, não que a de
+; paisagem seja esticada. Enquanto essa versão não existir, declarar retrato
+; só entrega uma tela deformada.
+window/handheld/orientation=0
 
 [rendering]
 
