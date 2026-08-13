@@ -10,17 +10,18 @@ Extraia e rode `ReinoPorConquista.exe`. O SmartScreen avisa que o autor é
 desconhecido — o executável ainda não é assinado. "Mais informações" →
 "Executar assim mesmo". O `LEIA-ME.txt` dentro do zip diz o que testar.
 
-**Apague o save antes de jogar.** A idade inicial mudou de 22 para 40–44, e
-é justamente a nova escala de tempo que esta rodada existe para testar. Use
-"Nova Saga", ou apague:
+**Apague o save antes de jogar** — "Nova Saga", ou apague:
 
 ```
 %APPDATA%\Godot\app_userdata\Reino por Conquista\save.json
 ```
 
-Rodada: Blocos 3 a 6 (moedas vivas, o Aço, arcos de fim, crueldade como
-eixo) mais os dentes do Aço, a escala de tempo da morte, as saídas da
-catraca e o passe anti-exploit.
+Rodada: as nove correções do teste — idade de volta aos 20 (com a
+mortalidade do mundo consertando a janela da sucessão), NPC que dão ouro,
+grão, madeira e homens na conversa, guarda fora do loop, popup no assalto ao
+trono, mapa comercial arrumado, o Trono Vazio e as Terras Bárbaras virando
+oferta de coroa, a mesa do veterano no lugar do rumor, arte por desfecho no
+trabalho e atributos aparando o risco do ofício.
 
 ## Android
 
