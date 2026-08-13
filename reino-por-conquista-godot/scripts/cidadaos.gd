@@ -74,11 +74,95 @@ static func _nascer(state: Dictionary) -> Dictionary:
 		"lorde": false,
 	}
 
+## A PRESSÃO DA VILA — o número que subia e ninguém lia.
+##
+## `resolver_ambicioso` soma 15 de pressão toda vez que o jogador ignora um
+## cidadão ambicioso, com o texto "ele sorriu, e isso foi pior". Mecanicamente
+## era MELHOR: só a ambição do sujeito subia, e a pressão ia para um campo
+## que nenhuma linha do projeto consultava. Havia até um sinal `pressao_alta`
+## declarado, sem emissor e sem ouvinte.
+##
+## Agora ela é lida todo mês, e o desenho é este:
+##
+##   · abaixo de 40 ela esfria sozinha (−8/mês). Uma vila que passou por um
+##     mês difícil e foi bem tratada esquece.
+##   · de 40 a 69 já custa: o povo murmura e a felicidade cai devagar.
+##   · a partir de 70 os notáveis mandam uma EXIGÊNCIA. É evento, não
+##     rolagem escondida: o jogador escolhe ceder ou peitar.
+##
+## O teto de 100 existe para a pressão não virar dívida impagável — o jogo já
+## tem `_tick_ruina` para isso, e dois relógios de derrota competindo é um a
+## mais.
+const PRESSAO_EXIGENCIA := 70.0
+const PRESSAO_MAX := 100.0
+const PRESSAO_ALIVIO := 8.0
+
+static func pressao(state: Dictionary) -> float:
+	if state.get("terra") == null:
+		return 0.0
+	return clampf(float(state["terra"].get("pressao", 0.0)), 0.0, PRESSAO_MAX)
+
+static func _tick_pressao(state: Dictionary, log: Callable) -> void:
+	var t: Dictionary = state["terra"]
+	var p := pressao(state)
+	if p < 40.0:
+		# esfria sozinha, mas nunca abaixo de zero
+		t["pressao"] = maxf(0.0, p - PRESSAO_ALIVIO)
+		return
+	if p < PRESSAO_EXIGENCIA:
+		t["felicidade"] = clampi(int(t["felicidade"]) - 2, 0, 100)
+		_diz(log, "Os notáveis de %s conversam baixo quando você passa." % t["nome"])
+		t["pressao"] = maxf(0.0, p - 3.0)
+		return
+	# ---- a exigência ----
+	# Não é um dado rolado às escondidas: vira evento, e o jogador decide.
+	# Ceder custa ouro e alivia; peitar mantém o cofre e cobra felicidade.
+	t["pressao"] = minf(PRESSAO_MAX, p)
+	if state.get("evento_pendente") == null:
+		var preco: int = maxi(60, roundi(p * 4.0))
+		state["evento_pendente"] = {
+			"tipo": "exigencia_notaveis",
+			"titulo": "Os notáveis exigem",
+			"texto": "As famílias que enriqueceram em %s vieram juntas, e não vieram pedir. Querem voz nas contas da vila, e trouxeram uma cifra: %d de ouro em obras que levem os nomes deles.\n\nJá foram ignoradas antes. Desta vez estão contando quantos homens cada uma pode armar." % [t["nome"], preco],
+			"preco": preco,
+			"opcoes": ["Ceder às exigências", "Mandar que voltem ao trabalho"],
+		}
+		Sinais.emitir(&"pressao_alta", {"pressao": p, "preco": preco})
+		_diz(log, "Os notáveis de %s exigem voz nas contas." % t["nome"])
+
+## Resolve a exigência. `ceder` gasta ouro e zera a pressão; peitar mantém o
+## cofre, derruba felicidade e deixa a pressão no teto — o problema volta.
+static func resolver_exigencia(state: Dictionary, ceder: bool,
+		log: Callable = Callable()) -> Dictionary:
+	var t: Dictionary = state.get("terra")
+	if t == null:
+		return {"ok": false, "msg": "Sem terra, sem notáveis."}
+	var ev: Dictionary = state.get("evento_pendente", {})
+	var preco: int = int(ev.get("preco", 120)) if ev != null else 120
+	state["evento_pendente"] = null
+	if ceder:
+		var pago: int = mini(preco, int(state["jogador"]["ouro"]))
+		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - pago
+		t["pressao"] = 0.0
+		t["felicidade"] = clampi(int(t["felicidade"]) + 6, 0, 100)
+		_diz(log, "As obras começam, e os nomes deles vão na pedra.")
+		return {"ok": true, "cedeu": true, "custo": pago,
+			"msg": "Você cedeu: %d de ouro em obras. A vila respira." % pago}
+	t["pressao"] = PRESSAO_MAX
+	t["felicidade"] = clampi(int(t["felicidade"]) - 12, 0, 100)
+	for n in lista(state):
+		if not bool(n.get("lorde", false)):
+			n["ambicao"] = mini(10, int(n.get("ambicao", 5)) + 1)
+	_diz(log, "Você mandou que voltassem ao trabalho. Eles voltaram — calados.")
+	return {"ok": true, "cedeu": false,
+		"msg": "Você peitou os notáveis. Eles não esqueceram."}
+
 static func tick(state: Dictionary, log: Callable) -> void:
 	if state.get("terra") == null:
 		return
 	var t: Dictionary = state["terra"]
 	var povo := lista(state)
+	_tick_pressao(state, log)
 
 	# a sociedade só aparece quando há vila de verdade (nível 1+)
 	if int(t["nivel"]) >= 1 and povo.is_empty():

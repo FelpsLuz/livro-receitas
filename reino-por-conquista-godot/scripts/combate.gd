@@ -91,12 +91,88 @@ static func fator_moral(moral: int) -> float:
 ## `moral` explícita serve à coluna em marcha, que carrega a moral do
 ## acampamento, e não a do quartel que ficou em casa. Sem argumento, vale
 ## a do exército do jogador.
+# ------------------------------------------------------------
+# FORMAÇÃO — o triângulo que a tela prometia e o motor ignorava
+#
+# `Dados.FORMACOES` declara `vence_de` desde sempre e a aba Tropas monta três
+# botões dizendo "Linha vence Cunha, Cunha vence Envolvimento, Envolvimento
+# vence Linha", gravando a escolha em `jogador.formacao`. Nenhuma linha deste
+# arquivo lia o campo: a única menção a formação aqui era um sorteio para o
+# inimigo que nunca era consultado. O jogador otimizava uma escolha tática e
+# perdia do mesmo jeito.
+#
+# ±15% e não mais: com o escalar de moral (0,70 a 1,00) e o de equipamento
+# (1,00 a 1,45), uma vantagem maior faria a formação decidir batalha sozinha
+# — e formação é a decisão BARATA das três, a única que não custa dia nem
+# ouro. Ela desempata; não substitui exército.
+const VANTAGEM_FORMACAO := 1.15
+const DESVANTAGEM_FORMACAO := 0.85
+
+## Quanto a formação `minha` vale contra `dele`.
+static func fator_formacao(minha: String, dele: String) -> float:
+	if minha == "" or dele == "" or minha == dele:
+		return 1.0
+	if not Dados.FORMACOES.has(minha) or not Dados.FORMACOES.has(dele):
+		return 1.0
+	if str(Dados.FORMACOES[minha]["vence_de"]) == dele:
+		return VANTAGEM_FORMACAO
+	if str(Dados.FORMACOES[dele]["vence_de"]) == minha:
+		return DESVANTAGEM_FORMACAO
+	return 1.0
+
+## A formação que o jogador escolheu, ou a de um exército NPC.
+static func formacao_de(d: Dictionary) -> String:
+	var f := str(d.get("formacao", ""))
+	return f if Dados.FORMACOES.has(f) else ""
+
+## A FORMAÇÃO QUE UM REINO ESTÁ DRILANDO NESTE MÊS.
+##
+## Derivada, e não sorteada nem guardada, por três razões:
+##
+##   · o espião e a batalha têm que concordar. Se fosse sorteada na hora do
+##     combate, o relatório de 180 de ouro apontaria uma formação e o campo
+##     mostraria outra — o pior tipo de mentira que uma interface conta.
+##   · muda TODO MÊS. É isso que dá prazo de validade ao relatório do
+##     espião: a informação envelhece, como todo o resto do `Intel`.
+##   · não consome RNG. Sortear aqui deslocaria o fluxo aleatório e as
+##     suítes determinísticas de marcha quebrariam sem relação com o que
+##     mudou — já aconteceu neste projeto quando a moral entrou no combate.
+## A ARITMÉTICA AQUI FOI CONQUISTADA NUM ERRO, e vale o comentário.
+##
+## A primeira versão fazia `("touros|%d|%d" % [mes, ano]).hash() % 3`. Parecia
+## óbvio e estava errado: o `String.hash()` do Godot é do tipo `h = h*31 + c`,
+## e trocar só o último dígito desloca o resultado por um MÚLTIPLO CONSTANTE —
+## medido, 1089 por mês. E 1089 é divisível por 3. Resultado: os doze meses
+## caíam na mesma classe de resto e todo reino formava em "Linha" o ano
+## inteiro. A doutrina "que muda todo mês" nunca mudava, e o relatório de
+## espião de 80 de ouro diria a mesma coisa para sempre.
+##
+## A correção não confia na distribuição do hash: o reino dá a FASE, e mês e
+## ano giram por aritmética explícita com multiplicadores coprimos de 3.
+## Consequência de desenho, e boa: cada reino está numa parte diferente do
+## ciclo, então espionar um não conta nada sobre o outro — mas quem prestou
+## atenção num reino consegue prever o mês seguinte dele. Informação com
+## prazo de validade E com estrutura para aprender.
+static func formacao_do_reino(state: Dictionary, chave: String) -> String:
+	if chave == "":
+		return ""
+	var chaves: Array = Dados.FORMACOES.keys()
+	var n: int = chaves.size()
+	var fase: int = abs(chave.hash()) % n
+	var giro: int = int(state.get("mes", 1)) * 7 + int(state.get("ano", 1)) * 13
+	return str(chaves[(fase + giro) % n])
+
 static func bonus_de(state: Dictionary, tropas: Dictionary, moral: int = -1) -> float:
 	# EQUIPAMENTO POR UNIDADE: a média ponderada do aço que ESTES homens
-	# carregam, não um nível único do exército inteiro. `equip` fica como
-	# piso para saves antigos, que não têm a tabela por tropa.
+	# carregam.
+	#
+	# O piso `1 + equip*0,15` saiu daqui. Ele lia `jogador.equip`, um contador
+	# de 0 a 3 que NENHUM botão do jogo movia — ficava em 0 para sempre, então
+	# o piso era sempre 1,0 e não fazia nada. Pior: se algum dia se movesse,
+	# contaria o mesmo aço duas vezes, porque a tabela por unidade abaixo já
+	# mede exatamente isso. Agora o exército tem uma fonte de equipamento só.
 	var Equipar = load("res://scripts/equipar.gd")
-	var b := 1.0 + int(state["jogador"].get("equip", 0)) * 0.15
+	var b := 1.0
 	var soma_eq := 0.0
 	var homens_eq := 0
 	for tipo_eq in tropas:
@@ -224,6 +300,23 @@ static func batalhar(state: Dictionary, inimigo: Dictionary, contexto: String,
 	b_meu *= 1.0 + (float(j["atributos"]["forca"]) - 5.0) * 0.04
 	var b_dele := 1.0 + int(inimigo.get("equip", 0)) * 0.15
 
+	# ---- A FORMAÇÃO ENTRA AQUI ----
+	# Os dois lados a declaram e os dois sentem o resultado: quem escolhe a
+	# formação que vence a do outro leva +15%, e o outro leva −15%. É uma
+	# diferença de 35% entre as duas pontas — grande o bastante para valer a
+	# escolha, pequena o bastante para não substituir exército.
+	var f_meu := formacao_de(j)
+	var f_dele := formacao_de(inimigo)
+	if f_dele == "":
+		# reino tem doutrina e treina; bando de estrada não. Para o bando, a
+		# chave vira a própria composição — assim ele TEM formação (senão o
+		# jogador nunca perderia vantagem) sem ser espionável.
+		f_dele = formacao_do_reino(state, str(inimigo.get("id",
+			"bando|" + str(inimigo.get("tropas", {}).keys()))))
+	var vantagem := fator_formacao(f_meu, f_dele)
+	b_meu *= vantagem
+	b_dele *= fator_formacao(f_dele, f_meu)
+
 	# fotografias: os dois golpes saem simultâneos
 	var foto_meu: Dictionary = meu.duplicate(true)
 	var foto_dele: Dictionary = dele.duplicate(true)
@@ -240,6 +333,11 @@ static func batalhar(state: Dictionary, inimigo: Dictionary, contexto: String,
 		"baixas_inimigo": ida["baixas_defensor"] + volta["baixas_atacante"],
 		"vivos_jogador": vivos_meu, "vivos_inimigo": vivos_dele,
 		"debandada": "",
+		# a formação vai no RELATÓRIO, e essa é metade do ponto: uma
+		# vantagem que o jogador não consegue ler depois da batalha é uma
+		# vantagem que ele não aprende a usar
+		"formacao": f_meu, "formacao_inimigo": f_dele,
+		"vantagem_formacao": vantagem,
 	}
 	if vivos_dele == 0 and vivos_meu > 0:
 		rel["debandada"] = "inimigo"
@@ -261,6 +359,23 @@ static func montar_relatorio(rel: Dictionary) -> String:
 	var l: Array = []
 	l.append("⚔ %s — %s" % [rel.get("contexto", "Batalha"),
 		"SAQUE" if rel.get("intencao", "") == "saque" else "CERCO"])
+	# A LINHA DA FORMAÇÃO. Ela vem antes das fases porque explica os números
+	# das fases: sem ela, o jogador vê o ataque 15% maior e não sabe por quê.
+	var f_meu := str(rel.get("formacao", ""))
+	var f_dele := str(rel.get("formacao_inimigo", ""))
+	if f_meu != "" and f_dele != "":
+		var nome_meu := str(Dados.FORMACOES.get(f_meu, {}).get("nome", f_meu))
+		var nome_dele := str(Dados.FORMACOES.get(f_dele, {}).get("nome", f_dele))
+		var v := float(rel.get("vantagem_formacao", 1.0))
+		if v > 1.0:
+			l.append("  %s contra %s: a formação era a certa (+15%% de força)."
+				% [nome_meu, nome_dele])
+		elif v < 1.0:
+			l.append("  %s contra %s: ele leu o campo melhor (−15%% de força)."
+				% [nome_meu, nome_dele])
+		else:
+			l.append("  %s contra %s: nenhum dos dois levou vantagem de formação."
+				% [nome_meu, nome_dele])
 	for f in rel.get("fases", []):
 		l.append("  %s: %d de ataque contra %d de defesa — %d baixas suas, %d dele."
 			% [f["nome"], f["ataque"], f["defesa"], f["mortos_atacante"], f["mortos_defensor"]])

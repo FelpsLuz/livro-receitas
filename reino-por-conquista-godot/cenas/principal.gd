@@ -2720,9 +2720,14 @@ func _aba_exercito(c: Container) -> void:
 		"O que segura carga inimiga. Lanceiro pesa aqui.")
 	Kit.fato(topo, "tropa", str(p["homens"]), "homens", Tema.TEXTO,
 		"Cabeças em armas. Cada uma come, bebe e recebe soldo.")
-	Kit.fato(topo, "martelo", "%d/3" % int(j["equip"]), "de equipamento",
-		Tema.ATENCAO if int(j["equip"]) == 0 else Tema.TEXTO,
-		"Da forja: couro batido, malha de ferro, placas. Multiplica a força em campo.")
+	# O 0/3 agora é DERIVADO da tabela por unidade da Ferraria, em vez de ler
+	# o contador `j["equip"]` que nenhum botão movia. É o degrau que a
+	# maioria dos homens carrega.
+	var nivel_eq: int = Equipar.nivel_do_exercito(state)
+	Kit.fato(topo, "martelo", "%d/3" % nivel_eq, "de equipamento",
+		Tema.ATENCAO if nivel_eq == 0 else Tema.TEXTO,
+		"O degrau que a maioria dos seus homens carrega: %s. Cada degrau multiplica a força em campo — e quem decide onde gastar o ferro é a Ferraria, mais abaixo."
+			% str(Equipar.NIVEIS[nivel_eq]["nome"]))
 	# a manutenção do mês, à direita: é o que o exército CUSTA, e custo fica
 	# separado de força para as duas leituras não se misturarem
 	var custo := Kit.fila(topo, Tema.E4)
@@ -3112,6 +3117,44 @@ func _aba_exercito(c: Container) -> void:
 	Kit.respiro(c, Tema.E2)
 	Kit.subsecao(c, "Ferraria")
 	Kit.nota(c, "O aço é por homem. Melhorar tira a leva da linha enquanto o ferreiro trabalha — tropa na bigorna não marcha.")
+
+	# ---- O BOTÃO QUE MOVE O 0/3 ----
+	# A tabela abaixo é onde se decide ONDE gastar o ferro, homem a homem, e
+	# continua sendo o coração da Ferraria. Este botão é o atalho para quem
+	# já decidiu "todos, um degrau acima" — e é ele que faz o contador da
+	# barra do Quartel sair de zero, que era a queixa: o número existia, o
+	# combate o lia, e nenhum botão do jogo o movia.
+	var nivel_ex: int = Equipar.nivel_do_exercito(state)
+	if nivel_ex < Equipar.MAX_NIVEL and Combate.total_homens(j["tropas"]) > 0:
+		var custo_tudo := 0
+		var homens_tudo := 0
+		for tipo_t in j["tropas"]:
+			var dt: Array = Equipar.distribuicao(state, str(tipo_t))
+			var n_t: int = int(dt[nivel_ex]) - (Equipar.na_forja(state, str(tipo_t))
+				if nivel_ex == 0 else 0)
+			if n_t > 0:
+				homens_tudo += n_t
+				custo_tudo += Equipar.custo(str(tipo_t), nivel_ex, n_t, state)
+		if homens_tudo > 0:
+			var card_tudo := _card(c, Tema.ACENTO)
+			var v_tudo := Kit.coluna(card_tudo, 0)
+			v_tudo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			Kit.texto(v_tudo, "Vestir o exército em %s"
+				% str(Equipar.NIVEIS[nivel_ex + 1]["nome"]), Tema.TEXTO, Tema.CORPO_G)
+			Kit.nota(v_tudo, "%d homens ainda em %s. Sobe o degrau do exército inteiro de uma vez — e todos vão para a bigorna juntos."
+				% [homens_tudo, str(Equipar.NIVEIS[nivel_ex]["nome"])])
+			var acao_tudo := Kit.fila(card_tudo, Tema.E3)
+			acao_tudo.size_flags_horizontal = Control.SIZE_SHRINK_END
+			acao_tudo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			Kit.icone_valor(acao_tudo, "moedas", str(custo_tudo), Tema.ACENTO)
+			var b_tudo := Kit.botao_mini(acao_tudo, "Vestir todos", func():
+				var r_t: Dictionary = Jogo.melhorar_equip(state)
+				Sfx.tocar(self, "espada" if bool(r_t.get("ok", false)) else "alerta")
+				_aviso(str(r_t.get("msg", "")))
+				Jogo.salvar(state)
+				atualizar(), "primario", 150)
+			b_tudo.disabled = int(j["ouro"]) < custo_tudo
+
 	var fila_f: Array = Equipar.fila(state)
 	if not fila_f.is_empty():
 		for item in fila_f:
@@ -3151,7 +3194,7 @@ func _aba_exercito(c: Container) -> void:
 			Kit.nota(cel_eq[5], "tudo em placas")
 			continue
 		var lote_eq: int = mini(5, int(dist[de_eq]))
-		var preco_eq: int = Equipar.custo(tipo_eq, de_eq, lote_eq)
+		var preco_eq: int = Equipar.custo(tipo_eq, de_eq, lote_eq, state)
 		var tipo_fix: String = tipo_eq
 		var de_fix: int = de_eq
 		var lote_fix: int = lote_eq
@@ -4057,6 +4100,24 @@ func _modal_evento() -> void:
 				["Reprimir pela força", func(): _modal_batalha(Jogo.resolver_evento(state, "reprimir"))],
 				["Abrir os celeiros e ceder", func():
 					Jogo.resolver_evento(state, "conceder")
+					Jogo.salvar(state)
+					atualizar()],
+			], Retratos.ilustracao("rebeliao"))
+		"exigencia_notaveis":
+			# A pressão da vila chegando à mesa. Ela subia 15 pontos toda vez
+			# que o jogador ignorava um ambicioso e ninguém lia o número — o
+			# texto dizia "ele sorriu, e isso foi pior" e mecanicamente era
+			# melhor. Agora ela cobra, e cobra como decisão.
+			_modal(str(ev.get("titulo", "Os notáveis exigem")),
+				str(ev.get("texto", "")), [
+				["Ceder — %d de ouro" % int(ev.get("preco", 120)), func():
+					_aviso(str(Cidadaos.resolver_exigencia(state, true,
+						Jogo.log_para(state)).get("msg", "")))
+					Jogo.salvar(state)
+					atualizar()],
+				["Mandar que voltem ao trabalho", func():
+					_aviso(str(Cidadaos.resolver_exigencia(state, false,
+						Jogo.log_para(state)).get("msg", "")))
 					Jogo.salvar(state)
 					atualizar()],
 			], Retratos.ilustracao("rebeliao"))

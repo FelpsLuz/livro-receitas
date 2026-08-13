@@ -76,13 +76,94 @@ static func fator(state: Dictionary, tipo: String) -> float:
 		return 1.0
 	return 1.0 + soma / float(total)
 
+## O DEGRAU QUE O EXÉRCITO ALCANÇOU, de 0 a 3 — o número que a tela mostra.
+##
+## Existe porque havia DOIS sistemas de equipamento no jogo: este, por
+## unidade, e um contador `jogador.equip` de 0 a 3 que a aba Quartel exibia
+## com dica explicando os três níveis. O contador era lido pelo combate e
+## NENHUM botão o movia: a única função que o subia não era chamada por
+## lugar nenhum da interface, e a Ferraria da tela mexia aqui. O jogador via
+## "0/3" para sempre e concluía que existia um sistema que não achou.
+##
+## A reconciliação é esta: o contador passa a ser DERIVADO daqui. Não é a
+## média — é o degrau que a MAIORIA dos homens já carrega, que é o que
+## alguém quer dizer ao falar "meu exército está de malha". Equipar dez de
+## duzentos não muda o número, e é honesto que não mude.
+static func nivel_do_exercito(state: Dictionary) -> int:
+	var por_nivel := [0, 0, 0, 0]
+	var total := 0
+	for tipo in state["jogador"]["tropas"]:
+		var d := distribuicao(state, str(tipo))
+		for n in range(0, MAX_NIVEL + 1):
+			por_nivel[n] += int(d[n])
+			total += int(d[n])
+	if total <= 0:
+		return 0
+	# do topo para baixo: o maior degrau em que metade do exército já está
+	var acumulado := 0
+	for n in range(MAX_NIVEL, 0, -1):
+		acumulado += por_nivel[n]
+		if acumulado * 2 >= total:
+			return n
+	return 0
+
+## O BOTÃO QUE MOVE O 0/3: sobe um degrau em TODO o exército de uma vez.
+##
+## A Ferraria continua sendo o lugar de decidir onde gastar o ferro homem a
+## homem — é ali que mora a escolha. Isto aqui é o atalho para quem já
+## decidiu: encomenda o degrau seguinte para cada tipo que ainda tem gente
+## atrás. Devolve o que conseguiu e o que faltou, sem cobrar pela metade.
+static func equipar_tudo(state: Dictionary, de: int) -> Dictionary:
+	if de < 0 or de >= MAX_NIVEL:
+		return {"ok": false, "msg": "Já é o melhor aço que se forja."}
+	var preco_total := 0
+	var homens := 0
+	var lotes: Array = []
+	for tipo in state["jogador"]["tropas"]:
+		var t := str(tipo)
+		var d := distribuicao(state, t)
+		var n: int = int(d[de]) - (na_forja(state, t) if de == 0 else 0)
+		if n <= 0:
+			continue
+		lotes.append({"tipo": t, "qtd": n})
+		preco_total += custo(t, de, n, state)
+		homens += n
+	if lotes.is_empty():
+		return {"ok": false,
+			"msg": "Ninguém no exército está em %s esperando o degrau seguinte."
+				% str(NIVEIS[de]["nome"])}
+	if int(state["jogador"]["ouro"]) < preco_total:
+		return {"ok": false,
+			"msg": "Vestir %d homens em %s custa %d de ouro — você tem %d." % [
+				homens, str(NIVEIS[de + 1]["nome"]), preco_total,
+				int(state["jogador"]["ouro"])]}
+	var maior := 0
+	for lote in lotes:
+		var r := encomendar(state, str(lote["tipo"]), de, int(lote["qtd"]))
+		if bool(r.get("ok", false)):
+			maior = maxi(maior, minutos(str(lote["tipo"]), de, int(lote["qtd"])))
+	var Relogio = load("res://scripts/relogio.gd")
+	return {"ok": true, "custo": preco_total, "homens": homens,
+		"msg": "%d homens na bigorna por %d de ouro — %s até o exército sair em %s." % [
+			homens, preco_total, Relogio.texto_dias(maior),
+			str(NIVEIS[de + 1]["nome"])]}
+
 ## Quanto custa subir `qtd` homens de `de` para `de+1`.
-static func custo(tipo: String, de: int, qtd: int) -> int:
+##
+## O desconto da casa da noiva entra AQUI, e não mais só na função sem botão
+## que ninguém chamava: quem casa com a filha do ferreiro pagava −15% numa
+## porta que não existia na interface. Agora vale para a Ferraria inteira,
+## que é onde o jogador de fato gasta ferro.
+static func custo(tipo: String, de: int, qtd: int, state: Dictionary = {}) -> int:
 	var base: int = int(Dados.TROPAS.get(tipo, {}).get("custo", 20))
 	# cada degrau custa mais: metade do preço da unidade no primeiro,
 	# quase o preço inteiro no terceiro
 	var fator_degrau: float = [0.0, 0.5, 0.8, 1.2][clampi(de + 1, 0, 3)]
-	return maxi(1, roundi(base * fator_degrau)) * qtd
+	var bruto: int = maxi(1, roundi(base * fator_degrau)) * qtd
+	if state.is_empty():
+		return bruto
+	var Pretendentes = load("res://scripts/pretendentes.gd")
+	return maxi(1, roundi(bruto * Pretendentes.fator_equipamento(state)))
 
 static func minutos(tipo: String, de: int, qtd: int) -> int:
 	var por_lote: int = int(MINUTOS_POR_DEGRAU[clampi(de + 1, 0, MAX_NIVEL)])
@@ -114,7 +195,7 @@ static func encomendar(state: Dictionary, tipo: String, de: int, qtd: int) -> Di
 		return {"ok": false,
 			"msg": "Você não tem %d homens de %s nesse nível prontos." % [
 				qtd, str(Dados.TROPAS[tipo]["nome"]).to_lower()]}
-	var preco := custo(tipo, de, qtd)
+	var preco := custo(tipo, de, qtd, state)
 	if int(state["jogador"]["ouro"]) < preco:
 		return {"ok": false, "msg": "O ferreiro pede %d de ouro." % preco}
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - preco

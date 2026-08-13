@@ -178,16 +178,31 @@ func _init() -> void:
 		Combate.colher_saque({"explorador": 50}, {"trigo": 100}).is_empty())
 
 	# ---------------- BUFFS ----------------
+	#
+	# A asserção mudou de fonte junto com o sistema. Ela escrevia
+	# `jogador.equip = 3` na mão e cobrava que o bônus fosse 1,45 — só que
+	# `equip` era um contador que NENHUM botão do jogo movia, e o mesmo aço
+	# já era medido pela tabela por unidade da Ferraria. Eram dois sistemas
+	# de equipamento, um travado em 0/3 e outro funcionando sem contador.
+	#
+	# Agora existe um só, e o teste passa pela porta que o jogador usa: pôr
+	# os homens na bigorna e esperar a forja entregar.
+	var Equipar = load("res://scripts/equipar.gd")
 	var s := Jogo.novo_jogo("Buffs")
-	s["jogador"]["equip"] = 0
+	s["jogador"]["tropas"] = {"lanceiro": 10}
+	s["jogador"]["ouro"] = 9000
 	var b0 := Combate.bonus_de(s, {"lanceiro": 10})
-	s["jogador"]["equip"] = 3
+	for degrau in 3:
+		Equipar.equipar_tudo(s, degrau)
+		Equipar.avancar(s, 99999)
 	var b3 := Combate.bonus_de(s, {"lanceiro": 10})
-	ok("equipamento dá buff permanente", b3 > b0 and is_equal_approx(b3, 1.45),
+	ok("o aço da Ferraria vale força no combate", b3 > b0 and is_equal_approx(b3, 1.45),
 		"%.2f" % b3)
+	ok("e o contador 0/3 acompanha o que a Ferraria fez",
+		Equipar.nivel_do_exercito(s) == 3, "%d/3" % Equipar.nivel_do_exercito(s))
 
 	# clã mercenário: +20% SÓ na especialidade dele
-	s["jogador"]["equip"] = 0
+	s = Jogo.novo_jogo("Buffs2")
 	s["clas_ativos"] = [{"id": "cla_estepe", "meses": 6,
 		"contingente": {"cav_leve": 8}, "especialidade": "cav"}]
 	ok("clã de cavalaria dá +20% a exército de cavalaria",

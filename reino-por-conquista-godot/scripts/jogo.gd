@@ -8,6 +8,7 @@ const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Combate = preload("res://scripts/combate.gd")
+const Equipar = preload("res://scripts/equipar.gd")
 const Clas = preload("res://scripts/clas.gd")
 const Intriga = preload("res://scripts/intriga.gd")
 const Contratos = preload("res://scripts/contratos.gd")
@@ -434,18 +435,24 @@ static func contratar_guardas(state: Dictionary, qtd: int) -> Dictionary:
 	state["jogador"]["guardas"] = int(state["jogador"]["guardas"]) + qtd
 	return {"ok": true, "msg": "%d guardas de elite contratados." % qtd}
 
+## VESTIR O EXÉRCITO INTEIRO um degrau acima.
+##
+## Esta função era um sistema paralelo e órfão: subia `jogador.equip` de 0 a
+## 3 por 200 × nível de ouro, cobrava o desconto da casa da noiva, e NÃO ERA
+## CHAMADA POR NENHUM BOTÃO — só por um teste. Enquanto isso a Ferraria da
+## tela mexia noutra tabela, por unidade. Dois sistemas de equipamento, um
+## visível e travado em 0/3, o outro funcionando e sem contador.
+##
+## Agora ela delega para o sistema que existe. O contador 0/3 passa a ser
+## derivado da tabela por unidade (`Equipar.nivel_do_exercito`), o desconto
+## da noiva mudou-se para `Equipar.custo` — onde vale para a Ferraria toda —
+## e o preço deixa de ser um número redondo inventado: é o custo real de
+## vestir os homens que você de fato tem.
 static func melhorar_equip(state: Dictionary) -> Dictionary:
-	if int(state["jogador"]["equip"]) >= 3:
+	var de: int = Equipar.nivel_do_exercito(state)
+	if de >= Equipar.MAX_NIVEL:
 		return {"ok": false, "msg": "Equipamento no máximo."}
-	# a forja da família da esposa cobra o preço de casa
-	var Pretendentes = load("res://scripts/pretendentes.gd")
-	var custo: int = roundi(200 * (int(state["jogador"]["equip"]) + 1)
-		* Pretendentes.fator_equipamento(state))
-	if state["jogador"]["ouro"] < custo:
-		return {"ok": false, "msg": "Melhoria custa %d de ouro." % custo}
-	state["jogador"]["ouro"] -= custo
-	state["jogador"]["equip"] = int(state["jogador"]["equip"]) + 1
-	return {"ok": true, "msg": "Equipamento nível %d (+15%% de força)." % state["jogador"]["equip"]}
+	return Equipar.equipar_tudo(state, de)
 
 ## Vender o excedente do celeiro é COMÉRCIO, e passa pelas mesmas duas
 ## regras da Feira: precisa da licença e empurra a oferta da praça. Sem

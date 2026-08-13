@@ -31,10 +31,25 @@ static func espionar(state: Dictionary, reino_id: String) -> Dictionary:
 				int(alvo.get("forca", 0)))
 			for tipo in alvo.get("tropas", {}):
 				contagem += int(alvo["tropas"][tipo])
+		# A FORMAÇÃO QUE ELES TREINAM. É o que faz os 80 de ouro do espião
+		# valerem numa guerra e não só numa chantagem: sabendo a doutrina do
+		# mês, o jogador escolhe a formação que a vence e leva +15% no campo
+		# — e a informação vence na virada do mês, porque a doutrina muda.
+		var f_alvo: String = Combate.formacao_do_reino(state, reino_id)
+		var nome_f: String = str(Dados.FORMACOES.get(f_alvo, {}).get("nome", f_alvo))
+		var vence_f: String = str(Dados.FORMACOES.get(f_alvo, {}).get("vence_de", ""))
+		var contra_f := ""
+		for chave_f in Dados.FORMACOES:
+			if str(Dados.FORMACOES[chave_f]["vence_de"]) == f_alvo:
+				contra_f = str(Dados.FORMACOES[chave_f]["nome"])
 		return {"ok": true, "revelou": contagem, "sucesso": true,
+			"formacao": f_alvo,
 			"titulo": "O espião voltou",
-			"relato": "Ele entrou como carroceiro e saiu três noites depois. Contou %d homens sob as bandeiras de %s e trouxe um segredo do rei — algo que a corte inteira finge não saber.\n\nA partir de agora a força desse reino aparece no mapa em vez de \"???\", e o segredo pode virar chantagem numa conversa com ele." % [contagem, reino_id],
-			"msg": "Segredo descoberto: %d homens contados em %s." % [contagem, reino_id]}
+			"relato": "Ele entrou como carroceiro e saiu três noites depois. Contou %d homens sob as bandeiras de %s e trouxe um segredo do rei — algo que a corte inteira finge não saber.\n\nViu também o campo de treino: eles estão formando em %s este mês. Quem chegar em %s leva vantagem; quem chegar em %s será quebrado.\n\nA partir de agora a força desse reino aparece no mapa em vez de \"???\", e o segredo pode virar chantagem numa conversa com ele." % [
+				contagem, reino_id, nome_f, contra_f,
+				str(Dados.FORMACOES.get(vence_f, {}).get("nome", vence_f))],
+			"msg": "Segredo descoberto: %d homens contados em %s, formando em %s." % [
+				contagem, reino_id, nome_f]}
 
 	if not state.has("flagras"):
 		state["flagras"] = {}

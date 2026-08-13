@@ -11,6 +11,7 @@ const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Combate = preload("res://scripts/combate.gd")
+const Equipar = preload("res://scripts/equipar.gd")
 const Clas = preload("res://scripts/clas.gd")
 const Intriga = preload("res://scripts/intriga.gd")
 const Contratos = preload("res://scripts/contratos.gd")
@@ -91,6 +92,12 @@ func _init() -> void:
 	ok(s4["terra"]["alimento"] <= 10, "camponeses convocados não plantam")
 
 	# ---------- combate: formação certa dá vantagem ----------
+	#
+	# Este teste se anunciava assim e NÃO media isso: ele montava um exército
+	# oito vezes maior e verificava que ele venceu — o que aconteceria com
+	# qualquer formação, inclusive nenhuma, porque `combate.gd` não lia o
+	# campo. O triângulo estava escrito em `Dados.FORMACOES`, prometido em
+	# três botões da aba Tropas, e ausente do motor.
 	var s5 := Jogo.novo_jogo("E")
 	s5["jogador"]["tropas"] = {"campones": 0, "lanceiro": 30, "arqueiro": 20, "cavaleiro": 5}
 	s5["jogador"]["formacao"] = "linha"
@@ -98,6 +105,108 @@ func _init() -> void:
 	var rel_bat := Combate.batalhar(s5, inimigo, "teste")
 	ok(rel_bat["vitoria"], "exército forte vence escaramuça")
 	ok(rel_bat["baixas_inimigo"] > 0, "baixas inimigas registradas")
+
+	# ---- o triângulo, agora medido de verdade ----
+	ok(Combate.fator_formacao("linha", "cunha") > 1.0
+		and Combate.fator_formacao("cunha", "cerco") > 1.0
+		and Combate.fator_formacao("cerco", "linha") > 1.0,
+		"o triângulo fecha: linha vence cunha, cunha vence cerco, cerco vence linha")
+	ok(Combate.fator_formacao("cunha", "linha") < 1.0,
+		"e quem escolhe errado PAGA, não só deixa de ganhar")
+	ok(is_equal_approx(Combate.fator_formacao("linha", "linha"), 1.0)
+		and is_equal_approx(Combate.fator_formacao("linha", ""), 1.0),
+		"formação igual, ou desconhecida, não move nada")
+	# a batalha inteira carrega o resultado para o relatório: uma vantagem
+	# que o jogador não consegue LER depois é uma que ele não aprende a usar
+	ok(str(rel_bat.get("formacao", "")) == "linha"
+		and str(rel_bat.get("formacao_inimigo", "")) == "cunha"
+		and float(rel_bat.get("vantagem_formacao", 0.0)) > 1.0,
+		"o relatório de batalha diz qual formação encontrou qual")
+	ok(str(rel_bat.get("resumo", "")).contains("formação era a certa"),
+		"e o texto do relatório explica o bônus em vez de só aplicá-lo")
+
+	# ---- o espião e o campo têm que CONCORDAR ----
+	#
+	# A formação de um reino é derivada de (id, mês, ano), e não sorteada, por
+	# causa disto: o relatório de 80 de ouro apontaria uma doutrina e o campo
+	# mostraria outra. Também muda todo mês, que é o prazo de validade da
+	# informação comprada.
+	var s_esp := Jogo.novo_jogo("Espião")
+	var f_mes1: String = Combate.formacao_do_reino(s_esp, "touros")
+	ok(f_mes1 == Combate.formacao_do_reino(s_esp, "touros"),
+		"a formação do reino é estável dentro do mês")
+	var mudou_algum := false
+	for m in range(1, 13):
+		s_esp["mes"] = m
+		if Combate.formacao_do_reino(s_esp, "touros") != f_mes1:
+			mudou_algum = true
+	ok(mudou_algum, "e muda ao longo do ano — o relatório do espião vence")
+
+	# ---- EQUIPAMENTO: um sistema só, e um botão que o move ----
+	#
+	# Havia dois: o contador `jogador.equip` de 0 a 3, exibido no Quartel e
+	# lido pelo combate, que NENHUM botão movia; e a tabela por unidade da
+	# Ferraria, que funcionava e não tinha contador.
+	var s_eq := Jogo.novo_jogo("Ferreiro")
+	s_eq["jogador"]["tropas"] = {"lanceiro": 10}
+	s_eq["jogador"]["ouro"] = 5000
+	ok(Equipar.nivel_do_exercito(s_eq) == 0, "exército sem aço começa em 0/3")
+	var forca_antes := Combate.bonus_de(s_eq, s_eq["jogador"]["tropas"], 100)
+	var r_eq: Dictionary = Jogo.melhorar_equip(s_eq)
+	ok(bool(r_eq.get("ok", false)),
+		"o botão de vestir o exército responde: %s" % str(r_eq.get("msg", "")))
+	# a bigorna leva tempo — o degrau não sobe no mesmo instante
+	Equipar.avancar(s_eq, 9999)
+	ok(Equipar.nivel_do_exercito(s_eq) == 1,
+		"e depois da forja o contador SAI de zero (%d/3)"
+			% Equipar.nivel_do_exercito(s_eq))
+	ok(Combate.bonus_de(s_eq, s_eq["jogador"]["tropas"], 100) > forca_antes,
+		"o degrau novo vale força de verdade no combate")
+
+	# ---- A PRESSÃO DA VILA passou a ser lida ----
+	#
+	# Ignorar o cidadão ambicioso somava 15 de pressão com o texto "ele
+	# sorriu, e isso foi pior". Mecanicamente era MELHOR: nenhuma linha do
+	# projeto consultava o campo, e havia até um sinal declarado sem emissor.
+	var Cidadaos_p = load("res://scripts/cidadaos.gd")
+	var s_pr := Jogo.novo_jogo("Pressionado")
+	s_pr["terra"] = {"nome": "Vila Teste", "nivel": 2, "populacao": 40,
+		"alimento": 200, "madeira": 50, "felicidade": 70, "pressao": 0.0}
+	var log_pr := Jogo.log_para(s_pr)
+	# abaixo de 40 ela esfria sozinha
+	s_pr["terra"]["pressao"] = 20.0
+	Cidadaos_p.tick(s_pr, log_pr)
+	ok(Cidadaos_p.pressao(s_pr) < 20.0,
+		"pressão baixa esfria sozinha (%.0f)" % Cidadaos_p.pressao(s_pr))
+	# na faixa do meio ela já custa felicidade
+	s_pr["terra"]["pressao"] = 55.0
+	var fel_pr: int = int(s_pr["terra"]["felicidade"])
+	Cidadaos_p.tick(s_pr, log_pr)
+	ok(int(s_pr["terra"]["felicidade"]) < fel_pr,
+		"pressão média já cobra felicidade todo mês")
+	# no teto ela vira EVENTO, não rolagem escondida
+	s_pr["terra"]["pressao"] = 80.0
+	s_pr["evento_pendente"] = null
+	Cidadaos_p.tick(s_pr, log_pr)
+	ok(s_pr["evento_pendente"] != null
+		and str(s_pr["evento_pendente"]["tipo"]) == "exigencia_notaveis",
+		"acima de 70 os notáveis exigem, e é o jogador que decide")
+	# ceder gasta ouro e zera; peitar mantém o cofre e o problema volta
+	var ouro_pr: int = int(s_pr["jogador"]["ouro"])
+	var r_ceder: Dictionary = Cidadaos_p.resolver_exigencia(s_pr, true, log_pr)
+	ok(bool(r_ceder.get("ok", false)) and int(s_pr["jogador"]["ouro"]) < ouro_pr
+		and Cidadaos_p.pressao(s_pr) == 0.0,
+		"ceder custa ouro e zera a pressão")
+	s_pr["terra"]["pressao"] = 80.0
+	s_pr["evento_pendente"] = null
+	Cidadaos_p.tick(s_pr, log_pr)
+	var ouro_pr2: int = int(s_pr["jogador"]["ouro"])
+	var fel_pr2: int = int(s_pr["terra"]["felicidade"])
+	Cidadaos_p.resolver_exigencia(s_pr, false, log_pr)
+	ok(int(s_pr["jogador"]["ouro"]) == ouro_pr2
+		and int(s_pr["terra"]["felicidade"]) < fel_pr2
+		and Cidadaos_p.pressao(s_pr) >= 70.0,
+		"peitar não custa ouro, custa felicidade — e eles voltam")
 
 	# ---------- clãs: oferta generosa contrata via mensageiro ----------
 	var s6 := Jogo.novo_jogo("F")
