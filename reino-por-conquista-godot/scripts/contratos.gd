@@ -4,6 +4,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Combate = preload("res://scripts/combate.gd")
 
@@ -221,6 +222,8 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 	if rel["vitoria"]:
 		contrato["pagamento"] = _pagamento_de(contrato["contratante"], int(contrato["pagamento"]))
 		state["jogador"]["ouro"] += int(contrato["pagamento"])
+		Livro.registrar(state, "contrato", "ouro", int(contrato["pagamento"]),
+			"Contrato: %s" % str(contrato.get("nome", "serviço")))
 		state["jogador"]["renome"] += int(contrato["renome"])
 		var ganho_h: int = int(RECOMPENSA_HONRA[dificuldade(contrato)])
 		state["jogador"]["honra"] = mini(HONRA_MAX,

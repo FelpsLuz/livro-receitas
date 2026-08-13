@@ -197,6 +197,19 @@ func _initialize() -> void:
 	await _tirar(jogo, 4, "corte_sem_rei")
 	st["local"] = "imperio"
 
+	# O LIVRO-RAZÃO do mês fechado. É a tela que existe para o jogador parar
+	# de concluir que o jogo é aleatório: vinte e um passos rodam na virada e
+	# até aqui ele via só o resultado.
+	# `atualizar()` DRENA o balanço e abre o modal sozinho — é esse o
+	# caminho do jogador. Chamar `_modal_balanco` depois encontraria a fila
+	# já vazia, que foi o que aconteceu na primeira tentativa deste quadro.
+	st["evento_pendente"] = null
+	st["fim"] = null
+	Jogo.passar_mes(st)
+	jogo.atualizar()
+	await _quadro(jogo, "balanco_mes")
+	jogo.overlay_modal.visible = false
+
 	print("pronto — PNGs em ", ProjectSettings.globalize_path("user://"))
 	quit()
 

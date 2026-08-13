@@ -19,6 +19,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Livro = preload("res://scripts/livro.gd")
 
 ## Uma baia: dez espaços, cinco de ouro por dia enquanto for alugada.
 const ESPACOS_POR_BAIA := 10
@@ -106,6 +107,7 @@ static func tick_dia(state: Dictionary, log: Callable = Callable()) -> void:
 		return
 	if int(state["jogador"]["ouro"]) >= custo:
 		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - custo
+		Livro.registrar(state, "armazem", "ouro", -custo, "Aluguel do armazém")
 		d["atraso"] = 0
 		return
 	d["atraso"] = int(d.get("atraso", 0)) + 1

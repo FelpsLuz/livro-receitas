@@ -13,6 +13,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Economia = preload("res://scripts/economia.gd")
@@ -172,6 +173,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 	var em_carga: int = 0
 	if pago_em_ouro > 0:
 		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - pago_em_ouro
+		Livro.registrar(state, "vassalagem", "ouro", -pago_em_ouro, "Tributo ao suserano")
 	if tributo > pago_em_ouro:
 		em_carga = _confiscar_carga(state, tributo - pago_em_ouro)
 	var recolhido: int = pago_em_ouro + em_carga

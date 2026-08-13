@@ -17,6 +17,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 
 ## Turnos: 1, 2 ou 3 dias. Trabalhar mais paga proporcionalmente melhor
@@ -317,6 +318,8 @@ static func trabalhar(state: Dictionary, reino_id: String, emprego_id: String,
 	var vaga: Dictionary = _vaga_ou_base(state, reino_id, emprego_id, e)
 	ev["paga"] = maxi(1, roundi(int(vaga["paga_dia"]) * dias * BONUS_PAGA[dias - 1]))
 	j["ouro"] = int(j["ouro"]) + int(ev["paga"])
+	Livro.registrar(state, "emprego", "ouro", int(ev["paga"]),
+		"Trabalho: %s" % str(ev.get("nome", "turno")))
 
 	# ---- o ofício deixa marca: um ponto de progresso por dia ----
 	var atrib := str(e["atributo"])

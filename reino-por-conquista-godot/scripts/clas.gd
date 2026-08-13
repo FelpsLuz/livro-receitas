@@ -6,6 +6,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 
 # `especialidade` é a classe em que o clã dá +20% (ver Combate.bonus_de):
@@ -99,6 +100,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 		var cla := cla_por_id(a["id"])
 		if state["jogador"]["ouro"] >= cla["soldo"]:
 			state["jogador"]["ouro"] -= int(cla["soldo"])
+			Livro.registrar(state, "clas", "ouro", -int(cla["soldo"]), "Soldo dos mercenários")
 			a["meses"] -= 1
 			if a["meses"] <= 0:
 				_remover_contingente(state, a)

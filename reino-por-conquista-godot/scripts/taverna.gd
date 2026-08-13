@@ -15,6 +15,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Sinais = preload("res://scripts/sinais.gd")
@@ -147,6 +148,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 		state["informantes"] = []
 		return
 	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - custo
+	Livro.registrar(state, "taverna", "ouro", -custo, "Informantes na corte")
 	for id in state["informantes"]:
 		var r := Geopolitica.reino_por_id(state, id)
 		if r.is_empty():

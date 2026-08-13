@@ -27,6 +27,21 @@ static func lista(state: Dictionary) -> Array:
 		state["terra"]["notaveis"] = []
 	return state["terra"]["notaveis"]
 
+## A MESMA LISTA, SEM CRIAR NADA.
+##
+## `lista()` inicializa `terra["notaveis"]` por preguiça, o que é certo para
+## quem vai mexer nela e errado para quem só quer olhar: a previsão do
+## Livro-Razão passou a chamá-la e virou uma função de leitura que escrevia
+## no estado. O teste que exige a previsão pura pegou isso na hora.
+##
+## Leitura que escreve é leitura que surpreende — e o ponto do Livro-Razão é
+## exatamente acabar com surpresa.
+static func lista_ro(state: Dictionary) -> Array:
+	if state.get("terra") == null:
+		return []
+	var n = state["terra"].get("notaveis")
+	return n if n is Array else []
+
 ## CORTE OPERACIONAL — o ofício de um notável LEAL rende um efeito de verdade.
 ##
 ## Binário, não cumulativo: um ferreiro leal já é O ferreiro da vila. Dois
@@ -35,7 +50,7 @@ static func lista(state: Dictionary) -> Array:
 ## e é essa pergunta que economia.gd e taverna.gd fazem antes de aplicar
 ## qualquer bônus de corte.
 static func oficio_ativo(state: Dictionary, oficio: String) -> bool:
-	for n in lista(state):
+	for n in lista_ro(state):
 		if str(n.get("oficio", "")) == oficio and int(n.get("lealdade", 0)) >= LEALDADE_MINIMA:
 			return true
 	return false
@@ -45,7 +60,7 @@ static func oficio_ativo(state: Dictionary, oficio: String) -> bool:
 ## esperar cruzar LIMIAR_ASCENSAO para ser perigoso quando a vila já está
 ## em felicidade crítica — ele lidera. Devolve {} se não há candidato.
 static func capataz_lider(state: Dictionary) -> Dictionary:
-	for n in lista(state):
+	for n in lista_ro(state):
 		if str(n.get("oficio", "")) != "capataz" or bool(n.get("lorde", false)):
 			continue
 		if int(n.get("riqueza", 0)) >= LIMIAR_ASCENSAO * 0.7 and int(n.get("lealdade", 100)) < 40:
@@ -55,7 +70,7 @@ static func capataz_lider(state: Dictionary) -> Dictionary:
 ## Lordes já jurados: é o que a UI mostra na Corte e o que rende por mês.
 static func lordes(state: Dictionary) -> Array:
 	var saida: Array = []
-	for n in lista(state):
+	for n in lista_ro(state):
 		if bool(n.get("lorde", false)):
 			saida.append(n)
 	return saida
@@ -219,7 +234,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 static func resolver_ambicioso(state: Dictionary, nome: String, escolha: String,
 		log: Callable) -> String:
 	var alvo: Dictionary = {}
-	for n in lista(state):
+	for n in lista_ro(state):
 		if n["nome"] == nome:
 			alvo = n
 			break

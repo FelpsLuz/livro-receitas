@@ -208,6 +208,70 @@ func _init() -> void:
 		and Cidadaos_p.pressao(s_pr) >= 70.0,
 		"peitar não custa ouro, custa felicidade — e eles voltam")
 
+	# ============================================================
+	# LIVRO-RAZÃO — o mês deixa de ser caixa-preta
+	#
+	# O terceiro clique roda vinte e um passos e o jogador via só o
+	# resultado. O projeto já tinha a regra escrita ("a virada nunca pode
+	# ser surpresa") e a aplicava só no TEXTO do botão.
+	# ============================================================
+	print("\n=== O LIVRO-RAZÃO ===")
+	var Livro_t = load("res://scripts/livro.gd")
+	var s_lv := Jogo.novo_jogo("Contador")
+	s_lv["terra"] = {"nome": "Vila Livro", "nivel": 2, "populacao": 40,
+		"alimento": 300, "madeira": 80, "felicidade": 70, "pressao": 0.0}
+	s_lv["jogador"]["ouro"] = 3000
+
+	# ---- a PREVISÃO não pode tocar no estado ----
+	var antes_lv: String = JSON.stringify(s_lv)
+	var prev: Dictionary = Livro_t.previsao(s_lv)
+	ok(JSON.stringify(s_lv) == antes_lv,
+		"a previsão do mês NÃO escreve no estado")
+	ok(not (prev.get("linhas", []) as Array).is_empty(),
+		"e ela tem o que dizer: %d lançamentos previstos"
+			% (prev.get("linhas", []) as Array).size())
+	var tem_soldo := false
+	var tem_imposto := false
+	for l_p in prev["linhas"]:
+		if str(l_p["motivo"]).contains("Soldo"):
+			tem_soldo = true
+		if str(l_p["motivo"]).contains("Imposto da vila"):
+			tem_imposto = true
+	ok(tem_soldo and tem_imposto,
+		"a previsão traz o soldo E o imposto — as duas pontas do mês")
+
+	# ---- o mês real bate com o que o livro registrou ----
+	var ouro_lv: int = int(s_lv["jogador"]["ouro"])
+	Jogo.passar_mes(s_lv)
+	var bal: Dictionary = s_lv.get("ultimo_balanco", {})
+	ok(not bal.is_empty(), "passar o mês fecha o livro e deixa o balanço pronto")
+	var bloco_ouro: Dictionary = bal.get("ouro", {})
+	ok(not (bloco_ouro.get("linhas", []) as Array).is_empty(),
+		"o balanço tem linhas de ouro itemizadas")
+	# a soma dos lançamentos tem que bater com o que o cofre de fato mudou
+	var delta_real: int = int(s_lv["jogador"]["ouro"]) - ouro_lv
+	ok(int(bloco_ouro.get("saldo", 0)) == delta_real,
+		"e a soma do livro bate com o cofre (livro %d, cofre %d)"
+			% [int(bloco_ouro.get("saldo", 0)), delta_real])
+	# fechar o mês limpa os lançamentos e guarda o resumo
+	ok((s_lv.get("livro", []) as Array).is_empty(),
+		"os lançamentos do mês são zerados na virada")
+	ok((s_lv.get("livro_meses", []) as Array).size() == 1,
+		"e o mês fechado vira uma linha de histórico")
+
+	# ---- telemetria ----
+	for i in 4:
+		Jogo.passar_mes(s_lv)
+	var csv: String = Livro_t.csv(s_lv)
+	ok(csv.begins_with("ano;mes;ouro_saldo"),
+		"o CSV sai com cabeçalho")
+	ok(csv.split("\n").size() == (s_lv["livro_meses"] as Array).size() + 1,
+		"uma linha por mês fechado, mais o cabeçalho (%d meses)"
+			% (s_lv["livro_meses"] as Array).size())
+	# o histórico não pode crescer para sempre dentro do save
+	ok(Livro_t.MESES_GUARDADOS <= 120,
+		"o histórico tem teto — o save não vira arquivo de log")
+
 	# ---------- clãs: oferta generosa contrata via mensageiro ----------
 	var s6 := Jogo.novo_jogo("F")
 	s6["jogador"]["ouro"] = 2000

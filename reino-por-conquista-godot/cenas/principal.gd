@@ -41,6 +41,7 @@ const Intel = preload("res://scripts/intel.gd")
 const Equipar = preload("res://scripts/equipar.gd")
 const Inimizade = preload("res://scripts/inimizade.gd")
 const Armazem = preload("res://scripts/armazem.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
@@ -890,6 +891,13 @@ func atualizar() -> void:
 		var ultimo := int(state.get("dia", 1)) >= Jogo.DIAS_POR_MES
 		b_dia.text = "Fechar o mês" if ultimo else "Passar o dia (%d/%d)" % [
 			int(state.get("dia", 1)), Jogo.DIAS_POR_MES]
+		# A PREVISÃO NA DICA DO BOTÃO.
+		#
+		# O projeto já tinha a regra escrita — "a virada nunca pode ser
+		# surpresa" — e a aplicava só no TEXTO do botão. O conteúdo da virada
+		# continuava chegando sem aviso: vinte e um passos rodavam e o
+		# jogador via só o resultado.
+		b_dia.tooltip_text = _texto_previsao()
 	# a linha de identidade é creme e fica creme: ela é contexto, não estado.
 	# Quem muda de temperatura com a estação é o chip do calendário no HUD.
 	status_label.add_theme_color_override("font_color", Tema.TEXTO_2)
@@ -924,7 +932,113 @@ func atualizar() -> void:
 	elif state["evento_pendente"] != null:
 		_modal_evento()
 	else:
+		_checar_balanco()
 		_checar_inimizade()
+
+## A CONTA DO MÊS QUE VEM, em texto curto para a dica do botão.
+##
+## Não é profecia e o texto diz isso: é a conta ORDINÁRIA — soldo, tributo,
+## colheita, aluguel. Evento, guerra declarada por NPC e colheita perdida
+## para invasão continuam sendo surpresa, e devem continuar.
+func _texto_previsao() -> String:
+	var p: Dictionary = Livro.previsao(state)
+	var linhas: Array = p.get("linhas", [])
+	if linhas.is_empty():
+		return "Nada de ordinário a receber nem a pagar neste mês."
+	var l: Array = ["O QUE A VIRADA DO MÊS VAI COBRAR E PAGAR", ""]
+	for item in linhas:
+		var d: int = int(item["delta"])
+		l.append("  %s%d %s   %s" % ["+" if d > 0 else "", d,
+			_nome_moeda(str(item["moeda"])), str(item["motivo"])])
+	var saldo: Dictionary = p.get("saldo", {})
+	l.append("")
+	var so: int = int(saldo.get("ouro", 0))
+	l.append("Saldo em ouro: %s%d  ·  cofre depois: %d" % [
+		"+" if so > 0 else "", so, int(p.get("ouro_depois", 0))])
+	if int(p.get("ouro_depois", 0)) < 0:
+		l.append("O COFRE NÃO COBRE O MÊS. O soldo sai pela metade e a moral cai.")
+	l.append("")
+	l.append("Não entra nesta conta: evento, guerra declarada contra você,")
+	l.append("nem colheita perdida para invasão.")
+	return "\n".join(l)
+
+func _nome_moeda(m: String) -> String:
+	match m:
+		"ouro": return "de ouro"
+		"alimento": return "de grão"
+		"madeira": return "de madeira"
+		"moral": return "de moral"
+		"renome": return "de renome"
+		"honra": return "de honra"
+	return m
+
+## O BALANÇO DO MÊS FECHADO — o relatório itemizado.
+##
+## Abre depois da virada, e só quando não há nada mais urgente na frente
+## (fim de jogo, evento, inimizade). O mês pode virar no meio de um turno de
+## trabalho de três dias, e o modal não pode aparecer no meio do turno.
+func _checar_balanco() -> void:
+	if state.is_empty() or state["fim"] != null or state["evento_pendente"] != null:
+		return
+	if overlay_modal != null and overlay_modal.visible:
+		return
+	var bal = state.get("ultimo_balanco")
+	if bal == null or (bal as Dictionary).is_empty():
+		return
+	state["ultimo_balanco"] = null
+	_modal_balanco(bal)
+
+func _modal_balanco(bal: Dictionary) -> void:
+	Sfx.tocar(self, "pagina")
+	var v := _painel_modal()
+	# `Kit.titulo_tela` não serve aqui: 30px de capitular com `clip_text`
+	# cortava "Livro-Razão de Abril, An[o]" no painel de 480. Cabeçalho de
+	# seção é o tamanho certo para modal.
+	Kit.secao(v, "Livro-Razão · %s, Ano %d" % [
+		MESES[state["mes"] - 1], int(state["ano"])],
+		"Tudo o que entrou e saiu no mês que fechou, linha por linha.")
+	# O conteúdo cresce com o mês: seis moedas × várias linhas estouravam a
+	# altura da tela e os botões saíam por baixo. Rola dentro do modal, com
+	# teto de altura — o modal nunca pode ser mais alto que a janela.
+	var rolo := ScrollContainer.new()
+	rolo.custom_minimum_size = Vector2(520, 300)
+	rolo.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(rolo)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", Tema.E3)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rolo.add_child(vb)
+	var vazio := true
+	for moeda in Livro.MOEDAS:
+		var bloco = bal.get(moeda)
+		if bloco == null or (bloco["linhas"] as Array).is_empty():
+			continue
+		vazio = false
+		var saldo_m: int = int(bloco["saldo"])
+		Kit.subsecao(vb, "%s   %s%d" % [_nome_moeda(moeda).to_upper().replace("DE ", ""),
+			"+" if saldo_m > 0 else "", saldo_m])
+		var tab_b := Kit.tabela(vb, [{"t": "", "w": 0},
+			{"t": "", "w": 96, "a": Kit.DIR}])
+		for linha in (bloco["linhas"] as Array):
+			var cel_b := Kit.linha(tab_b)
+			var texto_b: String = str(linha["motivo"])
+			if int(linha["vezes"]) > 1:
+				texto_b += "  (%d vezes)" % int(linha["vezes"])
+			Kit.texto(cel_b[0], texto_b, Tema.TEXTO_2, Tema.MICRO)
+			var d_b: int = int(linha["delta"])
+			Kit.numero(cel_b[1], "%s%d" % ["+" if d_b > 0 else "", d_b],
+				Tema.GANHO if d_b > 0 else Tema.PERIGO)
+	if vazio:
+		Kit.texto(vb, "Mês parado: nada entrou, nada saiu.", Tema.TEXTO_2)
+	Kit.respiro(v, Tema.E3)
+	var acoes_b := Kit.fila(v, Tema.E3)
+	_botao_modal(acoes_b, "Entendi", func(): pass, "primario")
+	# a telemetria sai por aqui: uma linha por mês fechado, para balancear
+	# com dado em vez de sensação
+	_botao(acoes_b, "Exportar histórico (CSV)", func():
+		var caminho: String = Livro.exportar_csv(state)
+		_aviso("Histórico salvo em %s" % caminho if caminho != ""
+			else "Não foi possível gravar o arquivo."), "fantasma")
 
 ## O INIMIGO COBRA O DIA — em qualquer caminho que gaste dia.
 ##

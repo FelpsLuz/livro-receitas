@@ -9,6 +9,7 @@ const Dialogo = preload("res://scripts/dialogo.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Combate = preload("res://scripts/combate.gd")
 const Equipar = preload("res://scripts/equipar.gd")
+const Livro = preload("res://scripts/livro.gd")
 const Clas = preload("res://scripts/clas.gd")
 const Intriga = preload("res://scripts/intriga.gd")
 const Contratos = preload("res://scripts/contratos.gd")
@@ -43,6 +44,7 @@ static func _molde_de_estado() -> Dictionary:
 		"minuto": 0, "empregos": {}, "afetos": {}, "mapa_comercial": null,
 		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
 		"licencas": {}, "avisos_ocultos": {}, "inimizade_fila": [],
+		"livro": [], "livro_meses": [],
 		"armazem": {"baias": 0, "proprio": false, "atraso": 0},
 		"equipamento": {}, "fila_ferraria": [],
 		"familia": {"conjuge": null, "filhos": []},
@@ -214,6 +216,9 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 		if avancar_relogio:
 			Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 		_tick_ruina(state, log)
+		# a cadeia também fecha o livro: o mês passou, o soldo foi cobrado e
+		# o jogador tem direito de ver a conta quando sair
+		state["ultimo_balanco"] = Livro.fechar_mes(state)
 		return
 
 	state["mes"] += 1
@@ -246,6 +251,13 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 	state["contratos"] = Contratos.gerar(state)
 	if state["jogador"]["rei_de"] != "":
 		state["jogador"]["meses_reinando"] += 1
+	# ---- FECHA O LIVRO-RAZÃO ----
+	# Depois de TUDO, e é a ordem que importa: fechar antes deixaria de fora
+	# o soldo do clã, a família e a expiração de contrato, que rodam no fim.
+	# O relatório fica em `ultimo_balanco` para a interface abrir quando o
+	# jogador voltar — a virada pode acontecer dentro de um turno de trabalho
+	# de três dias, e o modal não pode aparecer no meio do turno.
+	state["ultimo_balanco"] = Livro.fechar_mes(state)
 	# VITÓRIA: ser suserano de TODOS os reinos por 12 meses (conquista via guerra)
 	#
 	# O reino que VOCÊ fundou não entra na conta: ele nunca aparece como

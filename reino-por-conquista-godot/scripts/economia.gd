@@ -9,6 +9,7 @@ const Dados = preload("res://scripts/dados.gd")
 const Dialogo = preload("res://scripts/dialogo.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
+const Livro = preload("res://scripts/livro.gd")
 
 static func inicializar_mercados(state: Dictionary) -> void:
 	state["mercados"] = {}
@@ -425,8 +426,12 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 	# rende, e é esse o dote de quem casa fora da nobreza
 	var Pretendentes = load("res://scripts/pretendentes.gd")
 	producao = roundi(producao * Pretendentes.fator_colheita(state))
+	var lenha_do_mes: int = 2 + int(t["nivel"]) * 2 + int(trabalhando / 12.0)
 	t["alimento"] = maxi(0, int(t["alimento"]) + producao - int(t["populacao"]))
-	t["madeira"] = int(t["madeira"]) + 2 + int(t["nivel"]) * 2 + int(trabalhando / 12.0)
+	t["madeira"] = int(t["madeira"]) + lenha_do_mes
+	Livro.registrar(state, "terra", "alimento", producao, "Colheita")
+	Livro.registrar(state, "terra", "alimento", -int(t["populacao"]), "A vila come")
+	Livro.registrar(state, "terra", "madeira", lenha_do_mes, "Madeireira")
 
 	if Estacoes.e_inverno(state) and producao == 0:
 		_diz(log, "Inverno: as fazendas de %s pararam. O celeiro é o que há." % t["nome"])
@@ -434,8 +439,10 @@ static func tick_terra(state: Dictionary, log: Callable) -> void:
 		_diz(log, "Quase metade da vila está em armas: a colheita e o imposto despencaram.")
 
 	# ---- imposto: só quem ficou é que paga ----
-	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + imposto_mensal(state)
-	state["jogador"]["ultimo_imposto"] = imposto_mensal(state)
+	var imposto_do_mes: int = imposto_mensal(state)
+	state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) + imposto_do_mes
+	state["jogador"]["ultimo_imposto"] = imposto_do_mes
+	Livro.registrar(state, "terra", "ouro", imposto_do_mes, "Imposto da vila")
 
 	# ---- fome e pressão ----
 	if int(t["alimento"]) <= 0:
@@ -512,9 +519,17 @@ static func upkeep_de(tropas: Dictionary, multiplicador: float = 1.0,
 static func moral(state: Dictionary) -> int:
 	return int(state["jogador"].get("moral", 100))
 
-static func mudar_moral(state: Dictionary, delta: int) -> int:
-	var m := clampi(moral(state) + delta, 0, 100)
+## Toda mudança de moral passa aqui, e por isso o livro escuta AQUI: um
+## único ponto de instrumentação cobre soldo pago, soldo atrasado, vitória,
+## derrota, cerco e serviço humilhante. `motivo` é opcional para não quebrar
+## os chamadores antigos, mas quem não o passa aparece no relatório como
+## "moral" — e é assim que se acha quem falta instrumentar.
+static func mudar_moral(state: Dictionary, delta: int, motivo: String = "") -> int:
+	var antes := moral(state)
+	var m := clampi(antes + delta, 0, 100)
 	state["jogador"]["moral"] = m
+	Livro.registrar(state, "moral", "moral", m - antes,
+		motivo if motivo != "" else "Moral do exército")
 	return m
 
 static func tick_exercito(state: Dictionary, log: Callable) -> void:
@@ -532,7 +547,10 @@ static func tick_exercito(state: Dictionary, log: Callable) -> void:
 	if int(state["jogador"]["ouro"]) >= int(custo["ouro"]):
 		state["jogador"]["ouro"] = int(state["jogador"]["ouro"]) - int(custo["ouro"])
 		state["jogador"]["meses_sem_pagar"] = 0
+		Livro.registrar(state, "exercito", "ouro", -int(custo["ouro"]), "Soldo do exército")
 	else:
+		Livro.registrar(state, "exercito", "ouro", -int(state["jogador"]["ouro"]),
+			"Soldo pago pela metade — o cofre acabou")
 		state["jogador"]["ouro"] = 0
 		state["jogador"]["meses_sem_pagar"] = int(state["jogador"].get("meses_sem_pagar", 0)) + 1
 		faltou.append("soldo")
@@ -541,12 +559,20 @@ static func tick_exercito(state: Dictionary, log: Callable) -> void:
 	if t != null:
 		if int(t["alimento"]) >= int(custo["comida"]):
 			t["alimento"] = int(t["alimento"]) - int(custo["comida"])
+			Livro.registrar(state, "exercito", "alimento", -int(custo["comida"]),
+				"O exército come")
 		else:
+			Livro.registrar(state, "exercito", "alimento", -int(t["alimento"]),
+				"O exército comeu o celeiro até o fundo")
 			t["alimento"] = 0
 			faltou.append("comida")
 		if int(t["madeira"]) >= int(custo["madeira"]):
 			t["madeira"] = int(t["madeira"]) - int(custo["madeira"])
+			Livro.registrar(state, "exercito", "madeira", -int(custo["madeira"]),
+				"Manutenção de armas")
 		else:
+			Livro.registrar(state, "exercito", "madeira", -int(t["madeira"]),
+				"Faltou madeira para manter as armas")
 			t["madeira"] = 0
 			if int(custo["madeira"]) > 0:
 				faltou.append("madeira")
@@ -555,9 +581,9 @@ static func tick_exercito(state: Dictionary, log: Callable) -> void:
 
 	# ---- moral: é ela que deserta, não o dado ----
 	if faltou.is_empty():
-		mudar_moral(state, 6)
+		mudar_moral(state, 6, "Soldo em dia")
 		return
-	mudar_moral(state, -12 * faltou.size())
+	mudar_moral(state, -12 * faltou.size(), "Faltou %s" % ", ".join(faltou))
 	_diz(log, "Falta %s ao seu exército. A moral cai (%d)."
 		% [" e ".join(faltou), moral(state)])
 
