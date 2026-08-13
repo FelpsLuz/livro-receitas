@@ -584,8 +584,21 @@ func _init() -> void:
 	for r_fd in fd["reinos"]:
 		if not bool(r_fd.get("fundado_pelo_jogador", false)):
 			r_fd["dominado_por"] = "jogador"
-	for i_fd in 13:
+	# A COROA PRECISA SER SEGURADA. Os doze meses deixaram de ser um
+	# cronômetro: toda virada rola contra a casa mais insatisfeita, e uma
+	# revolta devolve o reino ao mapa. Este teste mede a CONTAGEM (a casa
+	# que você fundou não entra nela), então ele monta um imperador que
+	# consegue segurar — guarnição e cortes que não o odeiam. Sem isto ele
+	# mediria a sorte do dado, não a regra.
+	fd["jogador"]["tropas"]["lanceiro"] = 300
+	for r_fd2 in fd["reinos"]:
+		Dialogo.tags_de(fd, "rei_" + str(r_fd2["id"]))["relacao"] = 40
+	for i_fd in 200:
 		fd["evento_pendente"] = null
+		for r_fd3 in fd["reinos"]:
+			if not bool(r_fd3.get("fundado_pelo_jogador", false)):
+				r_fd3["dominado_por"] = "jogador"
+			Dialogo.tags_de(fd, "rei_" + str(r_fd3["id"]))["relacao"] = 40
 		Jogo.passar_mes(fd)
 		if fd["fim"] != null:
 			break

@@ -422,8 +422,15 @@ static func fator_felicidade(state: Dictionary) -> float:
 		return 1.0
 	return 0.5 + float(state["terra"].get("felicidade", 50)) / 100.0
 
+## O mês em que os celeiros foram abertos não tem imposto. Quem perdoou a
+## dívida da vila na segunda-feira não manda o cobrador na sexta — e sem esta
+## leitura o "perdão" seria uma linha de texto sem consequência de caixa.
+static func imposto_perdoado(state: Dictionary) -> bool:
+	var marca: String = "%d/%d" % [int(state.get("ano", 1)), int(state.get("mes", 1))]
+	return str(state["jogador"].get("imposto_perdoado_em", "")) == marca
+
 static func imposto_mensal(state: Dictionary) -> int:
-	if state.get("terra") == null:
+	if state.get("terra") == null or imposto_perdoado(state):
 		return 0
 	var nivel: int = clampi(int(state["terra"]["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
 	var taxa: float = float(Dados.NIVEIS_TERRA[nivel]["imposto"])

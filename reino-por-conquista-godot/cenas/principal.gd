@@ -3574,8 +3574,10 @@ func _aba_familia(c: Container) -> void:
 	# via chegar. Uma barra de idade contra um teto fixo mentiria duas vezes:
 	# ficaria cheia antes da hora e estouraria depois dela.
 	var idade_j: int = int(j["idade"])
-	var risco_ano: int = 25 if idade_j > 65 else (10 if idade_j > 55
-		else (4 if idade_j > 45 else 0))
+	# O NÚMERO VEM DA MESMA FUNÇÃO QUE ROLA O DADO. Aqui havia uma cópia
+	# escrita à mão dos três degraus de idade, e ela já estava mentindo: o
+	# sorteio passou a somar 3% por cicatriz e a tela não somava.
+	var risco_ano: int = roundi(Jogo.risco_anual(state) * 100.0)
 	var grupo_h := Kit.sulco(c, Tema.E4, Tema.E3)
 	var herdeiros: int = (f["filhos"] as Array).size()
 	# Mesma regra do mapa: manchete só quando há manchete. Aos 22 anos o
@@ -3594,7 +3596,18 @@ func _aba_familia(c: Container) -> void:
 		"Aos 46 o risco vira 4% ao ano; aos 56, 10%; aos 66, 25%.")
 	Kit.fato(fatos_h, "familia", "%d" % herdeiros, "filhos",
 		Tema.GANHO if herdeiros > 0 else Tema.PERIGO,
-		"Aos 8 anos cada um é educado no seu atributo mais forte.")
+		"Aos 8 anos cada um é educado no seu atributo mais forte; aos %d pode herdar." % Jogo.MAIORIDADE)
+	# FERIDA E CICATRIZ. Duas coisas diferentes, e a diferença é toda: a
+	# ferida fecha em nove meses, a cicatriz cobra 3% ao ano para sempre.
+	# Sem estar na tela, as duas seriam um relógio de morte invisível.
+	var fer_j: int = Jogo.ferimentos(state)
+	var cic_j: int = Jogo.cicatrizes(state)
+	if fer_j > 0:
+		Kit.fato(fatos_h, "espada", "%d" % fer_j, "feridas abertas", Tema.PERIGO,
+			"Cada uma cobra 1,5%% de risco por MÊS e fecha em %d meses sem sangrar. A terceira não fecha." % Jogo.MESES_PARA_CICATRIZAR)
+	if cic_j > 0:
+		Kit.fato(fatos_h, "caveira", "%d" % cic_j, "cicatrizes", Tema.PERIGO,
+			"Dano que não fecha: +3% no sorteio de todo ano, para sempre.")
 	Kit.fato(fatos_h, "renome", str(int(j["renome"])), "de renome", Tema.TEXTO,
 		"O que a casa vale aos olhos do continente.")
 	Kit.fato(fatos_h, "caveira", "%d" % int(j.get("crueldade", 0)), "de crueldade",
@@ -3616,6 +3629,22 @@ func _aba_familia(c: Container) -> void:
 		v_medo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		Kit.texto(v_medo, "Governa pelo medo", Tema.PERIGO, Tema.CORPO_G)
 		Kit.nota(v_medo, glosa_medo)
+		# A PEREGRINAÇÃO. Sem ela a crueldade é catraca: o teto de felicidade
+		# cai abaixo dos 65 que a redenção pelo bom governo exige, e o jogador
+		# fica preso do outro lado de um número que ninguém escreveu de
+		# propósito. O botão fica ao lado da conta que ele está pagando.
+		var pode_per: Dictionary = Medo.pode_peregrinar(state)
+		var b_per := Kit.botao_mini(v_medo, "Peregrinar · %d dias e %d de ouro" % [
+			Medo.DIAS_PEREGRINACAO, Medo.custo_peregrinacao(state)], func():
+			var r: Dictionary = Medo.peregrinar(state, Jogo.log_para(state))
+			if bool(r.get("ok", false)):
+				Sfx.tocar(self, "pagina")
+			_aviso(str(r.get("msg", "")))
+			Jogo.salvar(state)
+			atualizar(), "fantasma", 260)
+		b_per.disabled = not bool(pode_per.get("ok", false))
+		b_per.tooltip_text = str(pode_per.get("msg",
+			"Dois dias descalço e esmola à ordem. Apaga um ponto — o único caminho que ainda funciona acima de 5."))
 
 	var colunas := Kit.duas_colunas(c, 0.5)
 	var esq: VBoxContainer = colunas[0]
@@ -3699,8 +3728,20 @@ func _aba_familia(c: Container) -> void:
 		Kit.texto(Kit.card(c, Tema.PERIGO),
 			"Nenhum filho. Sem herdeiro, sua morte é o fim da linhagem — e do jogo.",
 			Tema.PERIGO)
+	else:
+		# A REGÊNCIA precisa estar escrita ANTES de acontecer. Ela é a
+		# diferença entre "morri e perdi" e "morri e paguei um preço", e um
+		# jogador que não sabe que ela existe joga como se não existisse.
+		var tem_apto := false
+		for fx in f["filhos"]:
+			if int(fx["idade"]) >= Jogo.MAIORIDADE:
+				tem_apto = true
+		if not tem_apto:
+			Kit.nota(Kit.card(c, Tema.ATENCAO),
+				"Nenhum filho tem %d anos ainda. Se você cair antes disso, a casa não acaba: entra em regência — e o continente cobra o pedágio (a sua terra, ou %d de renome, e toda corte desconta 20)."
+					% [Jogo.MAIORIDADE, Jogo.PEDAGIO_REGENCIA_RENOME])
 	for filho in f["filhos"]:
-		var apto: bool = int(filho["idade"]) >= 16
+		var apto: bool = int(filho["idade"]) >= Jogo.MAIORIDADE
 		var card := Kit.card(c, Tema.GANHO if apto else null)
 		var lf := Kit.fila(card, Tema.E3)
 		# bebê, criança e jovem têm cara própria na leva do Bloco II
@@ -4318,6 +4359,32 @@ func _modal_evento() -> void:
 					Jogo.salvar(state)
 					atualizar()],
 			], null if ficha_amb.is_empty() else Retratos.textura_cidadao(ficha_amb))
+		"ultimato_aco":
+			# O DENTE DO AÇO. O relógio da partida vinha crescendo num canto
+			# do mapa e nunca batia na porta do jogador — dava para comprar
+			# relação 60 com ele e desligar a ameaça com diplomacia barata.
+			# Aqui ele bate, e a recusa não custa nada HOJE: é isso que faz a
+			# escolha ser escolha. A conta chega dois degraus na frente.
+			var valor_ult: int = int(ev.get("valor", 0))
+			var meu_ouro: int = int(state["jogador"]["ouro"])
+			var corpo_ult := "Um arauto de %s desmontou no seu pátio sem pedir licença. Ele não traz proposta: traz uma cifra e uma data.\n\nTributo exigido: %d de ouro. Você tem %d." % [
+				str(ev.get("nome_reino", "")), valor_ult, meu_ouro]
+			if meu_ouro < valor_ult:
+				corpo_ult += "\n\nNão dá para pagar tudo. Eles pegam o que houver e anotam a diferença."
+			_modal("%s cobra tributo" % str(ev.get("nome_reino", "")), corpo_ult, [
+				["Pagar o tributo · %d" % mini(valor_ult, meu_ouro), func():
+					_aviso(str(Aco.responder_ultimato(state, true,
+						Jogo.log_para(state)).get("msg", "")))
+					Sfx.tocar(self, "moeda")
+					Jogo.salvar(state)
+					atualizar()],
+				["Mandar o arauto de volta", func():
+					_aviso(str(Aco.responder_ultimato(state, false,
+						Jogo.log_para(state)).get("msg", "")))
+					Sfx.tocar(self, "tambor")
+					Jogo.salvar(state)
+					atualizar()],
+			], Retratos.ilustracao("invasao"))
 		"traicao_guardas":
 			_modal("Traição por Ouro", "Sua guarda está sem soldo — e um reino rival ofereceu o dobro para abrirem seus portões esta noite.", [
 				["Pagar em dobro agora", func():

@@ -58,7 +58,16 @@ static func novo_jogo(nome: String = "") -> Dictionary:
 		"ano": 1, "mes": 3, "dia": 1,
 		"jogador": {
 			"nome": nome if nome != "" else Dados.rnd(Dados.NOMES_M) + " " + Dados.rnd(Dados.SOBRENOMES),
-			"idade": 22,
+			# ---- POR QUE 40 E NÃO 22 ----
+			# Com 22, o primeiro sorteio de morte rolava aos 46: vinte e
+			# quatro anos de jogo, que a 3 dias por mês são 864 cliques de
+			# "passar o dia" antes de o dado ser lançado UMA vez. O Aço
+			# termina de chegar no ano 7. A morte, a sucessão e o herdeiro
+			# — o único laço que separa este jogo de um Mount & Blade —
+			# ficavam fora da janela em que a partida acontece.
+			# Começando entre 40 e 44, o dado começa a rolar entre o ano 2
+			# e o ano 6: dentro da campanha, e não depois dela.
+			"idade": Dados.ri(40, 44),
 			"atributos": {"forca": Dados.ri(4, 7), "carisma": Dados.ri(4, 7),
 				"gestao": Dados.ri(4, 7), "intriga": Dados.ri(3, 6)},
 			"renome": 0, "ouro": 150, "crueldade": 0, "moral": 100,
@@ -290,9 +299,17 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 		if r.get("dominado_por", "") == "jogador":
 			dominados += 1
 	if dominados >= alvos and alvos > 0:
-		state["jogador"]["meses_imperador"] = state["jogador"].get("meses_imperador", 0) + 1
-		if state["jogador"]["meses_imperador"] >= 12:
-			state["fim"] = {"tipo": "vitoria", "arco": "conquista"}
+		# A COROAÇÃO PRECISA SER SEGURADA, e não esperada.
+		#
+		# Eram 12 meses de nada: a última batalha acabava e sobravam 36
+		# cliques de "passar o dia" contra ZERO pressão declarada. Anticlímax
+		# por desenho — o jogo mais tenso do continente terminava num
+		# cronômetro. Agora cada mês é um teste: as casas conquistadas
+		# testam quem as conquistou, e uma revolta zera o contador.
+		if not _testar_conquistados(state, log):
+			state["jogador"]["meses_imperador"] = state["jogador"].get("meses_imperador", 0) + 1
+			if state["jogador"]["meses_imperador"] >= 12:
+				state["fim"] = {"tipo": "vitoria", "arco": "conquista"}
 	else:
 		state["jogador"]["meses_imperador"] = 0
 	_tick_ferimento(state, log)
@@ -378,13 +395,115 @@ static func _tick_ruina(state: Dictionary, log: Callable) -> void:
 		_diz(log, "Sem ouro, sem homens, sem terra. O mundo esqueceu seu nome.")
 		state["fim"] = {"tipo": "derrota", "causa": "ruina"}
 
+# ============================================================
+# SEGURAR A COROA — os 12 meses que eram um cronômetro
+#
+# A vitória por conquista pedia doze meses seguidos de suserania sobre todos
+# os reinos, sem nenhuma pressão declarada nesse intervalo. Trinta e seis
+# cliques de nada depois da última batalha: o clímax do jogo virava tela de
+# espera. E o jogador que já ganhou não tem por que continuar jogando.
+#
+# Cada mês agora é um teste. Uma casa conquistada tem chance de se levantar,
+# e a chance depende do que você é para ela:
+#
+#   · relação com aquela corte (odiado se revolta, leal não)
+#   · a sua crueldade (o medo SEGURA — é o único lugar do jogo em que
+#     governar pelo terror é a jogada certa sem contrapartida imediata)
+#   · o seu exército em casa (guarnição vazia é convite)
+#
+# Revolta devolve o reino ao mapa E zera o contador. Quem tomou o continente
+# tem que provar que sabe segurá-lo — que é a única definição de império que
+# vale a pena escrever.
+# ============================================================
+## UMA rolagem por mês, e não uma por reino. A primeira versão rolava por
+## casa conquistada: seis dados por mês, setenta e dois em doze meses, e
+## qualquer chance por dado virava certeza no agregado — a vitória por
+## conquista ficava estatisticamente impossível, que é o extremo oposto do
+## problema que este código veio consertar.
+##
+## Rola contra a casa MAIS insatisfeita: é ela quem se levanta primeiro, e
+## saber qual é dá ao jogador o que fazer com os doze meses (visitar aquela
+## corte, guarnecer aquela fronteira) em vez de clicar.
+const CHANCE_REVOLTA_BASE := 0.04
+
+static func _pior_conquistado(state: Dictionary) -> Dictionary:
+	var pior: Dictionary = {}
+	# a menor relação entre as casas que você domina
+	var menor := 999
+	for r in state["reinos"]:
+		if str(r.get("dominado_por", "")) != "jogador":
+			continue
+		var rel: int = int(state["tags"].get("rei_" + str(r["id"]),
+			{"relacao": 0})["relacao"])
+		if rel < menor:
+			menor = rel
+			pior = r
+	return pior
+
+## O risco de perder uma casa neste mês — para o dado E para a interface.
+static func risco_revolta(state: Dictionary) -> float:
+	var pior := _pior_conquistado(state)
+	if pior.is_empty():
+		return 0.0
+	var rel: int = int(state["tags"].get("rei_" + str(pior["id"]),
+		{"relacao": 0})["relacao"])
+	var chance := CHANCE_REVOLTA_BASE
+	chance += 0.10 if rel <= -25 else (0.04 if rel < 25 else 0.0)
+	# O MEDO SEGURA. Aqui, e só aqui, governar pelo terror paga sem cobrar
+	# nada em troca: é a única casa do tabuleiro em que a crueldade é
+	# simplesmente a jogada certa.
+	chance -= 0.01 * Medo.nivel(state)
+	# guarnição em casa é o que impede a notícia de virar coragem
+	if Combate.total_homens(state["jogador"]["tropas"]) < 100:
+		chance += 0.08
+	return clampf(chance, 0.0, 0.95)
+
+static func _testar_conquistados(state: Dictionary, log: Callable) -> bool:
+	var pior := _pior_conquistado(state)
+	if pior.is_empty() or randf() >= risco_revolta(state):
+		return false
+	# A CASA SAI DO MAPA, e é só isso: o contador zera sozinho no mês
+	# seguinte, porque `dominados >= alvos` deixa de valer. Zerar o contador
+	# À MÃO aqui seria castigar duas vezes o mesmo dado.
+	pior["dominado_por"] = ""
+	Dialogo.mudar_relacao(state, "rei_" + str(pior["id"]), -30, "revolta")
+	state["jogador"]["renome"] = maxi(0, int(state["jogador"]["renome"]) - 10)
+	_diz(log, "%s se levantou. A coroa que você quase teve escorregou de novo." % str(pior["nome"]))
+	Sinais.emitir(&"revolta_conquistado", {"reino": str(pior["id"])})
+	return true
+
+## Quanto falta para a coroa — e o risco de perdê-la neste mês. A interface
+## precisa dos dois, senão os doze meses continuam parecendo um cronômetro.
+static func progresso_conquista(state: Dictionary) -> Dictionary:
+	var dominados := 0
+	var alvos := 0
+	for r in state["reinos"]:
+		if bool(r.get("fundado_pelo_jogador", false)):
+			continue
+		alvos += 1
+		if str(r.get("dominado_por", "")) == "jogador":
+			dominados += 1
+	var pior := _pior_conquistado(state)
+	return {"dominados": dominados, "alvos": alvos,
+		"meses": int(state["jogador"].get("meses_imperador", 0)), "alvo_meses": 12,
+		"risco": risco_revolta(state),
+		"frágil": "" if pior.is_empty() else str(pior.get("nome", ""))}
+
+## +3% ao ano por cicatriz, para sempre. É o dano que não fecha.
+const RISCO_POR_CICATRIZ := 0.03
+
+## O risco de morrer neste ano, para o sorteio e para a interface — e é a
+## MESMA função nos dois lugares, senão a barra da Casa mente.
+static func risco_anual(state: Dictionary) -> float:
+	var idade: int = int(state["jogador"]["idade"])
+	var base := 0.25 if idade > 65 else (0.10 if idade > 55 else (0.04 if idade > 45 else 0.0))
+	return minf(0.90, base + RISCO_POR_CICATRIZ * cicatrizes(state))
+
 static func _envelhecer(state: Dictionary, log: Callable) -> void:
 	state["jogador"]["idade"] += 1
 	for f in state["familia"]["filhos"]:
 		f["idade"] += 1
-	var idade: int = state["jogador"]["idade"]
-	var chance := 0.25 if idade > 65 else (0.10 if idade > 55 else (0.04 if idade > 45 else 0.0))
-	if randf() < chance:
+	if randf() < risco_anual(state):
 		morrer(state, "idade", log)
 
 # ============================================================
@@ -400,20 +519,44 @@ static func _envelhecer(state: Dictionary, log: Callable) -> void:
 # devagar, que é o oposto do desenho. É dar à BATALHA um risco pessoal.
 #
 #   · uma derrota esmagadora deixa um ferimento (marcado em `combate.gd`)
-#   · cada ferimento cobra 3% ao mês — dois ferimentos são 6%, e é aí que o
-#     jogador sente que precisa parar e se recompor
-#   · três meses sem sangrar cicatrizam um
+#   · cada ferimento cobra risco TODO MÊS, e não uma vez por ano
+#   · nove meses sem sangrar fecham um
+#   · o TERCEIRO ferimento não fecha: vira cicatriz, e cicatriz cobra para
+#     sempre no sorteio anual
+#
+# ---- por que 1,5% e não 3% ----
+#
+# A cura era de três meses, e com 3% ao mês um ferimento custava 8,7% de
+# chance de morrer antes de fechar. Nove meses de cura ao mesmo 3% seriam
+# 24% por batalha perdida — uma derrota feia viraria um quarto de saga
+# jogada fora, e o jogador aprenderia a nunca arriscar batalha, que é o
+# oposto do que o sistema quer ensinar. A 1,5% em nove meses dá 12,7%: dói,
+# dá para administrar, e dois ferimentos ao mesmo tempo (24%) são a hora de
+# parar e se recompor.
 #
 # O resultado é que uma campanha desastrosa passa a ter consequência que
 # dura, e o testamento — quem herda, com que atributos — vira parte do jogo
 # em vez de uma tela que quase ninguém abre.
 # ============================================================
-const RISCO_POR_FERIMENTO := 0.03
-const MESES_PARA_CICATRIZAR := 3
+const RISCO_POR_FERIMENTO := 0.015
+const MESES_PARA_CICATRIZAR := 9
+## Quantos ferimentos abertos ao mesmo tempo o corpo aguenta antes de um
+## deles virar permanente.
+const FERIMENTOS_ATE_CICATRIZ := 3
 
 static func _tick_ferimento(state: Dictionary, log: Callable) -> void:
 	var j: Dictionary = state["jogador"]
 	var n: int = int(j.get("ferimentos", 0))
+	# O TERCEIRO NÃO FECHA. Acumular três feridas abertas ao mesmo tempo
+	# converte uma delas em dano permanente: o corpo devolve duas e fica com
+	# a terceira. É o que impede a espiral de "perdi feio três vezes e nove
+	# meses depois estava novo".
+	if n >= FERIMENTOS_ATE_CICATRIZ:
+		j["ferimentos"] = n - 1
+		j["cicatrizes"] = int(j.get("cicatrizes", 0)) + 1
+		j["meses_sem_sangrar"] = 0
+		n -= 1
+		_diz(log, "A terceira ferida não vai fechar. Você vai levá-la até o fim.")
 	if n <= 0:
 		return
 	if randf() < RISCO_POR_FERIMENTO * n:
@@ -426,29 +569,94 @@ static func _tick_ferimento(state: Dictionary, log: Callable) -> void:
 		j["ferimentos"] = n - 1
 		j["meses_sem_sangrar"] = 0
 		if n - 1 <= 0:
-			_diz(log, "A ferida fechou. Ficou a cicatriz e o que ela lembra.")
+			_diz(log, "A ferida fechou. Ficou a marca e o que ela lembra.")
 
 ## Quantos ferimentos o jogador carrega — a interface precisa mostrar, senão
 ## é um relógio de morte invisível, que é o pior tipo.
 static func ferimentos(state: Dictionary) -> int:
 	return int(state["jogador"].get("ferimentos", 0))
 
+## E quantas cicatrizes, que não fecham nunca.
+static func cicatrizes(state: Dictionary) -> int:
+	return int(state["jogador"].get("cicatrizes", 0))
+
+# ============================================================
+# A SUCESSÃO — e a regência, que é o que faz o laço da casa disparar
+#
+# A idade de maioridade era 16, e com filho nascendo por volta do ano 2 isso
+# punha o herdeiro válido no ano 18 de jogo. Somado ao sorteio de morte que
+# só começava aos 46, o resultado medido era cara-ou-coroa: metade das sagas
+# terminava antes de o herdeiro valer alguma coisa, e "a derrota mais
+# administrável" não era administrável coisa nenhuma.
+#
+# Duas mexidas resolvem, e a segunda é a que importa:
+#
+#   · MAIORIDADE 14. Um adolescente pega em espada neste mundo.
+#   · REGÊNCIA. Morrer com filho MENOR deixou de ser derrota. A casa segue,
+#     o filho assume com a idade que tem, e o preço é o que um regente
+#     sempre paga: o continente testa a casa. Perde-se uma terra ou um naco
+#     de nome, os vassalos duvidam e a relação com todas as cortes cai.
+#
+# Morrer sem filho NENHUM continua sendo o fim, e tem que continuar: é a
+# única derrota que o jogador escolhe não evitar.
+# ============================================================
+const MAIORIDADE := 14
+const PEDAGIO_REGENCIA_RENOME := 20
+
 static func morrer(state: Dictionary, causa: String, log: Callable) -> void:
 	var herdeiro: Dictionary = {}
+	var menor: Dictionary = {}
 	for f in state["familia"]["filhos"]:
-		if f["idade"] >= 16:
+		if int(f["idade"]) >= MAIORIDADE:
 			herdeiro = f
 			break
-	if herdeiro.is_empty():
+		if menor.is_empty() or int(f["idade"]) > int(menor["idade"]):
+			menor = f
+	if herdeiro.is_empty() and menor.is_empty():
 		state["fim"] = {"tipo": "derrota", "causa": causa}
 		return
+	var regencia := herdeiro.is_empty()
+	if regencia:
+		herdeiro = menor
 	_diz(log, "%s morre (%s). %s assume a casa." % [state["jogador"]["nome"], causa, herdeiro["nome"]])
 	state["jogador"]["nome"] = herdeiro["nome"]
 	state["jogador"]["idade"] = herdeiro["idade"]
 	state["jogador"]["atributos"] = herdeiro["atributos"]
 	state["jogador"]["crueldade"] = 2 if herdeiro.get("mimado", false) else 0
+	# a casa nova começa inteira: as feridas eram do pai
+	state["jogador"]["ferimentos"] = 0
+	state["jogador"]["cicatrizes"] = 0
+	state["jogador"]["meses_sem_sangrar"] = 0
 	state["familia"]["filhos"].erase(herdeiro)
 	state["familia"]["conjuge"] = null
+	if regencia:
+		_cobrar_regencia(state, herdeiro, log)
+
+## O PEDÁGIO DA REGÊNCIA. Uma criança no trono é um convite, e o continente
+## atende: perde-se a terra (que é o que um vizinho toma primeiro) ou, sem
+## terra, um naco do nome. E toda corte desconta o que a casa vale.
+static func _cobrar_regencia(state: Dictionary, herdeiro: Dictionary,
+		log: Callable) -> void:
+	state["regencia"] = {"ate_idade": MAIORIDADE, "nome": str(herdeiro["nome"])}
+	if state.get("terra") != null:
+		var nome_t: String = str(state["terra"]["nome"])
+		state["terra"] = null
+		Armazem.desassentar(state)
+		_diz(log, "%s tem %d anos. Um vizinho tomou %s antes do fim do luto." % [
+			str(herdeiro["nome"]), int(herdeiro["idade"]), nome_t])
+	else:
+		state["jogador"]["renome"] = maxi(0,
+			int(state["jogador"]["renome"]) - PEDAGIO_REGENCIA_RENOME)
+		_diz(log, "%s tem %d anos, e um menino não comanda homens feitos. O nome da casa encolheu." % [
+			str(herdeiro["nome"]), int(herdeiro["idade"])])
+	# o continente testa a casa: toda corte desconta
+	for r in state.get("reinos", []):
+		Dialogo.mudar_relacao(state, "rei_" + str(r["id"]), -20, "regência")
+	# e o suserano, se houver, considera o juramento em suspenso
+	state["jogador"]["suserano"] = ""
+	state["jogador"]["meses_vassalo"] = 0
+	Sinais.emitir(&"regencia", {"nome": str(herdeiro["nome"]),
+		"idade": int(herdeiro["idade"])})
 
 static func comprar_terra(state: Dictionary) -> Dictionary:
 	if state["terra"] != null:
@@ -671,12 +879,30 @@ static func resolver_evento(state: Dictionary, escolha: String) -> Dictionary:
 				if state["terra"] == null:
 					_diz(log, "Não há celeiro para abrir. A turba se dispersa sozinha, por ora.")
 					return {}
-				var custo: int = mini(int(state["jogador"]["ouro"]), 200)
+				# ---- A SAÍDA NÃO-CRUEL, E ELA PRECISA DOER ----
+				# Custava `min(ouro, 200)`, o que significa que um jogador
+				# quebrado pagava ZERO e ainda comprava felicidade 55 — a
+				# opção humana era a barata, e a espiral que ela deveria
+				# quebrar (pobre → infeliz → rebelião → reprimir → +2 de
+				# crueldade → teto mais baixo → mais rebelião) continuava
+				# fechada porque reprimir era o único caminho com preço.
+				#
+				# Agora ceder custa o que uma vila come: ouro proporcional ao
+				# tamanho dela E o imposto do mês inteiro. É caro, é sempre
+				# possível, e não soma um ponto de crueldade sequer.
+				var t_reb: Dictionary = state["terra"]
+				var custo: int = mini(int(state["jogador"]["ouro"]),
+					200 + int(t_reb["populacao"]) * 2)
 				state["jogador"]["ouro"] -= custo
-				state["terra"]["alimento"] = int(state["terra"]["alimento"]) + 60
+				t_reb["alimento"] = int(t_reb["alimento"]) + 60
+				# o imposto deste mês não sai: quem abre celeiro não cobra
+				# aluguel na mesma semana
+				state["jogador"]["imposto_perdoado_em"] = "%d/%d" % [
+					int(state.get("ano", 1)), int(state.get("mes", 1))]
+				Livro.registrar(state, "terra", "ouro", -custo, "Celeiros abertos")
 				if lider == "":
-					state["terra"]["felicidade"] = 55
-					_diz(log, "Você abriu os celeiros (-%d ouro). O povo abaixa as foices." % custo)
+					t_reb["felicidade"] = 55
+					_diz(log, "Você abriu os celeiros (-%d ouro) e perdoou o imposto do mês. O povo abaixa as foices." % custo)
 				else:
 					# o povo se acalma, mas o capataz que armou a revolta segue
 					# no cargo — a ambição dele só cresceu com o gosto do poder

@@ -149,18 +149,61 @@ static func formacao_de(d: Dictionary) -> String:
 ##
 ## A correção não confia na distribuição do hash: o reino dá a FASE, e mês e
 ## ano giram por aritmética explícita com multiplicadores coprimos de 3.
-## Consequência de desenho, e boa: cada reino está numa parte diferente do
-## ciclo, então espionar um não conta nada sobre o outro — mas quem prestou
-## atenção num reino consegue prever o mês seguinte dele. Informação com
-## prazo de validade E com estrutura para aprender.
+##
+## ---- E POR QUE O CICLO SOZINHO NÃO BASTAVA ----
+##
+## O giro `mes*7 + ano*13` é GLOBAL: o mesmo para todos os reinos. Isso torna
+## o relatório do espião crackável em uma leitura — quem espiona uma corte
+## uma vez e conta os meses conhece a doutrina daquela casa para sempre, e os
+## 180 de ouro viram custo de uma vez só, não de cada campanha. Informação
+## que não expira não é informação, é tabela.
+##
+## A PERSONALIDADE DO REI quebra isso, e quebra com o que já existe:
+##
+##   · o ORGULHOSO carrega. Cunha, quase sempre — ele não envolve ninguém,
+##     ele atravessa. É o mais previsível, e é justamente por isso que o
+##     jogador que o conhece deixa de pagar espião contra ele.
+##   · o HONRADO segura a linha. Formação de escudos, de frente, sem truque.
+##   · o CALCULISTA envolve, e é o único que responde ao que VOCÊ fez: ele
+##     lê a sua última formação e escolhe a que vence dela. Espionar não
+##     ajuda contra ele — o que ajuda é variar.
+##   · o CRUEL não tem doutrina: gira pelo ciclo, e o ciclo é o que o espião
+##     lê. É o único caso em que o relatório continua valendo todo mês.
+##
+## Resultado: espionar deixa de ser uma compra única e vira uma leitura sobre
+## QUEM está do outro lado. Contra o calculista, o espião não serve — serve
+## trocar de formação. Contra o cruel, serve sempre. É a diferença entre uma
+## tabela decorável e um adversário.
 static func formacao_do_reino(state: Dictionary, chave: String) -> String:
 	if chave == "":
 		return ""
 	var chaves: Array = Dados.FORMACOES.keys()
 	var n: int = chaves.size()
-	var fase: int = abs(chave.hash()) % n
-	var giro: int = int(state.get("mes", 1)) * 7 + int(state.get("ano", 1)) * 13
-	return str(chaves[(fase + giro) % n])
+	match _personalidade_do_reino(state, chave):
+		"orgulhoso":
+			return "cunha"
+		"honrado":
+			return "linha"
+		"calculista":
+			# responde à SUA última formação: escolhe a que vence dela
+			var minha := formacao_de(state.get("jogador", {}))
+			if minha != "":
+				for f in chaves:
+					if str(Dados.FORMACOES[f]["vence_de"]) == minha:
+						return str(f)
+			return "cerco"
+		_:
+			var fase: int = abs(chave.hash()) % n
+			var giro: int = int(state.get("mes", 1)) * 7 + int(state.get("ano", 1)) * 13
+			return str(chaves[(fase + giro) % n])
+
+## A personalidade de quem comanda aquela chave. Vazia para o que não é
+## reino (bandidos, rebeldes, clãs) — esses caem no ciclo.
+static func _personalidade_do_reino(state: Dictionary, chave: String) -> String:
+	for r in state.get("reinos", []):
+		if str(r.get("id", "")) == chave:
+			return str((r.get("rei", {}) as Dictionary).get("personalidade", ""))
+	return ""
 
 static func bonus_de(state: Dictionary, tropas: Dictionary, moral: int = -1) -> float:
 	# EQUIPAMENTO POR UNIDADE: a média ponderada do aço que ESTES homens

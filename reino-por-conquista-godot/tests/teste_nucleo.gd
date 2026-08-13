@@ -17,6 +17,7 @@ const Intriga = preload("res://scripts/intriga.gd")
 const Contratos = preload("res://scripts/contratos.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
 const Medo = preload("res://scripts/medo.gd")
+const Aco = preload("res://scripts/aco.gd")
 
 var passou := 0
 var falhou := 0
@@ -128,20 +129,49 @@ func _init() -> void:
 
 	# ---- o espião e o campo têm que CONCORDAR ----
 	#
-	# A formação de um reino é derivada de (id, mês, ano), e não sorteada, por
-	# causa disto: o relatório de 80 de ouro apontaria uma doutrina e o campo
-	# mostraria outra. Também muda todo mês, que é o prazo de validade da
-	# informação comprada.
+	# A formação de um reino é derivada, e não sorteada, por causa disto: o
+	# relatório de 180 de ouro apontaria uma doutrina e o campo mostraria
+	# outra. Ela é DERIVADA DE QUEM COMANDA, e não de um ciclo global: um
+	# ciclo igual para todos era crackável em uma leitura — bastava contar
+	# os meses e a informação nunca mais expirava.
 	var s_esp := Jogo.novo_jogo("Espião")
-	var f_mes1: String = Combate.formacao_do_reino(s_esp, "touros")
-	ok(f_mes1 == Combate.formacao_do_reino(s_esp, "touros"),
+	ok(Combate.formacao_do_reino(s_esp, "touros")
+		== Combate.formacao_do_reino(s_esp, "touros"),
 		"a formação do reino é estável dentro do mês")
-	var mudou_algum := false
+
+	# o ORGULHOSO carrega, sempre. É o mais legível do continente — e o
+	# jogador que o conhece PARA de pagar espião contra ele, que é o ponto.
+	var todas_cunha := true
 	for m in range(1, 13):
 		s_esp["mes"] = m
-		if Combate.formacao_do_reino(s_esp, "touros") != f_mes1:
-			mudou_algum = true
-	ok(mudou_algum, "e muda ao longo do ano — o relatório do espião vence")
+		if Combate.formacao_do_reino(s_esp, "touros") != "cunha":
+			todas_cunha = false
+	ok(todas_cunha, "o rei orgulhoso atravessa em cunha o ano inteiro — doutrina é caráter")
+
+	# o HONRADO segura a linha, de frente e sem truque
+	ok(Combate.formacao_do_reino(s_esp, "leoes") == "linha",
+		"o rei honrado segura a linha de escudos")
+
+	# o CRUEL não tem doutrina: gira, e é contra ele que o espião vale todo mês
+	s_esp["mes"] = 1
+	var f_cruel: String = Combate.formacao_do_reino(s_esp, "imperio")
+	var girou := false
+	for m in range(1, 13):
+		s_esp["mes"] = m
+		if Combate.formacao_do_reino(s_esp, "imperio") != f_cruel:
+			girou = true
+	ok(girou, "o rei cruel gira pelo ciclo — contra ele o relatório vence e se compra de novo")
+
+	# o CALCULISTA lê VOCÊ. Espionar não ajuda; ajuda variar.
+	s_esp["mes"] = 1
+	s_esp["jogador"]["formacao"] = "linha"
+	var contra_linha: String = Combate.formacao_do_reino(s_esp, "alvorecer")
+	s_esp["jogador"]["formacao"] = "cunha"
+	var contra_cunha: String = Combate.formacao_do_reino(s_esp, "alvorecer")
+	ok(contra_linha != contra_cunha,
+		"o calculista muda com a SUA formação, não com o calendário")
+	ok(str(Dados.FORMACOES[contra_linha]["vence_de"]) == "linha",
+		"e escolhe exatamente a que vence da sua (%s bate linha)" % contra_linha)
 
 	# ---- EQUIPAMENTO: um sistema só, e um botão que o move ----
 	#
@@ -390,6 +420,12 @@ func _init() -> void:
 		s_leg["terra"]["felicidade"] = 70          # a vila segue contente
 		if s_leg["fim"] != null:
 			break
+		# 24 meses atravessam o ano 3, e no ano 3 o arauto do Aço bate na
+		# porta e TRAVA o mês — como trava para o jogador. Quem reina paga o
+		# tributo e segue reinando; ignorar o ultimato congelaria a saga.
+		if s_leg.get("evento_pendente") != null \
+				and str(s_leg["evento_pendente"].get("tipo", "")) == "ultimato_aco":
+			Aco.responder_ultimato(s_leg, true)
 		Jogo.passar_mes(s_leg)
 	ok(s_leg["fim"] != null and str(s_leg["fim"].get("arco", "")) == "legitimidade",
 		"reinar 24 meses com a vila contente é uma VITÓRIA por si só")
@@ -1043,6 +1079,361 @@ func _init() -> void:
 	Jogo.passar_mes(md7)
 	ok(int(md7["tags"]["rei_touros"]["relacao"]) <= Medo.teto_de_relacao(md7),
 		"sem terra nenhuma, a fama de queimar vila ainda derruba a relação")
+
+	# ============================================================
+	# OS DENTES DO AÇO — um relógio que não anda na sua direção é cenário
+	# ============================================================
+	print("\n-- Os dentes do Aço --")
+
+	var ac0 := Jogo.novo_jogo("Aco")
+	ac0["ano"] = 3
+	ac0["mes"] = 1
+	Aco.tick(ac0)
+	var id_aco: String = Aco.reino_id(ac0)
+	ok(id_aco != "", "no ano 3 o Aço tem nome: %s" % id_aco)
+	ok(Aco.degrau(ac0) >= 1, "e primeiro degrau")
+
+	# ---- DENTE 1: a crueldade fecha a porta da amizade ----
+	ok(Medo.nivel_de_reino(ac0, id_aco) >= Medo.LIMIAR,
+		"o Aço carrega crueldade própria (%d)" % Medo.nivel_de_reino(ac0, id_aco))
+	var teto_aco: int = Medo.teto_de_relacao_com(ac0, "rei_" + id_aco)
+	var outro_id := ""
+	for r_o in ac0["reinos"]:
+		if str(r_o["id"]) != id_aco:
+			outro_id = str(r_o["id"])
+			break
+	ok(Medo.teto_de_relacao_com(ac0, "rei_" + outro_id) == 100,
+		"as outras cortes seguem abertas — o jogador aqui é um santo")
+	ok(teto_aco < 100, "mas a corte do Aço fecha em %d" % teto_aco)
+	Dialogo.tags_de(ac0, "rei_" + id_aco)["relacao"] = teto_aco - 5
+	Dialogo.mudar_relacao(ac0, "rei_" + id_aco, 90, "elogio")
+	ok(int(ac0["tags"]["rei_" + id_aco]["relacao"]) == teto_aco,
+		"nenhum elogio compra amizade com quem queima vila")
+
+	# no segundo degrau o teto cruza 60: a neutralização por aliança morre
+	var ac2 := Jogo.novo_jogo("Aco2")
+	ac2["ano"] = 5
+	Aco.tick(ac2)
+	ok(Medo.teto_de_relacao_com(ac2, "rei_" + Aco.reino_id(ac2)) < 60,
+		"no segundo degrau o degrau da aliança fecha (teto %d) — a saída por diplomacia morre com partida pela frente"
+			% Medo.teto_de_relacao_com(ac2, "rei_" + Aco.reino_id(ac2)))
+	ok(Medo.QUEDA_REINO > Medo.QUEDA_PESSOA,
+		"e cai mais rápido que a de uma pessoa: aliar-se a reino cruel custa os inimigos dele")
+
+	# ---- DENTE 2: o pacto rasgado ----
+	var ac3 := Jogo.novo_jogo("Aco3")
+	ac3["ano"] = 3
+	ac3["aco"] = {"reino": "touros", "degrau": 0, "ultimo_rumor": 0}
+	ac3["pactos"] = [{"a": "touros", "b": "leoes", "tipo": "militar", "meses": 4}]
+	Aco.tick(ac3)
+	ok((ac3["pactos"] as Array).is_empty(),
+		"o Aço rasga o pacto que tinha ao subir de degrau")
+	ok(Geopolitica.relacao(ac3, "touros", "leoes") < 0,
+		"e o antigo aliado sente na relação (%d)" % Geopolitica.relacao(ac3, "touros", "leoes"))
+
+	# ---- DENTE 3: o ultimato ----
+	var ac4 := Jogo.novo_jogo("Aco4")
+	ac4["ano"] = 3
+	ac4["jogador"]["renome"] = 100
+	ac4["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(ac4)
+	Aco.tick(ac4)
+	var ev_a = ac4.get("evento_pendente")
+	ok(ev_a is Dictionary and str(ev_a.get("tipo", "")) == "ultimato_aco",
+		"o arauto chega até quem tem o que perder")
+	var ouro_a: int = int(ac4["jogador"]["ouro"])
+	var val_a: int = int(ev_a["valor"])
+	var r_pag: Dictionary = Aco.responder_ultimato(ac4, true)
+	ok(bool(r_pag.get("pagou", false)) and int(ac4["jogador"]["ouro"]) == ouro_a - val_a,
+		"pagar tira %d do cofre" % val_a)
+	ok(ac4.get("evento_pendente") == null, "e tira o ultimato da mesa")
+
+	# quem não tem nada não é cobrado: arauto não cavalga três dias por um
+	# mercenário sem cofre
+	var ac5 := Jogo.novo_jogo("Aco5")
+	ac5["ano"] = 3
+	ac5["terra"] = null
+	ac5["jogador"]["tropas"] = {"lanceiro": 5}
+	Aco.tick(ac5)
+	ok(ac5.get("evento_pendente") == null,
+		"o mercenário sem terra e sem tropa não recebe arauto")
+
+	# ---- a recusa vence no degrau seguinte, e não hoje ----
+	var ac6 := Jogo.novo_jogo("Aco6")
+	ac6["ano"] = 3
+	ac6["jogador"]["renome"] = 100
+	ac6["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(ac6)
+	Aco.tick(ac6)
+	Aco.responder_ultimato(ac6, false)
+	var id6: String = Aco.reino_id(ac6)
+	var em_guerra6 := func() -> bool:
+		for g in ac6["guerras"]:
+			if (str(g["a"]) == id6 and str(g["b"]) == "jogador") \
+					or (str(g["b"]) == id6 and str(g["a"]) == "jogador"):
+				return true
+		return false
+	ok(not em_guerra6.call(), "recusar não custa NADA hoje — é isso que faz ser escolha")
+	ac6["ano"] = 5
+	ac6["evento_pendente"] = null
+	Aco.tick(ac6)
+	ok(em_guerra6.call(),
+		"mas no degrau seguinte as colunas viram para o seu lado")
+
+	# ---- o Aço derrubado devolve o mapa ----
+	var ac7 := Jogo.novo_jogo("Aco7")
+	ac7["ano"] = 5
+	Aco.tick(ac7)
+	var id7: String = Aco.reino_id(ac7)
+	ok(Medo.nivel_de_reino(ac7, id7) > 0, "o Aço vivo carrega a crueldade")
+	for r7 in ac7["reinos"]:
+		if str(r7["id"]) == id7:
+			r7["dominado_por"] = "jogador"
+	ac7["evento_pendente"] = null
+	Aco.tick(ac7)
+	ok(Medo.nivel_de_reino(ac7, id7) == 0,
+		"e derrubado devolve a corte ao mapa — antagonista morto não envenena para sempre")
+	ok(Medo.teto_de_relacao_com(ac7, "rei_" + id7) == 100,
+		"o teto de relação com aquela casa reabre")
+
+	# ============================================================
+	# A ESCALA DE TEMPO DA MORTE — o laço da casa dentro da janela do Aço
+	# ============================================================
+	print("\n-- A morte entra na janela da partida --")
+
+	var idades: Array = []
+	for i_id in 40:
+		idades.append(int(Jogo.novo_jogo("Idade%d" % i_id)["jogador"]["idade"]))
+	var min_id: int = idades.min()
+	var max_id: int = idades.max()
+	ok(min_id >= 40 and max_id <= 44,
+		"a saga começa entre 40 e 44 anos (medido %d–%d)" % [min_id, max_id])
+	# a conta que motivou a mexida: aos 22 o primeiro dado rolava no ano 24
+	ok(46 - max_id <= 6,
+		"o primeiro sorteio de morte cai no máximo no ano 6 — dentro da janela do Aço, que fecha no 7")
+
+	# ---- o risco na tela é o risco do dado ----
+	var sr := Jogo.novo_jogo("Risco")
+	sr["jogador"]["idade"] = 50
+	ok(is_equal_approx(Jogo.risco_anual(sr), 0.04),
+		"aos 50 o risco anual é 4%")
+	sr["jogador"]["cicatrizes"] = 2
+	ok(is_equal_approx(Jogo.risco_anual(sr), 0.10),
+		"e duas cicatrizes somam 6 pontos — para sempre (%.0f%%)" % (Jogo.risco_anual(sr) * 100.0))
+	sr["jogador"]["idade"] = 60
+	ok(is_equal_approx(Jogo.risco_anual(sr), 0.16),
+		"aos 60 com as mesmas duas cicatrizes, 16%% — a cicatriz não some com o tempo")
+
+	# ---- a terceira ferida não fecha ----
+	var sf := Jogo.novo_jogo("Ferido")
+	sf["jogador"]["ferimentos"] = 3
+	sf["jogador"]["cicatrizes"] = 0
+	var vivo_f := false
+	for i_f in 60:
+		if sf["fim"] != null:
+			break
+		Jogo.passar_mes(sf)
+		if int(sf["jogador"].get("cicatrizes", 0)) > 0:
+			vivo_f = true
+			break
+	ok(vivo_f, "a terceira ferida aberta vira cicatriz permanente")
+	ok(int(sf["jogador"]["ferimentos"]) < 3, "e o corpo devolve as outras duas")
+
+	# ---- REGÊNCIA: morrer com filho menor não é derrota ----
+	var sg := Jogo.novo_jogo("Regente")
+	sg["jogador"]["renome"] = 100
+	sg["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(sg)
+	sg["familia"]["filhos"] = [{"nome": "Pequeno Ivo", "idade": 9, "genero": "m",
+		"atributos": {"forca": 5, "carisma": 5, "gestao": 5, "intriga": 5}}]
+	Dialogo.tags_de(sg, "rei_touros")["relacao"] = 50
+	Jogo.morrer(sg, "teste", Callable())
+	ok(sg["fim"] == null, "morrer com filho MENOR não encerra a saga")
+	ok(str(sg["jogador"]["nome"]) == "Pequeno Ivo" and int(sg["jogador"]["idade"]) == 9,
+		"a criança assume a casa com a idade que tem")
+	ok(sg.get("terra") == null, "e o pedágio cobra a terra: um vizinho a tomou")
+	ok(int(sg["tags"]["rei_touros"]["relacao"]) < 50,
+		"toda corte desconta o que a casa vale sob regência")
+	ok(sg.get("regencia") != null, "e o estado marca a regência")
+
+	# sem terra, o pedágio é o nome
+	var sg2 := Jogo.novo_jogo("Regente2")
+	sg2["terra"] = null
+	sg2["jogador"]["renome"] = 80
+	sg2["familia"]["filhos"] = [{"nome": "Cria", "idade": 5, "genero": "f",
+		"atributos": {"forca": 4, "carisma": 4, "gestao": 4, "intriga": 4}}]
+	Jogo.morrer(sg2, "teste", Callable())
+	ok(int(sg2["jogador"]["renome"]) == 80 - Jogo.PEDAGIO_REGENCIA_RENOME,
+		"sem terra a regência custa %d de renome" % Jogo.PEDAGIO_REGENCIA_RENOME)
+
+	# ---- maioridade 14: o filho herda de verdade, sem pedágio ----
+	var sh := Jogo.novo_jogo("Herdeiro")
+	sh["jogador"]["renome"] = 100
+	sh["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(sh)
+	sh["familia"]["filhos"] = [{"nome": "Ivo Feito", "idade": Jogo.MAIORIDADE,
+		"genero": "m",
+		"atributos": {"forca": 7, "carisma": 6, "gestao": 6, "intriga": 5}}]
+	Jogo.morrer(sh, "teste", Callable())
+	ok(sh["fim"] == null and str(sh["jogador"]["nome"]) == "Ivo Feito",
+		"aos %d o filho herda a casa" % Jogo.MAIORIDADE)
+	ok(sh.get("terra") != null and sh.get("regencia") == null,
+		"e herdeiro maior não paga pedágio nenhum")
+
+	# ---- sem filho NENHUM continua sendo o fim ----
+	var si := Jogo.novo_jogo("Sozinho")
+	si["familia"]["filhos"] = []
+	Jogo.morrer(si, "teste", Callable())
+	ok(si["fim"] != null and str(si["fim"].get("tipo", "")) == "derrota",
+		"morrer sem filho nenhum continua encerrando a linhagem")
+
+	# ---- a casa nova começa inteira ----
+	var sj := Jogo.novo_jogo("Limpo")
+	sj["jogador"]["ferimentos"] = 2
+	sj["jogador"]["cicatrizes"] = 2
+	sj["familia"]["filhos"] = [{"nome": "Novo", "idade": 20, "genero": "m",
+		"atributos": {"forca": 5, "carisma": 5, "gestao": 5, "intriga": 5}}]
+	Jogo.morrer(sj, "teste", Callable())
+	ok(Jogo.ferimentos(sj) == 0 and Jogo.cicatrizes(sj) == 0,
+		"as feridas eram do pai: o herdeiro começa inteiro")
+
+	# ============================================================
+	# AS SAÍDAS DA CATRACA e o passe anti-exploit
+	# ============================================================
+	print("\n-- Saídas da catraca --")
+
+	# ---- o número exato em que a redenção pelo bom governo morre ----
+	# Não é emergência: é decisão de desenho, e por isso está medida.
+	var morre_redencao := 0
+	var morre_legitim := 0
+	for n_c in range(Medo.LIMIAR, Medo.MAXIMO + 1):
+		var kt0 := Jogo.novo_jogo("Cat%d" % n_c)
+		kt0["jogador"]["crueldade"] = n_c
+		if morre_redencao == 0 and Medo.teto_de_felicidade(kt0) < 65:
+			morre_redencao = n_c
+		if morre_legitim == 0 and Medo.teto_de_felicidade(kt0) < Jogo.FELICIDADE_PARA_LEGITIMAR:
+			morre_legitim = n_c
+	ok(morre_redencao == 6,
+		"a redenção pelo bom governo (65+) morre em crueldade %d" % morre_redencao)
+	ok(morre_legitim == 8,
+		"e a vitória por Legitimidade morre em crueldade %d" % morre_legitim)
+
+	# ---- e a tela DIZ isso, em vez de deixar o jogador descobrir ----
+	var kt1 := Jogo.novo_jogo("Diz")
+	kt1["jogador"]["crueldade"] = 8
+	var txt_d: String = Medo.descricao(kt1)
+	ok(txt_d.contains("não apaga mais nada") and txt_d.contains("Legitimidade"),
+		"o cartão do medo escreve o que já morreu, com os números na frente")
+	ok(txt_d.contains("peregrinação"), "e aponta a única saída que ainda funciona")
+
+	# ---- A PEREGRINAÇÃO: a saída que custa DIA ----
+	var kt2 := Jogo.novo_jogo("Peregrino")
+	kt2["jogador"]["crueldade"] = 7
+	kt2["jogador"]["ouro"] = 99999
+	kt2["dia"] = 1
+	var dia_p: int = int(kt2["dia"])
+	var cru_p: int = int(kt2["jogador"]["crueldade"])
+	var ouro_p: int = int(kt2["jogador"]["ouro"])
+	var r_per: Dictionary = Medo.peregrinar(kt2)
+	ok(bool(r_per.get("ok", false)), "com ouro e dias, dá para peregrinar")
+	ok(int(kt2["jogador"]["crueldade"]) == cru_p - 1, "e um ponto sai")
+	ok(int(kt2["jogador"]["ouro"]) < ouro_p, "pagando esmola")
+	ok(int(kt2["dia"]) != dia_p, "e gastando os dois dias — dia é a moeda que valida arrependimento")
+
+	var kt3 := Jogo.novo_jogo("SemOuro")
+	kt3["jogador"]["crueldade"] = 7
+	kt3["jogador"]["ouro"] = 0
+	ok(not bool(Medo.pode_peregrinar(kt3).get("ok", false)),
+		"sem ouro a ordem não recebe ninguém")
+	var kt4 := Jogo.novo_jogo("Santo")
+	ok(not bool(Medo.pode_peregrinar(kt4).get("ok", false)),
+		"e quem não deve nada não tem o que expiar")
+
+	# ---- ceder na rebelião: caro, possível e SEM crueldade ----
+	var kt5 := Jogo.novo_jogo("Cede")
+	kt5["jogador"]["renome"] = 100
+	kt5["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(kt5)
+	kt5["terra"]["populacao"] = 200
+	kt5["terra"]["felicidade"] = 15
+	kt5["evento_pendente"] = {"tipo": "rebeliao", "lider": ""}
+	var cru_v: int = int(kt5["jogador"].get("crueldade", 0))
+	var ouro_v: int = int(kt5["jogador"]["ouro"])
+	Jogo.resolver_evento(kt5, "conceder")
+	ok(int(kt5["jogador"].get("crueldade", 0)) == cru_v,
+		"abrir os celeiros não soma um ponto de crueldade sequer")
+	ok(ouro_v - int(kt5["jogador"]["ouro"]) > 200,
+		"e custa caro de verdade: %d de ouro numa vila de 200" % (ouro_v - int(kt5["jogador"]["ouro"])))
+	ok(Economia.imposto_perdoado(kt5) and Economia.imposto_mensal(kt5) == 0,
+		"mais o imposto do mês inteiro — quem abre celeiro não manda o cobrador na sexta")
+	ok(int(kt5["terra"]["felicidade"]) > 15, "o povo abaixa as foices")
+
+	print("\n-- Passe anti-exploit --")
+
+	# ---- serviço sujo não devolve honra ----
+	var kt6 := Jogo.novo_jogo("Sujo")
+	kt6["jogador"]["honra"] = 20
+	kt6["jogador"]["tropas"]["lanceiro"] = 400
+	kt6["jogador"]["moral"] = 100
+	var sujo: Dictionary = {}
+	for c_s in Contratos.gerar(kt6):
+		if str(c_s.get("id", "")) == "incursao":
+			sujo = c_s
+	ok(not sujo.is_empty(), "o pária enxerga a incursão no mural")
+	if not sujo.is_empty():
+		var honra_s: int = int(kt6["jogador"]["honra"])
+		var cru_s: int = int(kt6["jogador"].get("crueldade", 0))
+		# A COLUNA PARTE DE ONDE FOI CONTRATADA, e o serviço tem que caber no
+		# mês. Sem estas duas linhas `executar` volta na porta e as asserções
+		# abaixo passam VAZIAS — foi o que aconteceu na primeira escrita
+		# deste teste, e um teste que passa sem rodar nada é pior que um
+		# teste vermelho.
+		kt6["local"] = str(sujo.get("regiao", kt6["local"]))
+		kt6["dia"] = 1
+		kt6["contrato_ativo"] = sujo
+		var r_sujo: Dictionary = Contratos.executar(kt6, sujo, Jogo.log_para(kt6))
+		ok(bool(r_sujo.get("vitoria", false)),
+			"a incursão foi cumprida de verdade (400 lanceiros contra uma vila)")
+		ok(int(kt6["jogador"]["honra"]) <= honra_s,
+			"queimar vila NÃO devolve honra — a armadilha não tem porta dos fundos")
+		ok(int(kt6["jogador"].get("crueldade", 0)) > cru_s,
+			"e continua custando crueldade")
+
+	# ---- mas mediar paz devolve, e custa presença ----
+	var kt7 := Jogo.novo_jogo("Mediador")
+	kt7["jogador"]["honra"] = 20
+	kt7["local"] = "touros"
+	Dialogo.tags_de(kt7, "rei_touros")["relacao"] = 70
+	kt7["guerras"] = [{"a": "touros", "b": "leoes", "meses": 3}]
+	var q_m: Dictionary = Dialogo.quem_atende(kt7, "touros")
+	var honra_m: int = int(kt7["jogador"]["honra"])
+	Dialogo.falar(kt7, q_m, "eu queria propor a paz entre vocês")
+	ok(int(kt7["jogador"]["honra"]) > honra_m,
+		"mediar paz devolve honra (%d → %d) — a rota de resgate é explícita" % [
+			honra_m, int(kt7["jogador"]["honra"])])
+
+	# ---- a coroação é segurada, não esperada ----
+	var kt8 := Jogo.novo_jogo("Imperador")
+	for r_k in kt8["reinos"]:
+		r_k["dominado_por"] = "jogador"
+	var pg: Dictionary = Jogo.progresso_conquista(kt8)
+	ok(int(pg["dominados"]) == int(pg["alvos"]) and int(pg["alvos"]) > 0,
+		"o continente inteiro sob a sua bandeira")
+	# odiado por todos, sem tropa em casa: os doze meses não passam limpos
+	for r_k2 in kt8["reinos"]:
+		Dialogo.tags_de(kt8, "rei_" + str(r_k2["id"]))["relacao"] = -80
+	kt8["jogador"]["tropas"] = {"lanceiro": 10}
+	var houve_revolta := false
+	for i_k in 24:
+		if kt8["fim"] != null:
+			break
+		if kt8.get("evento_pendente") != null:
+			kt8["evento_pendente"] = null
+		Jogo.passar_mes(kt8)
+		if int(kt8["jogador"].get("meses_imperador", 0)) == 0 and i_k > 0:
+			houve_revolta = true
+	ok(houve_revolta,
+		"odiado e sem guarnição, as casas conquistadas se levantam e zeram o contador")
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

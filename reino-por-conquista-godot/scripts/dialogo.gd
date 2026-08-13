@@ -372,7 +372,7 @@ static func mudar_relacao(state: Dictionary, npc_id: String, delta: int, _motivo
 	var t := tags_de(state, npc_id)
 	var novo := clampi(t["relacao"] + delta, -100, 100)
 	var Medo = load("res://scripts/medo.gd")
-	var teto: int = Medo.teto_de_relacao(state)
+	var teto: int = Medo.teto_de_relacao_com(state, npc_id)
 	if novo > teto and novo > int(t["relacao"]):
 		novo = maxi(teto, int(t["relacao"]))
 	t["relacao"] = novo
@@ -637,6 +637,15 @@ static func _resposta_paz(state: Dictionary, npc: Dictionary, efeitos: Array) ->
 			efeitos.append("[+15 Renome]")
 		else:
 			efeitos.append("[Já esperavam isso de você — nenhum renome novo]")
+		# ---- A ROTA DE RESGATE DA HONRA, e ela é EXPLÍCITA ----
+		# Desde que serviço sujo deixou de devolver honra, o pária precisava
+		# de um caminho de volta que não fosse "espere". Mediar paz é o
+		# caminho: custa presença na capital, custa o dia da viagem, e ao
+		# contrário do renome ele NÃO é uma vez por casa — nome se refaz
+		# devagar, mas se refaz.
+		var honra_p: int = int(state["jogador"].get("honra", 50))
+		state["jogador"]["honra"] = mini(100, honra_p + 8)
+		efeitos.append("[Honra %d → %d]" % [honra_p, int(state["jogador"]["honra"])])
 		return "Sua palavra tem peso comigo. Que seja. Mandarei emissários."
 	return "Paz se negocia entre iguais ou entre amigos. Você não é nenhum dos dois. Ainda."
 

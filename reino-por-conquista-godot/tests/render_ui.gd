@@ -9,6 +9,7 @@
 extends SceneTree
 
 const Jogo = preload("res://scripts/jogo.gd")
+const Aco = preload("res://scripts/aco.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
 const Llm = preload("res://scripts/llm.gd")
@@ -206,6 +207,22 @@ func _initialize() -> void:
 	st["jogador"]["crueldade"] = 5
 	await _tirar(jogo, 8, "casa_medo")
 	await _tirar(jogo, 0, "terra_imposto_guerra", 460)
+
+	# ---- O DENTE DO AÇO na tela ----
+	# O ultimato é o único momento em que o relógio central da partida bate
+	# na porta do jogador. Sem um quadro aqui, o modal que decide guerra ou
+	# tributo nasceria sem ninguém ter olhado para ele.
+	st["ano"] = 3
+	st["evento_pendente"] = null
+	Aco.tick(st, Jogo.log_para(st))
+	if st.get("evento_pendente") != null \
+			and str(st["evento_pendente"].get("tipo", "")) == "ultimato_aco":
+		jogo._modal_evento()
+		await _quadro(jogo, "ultimato_aco")
+		jogo.overlay_modal.visible = false
+		Aco.responder_ultimato(st, true)
+	else:
+		push_error("Invalid ultimato do Aço não chegou ao harness")
 	st["jogador"]["crueldade"] = 0
 
 	# O LIVRO-RAZÃO do mês fechado. É a tela que existe para o jogador parar

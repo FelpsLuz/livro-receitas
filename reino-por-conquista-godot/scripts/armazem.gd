@@ -96,6 +96,14 @@ static func assentar(state: Dictionary) -> void:
 		d["proprio"] = true
 	d["atraso"] = 0
 
+## PERDER a terra devolve o depósito à condição de alugado — senão a casa
+## que acabou de perder o chão continuaria com armazém de graça, e a regência
+## sairia mais barata que ficar vivo.
+static func desassentar(state: Dictionary) -> void:
+	var d := _dados(state)
+	d["proprio"] = false
+	d["atraso"] = 0
+
 ## Cobrado a cada DIA que passa. Sem ouro, o feitor tranca a baia: o
 ## atraso cresce e, no terceiro dia, ele fica com uma delas e com o que
 ## havia dentro.

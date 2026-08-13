@@ -295,7 +295,18 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 		Livro.registrar(state, "contrato", "ouro", int(contrato["pagamento"]),
 			"Contrato: %s" % str(contrato.get("nome", "serviço")))
 		state["jogador"]["renome"] += int(contrato["renome"])
-		var ganho_h: int = int(RECOMPENSA_HONRA[dificuldade(contrato)])
+		# ---- A PORTA DOS FUNDOS DA ARMADILHA DE HONRA ----
+		# Serviço sujo cumprido devolvia honra pela mesma tabela dos outros,
+		# o que significa que queimar uma vila SUBIA a sua reputação porque
+		# você manteve a palavra dada a quem encomendou o incêndio. Além de
+		# absurdo no tema, isso abria a armadilha por baixo: a espiral do
+		# pária (só serviço sujo, que paga 15% a mais, que suja mais) tinha
+		# uma saída de graça, e a faixa de honra virava decoração.
+		#
+		# Sujo paga o prêmio em OURO e mais nada. Quem quiser o nome de
+		# volta paga em dia: mediar paz numa corte, ou a peregrinação.
+		var ganho_h: int = 0 if SUJOS.has(str(contrato.get("id", ""))) \
+			else int(RECOMPENSA_HONRA[dificuldade(contrato)])
 		state["jogador"]["honra"] = mini(HONRA_MAX,
 			int(state["jogador"].get("honra", 50)) + ganho_h)
 		Dialogo.mudar_relacao(state, "rei_" + contrato["contratante"], 8, "contrato cumprido")
