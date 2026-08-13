@@ -1564,6 +1564,58 @@ func _init() -> void:
 	ok(str(Taverna.comprar_doutrina(sv2, "alvorecer")["formacao"]) == "o contrário da sua",
 		"e o calculista é anunciado como o que ele é: quem lê VOCÊ")
 
+	# ============================================================
+	# O PORTÃO TEM PREÇO, E O PREÇO ESTÁ ESCRITO
+	# ============================================================
+	print("\n-- A placa do portão --")
+
+	var pt := Jogo.novo_jogo("Barrado")
+	pt["local"] = "touros"
+	var p0: Dictionary = Dialogo.porta(pt, "touros")
+	ok(not bool(p0.get("aberta", false)),
+		"neutro e sem título: o portão está fechado")
+	ok((p0.get("caminhos", []) as Array).size() == 3,
+		"e a placa lista as TRÊS chaves, em vez de deixar o jogador adivinhar")
+	var texto_p: String = " ".join(p0.get("caminhos", []))
+	ok(texto_p.contains("você tem"),
+		"cada exigência vem com o SEU número do lado: \"%s\"" % str(p0["caminhos"][0]))
+	ok(int(p0.get("custo", 0)) > 0,
+		"e o suborno tem preço declarado (%d)" % int(p0.get("custo", 0)))
+
+	# a placa e a porta são a MESMA fonte: subornar abre as duas
+	pt["jogador"]["ouro"] = 500
+	var q_pt: Dictionary = Dialogo.quem_atende(pt, "touros")
+	ok(str(q_pt["papel"]) == "guarda", "quem atende ainda é o guarda")
+	Dialogo.falar(pt, q_pt, "tenho uma oferta: te dou ouro para me anunciar")
+	ok(str(Dialogo.quem_atende(pt, "touros")["papel"]) == "rei",
+		"pago o pedágio, o rei recebe")
+	ok(bool(Dialogo.porta(pt, "touros").get("aberta", false)),
+		"e a PLACA concorda com a porta — se divergissem, o jogo mentiria na tela")
+
+	# título abre sem ouro nenhum
+	var pt2 := Jogo.novo_jogo("Capitao")
+	pt2["jogador"]["renome"] = 60
+	ok(bool(Dialogo.porta(pt2, "touros").get("aberta", false)),
+		"o título de Capitão Mercenário abre o portão sem uma moeda")
+
+	# odiado: a placa diz que não há preço, e diz o que fazer
+	var pt3 := Jogo.novo_jogo("Odiado")
+	Dialogo.tags_de(pt3, "rei_touros")["relacao"] = -70
+	var p3: Dictionary = Dialogo.porta(pt3, "touros")
+	ok(not bool(p3.get("aberta", false)) and bool(p3.get("sem_saida", false)),
+		"odiado não tem pedágio que resolva — e a placa admite isso")
+	ok(not (p3.get("caminhos", []) as Array).is_empty(),
+		"mas ainda aponta o caminho longo, em vez de virar beco")
+
+	# ---- o guarda leva o pedágio na boca, e o pedágio certo ----
+	var pt4 := Jogo.novo_jogo("Briefing")
+	var q_pt4: Dictionary = Dialogo.quem_atende(pt4, "touros")
+	var brief: String = Dialogo.briefing(pt4, q_pt4)
+	ok(brief.contains("PEDÁGIO") and brief.contains("Capitão Mercenário"),
+		"o briefing do guarda carrega a tabela exata — a fala não pode divergir da placa")
+	ok(Dialogo.GUARDA_DOSSIE["nunca"].contains("tentar lá dentro"),
+		"e ele está proibido de mandar procurar gente que não existe")
+
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])
 	quit(1 if falhou > 0 else 0)

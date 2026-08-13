@@ -187,6 +187,10 @@ var conversa_input: LineEdit
 var conversa_retrato: TextureRect
 var conversa_titulo: Label
 var conversa_relacao: HBoxContainer
+## A linha de dica muda com QUEM atende (o rei aceita casamento, o guarda
+## não), e a placa do portão só existe quando há portão fechado.
+var conversa_dica: Label
+var conversa_porta: VBoxContainer
 var overlay_modal: Control
 var modal_centro: CenterContainer
 var input_nome: LineEdit
@@ -4206,12 +4210,21 @@ func _montar_conversa() -> void:
 	conversa_relacao = HBoxContainer.new()
 	conversa_relacao.add_theme_constant_override("separation", Tema.E3)
 	v_cab.add_child(conversa_relacao)
-	var l_dica := Label.new()
-	l_dica.text = "Elogie, insulte, ameace, proponha casamento, chantageie, negocie a paz. Ele lembra."
-	l_dica.add_theme_font_size_override("font_size", Tema.MINI)
-	l_dica.add_theme_color_override("font_color", Tema.TEXTO_3)
-	l_dica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v_cab.add_child(l_dica)
+	# A DICA ERA A DO REI, EM TODA CONVERSA. "Proponha casamento, chantageie,
+	# negocie a paz" na tela de um lanceiro de portão que não pode nenhuma
+	# das três — o jogador tentava, batia numa recusa, e concluía que o jogo
+	# estava quebrado. Agora ela é preenchida em `_atualizar_cab_conversa`,
+	# com o que ESTE interlocutor de fato faz.
+	conversa_dica = Label.new()
+	conversa_dica.add_theme_font_size_override("font_size", Tema.MINI)
+	conversa_dica.add_theme_color_override("font_color", Tema.TEXTO_3)
+	conversa_dica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v_cab.add_child(conversa_dica)
+	# A PLACA DO PORTÃO: o preço, quando há portão. Fica logo abaixo da
+	# dica, e só existe quando o portão está fechado.
+	conversa_porta = VBoxContainer.new()
+	conversa_porta.add_theme_constant_override("separation", Tema.E2)
+	v_cab.add_child(conversa_porta)
 	var v_sair := VBoxContainer.new()
 	v_sair.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cab.add_child(v_sair)
@@ -4298,6 +4311,61 @@ func _atualizar_cab_conversa() -> void:
 	# guarda, mas a simpatia que ele demonstra é a da casa.
 	conversa_retrato.texture = Retratos.textura(_id_retrato(npc_atual),
 		Retratos.humor_de(state, str(npc_atual["id"])))
+	_placa_do_portao()
+
+## ---- A PLACA DO PORTÃO ----
+##
+## Achado no teste: o jogador com relação 1 e sem título ficava preso num
+## guarda que deflectia para sempre. Ele não estava travado por falta de
+## mecânica — a escada de acesso existe, funciona e tem três chaves. Estava
+## travado por falta de PLACA: nada na tela dizia qual era o preço, e o
+## modelo preenchia o silêncio mandando "tentar lá dentro, com alguém que
+## possa fazer algo" — gente que não existe neste mundo.
+##
+## Um portão fechado é boa mecânica. Um portão fechado que não diz o preço é
+## um beco. Aqui o preço fica escrito, com os SEUS números ao lado de cada
+## exigência, e o suborno vira botão em vez de frase que se adivinha.
+func _placa_do_portao() -> void:
+	if conversa_dica == null or conversa_porta == null:
+		return
+	for filho in conversa_porta.get_children():
+		filho.queue_free()
+	var papel: String = str(npc_atual.get("papel", ""))
+	if papel == "guarda":
+		conversa_dica.text = "Ele abre portão e fofoca. Não fecha acordo, não negocia paz, não fala de exército."
+	elif papel == "conquistado":
+		conversa_dica.text = "Não há mais rei aqui para ouvir você."
+	else:
+		conversa_dica.text = "Elogie, insulte, ameace, peça apoio, proponha casamento, chantageie, negocie a paz. Ele lembra."
+	if papel != "guarda":
+		return
+	var reino_id: String = str(npc_atual.get("reino_id", ""))
+	if reino_id == "":
+		return
+	var p: Dictionary = Dialogo.porta(state, reino_id)
+	if bool(p.get("aberta", false)):
+		return
+	var cartao := Kit.card(conversa_porta, Tema.ATENCAO)
+	Kit.texto(cartao, "O portão está fechado para você", Tema.ATENCAO, Tema.CORPO)
+	Kit.nota(cartao, str(p.get("resumo", "")))
+	for cam in p.get("caminhos", []):
+		Kit.nota(cartao, "·  %s" % str(cam))
+	# o suborno deixa de ser uma frase que se adivinha e vira botão. A
+	# mecânica sempre existiu (`portao_aberto_ate`) e nada na tela a
+	# anunciava — o jogador tinha que digitar a palavra certa por sorte.
+	var custo: int = int(p.get("custo", 0))
+	if custo > 0:
+		var b_sub := Kit.botao_mini(cartao, "Pôr %d de ouro na mão dele" % custo, func():
+			var r: Dictionary = Dialogo.falar(state, npc_atual,
+				"tenho uma oferta: te dou ouro para me anunciar")
+			Sfx.tocar(self, "moeda")
+			conversa_texto += "[color=#b5a48c][b]Você[/b] · *estende as moedas*[/color]\n"
+			_responder(r, "suborno")
+			Jogo.salvar(state), "fantasma", 280)
+		b_sub.disabled = int(state["jogador"]["ouro"]) < custo
+		b_sub.tooltip_text = ("Vale o mês corrente. Na virada ele volta a ser guarda."
+			if int(state["jogador"]["ouro"]) >= custo
+			else "Você tem %d de ouro." % int(state["jogador"]["ouro"]))
 
 func enviar_texto(texto: String) -> void:
 	# emoji do teclado do celular viraria tofu na fonte do jogo — o mesmo
@@ -4368,6 +4436,19 @@ func _responder(resultado: Dictionary, fala_jogador: String = "") -> void:
 	conversa_hist.text = conversa_texto
 	digitando = false
 	conversa_input.placeholder_text = "Diga o que quiser..."
+	# ---- O PORTÃO ABRIU NO MEIO DA CONVERSA ----
+	# Subornar o guarda grava `portao_aberto_ate` e `quem_atende` passa a
+	# devolver o REI — mas a conversa continuava com o guarda na tela, e o
+	# jogador tinha que sair e voltar para descobrir que a moeda tinha
+	# funcionado. A palavra do guarda vale na hora, ou não vale.
+	if str(npc.get("papel", "")) == "guarda" and str(npc.get("reino_id", "")) != "":
+		var agora: Dictionary = Dialogo.quem_atende(state, str(npc["reino_id"]))
+		if str(agora.get("papel", "")) == "rei":
+			npc_atual = agora
+			conversa_texto += "[color=#8fbf6a][i]O portão se abre. %s recebe você.[/i][/color]\n\n" \
+				% str(agora["nome"])
+			conversa_hist.text = conversa_texto
+			Sfx.tocar(self, "abrir")
 	_atualizar_cab_conversa()
 	Jogo.salvar(state)
 	for acao in resultado["acoes"]:

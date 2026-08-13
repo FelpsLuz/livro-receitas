@@ -11,6 +11,7 @@ extends SceneTree
 const Jogo = preload("res://scripts/jogo.gd")
 const Aco = preload("res://scripts/aco.gd")
 const Taverna = preload("res://scripts/taverna.gd")
+const Dialogo = preload("res://scripts/dialogo.gd")
 const Retratos = preload("res://scripts/retratos.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
@@ -150,6 +151,27 @@ func _initialize() -> void:
 		"personalidade": "cruel"})
 	await _quadro(jogo, "conversa")
 	jogo.fechar_conversa()
+
+	# ---- O PORTÃO FECHADO, com a placa do pedágio ----
+	# É a tela onde o jogador do teste ficou preso: um guarda que deflectia
+	# para sempre e nada dizendo qual era o preço. Sem quadro, a placa nova
+	# poderia nascer fora da tela e ninguém veria.
+	# renome 60 dá o título de Capitão Mercenário, e o título ABRE o portão —
+	# com o estado rico do harness, `quem_atende` devolvia o rei e o quadro
+	# saía com a tela errada. Aqui o jogador é o que ele é no começo: ninguém.
+	var st_rel: int = int(st["tags"].get("rei_touros", {"relacao": 0})["relacao"])
+	var st_renome: int = int(st["jogador"]["renome"])
+	var st_terra = st["terra"]
+	st["jogador"]["renome"] = 0
+	st["terra"] = null                      # sem terra não há título de Senhor
+	st["tags"]["rei_touros"] = {"relacao": 0, "flags": {}}
+	var guarda_q: Dictionary = Dialogo.quem_atende(st, "touros")
+	jogo.abrir_conversa(guarda_q)
+	await _quadro(jogo, "portao_fechado")
+	jogo.fechar_conversa()
+	st["tags"]["rei_touros"]["relacao"] = st_rel
+	st["jogador"]["renome"] = st_renome
+	st["terra"] = st_terra
 
 	# ---- os fluxos do Bloco I: viagem, contrato e fronteira ----
 	# Os três modais novos que nenhum quadro cobria — e onde uma regressão

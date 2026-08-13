@@ -290,7 +290,14 @@ const GUARDA_DOSSIE := {
 	#
 	# A regra é dita como REGRA e não como sabor, porque instrução de estilo
 	# o modelo negocia e instrução de fato ele obedece.
-	"nunca": "NUNCA invente pessoas, cargos ou instituições. Neste mundo NÃO existem secretários, escrivães, sargentos, capitães da guarda, conselhos, chanceleres nem mordomos. Só existe o que está nesta ficha: você, o rei, os outros cinco reis, os clãs e a gente comum. Se não souber quem faria algo, diga que não sabe — nunca preencha com um nome ou um cargo.",
+	"nunca": "NUNCA invente pessoas, cargos ou instituições. Neste mundo NÃO existem secretários, escrivães, sargentos, capitães da guarda, conselhos, chanceleres nem mordomos. Só existe o que está nesta ficha: você, o rei, os outros cinco reis, os clãs e a gente comum. Se não souber quem faria algo, diga que não sabe — nunca preencha com um nome ou um cargo. E NUNCA mande o jogador \"tentar lá dentro\", \"falar com alguém\" ou \"procurar quem possa ajudar\": não há mais ninguém. Só você no portão e o rei no salão.",
+	# ---- O PORTÃO TEM PREÇO, E ELE TEM QUE DIZER QUAL ----
+	# Flagrado em jogo: o jogador insistia, o guarda deflectia para sempre e
+	# apontava para gente inexistente. Ele não estava travado por falta de
+	# mecânica — a escada de acesso existe e funciona. Estava travado por
+	# falta de PLACA. Um portão fechado é boa mecânica; um portão fechado que
+	# não diz o preço é um beco.
+	"porta": "Se o jogador insistir em falar com o rei, DIGA O PREÇO em vez de desconversar. O briefing traz as condições exatas: repita-as com as suas palavras, cansadas e diretas. Você não decide quem entra — você cobra o pedágio e conhece a tabela dele.",
 	"ancoras": [
 		"Você chegou na semana errada. Ele anda mandando enforcar gente por pouco.",
 		"Anuncio, mas não prometo nada. Se ele estiver de mau humor, a culpa não é minha nem sua.",
@@ -924,6 +931,67 @@ static func quem_atende(state: Dictionary, reino_id: String) -> Dictionary:
 	# Amistoso (+20 a +59) e Leal (≥60): rei em pessoa, sem restrição alguma
 	return rei
 
+# ============================================================
+# A PORTA — o que exatamente abre este portão, em números
+#
+# A escada de acesso acima está certa e era invisível. Flagrado em jogo: o
+# jogador com relação 1 e sem título ficava preso num guarda que deflectia
+# para sempre — e, pior, deflectia para gente que não existe ("tente lá
+# dentro, com alguém que possa fazer algo"). Ele não estava travado por
+# falta de mecânica: estava travado por falta de PLACA.
+#
+# Um portão fechado é uma boa mecânica. Um portão fechado que não diz o
+# preço é um beco.
+#
+# Esta função devolve o preço, e devolve UM SÓ lugar: a tela do portão, a
+# recusa do guarda e o briefing do modelo leem daqui. Assim a placa, a fala
+# e a regra não podem divergir — que é como um jogo passa a mentir.
+# ============================================================
+const RELACAO_PARA_REI := 20
+const RENOME_PARA_ANUNCIO := 50
+
+static func porta(state: Dictionary, reino_id: String) -> Dictionary:
+	var rel: int = int(tags_de(state, "rei_" + reino_id)["relacao"])
+	# O PORTÃO COMPRADO vem primeiro, pela mesma razão que vem primeiro em
+	# `quem_atende`: se esta função não soubesse do suborno, ela diria "o
+	# portão está fechado" na tela do jogador que acabou de pagar — e a
+	# placa contradiria a porta que já se abriu.
+	if int(tags_de(state, "rei_" + reino_id)["flags"].get("portao_aberto_ate", -1)) \
+			>= int(state["ano"]) * 12 + int(state["mes"]) and rel > -60:
+		return {"aberta": true, "relacao": rel, "comprada": true,
+			"resumo": "O portão está pago até a virada do mês."}
+	var Contratos = load("res://scripts/contratos.gd")
+	var titulo: String = Contratos.titulo(state)
+	var renome: int = int(state["jogador"]["renome"])
+	var caminhos: Array = []
+	if rel <= -60:
+		return {"aberta": false, "sem_saida": true, "relacao": rel,
+			"resumo": "Odiado. Não há preço: enquanto esta casa te odiar, o portão fica fechado e a cadeia é a única coisa que abre.",
+			"caminhos": ["Melhore a relação de longe: cumpra contrato desta casa, medeie a paz dela, ou deixe o tempo passar."]}
+	# o suborno: sempre disponível, e é o caminho que custa ouro em vez de mês
+	var custo_suborno: int = 50 + maxi(0, -rel) * 2
+	if rel <= -20:
+		if renome >= RENOME_PARA_ANUNCIO:
+			return {"aberta": true, "relacao": rel,
+				"resumo": "Hostil, mas o seu nome pesa: ele anuncia a contragosto."}
+		caminhos.append("%d de renome para ele anunciar mesmo te odiando (você tem %d)"
+			% [RENOME_PARA_ANUNCIO, renome])
+		caminhos.append("%d de ouro no bolso dele — vale o mês corrente" % custo_suborno)
+		return {"aberta": false, "relacao": rel, "caminhos": caminhos,
+			"resumo": "Hostil. Ele não anuncia ninguém de quem a casa não gosta — a não ser que o nome seja grande demais para ignorar."}
+	if rel < RELACAO_PARA_REI:
+		if int(TITULO_RANK.get(titulo, 0)) >= 1:
+			return {"aberta": true, "relacao": rel,
+				"resumo": "O seu título abre esta porta. O rei recebe — seco, mas recebe."}
+		caminhos.append("relação %d com esta casa (você tem %d)" % [RELACAO_PARA_REI, rel])
+		caminhos.append("o título de Capitão Mercenário, que vem com %d de renome (você tem %d)"
+			% [RENOME_PARA_ANUNCIO, renome])
+		caminhos.append("%d de ouro no bolso dele — vale o mês corrente" % custo_suborno)
+		return {"aberta": false, "relacao": rel, "caminhos": caminhos, "custo": custo_suborno,
+			"resumo": "Neutro e sem título: para este portão você ainda não é ninguém. Três coisas o abrem."}
+	return {"aberta": true, "relacao": rel,
+		"resumo": "A casa te conhece. O rei recebe em pessoa."}
+
 # ---------- adaptador LLM (fase 2: HTTPRequest ao llama.cpp) ----------
 ## Postura do NPC em relação ao jogador — uma função só, usada pela UI
 ## (separar aliados/inimigos/neutros) e pelo briefing da IA.
@@ -962,6 +1030,17 @@ static func briefing(state: Dictionary, npc: Dictionary) -> String:
 			reino = r
 	if reino.is_empty():
 		return "\n".join(l)
+
+	# ---- A TABELA DO PEDÁGIO, na boca de quem cobra ----
+	# O guarda tem que poder dizer o preço, e dizer o preço CERTO. Sem esta
+	# linha o modelo inventava a condição (ou pior, inventava uma pessoa a
+	# quem recorrer), e a fala dele contradizia a placa da tela.
+	if str(npc.get("papel", "")) == "guarda":
+		var p: Dictionary = porta(state, reino_id)
+		if not bool(p.get("aberta", false)):
+			var cams: Array = p.get("caminhos", [])
+			l.append("[O PEDÁGIO DO SEU PORTÃO] %s Só estas coisas abrem, e são estas exatamente: %s. Se ele insistir, diga isto — não invente outra condição nem outra pessoa."
+				% [str(p.get("resumo", "")), "; ".join(cams) if not cams.is_empty() else "nenhuma, por ora"])
 
 	# situação do reino DELE — é o que separa fala genérica de fala situada
 	if str(reino.get("dominado_por", "")) == "jogador":
@@ -1043,6 +1122,7 @@ static func _dossie_guarda(npc: Dictionary) -> String:
 		"O que sabe: %s" % GUARDA_DOSSIE["sabe"],
 		"O que NÃO sabe (nunca inventa isso, nem sob pressão): %s" % GUARDA_DOSSIE["nao_sabe"],
 		"REGRA DURA: %s" % GUARDA_DOSSIE["nunca"],
+		"O PORTÃO: %s" % GUARDA_DOSSIE["porta"],
 	]
 	var reino_id: String = str(npc.get("reino_id", ""))
 	if GUARDA_SOTAQUE.has(reino_id):
