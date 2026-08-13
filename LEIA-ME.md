@@ -23,6 +23,10 @@ trono, mapa comercial arrumado, o Trono Vazio e as Terras Bárbaras virando
 oferta de coroa, a mesa do veterano no lugar do rumor, arte por desfecho no
 trabalho e atributos aparando o risco do ofício.
 
+**E o portão do guarda passou a ter preço escrito.** Quando ele te barra,
+um cartão mostra as três chaves com os seus números do lado, e o suborno
+virou botão em vez de frase a adivinhar. Pagar abre o portão na hora.
+
 ## Android
 
 **[ReinoPorConquista-teste.apk](https://raw.githubusercontent.com/FelpsLuz/livro-receitas/apk-teste/ReinoPorConquista-teste.apk)** (58 MB)
