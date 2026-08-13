@@ -25,6 +25,7 @@ const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
 const Armazem = preload("res://scripts/armazem.gd")
 const Inimizade = preload("res://scripts/inimizade.gd")
+const Medo = preload("res://scripts/medo.gd")
 
 const ARQUIVO_SAVE := "user://save.json"
 
@@ -45,6 +46,7 @@ static func _molde_de_estado() -> Dictionary:
 		"progresso_atributo": {}, "intel": {}, "chantagens_ano": {},
 		"licencas": {}, "avisos_ocultos": {}, "inimizade_fila": [],
 		"livro": [], "livro_meses": [],
+		"aco": {"reino": "", "degrau": 0, "ultimo_rumor": 0},
 		"armazem": {"baias": 0, "proprio": false, "atraso": 0},
 		"equipamento": {}, "fila_ferraria": [],
 		"familia": {"conjuge": null, "filhos": []},
@@ -195,6 +197,11 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 		if state["mes"] > 12:
 			state["mes"] = 1
 			state["ano"] += 1
+			# A CADEIA NÃO CONGELA A IDADE. O ramo de prisão retornava sem
+			# chamar `_envelhecer`, e o comentário deste arquivo promete que
+			# "cadeia é castigo, não abrigo": cumprir três anos de pena
+			# deixava o jogador com a mesma idade e sem sorteio de morte.
+			_envelhecer(state, log)
 		_diz(log, "Mais um mês a ferros. As paredes escorrem.")
 		Economia.tick_mercados(state)         # o mundo segue sem você
 		Economia.tick_choques(state)
@@ -216,6 +223,8 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 		if avancar_relogio:
 			Relogio.avancar(state, Relogio.MINUTOS_POR_MES, log)
 		_tick_ruina(state, log)
+		# a ferros a fama continua trabalhando contra você
+		Medo.aplicar_tetos(state)
 		# a cadeia também fecha o livro: o mês passou, o soldo foi cobrado e
 		# o jogador tem direito de ver a conta quando sair
 		state["ultimo_balanco"] = Livro.fechar_mes(state)
@@ -251,6 +260,14 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 	state["contratos"] = Contratos.gerar(state)
 	if state["jogador"]["rei_de"] != "":
 		state["jogador"]["meses_reinando"] += 1
+	# ---- O MEDO COBRA ----
+	# Depois de TODOS os tiques que mexem em felicidade e relação, e por isso
+	# aqui e não dentro de `tick_terra`: lá o teto seria aplicado antes do
+	# bônus da esposa e antes de `Geopolitica`/`Clas` mexerem nas cortes, e
+	# um teto aplicado antes do último aumento não é teto nenhum. Fora que
+	# `tick_terra` volta na porta quando o jogador não tem terra — e o
+	# mercenário sem chão também tem que sentir a fama de queimar vila.
+	Medo.aplicar_tetos(state)
 	# ---- FECHA O LIVRO-RAZÃO ----
 	# Depois de TUDO, e é a ordem que importa: fechar antes deixaria de fora
 	# o soldo do clã, a família e a expiração de contrato, que rodam no fim.
@@ -275,10 +292,66 @@ static func passar_mes(state: Dictionary, avancar_relogio: bool = true) -> void:
 	if dominados >= alvos and alvos > 0:
 		state["jogador"]["meses_imperador"] = state["jogador"].get("meses_imperador", 0) + 1
 		if state["jogador"]["meses_imperador"] >= 12:
-			state["fim"] = {"tipo": "vitoria"}
+			state["fim"] = {"tipo": "vitoria", "arco": "conquista"}
 	else:
 		state["jogador"]["meses_imperador"] = 0
+	_tick_ferimento(state, log)
+	_tick_legitimidade(state, log)
 	_tick_ruina(state, log)
+
+# ============================================================
+# OS ARCOS DE VITÓRIA
+#
+# Havia UM: dominar os seis reinos e segurar por doze meses. É a saída do
+# conquistador, e ela é longa, cara e única — quem joga de mercador, de
+# intrigante ou de fundador de casa não tinha nenhum fim para perseguir, e
+# um sandbox sem linha de chegada é um sandbox que se abandona.
+#
+# São três agora, e cada um premia um jeito de jogar que o motor JÁ
+# sustentava sem ter onde desaguar:
+#
+#   CONQUISTA     todas as casas dominadas, doze meses. A que já existia.
+#   LEGITIMIDADE  fundar a própria casa e fazê-la DURAR: 24 meses de reinado
+#                 com a vila contente. É a vitória de quem construiu em vez
+#                 de tomar — e usa `meses_reinando`, que era incrementado
+#                 todo mês e nunca consultado por linha nenhuma.
+#   USURPAÇÃO     sentar no trono de um dos seis pela corte e não pelo
+#                 exército (ver `Intriga.assaltar_trono`).
+#
+# A derrota continua sendo uma só: morrer sem herdeiro.
+# ============================================================
+const MESES_PARA_LEGITIMAR := 24
+const FELICIDADE_PARA_LEGITIMAR := 50
+
+static func _tick_legitimidade(state: Dictionary, log: Callable) -> void:
+	var j: Dictionary = state["jogador"]
+	if str(j.get("rei_de", "")) == "" or state["fim"] != null:
+		return
+	# a vila contente é a prova de que a coroa é aceita, e não só usada
+	var fel: int = int(state["terra"]["felicidade"]) if state.get("terra") != null else 0
+	if fel < FELICIDADE_PARA_LEGITIMAR:
+		# não zera o contador de reinado: reinar mal continua sendo reinar.
+		# O que se perde é o mês de legitimidade, e isso é medido à parte.
+		j["meses_legitimo"] = 0
+		return
+	var m: int = int(j.get("meses_legitimo", 0)) + 1
+	j["meses_legitimo"] = m
+	if m == roundi(MESES_PARA_LEGITIMAR * 0.5):
+		_diz(log, "Metade do caminho: já falam da sua casa como se ela sempre tivesse existido.")
+	if m >= MESES_PARA_LEGITIMAR:
+		state["fim"] = {"tipo": "vitoria", "arco": "legitimidade"}
+
+## Quanto falta para a coroa virar linhagem. Devolve {} quando o jogador
+## ainda não tem reino — a interface usa isto para mostrar o arco.
+static func progresso_legitimidade(state: Dictionary) -> Dictionary:
+	var j: Dictionary = state["jogador"]
+	if str(j.get("rei_de", "")) == "":
+		return {}
+	var fel: int = int(state["terra"]["felicidade"]) if state.get("terra") != null else 0
+	return {"meses": int(j.get("meses_legitimo", 0)),
+		"alvo": MESES_PARA_LEGITIMAR,
+		"felicidade": fel, "felicidade_alvo": FELICIDADE_PARA_LEGITIMAR,
+		"contando": fel >= FELICIDADE_PARA_LEGITIMAR}
 
 ## Ruína total: sem ouro, sem homens, sem terra e sem marcha não existe
 ## NENHUMA ação que gere renda — sem esta função o jogo virava um estado
@@ -313,6 +386,52 @@ static func _envelhecer(state: Dictionary, log: Callable) -> void:
 	var chance := 0.25 if idade > 65 else (0.10 if idade > 55 else (0.04 if idade > 45 else 0.0))
 	if randf() < chance:
 		morrer(state, "idade", log)
+
+# ============================================================
+# O FERIMENTO — a morte que faz o herdeiro valer alguma coisa
+#
+# A herança dinástica deste jogo está escrita, testada e é o que o separa de
+# um Mount & Blade: o filho é educado no seu atributo mais forte e assume a
+# casa quando você cai. E quase ninguém chegava a ver, porque a única morte
+# possível era a de velhice — 4% ao ano depois dos 45. Começando aos 22, uma
+# partida de dez anos termina aos 32, e o herdeiro nunca entra em cena.
+#
+# A correção não é subir a mortalidade por idade: isso puniria quem joga
+# devagar, que é o oposto do desenho. É dar à BATALHA um risco pessoal.
+#
+#   · uma derrota esmagadora deixa um ferimento (marcado em `combate.gd`)
+#   · cada ferimento cobra 3% ao mês — dois ferimentos são 6%, e é aí que o
+#     jogador sente que precisa parar e se recompor
+#   · três meses sem sangrar cicatrizam um
+#
+# O resultado é que uma campanha desastrosa passa a ter consequência que
+# dura, e o testamento — quem herda, com que atributos — vira parte do jogo
+# em vez de uma tela que quase ninguém abre.
+# ============================================================
+const RISCO_POR_FERIMENTO := 0.03
+const MESES_PARA_CICATRIZAR := 3
+
+static func _tick_ferimento(state: Dictionary, log: Callable) -> void:
+	var j: Dictionary = state["jogador"]
+	var n: int = int(j.get("ferimentos", 0))
+	if n <= 0:
+		return
+	if randf() < RISCO_POR_FERIMENTO * n:
+		_diz(log, "A ferida não fechou. %s não passou deste mês." % str(j["nome"]))
+		morrer(state, "ferimento", log)
+		return
+	var parado: int = int(j.get("meses_sem_sangrar", 0)) + 1
+	j["meses_sem_sangrar"] = parado
+	if parado >= MESES_PARA_CICATRIZAR:
+		j["ferimentos"] = n - 1
+		j["meses_sem_sangrar"] = 0
+		if n - 1 <= 0:
+			_diz(log, "A ferida fechou. Ficou a cicatriz e o que ela lembra.")
+
+## Quantos ferimentos o jogador carrega — a interface precisa mostrar, senão
+## é um relógio de morte invisível, que é o pior tipo.
+static func ferimentos(state: Dictionary) -> int:
+	return int(state["jogador"].get("ferimentos", 0))
 
 static func morrer(state: Dictionary, causa: String, log: Callable) -> void:
 	var herdeiro: Dictionary = {}
@@ -407,6 +526,27 @@ static func meses_preso(state: Dictionary) -> int:
 	return maxi(0, int(state["jogador"].get("preso_ate", 0)) - _mes_absoluto(state))
 
 const AVISO_PRESO := "Você está a ferros. Daqui não se manda em nada."
+
+## A SAGA ACABOU? A mesma pergunta que a cela faz, e que a morte não fazia.
+##
+## `passar_dia` e `passar_mes` já voltavam na porta com `fim != null`, mas
+## quem PAGA antes de gastar o dia não voltava: medido, o lenhador que
+## morria no primeiro turno continuava cortando lenha e embolsando a paga
+## por mais quatro turnos, porque `Empregos.trabalhar` credita o ouro e o
+## progresso de ofício ANTES de chamar o funil do tempo — e o funil era o
+## único lugar que sabia da morte.
+##
+## Um defunto não bate ponto. Toda ação que credita alguma coisa passa a
+## perguntar aqui, do mesmo jeito que já pergunta pela cela.
+static func acabou(state: Dictionary) -> bool:
+	return state.get("fim") != null
+
+## A recusa padrão para quem tentar agir com a saga encerrada.
+static func recusa_fim(state: Dictionary) -> Dictionary:
+	var f: Dictionary = state.get("fim", {}) if state.get("fim") != null else {}
+	return {"ok": false, "acabou": true,
+		"msg": "A saga terminou (%s). Não há mais o que fazer com esta casa." %
+			str(f.get("causa", "fim"))}
 
 ## A recusa padrão, em personagem, para quem tentar agir da cela.
 static func recusa_preso(state: Dictionary) -> Dictionary:

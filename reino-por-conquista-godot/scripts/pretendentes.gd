@@ -94,6 +94,8 @@ static func cortejadas(state: Dictionary) -> Array:
 static func cortejar(state: Dictionary, reino_id: String, idx: int,
 		log: Callable = Callable()) -> Dictionary:
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.acabou(state):
+		return Jogo.recusa_fim(state)
 	if Jogo.esta_preso(state):
 		return Jogo.recusa_preso(state)
 	if state["familia"]["conjuge"] != null:

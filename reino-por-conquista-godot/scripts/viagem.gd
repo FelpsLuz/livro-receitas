@@ -60,6 +60,8 @@ static func viajar(state: Dictionary, destino: String, log: Callable = Callable(
 	if not bool(est["ok"]):
 		return est
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.acabou(state):
+		return Jogo.recusa_fim(state)
 	if Jogo.esta_preso(state):
 		return Jogo.recusa_preso(state)
 	var dias: int = int(est["dias"])

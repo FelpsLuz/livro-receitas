@@ -10,6 +10,7 @@ const Dialogo = preload("res://scripts/dialogo.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Cidadaos = preload("res://scripts/cidadaos.gd")
 const Livro = preload("res://scripts/livro.gd")
+const Medo = preload("res://scripts/medo.gd")
 
 static func inicializar_mercados(state: Dictionary) -> void:
 	state["mercados"] = {}
@@ -398,12 +399,36 @@ static func lenha_mensal(state: Dictionary) -> int:
 		return 0
 	return 2 + int(t["nivel"]) * 2 + int(populacao_ativa(state) / 12.0)
 
+## FELICIDADE MULTIPLICA O IMPOSTO — e é aqui que ela deixa de ser uma
+## moeda morta 90% do tempo.
+##
+## Ela existia só em LIMIAR: invisível até explodir. Abaixo de 20 vinha
+## rebelião, abaixo de 40 o lorde sumia, 65 apagava crueldade — e entre um
+## limiar e outro o número não fazia absolutamente nada. Uma moeda que o
+## jogador não lê todo mês é peso morto na interface e no código.
+##
+## `0,5 + felicidade/100` dá de 0,5× (povo em fúria, metade da arrecadação)
+## a 1,5× (povo contente, uma vez e meia). É a mesma amplitude do fator de
+## gestão em cima, e a escolha de faixa não é arbitrária: em 50 — o meio,
+## onde a vila nasce — o multiplicador é exatamente 1,0, então nada muda
+## para quem já jogava e a curva cresce dos dois lados a partir daí.
+##
+## O que isso liga: o pão do celeiro, a exigência dos notáveis, o casamento
+## com a filha do capataz e a decisão de convocar metade da vila passam
+## todos a ter preço no MESMO número, todo mês, em vez de só na hora em que
+## alguém pega uma tocha.
+static func fator_felicidade(state: Dictionary) -> float:
+	if state.get("terra") == null:
+		return 1.0
+	return 0.5 + float(state["terra"].get("felicidade", 50)) / 100.0
+
 static func imposto_mensal(state: Dictionary) -> int:
 	if state.get("terra") == null:
 		return 0
 	var nivel: int = clampi(int(state["terra"]["nivel"]), 0, Dados.NIVEIS_TERRA.size() - 1)
 	var taxa: float = float(Dados.NIVEIS_TERRA[nivel]["imposto"])
-	return roundi(populacao_ativa(state) * taxa * fator_gestao(state))
+	return roundi(populacao_ativa(state) * taxa * fator_gestao(state)
+		* fator_felicidade(state))
 
 static func tick_terra(state: Dictionary, log: Callable) -> void:
 	if state["terra"] == null:
@@ -583,7 +608,11 @@ static func tick_exercito(state: Dictionary, log: Callable) -> void:
 	if faltou.is_empty():
 		mudar_moral(state, 6, "Soldo em dia")
 		return
-	mudar_moral(state, -12 * faltou.size(), "Faltou %s" % ", ".join(faltou))
+	# O MEDO SEGURA A TROPA. Quem tem fama de enforcar desertor não precisa
+	# pagar em dia — a queda é aparada, nunca zerada. Compra tempo, não
+	# lealdade.
+	var queda: int = roundi(-12.0 * faltou.size() * Medo.fator_desercao(state))
+	mudar_moral(state, queda, "Faltou %s" % ", ".join(faltou))
 	_diz(log, "Falta %s ao seu exército. A moral cai (%d)."
 		% [" e ".join(faltou), moral(state)])
 

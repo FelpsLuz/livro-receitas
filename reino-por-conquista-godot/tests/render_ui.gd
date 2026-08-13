@@ -197,6 +197,17 @@ func _initialize() -> void:
 	await _tirar(jogo, 4, "corte_sem_rei")
 	st["local"] = "imperio"
 
+	# ---- O EIXO DO MEDO, nas duas telas onde ele aparece ----
+	# Com crueldade 0 (o padrão do harness) nada disso desenha: o cartão do
+	# medo some e o imposto de guerra fica apagado. Ou seja, os dois
+	# controles novos do Bloco 6 não passariam por render nenhum — que é
+	# exatamente como um botão nasce quebrado e ninguém vê.
+	st["local"] = "imperio"
+	st["jogador"]["crueldade"] = 5
+	await _tirar(jogo, 8, "casa_medo")
+	await _tirar(jogo, 0, "terra_imposto_guerra", 460)
+	st["jogador"]["crueldade"] = 0
+
 	# O LIVRO-RAZÃO do mês fechado. É a tela que existe para o jogador parar
 	# de concluir que o jogo é aleatório: vinte e um passos rodam na virada e
 	# até aqui ele via só o resultado.

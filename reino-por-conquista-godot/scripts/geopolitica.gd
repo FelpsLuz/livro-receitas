@@ -16,6 +16,7 @@
 extends RefCounted
 
 const Dados = preload("res://scripts/dados.gd")
+const Aco = preload("res://scripts/aco.gd")
 const Sinais = preload("res://scripts/sinais.gd")
 const Economia = preload("res://scripts/economia.gd")
 const Recrutamento = preload("res://scripts/recrutamento.gd")
@@ -147,6 +148,7 @@ static func tick(state: Dictionary, log: Callable) -> void:
 	_tick_ataques_jogador(state, log)
 	_tick_conquistas(state, log)
 	_tick_influencia_corte(state, log)
+	Aco.tick(state, log)
 
 ## Tesouro, celeiro e madeireira rendem; o EXÉRCITO consome. Um rei NPC
 ## joga pelas mesmas regras do jogador: se não paga, a moral cai e os homens
@@ -165,6 +167,10 @@ static func _tick_economia(state: Dictionary, log: Callable) -> void:
 		for p in pactos_de(state, r["id"]):
 			if p["tipo"] == "comercio":
 				renda = roundi(renda * 1.25)
+		# O AÇO: um multiplicador crescente num reino só. É a linha inteira
+		# do antagonista dentro da economia — o resto do sistema não sabe
+		# que ele existe, e é por isso que custa tão pouco.
+		renda = roundi(renda * Aco.fator(state, str(r["id"])))
 		r["tesouro"] = int(r.get("tesouro", 0)) + renda
 		r["celeiro"] = int(r.get("celeiro", 0)) + nobres * Dados.ri(20, 35)
 		r["madeireira"] = int(r.get("madeireira", 0)) + nobres * Dados.ri(10, 20)

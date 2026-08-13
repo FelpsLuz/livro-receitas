@@ -697,17 +697,44 @@ func _init() -> void:
 		int(sw["progresso_atributo"]["forca"]) == 2)
 	ok("turno maior paga proporcionalmente melhor que dois turnos curtos",
 		Empregos.BONUS_PAGA[2] > Empregos.BONUS_PAGA[0])
-	# dez dias de ofício = um ponto de atributo
-	var forca_w0: int = int(sw["jogador"]["atributos"]["forca"])
-	for i_w in 5:
-		sw["dia"] = 1
-		Empregos.trabalhar(sw, "touros", "lenhador", 2)
-	ok("dez dias de ofício sobem o atributo em um ponto",
-		int(sw["jogador"]["atributos"]["forca"]) >= forca_w0 + 1,
-		"força %d → %d" % [forca_w0, int(sw["jogador"]["atributos"]["forca"])])
 	sw["dia"] = 3
 	ok("turno que não cabe no mês é recusado",
 		not Empregos.trabalhar(sw, "touros", "lenhador", 3)["ok"])
+
+	# ---- dez dias de ofício = um ponto de atributo ----
+	# NUM OFÍCIO QUE NÃO MATA, e essa troca não é conveniência: o lenhador
+	# tem 5% de morte por turno, que num turno de dois dias vira 7,5%. Seis
+	# turnos são 38% de chance de o jogador morrer no meio da medição — o
+	# teste passava por sorte da seed e media a sorte, não a progressão.
+	# `obras` só arrisca honra, que não interrompe turno nenhum.
+	var so := Jogo.novo_jogo("Obras")
+	so["jogador"]["honra"] = 50
+	ok("o supervisor de obras aceita quem tem nome",
+		bool(Empregos.pedir_emprego(so, "touros", "obras")["ok"]))
+	var gestao_w0: int = int(so["jogador"]["atributos"]["gestao"])
+	for i_w in 6:
+		so["dia"] = 1
+		Empregos.trabalhar(so, "touros", "obras", 2)
+	ok("dez dias de ofício sobem o atributo em um ponto",
+		int(so["jogador"]["atributos"]["gestao"]) >= gestao_w0 + 1,
+		"gestão %d → %d" % [gestao_w0, int(so["jogador"]["atributos"]["gestao"])])
+
+	# ---- UM DEFUNTO NÃO BATE PONTO ----
+	# Achado medindo o item acima: `trabalhar` credita ouro e progresso
+	# ANTES de chamar o funil do tempo, e o funil era o único lugar que
+	# sabia da morte. O lenhador morria no primeiro turno e seguia cortando
+	# lenha e recebendo por mais quatro.
+	var sd := Jogo.novo_jogo("Defunto")
+	sd["jogador"]["honra"] = 50
+	Empregos.pedir_emprego(sd, "touros", "obras")
+	sd["fim"] = {"tipo": "derrota", "causa": "teste"}
+	var ouro_d: int = int(sd["jogador"]["ouro"])
+	var r_d: Dictionary = Empregos.trabalhar(sd, "touros", "obras", 2)
+	ok("com a saga encerrada o turno é recusado", not bool(r_d["ok"]))
+	ok("e o defunto não recebe paga nenhuma",
+		int(sd["jogador"]["ouro"]) == ouro_d)
+	ok("a viagem também fecha a porta para quem já morreu",
+		not bool(Viagem.viajar(sd, "garcas")["ok"]))
 
 	# a notação de risco: o número é a chance E a fração perdida
 	var sh := Jogo.novo_jogo("Bardo")

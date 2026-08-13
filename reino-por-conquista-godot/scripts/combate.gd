@@ -346,6 +346,22 @@ static func batalhar(state: Dictionary, inimigo: Dictionary, contexto: String,
 	rel["vitoria"] = vivos_dele == 0 or (vivos_meu > 0 and vivos_meu > vivos_dele)
 	# derrota esmagadora: perdeu quase tudo e o inimigo ficou de pé
 	rel["esmagado"] = (not rel["vitoria"]) and vivos_meu <= maxi(1, roundi(vivos_dele * 0.15))
+	# ---- O FERIMENTO ----
+	#
+	# O jogo tem herança dinástica escrita e testada — filho educado no seu
+	# atributo mais forte, casa que continua depois de você — e quase ninguém
+	# chega a ver: a única morte possível era a de velhice, com 4% ao ano
+	# depois dos 45. Uma partida de dez anos começando aos 22 termina aos 32:
+	# o laço da casa, que é o diferencial deste jogo contra um Mount & Blade,
+	# nunca era jogado.
+	#
+	# Batalha esmagadora agora deixa MARCA. Não mata na hora — matar no
+	# clique é arbitrário e o jogador não tem como responder — mas acumula um
+	# ferimento que o mês cobra, e que cicatriza se você parar de sangrar.
+	if bool(rel["esmagado"]):
+		j["ferimentos"] = int(j.get("ferimentos", 0)) + 1
+		j["meses_sem_sangrar"] = 0
+		rel["ferido"] = true
 	rel["resumo"] = montar_relatorio(rel)
 	Sinais.emitir(&"batalha_terminou", rel)
 	return rel

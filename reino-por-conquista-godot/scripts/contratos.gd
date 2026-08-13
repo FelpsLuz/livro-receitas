@@ -105,16 +105,84 @@ static func gerar(state: Dictionary) -> Array:
 			c["forca"] = int(t["forca"]) + degrau
 			# paga acompanha a dureza: serviço de corte rica vale o risco
 			c["pagamento"] = roundi(Dados.ri(t["ouro"][0], t["ouro"][1])
-				* (1.0 + 0.35 * degrau))
+				* (1.0 + 0.35 * degrau) * _fator_honra(state))
 			c["renome"] = int(t["renome"]) + degrau * 3
 			c["aceito"] = false
+			c["selo"] = _selo_de_honra(state)
 			contratos.append(c)
 	return contratos
 
-## O mural DESTA taverna.
+# ============================================================
+# A HONRA ESCALA O MURAL
+#
+# Ela era a segunda moeda morta 90% do tempo: existia em dois limiares —
+# 45 para jurar vassalagem, e faixas de emprego — e no resto do jogo era um
+# número que só descia quando você quebrava a palavra. Punição sem prêmio.
+#
+# Aqui ela vira FONTE DE RENDA, e o desenho tem três faixas:
+#
+#   abaixo de 30   PÁRIA. Ninguém honesto contrata quem larga contrato. Só
+#                  sobra serviço sujo — queimar vila, incursão — que paga
+#                  bem e cobra mais honra ainda. É uma armadilha de dívida
+#                  desenhada de propósito: fácil de entrar, cara de sair.
+#   30 a 59        o mural de sempre.
+#   60 ou mais     PALAVRA DE FERRO. As cortes disputam quem tem nome
+#                  limpo, e o serviço premium paga +25%.
+#
+# O que isso conserta: honra deixa de ser só uma trava e passa a ser uma
+# ESCOLHA de carreira. Quem vive de trabalho sujo ganha mais por serviço e
+# afunda a própria reputação até só restar trabalho sujo; quem cuida do
+# nome ganha menos por serviço e mais no fim do mês.
+# ============================================================
+const HONRA_PARIA := 30
+const HONRA_FERRO := 60
+## Os serviços que uma corte decente não encomenda a ninguém.
+const SUJOS := ["incursao"]
+
+static func honra_de(state: Dictionary) -> int:
+	return int(state["jogador"].get("honra", 50))
+
+static func _fator_honra(state: Dictionary) -> float:
+	var h := honra_de(state)
+	if h >= HONRA_FERRO:
+		return 1.25
+	if h < HONRA_PARIA:
+		# pária ganha MAIS por serviço, e é isso que faz a armadilha fechar
+		return 1.15
+	return 1.0
+
+static func _selo_de_honra(state: Dictionary) -> String:
+	var h := honra_de(state)
+	if h >= HONRA_FERRO:
+		return "palavra de ferro"
+	if h < HONRA_PARIA:
+		return "sem perguntas"
+	return ""
+
+## O mural que ESTE jogador consegue ver.
+##
+## Não é um filtro cosmético: pária não recebe oferta de corte decente, e
+## quem tem palavra de ferro não é procurado para queimar vila. A lista
+## bruta continua a mesma — o que muda é quem chama quem.
+static func _visivel_para(state: Dictionary, c: Dictionary) -> bool:
+	var h := honra_de(state)
+	var sujo: bool = SUJOS.has(str(c.get("id", "")))
+	if h < HONRA_PARIA:
+		return sujo
+	if h >= HONRA_FERRO:
+		return not sujo
+	return true
+
+## O mural DESTA taverna, filtrado pelo que a sua reputação alcança.
+##
+## O filtro é aplicado na EXIBIÇÃO e não na geração, de propósito: o mundo
+## gera os mesmos contratos para todos, e a honra decide quais chegam ao seu
+## ouvido. Assim, recuperar a honra faz o mural mudar na hora — sem esperar
+## a virada do mês para o mural ser regerado.
 static func do_local(state: Dictionary) -> Array:
 	var aqui: String = str(state.get("local", ""))
-	return state["contratos"].filter(func(c): return str(c.get("regiao", aqui)) == aqui)
+	return state["contratos"].filter(func(c):
+		return str(c.get("regiao", aqui)) == aqui and _visivel_para(state, c))
 
 static func por_uid(state: Dictionary, uid: String) -> Dictionary:
 	for c in state["contratos"]:
@@ -199,6 +267,8 @@ static func executar(state: Dictionary, contrato: Dictionary, log: Callable) -> 
 	# o serviço come DIAS, e tem que caber no mês: é isso que transforma
 	# "aceitar tudo" numa escolha de agenda
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.acabou(state):
+		return Jogo.recusa_fim(state)
 	if Jogo.esta_preso(state):
 		return Jogo.recusa_preso(state)
 	# A COLUNA PARTE DAQUI. O serviço foi contratado numa taverna, e é de

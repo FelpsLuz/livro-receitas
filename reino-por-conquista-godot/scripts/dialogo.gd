@@ -358,9 +358,24 @@ static func tags_de(state: Dictionary, npc_id: String) -> Dictionary:
 		state["tags"][npc_id] = {"relacao": 0, "flags": {}}
 	return state["tags"][npc_id]
 
+## O TETO DO MEDO MORDE AQUI, e não no fechamento do mês.
+##
+## Este é o funil único por onde passa toda relação do jogador com uma corte
+## — elogio, contrato honrado, calote, ameaça, suborno. Clipar aqui é o que
+## faz o cruel VER o custo no momento em que ele tenta comprar a aliança:
+## a barra sobe até o teto e para, com o número na tela. No fechamento do
+## mês ele veria um recuo sem causa aparente e culparia outra coisa.
+##
+## O teto nunca segura queda: `mini` só se aplica ao valor final, então
+## perder relação continua funcionando igual para quem governa pelo medo.
 static func mudar_relacao(state: Dictionary, npc_id: String, delta: int, _motivo: String) -> String:
 	var t := tags_de(state, npc_id)
-	t["relacao"] = clampi(t["relacao"] + delta, -100, 100)
+	var novo := clampi(t["relacao"] + delta, -100, 100)
+	var Medo = load("res://scripts/medo.gd")
+	var teto: int = Medo.teto_de_relacao(state)
+	if novo > teto and novo > int(t["relacao"]):
+		novo = maxi(teto, int(t["relacao"]))
+	t["relacao"] = novo
 	return "[%s: %d]" % [nome_relacao(t["relacao"]), t["relacao"]]
 
 static func nome_relacao(r: int) -> String:

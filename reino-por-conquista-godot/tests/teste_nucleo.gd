@@ -16,6 +16,7 @@ const Clas = preload("res://scripts/clas.gd")
 const Intriga = preload("res://scripts/intriga.gd")
 const Contratos = preload("res://scripts/contratos.gd")
 const Geopolitica = preload("res://scripts/geopolitica.gd")
+const Medo = preload("res://scripts/medo.gd")
 
 var passou := 0
 var falhou := 0
@@ -271,6 +272,167 @@ func _init() -> void:
 	# o histórico não pode crescer para sempre dentro do save
 	ok(Livro_t.MESES_GUARDADOS <= 120,
 		"o histórico tem teto — o save não vira arquivo de log")
+
+	# ============================================================
+	# BLOCO 3 — as duas moedas de limiar ganham gradiente
+	#
+	# Felicidade e honra existiam só em limiar: invisíveis até explodirem.
+	# Moeda que o jogador não lê todo mês é peso morto.
+	# ============================================================
+	print("\n=== FELICIDADE E HONRA VIRAM GRADIENTE ===")
+	var s_fel := Jogo.novo_jogo("Amado")
+	s_fel["terra"] = {"nome": "V", "nivel": 2, "populacao": 60, "alimento": 300,
+		"madeira": 50, "felicidade": 50, "pressao": 0.0}
+	var imp_50: int = Economia.imposto_mensal(s_fel)
+	s_fel["terra"]["felicidade"] = 100
+	var imp_100: int = Economia.imposto_mensal(s_fel)
+	s_fel["terra"]["felicidade"] = 0
+	var imp_0: int = Economia.imposto_mensal(s_fel)
+	ok(imp_100 > imp_50 and imp_50 > imp_0,
+		"o imposto acompanha a felicidade (%d < %d < %d)" % [imp_0, imp_50, imp_100])
+	# em 50 — o meio, onde a vila nasce — o multiplicador é exatamente 1,0:
+	# nada muda para quem já jogava, e a curva cresce dos dois lados
+	s_fel["terra"]["felicidade"] = 50
+	ok(is_equal_approx(Economia.fator_felicidade(s_fel), 1.0),
+		"e em 50 o fator é 1,0 — o meio não mexe em nada")
+	ok(is_equal_approx(Economia.fator_felicidade(s_fel), 1.0)
+		and imp_0 * 2 <= imp_100 + 2,
+		"a amplitude é de 0,5x a 1,5x — povo em fúria arrecada metade")
+
+	# ---- honra: o mural muda com a reputação ----
+	var s_h := Jogo.novo_jogo("Honrado")
+	s_h["local"] = "touros"
+	s_h["jogador"]["honra"] = 70
+	s_h["contratos"] = Contratos.gerar(s_h)
+	var mural_ferro: Array = Contratos.do_local(s_h)
+	var tem_sujo_ferro := false
+	for c_h in mural_ferro:
+		if Contratos.SUJOS.has(str(c_h.get("id", ""))):
+			tem_sujo_ferro = true
+	ok(not tem_sujo_ferro,
+		"com palavra de ferro, ninguém te oferece trabalho sujo")
+	s_h["jogador"]["honra"] = 10
+	var mural_paria: Array = Contratos.do_local(s_h)
+	var so_sujo := not mural_paria.is_empty()
+	for c_h2 in mural_paria:
+		if not Contratos.SUJOS.has(str(c_h2.get("id", ""))):
+			so_sujo = false
+	ok(so_sujo or mural_paria.is_empty(),
+		"e como pária, só sobra o trabalho sujo (%d ofertas)" % mural_paria.size())
+	# a paga escala nas duas pontas, e é isso que fecha a armadilha
+	var s_p1 := Jogo.novo_jogo("A"); s_p1["jogador"]["honra"] = 70
+	var s_p2 := Jogo.novo_jogo("B"); s_p2["jogador"]["honra"] = 45
+	ok(Contratos._fator_honra(s_p1) > Contratos._fator_honra(s_p2),
+		"palavra de ferro paga mais que reputação comum")
+	var s_p3 := Jogo.novo_jogo("C"); s_p3["jogador"]["honra"] = 10
+	ok(Contratos._fator_honra(s_p3) > Contratos._fator_honra(s_p2),
+		"e o pária TAMBÉM paga mais — é a armadilha: fácil de entrar, cara de sair")
+
+	# ============================================================
+	# BLOCO 4 — O AÇO: o relógio que faz o sandbox virar corrida
+	#
+	# O mundo andava sem o jogador, mas não vinha atrás dele. Sem relógio de
+	# pressão, sandbox afunda em tédio, não em dificuldade.
+	# ============================================================
+	print("\n=== O AÇO CHEGA ===")
+	var Aco_t = load("res://scripts/aco.gd")
+	var s_ac := Jogo.novo_jogo("Corrida")
+	ok(Aco_t.reino_id(s_ac) == "" and Aco_t.degrau(s_ac) == 0,
+		"no ano 1 não há Aço: o mundo é normal")
+	ok(is_equal_approx(Aco_t.fator(s_ac, "touros"), 1.0),
+		"e nenhum reino leva multiplicador nenhum")
+	# ---- o antagonista nasce de como a partida correu, não de sorteio ----
+	s_ac["ano"] = 3
+	for r_ac in s_ac["reinos"]:
+		r_ac["tesouro"] = 100
+	# o mais rico no fim do ano 2 é quem vira o Aço
+	s_ac["reinos"][2]["tesouro"] = 99999
+	var esperado: String = str(s_ac["reinos"][2]["id"])
+	Aco_t.tick(s_ac, Jogo.log_para(s_ac))
+	ok(Aco_t.reino_id(s_ac) == esperado,
+		"no ano 3 o mais RICO vira o Aço (%s) — não um sorteio" % Aco_t.reino_id(s_ac))
+	ok(Aco_t.degrau(s_ac) >= 1 and Aco_t.fator(s_ac, esperado) > 1.0,
+		"e ele passa a crescer acima da curva (fator %.2f)"
+			% Aco_t.fator(s_ac, esperado))
+	ok(is_equal_approx(Aco_t.fator(s_ac, "touros" if esperado != "touros" else "leoes"), 1.0),
+		"os outros reinos seguem no fator 1,0 — é UM antagonista, não uma era")
+	# ---- os degraus sobem com o calendário ----
+	var f3: float = Aco_t.fator(s_ac, esperado)
+	s_ac["ano"] = 7
+	Aco_t.tick(s_ac, Jogo.log_para(s_ac))
+	ok(Aco_t.fator(s_ac, esperado) > f3,
+		"o Aço aperta com os anos (%.2f no ano 3, %.2f no ano 7)"
+			% [f3, Aco_t.fator(s_ac, esperado)])
+	ok(Aco_t.aviso(s_ac) != "" and Aco_t.nome_do_degrau(s_ac) != "",
+		"e a interface tem o que dizer: \"%s\"" % Aco_t.aviso(s_ac))
+	# ---- e ele PODE cair: é prazo, não sentença ----
+	for r_ac2 in s_ac["reinos"]:
+		if str(r_ac2["id"]) == esperado:
+			r_ac2["dominado_por"] = "jogador"
+	Aco_t.tick(s_ac, Jogo.log_para(s_ac))
+	ok(Aco_t.reino_id(s_ac) == "" and Aco_t.degrau(s_ac) == 0,
+		"conquistar o Aço encerra a ameaça — o relógio é um prazo, não uma sentença")
+
+	# ============================================================
+	# BLOCO 5 — arcos de vitória e a morte que faz o herdeiro valer
+	# ============================================================
+	print("\n=== OS ARCOS DE VITÓRIA ===")
+	# ---- LEGITIMIDADE: construir e fazer durar ----
+	var s_leg := Jogo.novo_jogo("Fundador")
+	ok(Jogo.progresso_legitimidade(s_leg).is_empty(),
+		"sem coroa, o arco da legitimidade nem existe")
+	s_leg["jogador"]["rei_de"] = "barbaros"
+	s_leg["terra"] = {"nome": "V", "nivel": 3, "populacao": 60, "alimento": 900,
+		"madeira": 300, "felicidade": 70, "pressao": 0.0}
+	s_leg["jogador"]["ouro"] = 90000
+	var log_leg := Jogo.log_para(s_leg)
+	for i in Jogo.MESES_PARA_LEGITIMAR:
+		s_leg["terra"]["felicidade"] = 70          # a vila segue contente
+		if s_leg["fim"] != null:
+			break
+		Jogo.passar_mes(s_leg)
+	ok(s_leg["fim"] != null and str(s_leg["fim"].get("arco", "")) == "legitimidade",
+		"reinar 24 meses com a vila contente é uma VITÓRIA por si só")
+	# e a vila infeliz não conta o mês
+	var s_leg2 := Jogo.novo_jogo("Tirano")
+	s_leg2["jogador"]["rei_de"] = "barbaros"
+	s_leg2["terra"] = {"nome": "V", "nivel": 3, "populacao": 60, "alimento": 900,
+		"madeira": 300, "felicidade": 20, "pressao": 0.0}
+	s_leg2["jogador"]["ouro"] = 90000
+	for i in 6:
+		s_leg2["terra"]["felicidade"] = 20
+		Jogo.passar_mes(s_leg2)
+	ok(int(s_leg2["jogador"].get("meses_legitimo", 0)) == 0,
+		"reinar sobre povo infeliz não acumula legitimidade nenhuma")
+
+	# ---- O FERIMENTO: a morte que faz o herdeiro entrar em cena ----
+	print("\n=== A MORTE ACONTECE DE VERDADE ===")
+	var s_fer := Jogo.novo_jogo("Ferido")
+	s_fer["jogador"]["tropas"] = {"lanceiro": 1}
+	var inim_forte := {"tropas": {"espadachim": 400, "arqueiro": 200}, "equip": 3}
+	Combate.batalhar(s_fer, inim_forte, "massacre")
+	ok(Jogo.ferimentos(s_fer) > 0,
+		"derrota esmagadora deixa ferimento (%d)" % Jogo.ferimentos(s_fer))
+	# o ferimento cicatriza se você parar de sangrar
+	s_fer["jogador"]["ferimentos"] = 1
+	s_fer["jogador"]["meses_sem_sangrar"] = 0
+	s_fer["jogador"]["ouro"] = 90000
+	seed(7)
+	for i in Jogo.MESES_PARA_CICATRIZAR:
+		if s_fer["fim"] != null:
+			break
+		Jogo.passar_mes(s_fer)
+	ok(Jogo.ferimentos(s_fer) == 0 or s_fer["fim"] != null,
+		"três meses sem sangrar cicatrizam — ou o ferimento cobra")
+	# e a cadeia deixou de congelar a idade (furo 10 da auditoria)
+	var s_cad := Jogo.novo_jogo("Preso")
+	var idade_cad: int = int(s_cad["jogador"]["idade"])
+	Jogo.prender(s_cad, 14, Jogo.log_para(s_cad))
+	for i in 14:
+		Jogo.passar_mes(s_cad)
+	ok(int(s_cad["jogador"]["idade"]) > idade_cad,
+		"cumprir pena ENVELHECE (%d → %d) — cadeia é castigo, não abrigo"
+			% [idade_cad, int(s_cad["jogador"]["idade"])])
 
 	# ---------- clãs: oferta generosa contrata via mensageiro ----------
 	var s6 := Jogo.novo_jogo("F")
@@ -739,6 +901,148 @@ func _init() -> void:
 			r["dominado_por"] = "jogador"
 	var qa9 := Dialogo.quem_atende(sa9, "touros")
 	ok(qa9["papel"] != "conquistado", "mas conquistado PELO jogador não bloqueia — o trono é dele agora")
+
+	# ============================================================
+	# BLOCO 6 — A OITAVA MOEDA: crueldade vira eixo, não multa
+	#
+	# O contrato do sistema tem duas metades, e as duas precisam de prova:
+	# abaixo do limiar NADA muda (senão o jogo pune quem nunca escolheu),
+	# e acima dele o medo tem que DAR e COBRAR no mesmo movimento.
+	# ============================================================
+	print("\n-- Bloco 6: o medo como moeda --")
+
+	var md0 := Jogo.novo_jogo("Medo0")
+	md0["jogador"]["crueldade"] = 2                    # um abaixo do limiar
+	ok(is_equal_approx(Medo.fator_desercao(md0), 1.0),
+		"abaixo do limiar o medo não segura tropa nenhuma")
+	ok(Medo.teto_de_relacao(md0) == 100 and Medo.teto_de_felicidade(md0) == 100,
+		"e não cobra teto nenhum: quem nunca queimou vila joga o jogo inteiro")
+	ok(Medo.descricao(md0) == "",
+		"a interface não anuncia um sistema que ainda não ligou")
+	ok(not bool(Medo.pode_taxar(md0).get("ok", false)),
+		"imposto de guerra é porta fechada para quem não mete medo")
+
+	# ---- o que o medo DÁ: a tropa aguenta soldo atrasado ----
+	var md1 := Jogo.novo_jogo("Medo1")
+	md1["jogador"]["crueldade"] = 3
+	ok(Medo.fator_desercao(md1) < 1.0,
+		"no limiar a deserção por soldo atrasado começa a ser aparada")
+	var sm_max := Jogo.novo_jogo("MedoMax")
+	sm_max["jogador"]["crueldade"] = Medo.MAXIMO
+	ok(Medo.fator_desercao(sm_max) >= 0.40,
+		"mas há piso: nem o mais temido sustenta exército sem pagar para sempre")
+	ok(Medo.fator_desercao(sm_max) < Medo.fator_desercao(md1),
+		"e cada ponto de crueldade compra mais um tanto de silêncio")
+
+	# a prova de que o fator chega mesmo na moral, e não só na função:
+	# dois jogadores idênticos com o cofre vazio, um cruel e um não.
+	var sm_a := Jogo.novo_jogo("Soldo-A")
+	var sm_b := Jogo.novo_jogo("Soldo-B")
+	for s_soldo in [sm_a, sm_b]:
+		s_soldo["jogador"]["ouro"] = 0
+		s_soldo["jogador"]["tropas"]["lanceiro"] = 60
+		s_soldo["jogador"]["moral"] = 100
+	sm_b["jogador"]["crueldade"] = Medo.MAXIMO
+	Economia.tick_exercito(sm_a, Callable())
+	Economia.tick_exercito(sm_b, Callable())
+	ok(int(sm_b["jogador"]["moral"]) > int(sm_a["jogador"]["moral"]),
+		"com o cofre vazio, o temido perde MENOS moral que o amado (%d vs %d)" % [
+			int(sm_b["jogador"]["moral"]), int(sm_a["jogador"]["moral"])])
+
+	# ---- o que o medo COBRA: o teto de relação ----
+	var md2 := Jogo.novo_jogo("Medo2")
+	md2["jogador"]["crueldade"] = 5
+	var teto2: int = Medo.teto_de_relacao(md2)
+	ok(teto2 < 100 and teto2 >= 60,
+		"crueldade 5 aperta a relação mas ainda deixa fechar aliança: teto %d" % teto2)
+	# ONDE A ALIANÇA MORRE. O degrau de 60 é o que vale dinheiro (desconto,
+	# abrigo contra emboscada, casamento de sangue); abaixo dele o cruel
+	# continua negociando contrato, mas negocia sozinho.
+	var md2b := Jogo.novo_jogo("Medo2b")
+	md2b["jogador"]["crueldade"] = 6
+	ok(Medo.teto_de_relacao(md2b) < 60,
+		"e é no sexto ponto que o degrau da aliança fecha de vez (teto %d)" %
+			Medo.teto_de_relacao(md2b))
+	Dialogo.tags_de(md2, "rei_touros")["relacao"] = teto2 - 2
+	Dialogo.mudar_relacao(md2, "rei_touros", 50, "elogio")
+	ok(int(md2["tags"]["rei_touros"]["relacao"]) == teto2,
+		"e a relação para NO teto na hora, não no fim do mês")
+	Dialogo.mudar_relacao(md2, "rei_touros", -30, "ameaça")
+	ok(int(md2["tags"]["rei_touros"]["relacao"]) == teto2 - 30,
+		"mas o teto nunca segura queda: perder relação continua igual")
+
+	# quem já era aliado antes de virar tirano não perde tudo de uma vez —
+	# o teto desce 12 por ponto, então a queda é uma moagem, não um abismo
+	var md3 := Jogo.novo_jogo("Medo3")
+	md3["jogador"]["crueldade"] = 3
+	Dialogo.tags_de(md3, "rei_touros")["relacao"] = 95
+	Medo.aplicar_tetos(md3)
+	ok(int(md3["tags"]["rei_touros"]["relacao"]) == Medo.teto_de_relacao(md3),
+		"a aliança velha é aparada até o teto do primeiro ponto acima do limiar")
+	ok(int(md3["tags"]["rei_touros"]["relacao"]) >= 60,
+		"que ainda é aliança: um único ponto de crueldade não queima o continente")
+
+	# ---- o que o medo COBRA: o teto de felicidade ----
+	var md4 := Jogo.novo_jogo("Medo4")
+	md4["jogador"]["renome"] = 100
+	md4["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(md4)
+	md4["terra"]["felicidade"] = 100
+	md4["jogador"]["crueldade"] = 6
+	Medo.aplicar_tetos(md4)
+	ok(int(md4["terra"]["felicidade"]) == Medo.teto_de_felicidade(md4),
+		"vila governada pelo medo nunca é feliz: felicidade aparada em %d" % Medo.teto_de_felicidade(md4))
+	# e isso tem consequência de CAIXA, porque a felicidade multiplica o
+	# imposto desde o Bloco 3 — é o que faz o eixo ser escolha e não escada
+	var md5 := Jogo.novo_jogo("Medo5")
+	md5["jogador"]["renome"] = 100
+	md5["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(md5)
+	md5["terra"] = md4["terra"].duplicate(true)
+	md5["terra"]["felicidade"] = 100
+	ok(Economia.imposto_mensal(md5) > Economia.imposto_mensal(md4),
+		"o tirano arrecada MENOS por camponês (%d vs %d)" % [
+			Economia.imposto_mensal(md4), Economia.imposto_mensal(md5)])
+
+	# ---- o imposto de guerra: a porta que só o medo abre ----
+	var md6 := Jogo.novo_jogo("Medo6")
+	md6["jogador"]["renome"] = 100
+	md6["jogador"]["ouro"] = 9999
+	Jogo.comprar_terra(md6)
+	ok(not bool(Medo.pode_taxar(md6).get("ok", false)),
+		"com terra mas sem fama, a vila se recusa a pagar o dobro")
+	md6["jogador"]["crueldade"] = 4
+	ok(bool(Medo.pode_taxar(md6).get("ok", false)),
+		"com fama de enforcar, os cobradores saem com escolta")
+	var ouro_antes: int = int(md6["jogador"]["ouro"])
+	var fel_antes: int = int(md6["terra"]["felicidade"])
+	var rtx: Dictionary = Medo.taxar(md6)
+	ok(bool(rtx.get("ok", false)) and int(md6["jogador"]["ouro"]) > ouro_antes,
+		"o imposto de guerra entra no cofre (+%d)" % int(rtx.get("ouro", 0)))
+	ok(int(md6["terra"]["felicidade"]) < fel_antes,
+		"e sai da felicidade da vila")
+	ok(float(md6["terra"].get("pressao", 0.0)) > 0.0,
+		"os notáveis anotam quem foi taxado")
+	ok(not bool(Medo.pode_taxar(md6).get("ok", false)),
+		"uma vez por mês — salvar e recarregar não sangra a mesma vila duas vezes")
+	var ouro_travado: int = int(md6["jogador"]["ouro"])
+	Medo.taxar(md6)
+	ok(int(md6["jogador"]["ouro"]) == ouro_travado,
+		"e a segunda chamada no mesmo mês não move o ouro")
+	md6["mes"] = int(md6["mes"]) + 1
+	ok(bool(Medo.pode_taxar(md6).get("ok", false)),
+		"mas no mês seguinte a porta reabre")
+
+	# ---- o mercenário sem chão também paga a fama ----
+	# `tick_terra` volta na porta quando não há terra, e era lá que os tetos
+	# moravam: sem este ponto em `Jogo`, o cruel sem terra ficava imune.
+	var md7 := Jogo.novo_jogo("Medo7")
+	md7["terra"] = null
+	md7["jogador"]["crueldade"] = 8
+	Dialogo.tags_de(md7, "rei_touros")["relacao"] = 90
+	Jogo.passar_mes(md7)
+	ok(int(md7["tags"]["rei_touros"]["relacao"]) <= Medo.teto_de_relacao(md7),
+		"sem terra nenhuma, a fama de queimar vila ainda derruba a relação")
 
 	print("=====================================")
 	print("RESULTADO: %d passaram, %d falharam" % [passou, falhou])

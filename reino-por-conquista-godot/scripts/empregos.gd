@@ -269,6 +269,8 @@ static func trabalhar(state: Dictionary, reino_id: String, emprego_id: String,
 			"msg": "O turno é lá, não aqui. Volte à taverna onde você pediu o emprego."}
 	dias = clampi(dias, 1, 3)
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.acabou(state):
+		return Jogo.recusa_fim(state)
 	if Jogo.esta_preso(state):
 		return Jogo.recusa_preso(state)
 	if int(state.get("dia", 1)) + dias > Jogo.DIAS_POR_MES + 1:

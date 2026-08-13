@@ -403,6 +403,8 @@ static func _educar(state: Dictionary, log: Callable) -> void:
 ## relatório. Esta função é a primeira porta.
 static func assaltar_trono(state: Dictionary, reino_id: String, log: Callable) -> Dictionary:
 	var Jogo = load("res://scripts/jogo.gd")
+	if Jogo.acabou(state):
+		return Jogo.recusa_fim(state)
 	if Jogo.esta_preso(state):
 		return Jogo.recusa_preso(state)
 	if str(state.get("local", "")) != reino_id:

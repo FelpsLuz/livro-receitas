@@ -32,6 +32,7 @@ const Empregos = preload("res://scripts/empregos.gd")
 const Pretendentes = preload("res://scripts/pretendentes.gd")
 const Viagem = preload("res://scripts/viagem.gd")
 const Barbaros = preload("res://scripts/barbaros.gd")
+const Aco = preload("res://scripts/aco.gd")
 const MapaMundi = preload("res://cenas/mapa_mundi.gd")
 const Marchas = preload("res://scripts/marchas.gd")
 const Relogio = preload("res://scripts/relogio.gd")
@@ -42,6 +43,7 @@ const Equipar = preload("res://scripts/equipar.gd")
 const Inimizade = preload("res://scripts/inimizade.gd")
 const Armazem = preload("res://scripts/armazem.gd")
 const Livro = preload("res://scripts/livro.gd")
+const Medo = preload("res://scripts/medo.gd")
 const Estacoes = preload("res://scripts/estacoes.gd")
 const Vassalagem = preload("res://scripts/vassalagem.gd")
 const Comandantes = preload("res://scripts/comandantes.gd")
@@ -1367,6 +1369,26 @@ func _aba_terra(c: Container) -> void:
 			atualizar(), "fantasma")
 		b_ex.tooltip_text = "Ouro rápido — e o povo reclama da despensa vazia"
 		_com_icone(b_ex, "carroca")
+
+		# ---- A PORTA QUE SÓ O MEDO ABRE ----
+		# O botão aparece SEMPRE, e apagado quando não dá. Escondê-lo
+		# abaixo do limiar seria repetir o defeito que esta rodada veio
+		# corrigir: a crueldade subia, fechava portas e nunca dizia que
+		# abria alguma. Apagado com o motivo no tooltip, o jogador que
+		# nunca enforcou ninguém ao menos SABE que existe esse caminho.
+		var pode_taxar: Dictionary = Medo.pode_taxar(state)
+		var b_tx := _botao(acoes, "Imposto de guerra  ·  dobra o mês", func():
+			var r: Dictionary = Medo.taxar(state, Jogo.log_para(state))
+			if bool(r.get("ok", false)):
+				Sfx.tocar(self, "moeda")
+			_aviso(str(r.get("msg", "")))
+			Jogo.salvar(state)
+			atualizar(), "perigo")
+		b_tx.disabled = not bool(pode_taxar.get("ok", false))
+		b_tx.tooltip_text = str(pode_taxar.get("msg",
+			"Mais %d de ouro agora. A vila perde 15 de felicidade e os notáveis não esquecem." %
+			Economia.imposto_mensal(state)))
+		_com_icone(b_tx, "caveira")
 		var _fim := nivel_cap
 
 func _aba_mapa(c: Container) -> void:
@@ -3576,8 +3598,24 @@ func _aba_familia(c: Container) -> void:
 	Kit.fato(fatos_h, "renome", str(int(j["renome"])), "de renome", Tema.TEXTO,
 		"O que a casa vale aos olhos do continente.")
 	Kit.fato(fatos_h, "caveira", "%d" % int(j.get("crueldade", 0)), "de crueldade",
-		Tema.PERIGO if int(j.get("crueldade", 0)) >= 3 else Tema.TEXTO,
-		"Seis meses de povo contente (felicidade 65+) apagam um ponto.")
+		Tema.PERIGO if int(j.get("crueldade", 0)) >= Medo.LIMIAR else Tema.TEXTO,
+		"A partir de %d o medo passa a governar por você — e a cobrar. Seis meses de povo contente (felicidade 65+) apagam um ponto." % Medo.LIMIAR)
+
+	# ---- O EIXO: GOVERNAR PELO AMOR OU PELO MEDO ----
+	# A crueldade era um contador que só subia e só fechava portas: os
+	# notáveis reagiam a partir de 3 e o herdeiro nascia mimado, e nada na
+	# tela dizia isso. Aqui o que o medo DÁ e o que ele COBRA ficam escritos
+	# lado a lado, porque uma moeda que o jogador não sabe gastar não é
+	# moeda — é multa.
+	var glosa_medo: String = Medo.descricao(state)
+	if glosa_medo != "":
+		var cartao_medo := Kit.card(c, Tema.PERIGO)
+		var l_medo := Kit.fila(cartao_medo, Tema.E4)
+		Kit.ilustracao(l_medo, Retratos.ilustracao("saque"), 64)
+		var v_medo := Kit.coluna(l_medo, Tema.E2)
+		v_medo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		Kit.texto(v_medo, "Governa pelo medo", Tema.PERIGO, Tema.CORPO_G)
+		Kit.nota(v_medo, glosa_medo)
 
 	var colunas := Kit.duas_colunas(c, 0.5)
 	var esq: VBoxContainer = colunas[0]
@@ -3592,8 +3630,9 @@ func _aba_familia(c: Container) -> void:
 	var v_eu := Kit.coluna(l_eu, 0)
 	Kit.texto(v_eu, str(j["nome"]), Tema.TEXTO, Tema.CORPO_G)
 	Kit.nota(v_eu, "%d anos · %s" % [int(j["idade"]), Contratos.titulo(state)])
-	if int(j.get("crueldade", 0)) >= 3:
-		Kit.selo(l_eu, "reputação de crueldade", Color("e8917a"), Tema.PERIGO_FUNDO)
+	# o selo "reputação de crueldade" saiu daqui: acendia na MESMA condição
+	# do cartão do medo logo acima e dizia menos — rótulo sem número, ao
+	# lado de um cartão que lista o que o medo dá e o que ele cobra.
 	_ficha_atributos(meu, j["atributos"])
 
 	var casa := Kit.card(dir)
@@ -3701,6 +3740,24 @@ func _aba_guerras(c: Container) -> void:
 	# ---- as SUAS guerras primeiro: é a linha que decide o seu mês ----
 	var minhas: Array = state["guerras"].filter(func(g):
 		return str(g["a"]) == "jogador" or str(g["b"]) == "jogador")
+
+	# ---- O AÇO ----
+	# Um relógio de pressão invisível não pressiona nada. Ele vem ANTES do
+	# placar porque, a partir do ano 3, ele é a única linha desta tela que
+	# tem prazo.
+	var aviso_aco: String = Aco.aviso(state)
+	if aviso_aco != "":
+		var card_aco := Kit.card(c, Tema.PERIGO)
+		var v_aco := Kit.coluna(card_aco, Tema.E2)
+		v_aco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Kit.texto(v_aco, Aco.nome_do_degrau(state), Tema.PERIGO, Tema.CORPO_G)
+		Kit.nota(v_aco, aviso_aco)
+		var faltam: int = Aco.meses_ate_proximo(state)
+		if faltam >= 0:
+			Kit.nota(v_aco, "O próximo passo deles vem em %d %s." % [
+				faltam, "mês" if faltam == 1 else "meses"])
+		else:
+			Kit.nota(v_aco, "Não há próximo passo: já é o último. Quem os derrubar devolve o tempo ao continente.")
 
 	# O placar da mesa, antes dos cards. Sem destaque: a guerra não tem um
 	# par valor/teto — o que ela tem é DURAÇÃO, e a mais longa é o número
