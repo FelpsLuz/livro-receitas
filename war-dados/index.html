@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <title>Dados do War</title>
+  <meta name="description" content="Rolador de dados para o jogo War: 3 dados de ataque e 3 de defesa, com apuração automática das baixas.">
+  <meta name="theme-color" content="#12151c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dados War">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Dados do <span class="brand">WAR</span></h1>
+      <button id="btn-tropas" class="ghost-btn" type="button" aria-pressed="false" aria-controls="tropas">
+        Tropas
+      </button>
+    </header>
+
+    <section id="tropas" class="troops" hidden aria-label="Contador de tropas">
+      <div class="troop" data-side="atk">
+        <span class="troop-label">Ataque</span>
+        <div class="troop-ctrl">
+          <button class="round-btn" type="button" data-troop="atk" data-delta="-1" aria-label="Diminuir tropas de ataque">−</button>
+          <output class="troop-value" id="troop-atk">10</output>
+          <button class="round-btn" type="button" data-troop="atk" data-delta="1" aria-label="Aumentar tropas de ataque">+</button>
+        </div>
+      </div>
+      <div class="troop" data-side="def">
+        <span class="troop-label">Defesa</span>
+        <div class="troop-ctrl">
+          <button class="round-btn" type="button" data-troop="def" data-delta="-1" aria-label="Diminuir tropas de defesa">−</button>
+          <output class="troop-value" id="troop-def">10</output>
+          <button class="round-btn" type="button" data-troop="def" data-delta="1" aria-label="Aumentar tropas de defesa">+</button>
+        </div>
+      </div>
+      <p class="troops-hint">As baixas de cada rodada são descontadas automaticamente.</p>
+    </section>
+
+    <main class="board">
+      <section class="side side--atk" aria-labelledby="atk-title">
+        <div class="side-head">
+          <h2 id="atk-title">Ataque</h2>
+          <div class="count-picker" role="group" aria-label="Quantidade de dados de ataque">
+            <button type="button" data-side="atk" data-count="1">1</button>
+            <button type="button" data-side="atk" data-count="2">2</button>
+            <button type="button" data-side="atk" data-count="3" class="is-active" aria-pressed="true">3</button>
+          </div>
+        </div>
+        <div class="dice-row" id="dice-atk"></div>
+      </section>
+
+      <div class="versus" aria-hidden="true">
+        <span class="versus-line"></span>
+        <span class="versus-text">VS</span>
+        <span class="versus-line"></span>
+      </div>
+
+      <section class="side side--def" aria-labelledby="def-title">
+        <div class="side-head">
+          <h2 id="def-title">Defesa</h2>
+          <div class="count-picker" role="group" aria-label="Quantidade de dados de defesa">
+            <button type="button" data-side="def" data-count="1">1</button>
+            <button type="button" data-side="def" data-count="2">2</button>
+            <button type="button" data-side="def" data-count="3" class="is-active" aria-pressed="true">3</button>
+          </div>
+        </div>
+        <div class="dice-row" id="dice-def"></div>
+      </section>
+
+      <section class="result" id="result" aria-live="polite">
+        <p class="result-empty">Escolha os dados e role.</p>
+      </section>
+    </main>
+
+    <div class="actions">
+      <button id="btn-roll" class="roll-btn" type="button">Rolar dados</button>
+    </div>
+
+    <section class="history" aria-labelledby="hist-title">
+      <div class="history-head">
+        <h2 id="hist-title">Histórico</h2>
+        <button id="btn-clear" class="ghost-btn ghost-btn--sm" type="button">Limpar</button>
+      </div>
+      <ol class="history-list" id="history-list"></ol>
+    </section>
+
+    <footer class="foot">
+      <p>Empate é vitória da defesa. Compara-se o maior dado do ataque com o maior da defesa, e assim por diante.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
