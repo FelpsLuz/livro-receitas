@@ -1,0 +1,107 @@
+---
+/**
+ * /politica-de-privacidade — LGPD (seção 8.6): finalidade declarada,
+ * consentimento como base legal dos formulários, sem CPF nem dado sensível.
+ */
+import Base from "../layouts/Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import { SITE, EMAIL_CONTATO } from "../config";
+
+const titulo = `Política de privacidade · ${SITE.marcaPublica} · ${SITE.creci}`;
+const descricao = `Como ${SITE.marcaPublica}, ${SITE.expressaoObrigatoria.toLowerCase()} (${SITE.creci}), trata os dados pessoais enviados pelos formulários deste site, conforme a LGPD.`;
+const atualizadaEm = "19 de agosto de 2026";
+---
+
+<Base titulo={titulo} descricao={descricao}>
+  <article class="container secao politica">
+    <Breadcrumbs trilha={[{ nome: "Início", href: "/" }, { nome: "Política de privacidade" }]} />
+
+    <h1>Política de privacidade</h1>
+    <p class="politica__meta dado">Atualizada em {atualizadaEm}</p>
+
+    <h2>Quem trata os dados</h2>
+    <p>
+      Este site pertence a {SITE.marcaPublica}, {SITE.expressaoObrigatoria.toLowerCase()} pessoa
+      física, registro {SITE.creci}, com atuação em {SITE.cidade}/{SITE.uf}. Para qualquer assunto
+      sobre dados pessoais, o contato é <a href={`mailto:${EMAIL_CONTATO}`}>{EMAIL_CONTATO}</a>.
+    </p>
+
+    <h2>Quais dados são coletados e para quê</h2>
+    <p>Este site coleta apenas o que você digita nos formulários, com estas finalidades:</p>
+    <ul>
+      <li>
+        <strong>Pedido de avaliação:</strong> localização e características do imóvel, nome,
+        WhatsApp e e-mail — usados exclusivamente para preparar a avaliação e para o contato sobre
+        ela.
+      </li>
+      <li>
+        <strong>Cadastro de parceiro:</strong> nome, CRECI, região de atuação e contato — usados
+        exclusivamente para tratar da parceria entre corretores.
+      </li>
+    </ul>
+    <p>
+      Não coletamos CPF nem qualquer dado sensível. O envio só acontece com a caixa de
+      consentimento marcada por você (base legal: consentimento — art. 7º, I, da LGPD).
+    </p>
+
+    <h2>Com quem os dados são compartilhados</h2>
+    <p>
+      Os dados não são vendidos nem usados para lista de marketing de terceiros. Para funcionar, o
+      site usa serviços de infraestrutura que processam dados em nosso nome: hospedagem e rede
+      (Cloudflare) e serviço de encaminhamento de formulário por e-mail (Web3Forms), que entrega a
+      mensagem à caixa de e-mail do corretor. Se você optar por concluir o contato pelo WhatsApp, a
+      conversa passa a ser regida pelos termos do próprio WhatsApp.
+    </p>
+
+    <h2>Estatísticas de navegação</h2>
+    <p>
+      Quando ativa, a medição de audiência usa o Google Analytics 4 para entender, de forma
+      agregada, quais páginas são visitadas e de onde vêm os acessos. Essa medição não é usada para
+      identificar você pelo nome e pode ser bloqueada por extensões de navegador sem prejuízo ao
+      uso do site.
+    </p>
+
+    <h2>Por quanto tempo os dados ficam guardados</h2>
+    <p>
+      Pelo tempo necessário ao atendimento do seu pedido e aos prazos legais de uma eventual
+      intermediação. Pedidos sem continuidade são descartados periodicamente.
+    </p>
+
+    <h2>Seus direitos</h2>
+    <p>
+      A LGPD garante a você confirmação de tratamento, acesso, correção, eliminação e revogação do
+      consentimento a qualquer momento. Basta pedir pelo e-mail
+      <a href={`mailto:${EMAIL_CONTATO}`}>{EMAIL_CONTATO}</a> — a resposta vem no menor prazo
+      possível, sem burocracia.
+    </p>
+
+    <h2>Alterações desta política</h2>
+    <p>
+      Esta página é atualizada sempre que a operação do site mudar. A data da última atualização
+      aparece no topo.
+    </p>
+  </article>
+</Base>
+
+<style>
+  .politica {
+    max-width: 46rem;
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .politica__meta {
+    color: var(--text-mid);
+    font-size: 0.85rem;
+  }
+
+  .politica h2 {
+    margin-top: var(--esp-4);
+  }
+
+  .politica ul {
+    padding-left: 1.2em;
+    display: grid;
+    gap: var(--esp-2);
+  }
+</style>

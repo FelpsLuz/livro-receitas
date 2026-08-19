@@ -1,0 +1,273 @@
+---
+/**
+ * /parceiros — área para corretor parceiro (seção 9.7).
+ * Condições comerciais NÃO são inventadas: blocos [PREENCHER] visíveis.
+ */
+import { getEntry } from "astro:content";
+import Base from "../layouts/Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import { imoveisVitrine } from "../lib/imoveis";
+import { precoBRL, linhaResumo, TIPO_LABEL } from "../lib/formatar";
+import { nomeDoBairro } from "../lib/territorio";
+import { SITE } from "../config";
+
+const imoveis = await imoveisVitrine();
+const linhas = await Promise.all(
+  imoveis.map(async (imovel) => {
+    const condominio = imovel.data.condominio
+      ? await getEntry("condominios", imovel.data.condominio)
+      : undefined;
+    return {
+      imovel,
+      local: [condominio?.data.nome, nomeDoBairro(imovel.data.bairro)].filter(Boolean).join(" · "),
+    };
+  })
+);
+
+const titulo = `Parceria entre corretores · ${SITE.marcaPublica} · ${SITE.creci}`;
+const descricao = `Área do corretor parceiro: imóveis disponíveis para parceria na zona oeste de ${SITE.cidade}, com ficha imprimível para repasse e regras claras de divisão.`;
+---
+
+<Base titulo={titulo} descricao={descricao}>
+  <section class="container secao parceiros">
+    <Breadcrumbs trilha={[{ nome: "Início", href: "/" }, { nome: "Parceiros" }]} />
+
+    <header class="parceiros__cabeca">
+      <p class="rotulo">Para corretores</p>
+      <h1>Parceria com regra clara e ficha pronta</h1>
+      <p>
+        Tem cliente comprador para a zona oeste? Os imóveis abaixo estão disponíveis para
+        parceria. Cada um tem página própria com ficha imprimível em A4 — leve para o seu cliente
+        com a minha autorização.
+      </p>
+    </header>
+
+    <section class="parceiros__regras">
+      <h2>Como funciona</h2>
+      <div class="grade grade--3">
+        <div class="parceiros__regra">
+          <h3>Divisão de comissão</h3>
+          <div class="aviso-preencher">Percentual de divisão para parceria (ex.: 50/50 sobre a comissão). Definir e publicar aqui.</div>
+        </div>
+        <div class="parceiros__regra">
+          <h3>Quem atende o cliente</h3>
+          <div class="aviso-preencher">Regra de atendimento e de registro do cliente indicado (quem faz a visita, prazo de validade da indicação).</div>
+        </div>
+        <div class="parceiros__regra">
+          <h3>Exclusividade e repasse</h3>
+          <div class="aviso-preencher">Condições para imóveis exclusivos e regras de repasse de material (uso da ficha, fotos e ref).</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="parceiros__lista">
+      <h2>Disponíveis para parceria</h2>
+      {
+        linhas.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Ref.</th>
+                <th scope="col">Imóvel</th>
+                <th scope="col">Local</th>
+                <th scope="col">Valor</th>
+                <th scope="col"><span class="visualmente-oculto">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map(({ imovel, local }) => (
+                <tr>
+                  <td class="dado">{imovel.data.ref}</td>
+                  <td>
+                    {TIPO_LABEL[imovel.data.tipo]} · {linhaResumo(imovel.data)}
+                    {imovel.data.exclusivo && <span class="selo selo--exclusivo">Exclusivo</span>}
+                  </td>
+                  <td>{local}</td>
+                  <td class="dado">{imovel.data.exibir_valor ? precoBRL(imovel.data.valor) : "Consulte"}</td>
+                  <td>
+                    <a href={`/imovel/${imovel.id}`}>Página + ficha A4 →</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>Nenhum imóvel disponível para parceria neste momento.</p>
+        )
+      }
+      <p class="parceiros__nota">
+        A ficha imprimível está no botão “Ficha para parceiro” dentro da página de cada imóvel —
+        A4 limpo, com ref, ficha técnica e o registro {SITE.creci}.
+      </p>
+    </section>
+
+    <section class="parceiros__form-bloco">
+      <h2>Cadastro de parceiro</h2>
+      <p>Me diga quem você é e onde atua. Eu retorno com as condições e os imóveis abertos a parceria.</p>
+      <form id="form-parceiro" novalidate>
+        <div class="parceiros__dupla">
+          <div class="campo">
+            <label for="p-nome">Nome</label>
+            <input type="text" id="p-nome" name="nome" autocomplete="name" required />
+          </div>
+          <div class="campo">
+            <label for="p-creci">CRECI</label>
+            <input type="text" id="p-creci" name="creci" required placeholder="Ex.: CRECI-SP 000.000-F" />
+          </div>
+        </div>
+        <div class="campo">
+          <label for="p-regiao">Região onde atua</label>
+          <input type="text" id="p-regiao" name="regiao" required placeholder="Ex.: Sorocaba zona norte" />
+        </div>
+        <div class="parceiros__dupla">
+          <div class="campo">
+            <label for="p-whatsapp">WhatsApp</label>
+            <input type="tel" id="p-whatsapp" name="whatsapp" inputmode="tel" required placeholder="15 9XXXX-XXXX" />
+          </div>
+          <div class="campo">
+            <label for="p-email">E-mail <span class="dica">— opcional</span></label>
+            <input type="email" id="p-email" name="email" autocomplete="email" />
+          </div>
+        </div>
+        <div class="campo campo--consentimento">
+          <input type="checkbox" id="p-consentimento" name="consentimento" required />
+          <label for="p-consentimento">
+            Autorizo o uso destes dados exclusivamente para o contato sobre parceria entre
+            corretores, conforme a <a href="/politica-de-privacidade">política de privacidade</a>. (LGPD)
+          </label>
+        </div>
+        <button type="submit" class="botao botao--tinta">Enviar cadastro</button>
+      </form>
+    </section>
+  </section>
+</Base>
+
+<style>
+  .parceiros__cabeca {
+    display: grid;
+    gap: var(--esp-2);
+    max-width: 46rem;
+    margin-bottom: var(--esp-6);
+  }
+
+  .parceiros__regras {
+    margin-bottom: var(--esp-7);
+  }
+
+  .parceiros__regras h2 {
+    margin-bottom: var(--esp-4);
+  }
+
+  .parceiros__regra {
+    display: grid;
+    gap: var(--esp-3);
+    align-content: start;
+  }
+
+  .parceiros__lista h2 {
+    margin-bottom: var(--esp-4);
+  }
+
+  .parceiros__lista {
+    overflow-x: auto;
+  }
+
+  .parceiros__lista table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+
+  .parceiros__lista th {
+    text-align: left;
+    font-family: var(--f-display);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-rotulo);
+    color: var(--text-mid);
+    border-bottom: 2px solid var(--ink-line);
+    padding: var(--esp-2) var(--esp-3);
+  }
+
+  .parceiros__lista td {
+    border-bottom: 1px solid var(--line);
+    padding: var(--esp-3);
+    vertical-align: top;
+  }
+
+  .parceiros__lista .selo {
+    margin-left: var(--esp-2);
+  }
+
+  .parceiros__nota {
+    margin-top: var(--esp-3);
+    font-size: 0.9rem;
+    color: var(--text-mid);
+  }
+
+  .parceiros__form-bloco {
+    margin-top: var(--esp-7);
+    max-width: 40rem;
+  }
+
+  .parceiros__form-bloco h2 {
+    margin-bottom: var(--esp-2);
+  }
+
+  .parceiros__form-bloco > p {
+    margin-bottom: var(--esp-4);
+    color: var(--text-mid);
+  }
+
+  .parceiros__dupla {
+    display: grid;
+    gap: 0 var(--esp-4);
+  }
+
+  @media (min-width: 30em) {
+    .parceiros__dupla {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>
+
+<script>
+  import { enviarLead, marcarConversao } from "../lib/cliente/envio";
+
+  const form = document.getElementById("form-parceiro") as HTMLFormElement | null;
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    const dados = new FormData(form);
+    const v = (nome: string) => String(dados.get(nome) ?? "");
+    const botao = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    botao.disabled = true;
+    botao.textContent = "Enviando…";
+
+    try {
+      await enviarLead({
+        assunto: `Parceria — ${v("nome")} (${v("creci")})`,
+        nomeRemetente: v("nome"),
+        emailRemetente: v("email") || undefined,
+        campos: [
+          ["Nome", v("nome")],
+          ["CRECI", v("creci")],
+          ["Região de atuação", v("regiao")],
+          ["WhatsApp", v("whatsapp")],
+          ["E-mail", v("email")],
+          ["Origem", "cadastro de parceiro"],
+          ["Consentimento LGPD", "sim"],
+        ],
+      });
+      marcarConversao("parceiro");
+      window.location.assign("/obrigado");
+    } catch {
+      botao.disabled = false;
+      botao.textContent = "Enviar cadastro";
+    }
+  });
+</script>

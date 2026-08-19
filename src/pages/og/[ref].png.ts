@@ -22,10 +22,12 @@ export const GET: APIRoute = async ({ props }) => {
   const dias = vendido ? diasVenda(imovel) : null;
   const quando = d.vendido_em ? mesAno(d.vendido_em) : null;
   const condominio = d.condominio ? await getEntry("condominios", d.condominio) : undefined;
-  const localCompleto = [condominio?.data.nome, nomeDoBairro(d.bairro), "Sorocaba"]
-    .filter(Boolean)
-    .join(" · ");
-  const local = localCompleto.length > 56 ? `${localCompleto.slice(0, 56)}…` : localCompleto;
+  // Com condomínio + bairro, a cidade é redundante e estoura a largura da faixa.
+  const partesLocal = condominio
+    ? [condominio.data.nome, nomeDoBairro(d.bairro)]
+    : [nomeDoBairro(d.bairro), "Sorocaba"];
+  const localCompleto = partesLocal.join(" · ");
+  const local = localCompleto.length > 48 ? `${localCompleto.slice(0, 48)}…` : localCompleto;
 
   // Caminho original da foto no filesystem, exposto pelo astro:assets no build.
   const caminhoFoto = (d.fotos[0].src as unknown as { fsPath?: string }).fsPath;

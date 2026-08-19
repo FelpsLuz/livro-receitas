@@ -289,7 +289,7 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
 
         <img class="ficha-imp__foto" src={capaImpressao.src} alt={d.fotos[0].alt} />
 
-        <h1 class="ficha-imp__titulo">{d.titulo}</h1>
+        <p class="ficha-imp__titulo">{d.titulo}</p>
         <p class="ficha-imp__local">
           {condominio ? `${condominio.data.nome} · ` : ""}
           {bairroNome}, {d.cidade}/{d.uf}
@@ -356,7 +356,7 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
   }
 
   .pagina-imovel__ref {
-    color: var(--text-low);
+    color: var(--text-mid);
     font-size: 0.9rem;
   }
 

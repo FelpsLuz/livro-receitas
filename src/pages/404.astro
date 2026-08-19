@@ -1,0 +1,119 @@
+---
+/**
+ * /404 — página de erro útil (seção 5): busca no conteúdo do site e
+ * caminhos diretos para a vitrine e a avaliação.
+ */
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import { imoveisVitrine } from "../lib/imoveis";
+import { TIPO_LABEL } from "../lib/formatar";
+import { nomeDoBairro } from "../lib/territorio";
+import { SITE } from "../config";
+
+const imoveis = await imoveisVitrine();
+const bairros = await getCollection("bairros");
+const condominios = await getCollection("condominios");
+
+const destinos = [
+  { rotulo: "Imóveis à venda — vitrine com filtros", href: "/imoveis" },
+  { rotulo: "Avaliação gratuita de imóvel", href: "/avaliacao" },
+  { rotulo: "Imóveis vendidos — prazos reais", href: "/vendidos" },
+  { rotulo: "Sobre o corretor", href: "/sobre" },
+  { rotulo: "Parceria entre corretores", href: "/parceiros" },
+  ...condominios.map((c) => ({ rotulo: `Condomínio ${c.data.nome}`, href: `/condominio/${c.id}` })),
+  ...bairros.map((b) => ({ rotulo: `Bairro ${b.data.nome}`, href: `/regiao/${b.id}` })),
+  ...imoveis.map((i) => ({
+    rotulo: `${i.data.ref} — ${TIPO_LABEL[i.data.tipo]} no ${nomeDoBairro(i.data.bairro)}`,
+    href: `/imovel/${i.id}`,
+  })),
+];
+---
+
+<Base
+  titulo={`Página não encontrada · ${SITE.marcaPublica}`}
+  descricao="Endereço não encontrado. Busque no conteúdo do site ou vá direto para os imóveis à venda e a avaliação gratuita."
+  noindex
+>
+  <section class="container secao pagina-404">
+    <p class="rotulo">Erro 404</p>
+    <h1>Essa página não existe — mas o imóvel que você procura talvez exista.</h1>
+
+    <div class="campo pagina-404__busca">
+      <label for="busca-404">Buscar no site</label>
+      <input
+        type="search"
+        id="busca-404"
+        placeholder="Ex.: Jardim Brasilândia, casa em condomínio, FL-0001…"
+        autocomplete="off"
+      />
+    </div>
+
+    <ul class="pagina-404__lista" data-lista-404 role="list">
+      {
+        destinos.map((d) => (
+          <li data-texto={d.rotulo.toLowerCase()}>
+            <a href={d.href}>{d.rotulo}</a>
+          </li>
+        ))
+      }
+    </ul>
+    <p class="pagina-404__nada" data-nada-404 hidden>
+      Nada com esse termo por aqui. Vá para a <a href="/imoveis">vitrine completa</a> ou
+      <a href="/avaliacao">peça uma avaliação</a>.
+    </p>
+
+    <p class="pagina-404__acoes">
+      <a class="botao botao--sinal" href="/imoveis">Ver imóveis à venda</a>
+      <a class="botao botao--contorno" href="/avaliacao">Avaliar meu imóvel</a>
+    </p>
+  </section>
+</Base>
+
+<style>
+  .pagina-404 {
+    max-width: 46rem;
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .pagina-404__busca {
+    margin: 0;
+  }
+
+  .pagina-404__lista {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--esp-2);
+    max-height: 21rem;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--raio);
+    padding: var(--esp-3) var(--esp-4);
+  }
+
+  .pagina-404__acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-3);
+    max-width: none;
+  }
+</style>
+
+<script>
+  const campo = document.getElementById("busca-404") as HTMLInputElement | null;
+  const itens = [...document.querySelectorAll<HTMLElement>("[data-lista-404] li")];
+  const nada = document.querySelector<HTMLElement>("[data-nada-404]");
+
+  campo?.addEventListener("input", () => {
+    const termo = campo.value.trim().toLowerCase();
+    let visiveis = 0;
+    for (const item of itens) {
+      const mostra = termo === "" || (item.dataset.texto ?? "").includes(termo);
+      item.hidden = !mostra;
+      if (mostra) visiveis++;
+    }
+    if (nada) nada.hidden = visiveis > 0;
+  });
+</script>

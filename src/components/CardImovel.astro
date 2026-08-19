@@ -63,7 +63,7 @@ const dataAttrs = comDados
           <p class="cartao-imovel__preco preco">{precoBRL(d.valor)}</p>
         )
       }
-      <h3 class="cartao-imovel__titulo">{TIPO_LABEL[d.tipo]} · {linhaResumo(d)}</h3>
+      <p class="cartao-imovel__titulo">{TIPO_LABEL[d.tipo]} · {linhaResumo(d)}</p>
       <p class="cartao-imovel__local">{local}</p>
       <p class="cartao-imovel__selos">
         {d.exclusivo && !vendido && <span class="selo selo--exclusivo">Exclusivo</span>}
@@ -136,7 +136,7 @@ const dataAttrs = comDados
   .cartao-imovel__ref {
     margin-left: auto;
     font-size: 0.78rem;
-    color: var(--text-low);
+    color: var(--text-mid);
   }
 
   .cartao-imovel a:hover .cartao-imovel__titulo {

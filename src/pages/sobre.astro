@@ -1,0 +1,211 @@
+---
+/**
+ * /sobre — quem é, território, método (seção 5). Sem inventar histórico:
+ * lacunas de biografia ficam em bloco [PREENCHER] visível (seção 12).
+ */
+import Base from "../layouts/Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import AssinaturaLegal from "../components/AssinaturaLegal.astro";
+import MapaTerritorio from "../components/MapaTerritorio.astro";
+import BotaoWhatsApp from "../components/BotaoWhatsApp.astro";
+import { CAMADA_LABEL, TERRITORIO } from "../lib/territorio";
+import { SITE } from "../config";
+
+const titulo = `Sobre ${SITE.marcaPublica} · ${SITE.expressaoObrigatoria} em ${SITE.cidade} · ${SITE.creci}`;
+const descricao = `Quem é ${SITE.marcaPublica}: ${SITE.expressaoObrigatoria.toLowerCase()} em ${SITE.cidade}/${SITE.uf}, especialista no vetor oeste e noroeste da cidade — território, método de trabalho e registro profissional.`;
+
+const porCamada = (camada: (typeof TERRITORIO)[number]["camada"]) =>
+  TERRITORIO.filter((b) => b.camada === camada).map((b) => b.nome);
+---
+
+<Base titulo={titulo} descricao={descricao}>
+  <article class="container secao sobre">
+    <Breadcrumbs trilha={[{ nome: "Início", href: "/" }, { nome: "Sobre" }]} />
+
+    <header class="sobre__cabeca">
+      <AssinaturaLegal variante="rodape" />
+      <h1>Corretor de um território, não de uma cidade inteira</h1>
+    </header>
+
+    <div class="sobre__texto">
+      <p>
+        Eu trabalho um recorte específico de {SITE.cidade}: o vetor oeste/noroeste, do Jardim
+        Brasilândia ao entorno da Facens. É uma escolha de método — em vez de anunciar em toda a
+        cidade, eu acompanho preço por condomínio, sei o que gira e o que encalha em cada bairro e
+        atendo rápido porque o território é do tamanho certo para um corretor atender bem.
+      </p>
+      <p>
+        Na prática, isso muda o resultado de quem vende: o valor do seu imóvel não sai de achismo
+        nem de anúncio parado, sai das vendas que realmente aconteceram no seu condomínio — várias
+        delas intermediadas por mim, com prazo documentado nesta página:
+        <a href="/vendidos">imóveis vendidos</a>.
+      </p>
+
+      <div class="aviso-preencher">
+        Mini-biografia real do corretor (formação, trajetória até o mercado imobiliário, tempo de
+        atuação, vínculo com a região). Não publicar nada aqui que não seja verificável.
+      </div>
+    </div>
+
+    <section class="sobre__secao">
+      <h2>O território</h2>
+      <div class="sobre__camadas">
+        <div>
+          <h3 class="rotulo">{CAMADA_LABEL["nucleo"]}</h3>
+          <p>{porCamada("nucleo").join(" · ")}</p>
+          <p class="sobre__faixa dado">R$ 300–600 mil</p>
+        </div>
+        <div>
+          <h3 class="rotulo">{CAMADA_LABEL["faixa-alta"]}</h3>
+          <p>{porCamada("faixa-alta").join(" · ")}</p>
+          <p class="sobre__faixa dado">R$ 500–900 mil</p>
+        </div>
+        <div>
+          <h3 class="rotulo">{CAMADA_LABEL["alto-padrao"]}</h3>
+          <p>{porCamada("alto-padrao").join(" · ")}</p>
+          <p class="sobre__faixa">Atendo sob demanda — não é o foco da operação.</p>
+        </div>
+      </div>
+      <MapaTerritorio />
+    </section>
+
+    <section class="sobre__secao">
+      <h2>O método</h2>
+      <div class="sobre__metodo">
+        <div>
+          <h3>Avaliação por comparáveis reais</h3>
+          <p>
+            A faixa de valor sai do que fechou negócio no seu condomínio e bairro, com a
+            justificativa aberta. Preço certo na largada é o que encurta o prazo de venda.
+          </p>
+        </div>
+        <div>
+          <h3>Anúncio completo, com autorização escrita</h3>
+          <p>
+            Só publico imóvel com autorização escrita, como manda o Decreto 81.871/78 — e publico
+            direito: ficha técnica completa, fotos reais e página própria com preview limpo no
+            WhatsApp.
+          </p>
+        </div>
+        <div>
+          <h3>Atendimento direto</h3>
+          <p>
+            Sem central de atendimento: quem responde é o corretor. Comprador qualificado recebe
+            resposta rápida; o proprietário recebe retorno honesto do que está acontecendo.
+          </p>
+        </div>
+        <div>
+          <h3>Parceria com outros corretores</h3>
+          <p>
+            Quando amplia a chance de vender, eu divulgo para corretores parceiros com
+            <a href="/parceiros">ficha pronta para repasse</a> — alcance de rede com um único ponto
+            de controle.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sobre__secao sobre__registro">
+      <h2>Registro profissional</h2>
+      <p>
+        {SITE.marcaPublica} atua como {SITE.expressaoObrigatoria.toLowerCase()} pessoa física,
+        inscrito no Conselho Regional de Corretores de Imóveis sob o registro
+        <strong class="dado">{SITE.creci}</strong>. Todo anúncio deste site identifica o registro,
+        como exige a Resolução COFECI nº 1.065/2007.
+      </p>
+    </section>
+
+    <section class="sobre__cta">
+      <h2>Vamos falar do seu imóvel?</h2>
+      <p class="sobre__cta-acoes">
+        <a class="botao botao--sinal" href="/avaliacao">Pedir avaliação gratuita</a>
+        <BotaoWhatsApp variante="contorno" />
+      </p>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .sobre__cabeca {
+    display: grid;
+    gap: var(--esp-4);
+    margin-bottom: var(--esp-5);
+  }
+
+  .sobre__texto {
+    display: grid;
+    gap: var(--esp-3);
+    max-width: var(--largura-texto);
+  }
+
+  .sobre__secao {
+    margin-top: var(--esp-7);
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .sobre__camadas {
+    display: grid;
+    gap: var(--esp-4);
+    margin-bottom: var(--esp-4);
+  }
+
+  @media (min-width: 48em) {
+    .sobre__camadas {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .sobre__camadas > div {
+    border: 1px solid var(--line);
+    border-radius: var(--raio);
+    padding: var(--esp-4);
+    display: grid;
+    gap: var(--esp-2);
+    align-content: start;
+  }
+
+  .sobre__faixa {
+    color: var(--signal);
+    font-size: 0.95rem;
+  }
+
+  .sobre__metodo {
+    display: grid;
+    gap: var(--esp-5);
+  }
+
+  @media (min-width: 48em) {
+    .sobre__metodo {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .sobre__metodo h3 {
+    margin-bottom: var(--esp-2);
+  }
+
+  .sobre__metodo p {
+    color: var(--text-mid);
+    font-size: 0.98rem;
+  }
+
+  .sobre__registro {
+    background: var(--surface-2);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-5);
+  }
+
+  .sobre__cta {
+    margin-top: var(--esp-7);
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .sobre__cta-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-3);
+    max-width: none;
+  }
+</style>

@@ -171,8 +171,8 @@ const camadas: Camada[] = ["nucleo", "faixa-alta", "alto-padrao"];
     {
       camadas.map((camada) => (
         <section>
-          <h3 class="rotulo">{CAMADA_LABEL[camada]}</h3>
-          <ul role="list">
+          <p class="rotulo" id={`mapa-camada-${camada}`}>{CAMADA_LABEL[camada]}</p>
+          <ul role="list" aria-labelledby={`mapa-camada-${camada}`}>
             {TERRITORIO.filter((b) => b.camada === camada).map((b) => {
               const n = disponiveis.get(b.slug) ?? 0;
               const v = vendas.get(b.slug) ?? 0;
@@ -305,7 +305,7 @@ const camadas: Camada[] = ["nucleo", "faixa-alta", "alto-padrao"];
 
   .mapa__leg-nota {
     margin-left: auto;
-    color: var(--text-low);
+    color: var(--text-mid);
     font-size: 0.78rem;
   }
 
