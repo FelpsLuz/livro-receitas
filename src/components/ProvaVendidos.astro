@@ -1,0 +1,136 @@
+---
+/**
+ * Bloco de prova (seções 9.1/9.2): vendidos com prazo. É o argumento
+ * central do funil de captação — a prova encosta no pedido.
+ */
+import { Image } from "astro:assets";
+import { getEntry } from "astro:content";
+import { imoveisVendidos, diasVenda } from "../lib/imoveis";
+import { mesAno, TIPO_LABEL } from "../lib/formatar";
+import { nomeDoBairro } from "../lib/territorio";
+
+interface Props {
+  limite?: number;
+}
+
+const { limite = 3 } = Astro.props;
+const vendidos = (await imoveisVendidos()).slice(0, limite);
+
+const cases = await Promise.all(
+  vendidos.map(async (imovel) => {
+    const condominio = imovel.data.condominio
+      ? await getEntry("condominios", imovel.data.condominio)
+      : undefined;
+    return {
+      imovel,
+      dias: diasVenda(imovel),
+      quando: imovel.data.vendido_em ? mesAno(imovel.data.vendido_em) : null,
+      local: [condominio?.data.nome, nomeDoBairro(imovel.data.bairro)].filter(Boolean).join(" · "),
+    };
+  })
+);
+---
+
+{
+  cases.length > 0 && (
+    <ul class="prova" role="list">
+      {cases.map(({ imovel, dias, quando, local }) => (
+        <li>
+          <a class="prova__case" href={`/imovel/${imovel.id}`}>
+            <span class="prova__foto">
+              <Image
+                src={imovel.data.fotos[0].src}
+                alt={imovel.data.fotos[0].alt}
+                widths={[200, 320]}
+                sizes="128px"
+                loading="lazy"
+              />
+              <span class="prova__selo">Vendido</span>
+            </span>
+            <span class="prova__texto">
+              <strong class="dado prova__prazo">
+                {dias ? `Vendido em ${dias} dias` : "Vendido"}
+                {quando ? ` · ${quando}` : ""}
+              </strong>
+              <span class="prova__desc">
+                {TIPO_LABEL[imovel.data.tipo]} · {local}
+              </span>
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  .prova {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .prova__case {
+    display: flex;
+    align-items: center;
+    gap: var(--esp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-3);
+    text-decoration: none;
+    color: inherit;
+    background: var(--surface);
+  }
+
+  .prova__case:hover {
+    border-color: var(--ink-line);
+  }
+
+  .prova__foto {
+    position: relative;
+    flex: 0 0 128px;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--raio);
+    overflow: hidden;
+    background: var(--surface-2);
+  }
+
+  .prova__foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.85);
+  }
+
+  .prova__selo {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: var(--ink);
+    color: #fff;
+    font-family: var(--f-display);
+    font-size: 0.58rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-rotulo);
+    padding: 0.2em 0.55em;
+    border-radius: 3px;
+  }
+
+  .prova__texto {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .prova__prazo {
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+
+  .prova__desc {
+    font-size: 0.9rem;
+    color: var(--text-mid);
+  }
+</style>

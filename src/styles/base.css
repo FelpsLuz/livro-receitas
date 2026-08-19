@@ -45,6 +45,12 @@ select {
   color: inherit;
 }
 
+/* O atributo hidden vence qualquer display definido por classe
+   (o filtro da vitrine e o formulário multi-etapa dependem disso). */
+[hidden] {
+  display: none !important;
+}
+
 /* ============ Tipografia ============ */
 h1,
 h2,

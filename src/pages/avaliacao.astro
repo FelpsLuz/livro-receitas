@@ -1,0 +1,399 @@
+---
+/**
+ * /avaliacao — a rota mais importante do site (seção 9.2).
+ * Objetivo único: o proprietário envia os dados do imóvel.
+ */
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import ProvaVendidos from "../components/ProvaVendidos.astro";
+import FaqBloco from "../components/FaqBloco.astro";
+import { TITULOS, schemaFaq } from "../lib/seo";
+import { TERRITORIO } from "../lib/territorio";
+import { SITE } from "../config";
+
+const condominios = await getCollection("condominios");
+const sugestoes = [
+  ...condominios.map((c) => c.data.nome),
+  ...TERRITORIO.map((b) => b.nome),
+];
+
+const faqs = [
+  {
+    pergunta: "Quanto custa a avaliação do meu imóvel?",
+    resposta:
+      "Nada. A avaliação é gratuita e sem compromisso. Eu levanto as vendas reais do seu condomínio e do seu bairro e te devolvo uma faixa de valor com a justificativa — você decide o que fazer com ela.",
+  },
+  {
+    pergunta: "Preciso dar exclusividade para receber a avaliação?",
+    resposta:
+      "Não. A avaliação não exige exclusividade nem contrato. Se depois fizer sentido trabalharmos juntos, as condições da intermediação são combinadas por escrito, como manda a lei.",
+  },
+  {
+    pergunta: "Em quanto tempo meu imóvel vende?",
+    resposta:
+      "Depende de três fatores: preço ancorado nas vendas reais, apresentação do anúncio e liquidez da sua tipologia no bairro. Na avaliação eu te mostro o histórico do seu condomínio e o intervalo de prazo realista para o seu caso — sem promessa genérica.",
+  },
+  {
+    pergunta: "Por que meu imóvel ainda não vendeu?",
+    resposta:
+      "Na maioria dos casos: preço fora dos comparáveis reais, fotos que não vendem ou anúncio incompleto que não gera confiança. O diagnóstico faz parte da avaliação — eu aponto o que está travando e o que mudaria.",
+  },
+];
+
+const descricao =
+  "Avaliação gratuita de imóvel na zona oeste de Sorocaba, baseada nas vendas reais de cada condomínio e bairro. Descubra quanto seu imóvel vale hoje e por que ainda não vendeu.";
+---
+
+<Base
+  titulo={TITULOS.avaliacao()}
+  descricao={descricao}
+  schemaExtra={[schemaFaq(faqs)]}
+>
+  <section class="secao container avaliacao">
+    <div class="avaliacao__cabeca">
+      <p class="rotulo">Avaliação gratuita · {SITE.cidade} zona oeste</p>
+      <h1>Quanto vale seu imóvel — e por que ele ainda não vendeu?</h1>
+      <p>
+        Sem achismo: eu comparo seu imóvel com as vendas reais do seu condomínio e do seu bairro e
+        te devolvo uma faixa de valor com justificativa. Preencha em menos de 2 minutos.
+      </p>
+    </div>
+
+    <div class="avaliacao__grade">
+      <aside class="avaliacao__prova">
+        <h2 class="rotulo">Vendas concluídas — prazo real</h2>
+        <ProvaVendidos limite={3} />
+        <p class="avaliacao__prova-nota">
+          Preço certo vende. Estes são imóveis avaliados e vendidos por mim na região —
+          <a href="/vendidos">veja todos</a>.
+        </p>
+      </aside>
+
+      <form class="avaliacao__form" id="form-avaliacao" novalidate>
+        <p class="avaliacao__progresso-texto dado" aria-live="polite">
+          Etapa <span data-etapa-atual>1</span> de 3 — <span data-etapa-nome>Onde fica</span>
+        </p>
+        <div class="avaliacao__progresso" role="presentation">
+          <span data-barra style="width: 33.3%"></span>
+        </div>
+
+        <fieldset data-etapa="1">
+          <legend>Onde fica o imóvel?</legend>
+          <div class="campo">
+            <label for="localizacao">Bairro ou condomínio</label>
+            <input
+              type="text"
+              id="localizacao"
+              name="localizacao"
+              list="lista-locais"
+              autocomplete="off"
+              required
+              placeholder="Ex.: Jardim Brasilândia"
+            />
+            <datalist id="lista-locais">
+              {sugestoes.map((s) => <option value={s} />)}
+            </datalist>
+            <p class="dica">Pode digitar o nome do condomínio — eu conheço os da região.</p>
+          </div>
+          <p class="avaliacao__acoes">
+            <button type="button" class="botao botao--sinal" data-avancar>Continuar</button>
+          </p>
+        </fieldset>
+
+        <fieldset data-etapa="2" hidden>
+          <legend>Como é o imóvel?</legend>
+          <div class="campo">
+            <label for="tipo">Tipo</label>
+            <select id="tipo" name="tipo" required>
+              <option value="">Selecione…</option>
+              <option value="Apartamento">Apartamento</option>
+              <option value="Casa em condomínio">Casa em condomínio</option>
+              <option value="Casa">Casa de rua</option>
+              <option value="Terreno">Terreno</option>
+            </select>
+          </div>
+          <div class="avaliacao__dupla">
+            <div class="campo">
+              <label for="dormitorios">Dormitórios</label>
+              <select id="dormitorios" name="dormitorios" required>
+                <option value="">Selecione…</option>
+                <option>1</option>
+                <option>2</option>
+                <option>3</option>
+                <option value="4 ou mais">4+</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="vagas">Vagas</label>
+              <select id="vagas" name="vagas">
+                <option value="">Selecione…</option>
+                <option>0</option>
+                <option>1</option>
+                <option>2</option>
+                <option value="3 ou mais">3+</option>
+              </select>
+            </div>
+          </div>
+          <div class="avaliacao__dupla">
+            <div class="campo">
+              <label for="area">Área útil (m²) <span class="dica">— se souber</span></label>
+              <input type="number" id="area" name="area" min="10" max="2000" inputmode="numeric" />
+            </div>
+            <div class="campo">
+              <label for="andar">Andar <span class="dica">— se apartamento</span></label>
+              <input type="number" id="andar" name="andar" min="0" max="60" inputmode="numeric" />
+            </div>
+          </div>
+          <p class="avaliacao__acoes">
+            <button type="button" class="botao botao--contorno" data-voltar>Voltar</button>
+            <button type="button" class="botao botao--sinal" data-avancar>Continuar</button>
+          </p>
+        </fieldset>
+
+        <fieldset data-etapa="3" hidden>
+          <legend>Como falo com você?</legend>
+          <div class="campo">
+            <label for="nome">Nome</label>
+            <input type="text" id="nome" name="nome" autocomplete="name" required />
+          </div>
+          <div class="campo">
+            <label for="whatsapp">WhatsApp (DDD + número)</label>
+            <input
+              type="tel"
+              id="whatsapp"
+              name="whatsapp"
+              autocomplete="tel"
+              inputmode="tel"
+              required
+              placeholder="15 9XXXX-XXXX"
+            />
+          </div>
+          <div class="campo">
+            <label for="email">E-mail <span class="dica">— opcional</span></label>
+            <input type="email" id="email" name="email" autocomplete="email" />
+          </div>
+          <div class="campo campo--consentimento">
+            <input type="checkbox" id="consentimento" name="consentimento" required />
+            <label for="consentimento">
+              Autorizo o uso destes dados exclusivamente para preparar e enviar a avaliação do meu
+              imóvel e para o contato sobre ela, conforme a
+              <a href="/politica-de-privacidade">política de privacidade</a>. (LGPD)
+            </label>
+          </div>
+          <p class="avaliacao__acoes">
+            <button type="button" class="botao botao--contorno" data-voltar>Voltar</button>
+            <button type="submit" class="botao botao--sinal">Pedir minha avaliação gratuita</button>
+          </p>
+          <p class="dica" data-erro-envio hidden>
+            Não consegui enviar agora. Tente de novo ou
+            <a href={`https://wa.me/${SITE.whatsappE164}`} data-whatsapp target="_blank" rel="noopener">fale comigo no WhatsApp</a>.
+          </p>
+        </fieldset>
+      </form>
+    </div>
+  </section>
+
+  <section class="secao container">
+    <FaqBloco faqs={faqs} titulo="Perguntas de quem quer vender" />
+  </section>
+</Base>
+
+<style>
+  .avaliacao__cabeca {
+    max-width: 46rem;
+    display: grid;
+    gap: var(--esp-3);
+    margin-bottom: var(--esp-6);
+  }
+
+  .avaliacao__grade {
+    display: grid;
+    gap: var(--esp-6);
+  }
+
+  @media (min-width: 64em) {
+    .avaliacao__grade {
+      grid-template-columns: minmax(300px, 2fr) 3fr;
+      align-items: start;
+    }
+
+    /* A prova encosta no formulário de propósito. */
+    .avaliacao__prova {
+      position: sticky;
+      top: 84px;
+    }
+  }
+
+  .avaliacao__prova {
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .avaliacao__prova-nota {
+    font-size: 0.9rem;
+    color: var(--text-mid);
+  }
+
+  .avaliacao__form {
+    border: 1px solid var(--line);
+    border-radius: var(--raio-foto);
+    padding: clamp(1.25rem, 3vw, 2rem);
+    background: var(--surface);
+  }
+
+  .avaliacao__progresso-texto {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+    margin-bottom: var(--esp-2);
+  }
+
+  .avaliacao__progresso {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+    margin-bottom: var(--esp-5);
+  }
+
+  .avaliacao__progresso span {
+    display: block;
+    height: 100%;
+    background: var(--signal);
+    transition: width 0.25s ease;
+  }
+
+  legend {
+    font-family: var(--f-display);
+    font-weight: 650;
+    font-size: 1.25rem;
+    color: var(--ink);
+    margin-bottom: var(--esp-4);
+  }
+
+  .avaliacao__dupla {
+    display: grid;
+    gap: 0 var(--esp-4);
+  }
+
+  @media (min-width: 30em) {
+    .avaliacao__dupla {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .avaliacao__acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--esp-3);
+    margin-top: var(--esp-4);
+    max-width: none;
+  }
+
+  .avaliacao__acoes [data-voltar] {
+    margin-right: auto;
+  }
+
+  .campo input[aria-invalid="true"],
+  .campo select[aria-invalid="true"] {
+    border-color: var(--signal);
+  }
+</style>
+
+<script>
+  import { enviarLead, marcarConversao } from "../lib/cliente/envio";
+
+  const form = document.getElementById("form-avaliacao") as HTMLFormElement | null;
+
+  if (form) {
+    const etapas = [...form.querySelectorAll<HTMLFieldSetElement>("[data-etapa]")];
+    const barra = form.querySelector<HTMLElement>("[data-barra]")!;
+    const numeroEl = form.querySelector<HTMLElement>("[data-etapa-atual]")!;
+    const nomeEl = form.querySelector<HTMLElement>("[data-etapa-nome]")!;
+    const nomes = ["Onde fica", "Como é", "Como falo com você"];
+    let atual = 0;
+
+    const medir = (ev: string, p?: object) => (window as any).medir?.(ev, p);
+
+    let iniciou = false;
+    form.addEventListener(
+      "focusin",
+      () => {
+        if (!iniciou) {
+          iniciou = true;
+          medir("avaliacao_iniciada");
+        }
+      },
+      { once: false }
+    );
+
+    const mostrar = (i: number) => {
+      atual = i;
+      etapas.forEach((f, j) => (f.hidden = j !== i));
+      barra.style.width = `${((i + 1) / etapas.length) * 100}%`;
+      numeroEl.textContent = String(i + 1);
+      nomeEl.textContent = nomes[i];
+      etapas[i].querySelector<HTMLElement>("input, select")?.focus({ preventScroll: false });
+    };
+
+    const validarEtapa = (i: number): boolean => {
+      let ok = true;
+      for (const campo of etapas[i].querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+        "input, select"
+      )) {
+        const valido = campo.checkValidity();
+        campo.setAttribute("aria-invalid", String(!valido));
+        if (!valido) {
+          if (ok) campo.reportValidity();
+          ok = false;
+        }
+      }
+      return ok;
+    };
+
+    form.addEventListener("click", (e) => {
+      const alvo = e.target as HTMLElement;
+      if (alvo.matches("[data-avancar]")) {
+        if (validarEtapa(atual)) mostrar(atual + 1);
+      } else if (alvo.matches("[data-voltar]")) {
+        mostrar(atual - 1);
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!validarEtapa(2)) return;
+
+      const dados = new FormData(form);
+      const v = (nome: string) => String(dados.get(nome) ?? "");
+      const botao = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      botao.disabled = true;
+      botao.textContent = "Enviando…";
+
+      try {
+        await enviarLead({
+          assunto: `Avaliação — ${v("localizacao")} (${v("tipo") || "imóvel"})`,
+          nomeRemetente: v("nome"),
+          emailRemetente: v("email") || undefined,
+          campos: [
+            ["Bairro/Condomínio", v("localizacao")],
+            ["Tipo", v("tipo")],
+            ["Dormitórios", v("dormitorios")],
+            ["Vagas", v("vagas")],
+            ["Área útil (m²)", v("area")],
+            ["Andar", v("andar")],
+            ["Nome", v("nome")],
+            ["WhatsApp", v("whatsapp")],
+            ["E-mail", v("email")],
+            ["Consentimento LGPD", "sim"],
+          ],
+        });
+        marcarConversao("avaliacao");
+        window.location.assign("/obrigado");
+      } catch {
+        botao.disabled = false;
+        botao.textContent = "Pedir minha avaliação gratuita";
+        form.querySelector<HTMLElement>("[data-erro-envio]")!.hidden = false;
+      }
+    });
+  }
+</script>

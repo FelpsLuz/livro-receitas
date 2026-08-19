@@ -1,0 +1,320 @@
+---
+/**
+ * Vitrine (seção 9.3): somente disponíveis e reservados. Filtro client-side
+ * puro sobre os cards pré-renderizados no build — sem chamada de rede.
+ * Estado do filtro na URL (compartilhável). Paginação a partir de 12 itens.
+ */
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import CardImovel from "../components/CardImovel.astro";
+import BotaoWhatsApp from "../components/BotaoWhatsApp.astro";
+import { imoveisVitrine } from "../lib/imoveis";
+import { nomeDoBairro } from "../lib/territorio";
+import { SITE } from "../config";
+
+const imoveis = await imoveisVitrine();
+const condominios = await getCollection("condominios");
+
+const bairrosComImovel = [...new Set(imoveis.map((i) => i.data.bairro))].map((slug) => ({
+  slug,
+  nome: nomeDoBairro(slug),
+}));
+const condominiosComImovel = condominios
+  .filter((c) => imoveis.some((i) => i.data.condominio === c.id))
+  .map((c) => ({ slug: c.id, nome: c.data.nome }));
+
+const titulo = `Imóveis à venda na zona oeste de ${SITE.cidade} · ${SITE.marcaPublica}`;
+const descricao = `Apartamentos e casas em condomínio à venda no vetor oeste e noroeste de ${SITE.cidade}: preço visível, ficha técnica completa e atendimento direto com o corretor. ${SITE.creci}.`;
+---
+
+<Base titulo={titulo} descricao={descricao}>
+  <section class="secao container">
+    <Breadcrumbs trilha={[{ nome: "Início", href: "/" }, { nome: "Imóveis à venda" }]} />
+
+    <div class="secao__cabeca">
+      <h1>Imóveis à venda</h1>
+      <p class="dado vitrine__contagem"><span data-resultado>{imoveis.length}</span> imóveis</p>
+    </div>
+
+    <form class="filtros" data-filtros aria-label="Filtrar imóveis">
+      <div class="filtros__grade">
+        <div class="campo">
+          <label for="f-faixa">Faixa de preço</label>
+          <select id="f-faixa" name="faixa">
+            <option value="">Qualquer</option>
+            <option value="0-400000">Até R$ 400 mil</option>
+            <option value="400000-500000">R$ 400–500 mil</option>
+            <option value="500000-650000">R$ 500–650 mil</option>
+            <option value="650000-800000">R$ 650–800 mil</option>
+            <option value="800000-">Acima de R$ 800 mil</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="f-tipo">Tipo</label>
+          <select id="f-tipo" name="tipo">
+            <option value="">Todos</option>
+            <option value="apartamento">Apartamento</option>
+            <option value="casa-condominio">Casa em condomínio</option>
+            <option value="casa">Casa</option>
+            <option value="terreno">Terreno</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="f-dormitorios">Dormitórios</label>
+          <select id="f-dormitorios" name="dormitorios">
+            <option value="">Qualquer</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="f-vagas">Vagas</label>
+          <select id="f-vagas" name="vagas">
+            <option value="">Qualquer</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="f-bairro">Bairro</label>
+          <select id="f-bairro" name="bairro">
+            <option value="">Todos</option>
+            {bairrosComImovel.map((b) => <option value={b.slug}>{b.nome}</option>)}
+          </select>
+        </div>
+        <div class="campo">
+          <label for="f-condominio">Condomínio</label>
+          <select id="f-condominio" name="condominio">
+            <option value="">Todos</option>
+            {condominiosComImovel.map((c) => <option value={c.slug}>{c.nome}</option>)}
+          </select>
+        </div>
+        <div class="campo">
+          <label for="f-ordem">Ordenar por</label>
+          <select id="f-ordem" name="ordem">
+            <option value="recentes">Mais recentes</option>
+            <option value="menor-preco">Menor preço</option>
+            <option value="maior-preco">Maior preço</option>
+          </select>
+        </div>
+        <div class="campo filtros__limpar">
+          <button type="reset" class="botao botao--contorno">Limpar filtros</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="grade grade--3 vitrine__lista" data-lista>
+      {imoveis.map((imovel, i) => <CardImovel imovel={imovel} comDados prioridade={i < 3} />)}
+    </div>
+
+    <div class="vitrine__vazio" data-vazio hidden>
+      <h2>Nenhum imóvel com esses filtros.</h2>
+      <p>Me diga o que procura e eu busco — conheço o que está à venda no território, inclusive fora do site.</p>
+      <BotaoWhatsApp
+        variante="sinal"
+        rotulo="Dizer o que procuro no WhatsApp"
+        mensagem="Olá, Felipe. Procuro um imóvel na zona oeste e não achei no site. O que procuro:"
+      />
+    </div>
+
+    <nav class="vitrine__paginacao" data-paginacao aria-label="Paginação" hidden>
+      <button type="button" class="botao botao--contorno" data-pagina-anterior>← Anterior</button>
+      <p class="dado" data-pagina-info aria-live="polite"></p>
+      <button type="button" class="botao botao--contorno" data-pagina-proxima>Próxima →</button>
+    </nav>
+  </section>
+</Base>
+
+<style>
+  .vitrine__contagem {
+    color: var(--text-mid);
+  }
+
+  .filtros {
+    border: 1px solid var(--line);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-4);
+    margin-bottom: var(--esp-6);
+    background: var(--surface-2);
+  }
+
+  .filtros__grade {
+    display: grid;
+    gap: var(--esp-2) var(--esp-4);
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    align-items: end;
+  }
+
+  .filtros .campo {
+    margin-bottom: 0;
+  }
+
+  .filtros .campo label {
+    font-size: 0.8rem;
+  }
+
+  .filtros .campo select {
+    min-height: 44px;
+    background: var(--surface);
+  }
+
+  .filtros__limpar .botao {
+    min-height: 44px;
+    width: 100%;
+    font-size: 0.9rem;
+  }
+
+  .vitrine__vazio {
+    border: 1px dashed var(--line);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-7) var(--esp-5);
+    text-align: center;
+    display: grid;
+    gap: var(--esp-3);
+    justify-items: center;
+  }
+
+  .vitrine__paginacao {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--esp-4);
+    margin-top: var(--esp-6);
+  }
+
+  .vitrine__paginacao .botao[disabled] {
+    visibility: hidden;
+  }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>("[data-filtros]");
+  const lista = document.querySelector<HTMLElement>("[data-lista]");
+
+  if (form && lista) {
+    const TAMANHO_PAGINA = 12;
+    const cards = [...lista.querySelectorAll<HTMLElement>("[data-item]")];
+    const vazio = document.querySelector<HTMLElement>("[data-vazio]")!;
+    const resultado = document.querySelector<HTMLElement>("[data-resultado]")!;
+    const paginacao = document.querySelector<HTMLElement>("[data-paginacao]")!;
+    const infoPagina = paginacao.querySelector<HTMLElement>("[data-pagina-info]")!;
+    const btAnterior = paginacao.querySelector<HTMLButtonElement>("[data-pagina-anterior]")!;
+    const btProxima = paginacao.querySelector<HTMLButtonElement>("[data-pagina-proxima]")!;
+    let pagina = 1;
+    let timerMedicao: ReturnType<typeof setTimeout> | undefined;
+
+    const valores = () => {
+      const f = new FormData(form);
+      return {
+        faixa: String(f.get("faixa") ?? ""),
+        tipo: String(f.get("tipo") ?? ""),
+        dormitorios: String(f.get("dormitorios") ?? ""),
+        vagas: String(f.get("vagas") ?? ""),
+        bairro: String(f.get("bairro") ?? ""),
+        condominio: String(f.get("condominio") ?? ""),
+        ordem: String(f.get("ordem") || "recentes"),
+      };
+    };
+
+    const casa = (card: HTMLElement, v: ReturnType<typeof valores>): boolean => {
+      const preco = Number(card.dataset.preco);
+      if (v.faixa) {
+        const [min, max] = v.faixa.split("-");
+        if (min && preco < Number(min)) return false;
+        if (max && preco > Number(max)) return false;
+      }
+      if (v.tipo && card.dataset.tipo !== v.tipo) return false;
+      if (v.dormitorios && Number(card.dataset.dormitorios) < Number(v.dormitorios)) return false;
+      if (v.vagas && Number(card.dataset.vagas) < Number(v.vagas)) return false;
+      if (v.bairro && card.dataset.bairro !== v.bairro) return false;
+      if (v.condominio && card.dataset.condominio !== v.condominio) return false;
+      return true;
+    };
+
+    const aplicar = (registrarEvento: boolean) => {
+      const v = valores();
+
+      const visiveis = cards.filter((c) => casa(c, v));
+      visiveis.sort((a, b) => {
+        if (v.ordem === "menor-preco") return Number(a.dataset.preco) - Number(b.dataset.preco);
+        if (v.ordem === "maior-preco") return Number(b.dataset.preco) - Number(a.dataset.preco);
+        return Number(b.dataset.publicado) - Number(a.dataset.publicado);
+      });
+
+      const totalPaginas = Math.max(1, Math.ceil(visiveis.length / TAMANHO_PAGINA));
+      pagina = Math.min(Math.max(1, pagina), totalPaginas);
+      const inicio = (pagina - 1) * TAMANHO_PAGINA;
+      const daPagina = new Set(visiveis.slice(inicio, inicio + TAMANHO_PAGINA));
+
+      for (const card of cards) card.hidden = !daPagina.has(card);
+      for (const card of visiveis) lista.appendChild(card); // reordena o DOM
+
+      resultado.textContent = String(visiveis.length);
+      vazio.hidden = visiveis.length > 0;
+      lista.hidden = visiveis.length === 0;
+
+      const precisaPaginar = visiveis.length > TAMANHO_PAGINA;
+      paginacao.hidden = !precisaPaginar;
+      if (precisaPaginar) {
+        infoPagina.textContent = `Página ${pagina} de ${totalPaginas}`;
+        btAnterior.disabled = pagina <= 1;
+        btProxima.disabled = pagina >= totalPaginas;
+      }
+
+      // Estado compartilhável na URL.
+      const params = new URLSearchParams();
+      for (const [chave, valor] of Object.entries(v)) {
+        if (valor && !(chave === "ordem" && valor === "recentes")) params.set(chave, valor);
+      }
+      if (pagina > 1) params.set("pagina", String(pagina));
+      const consulta = params.toString();
+      history.replaceState(null, "", consulta ? `?${consulta}` : location.pathname);
+
+      if (registrarEvento) {
+        clearTimeout(timerMedicao);
+        timerMedicao = setTimeout(() => {
+          const ativos = Object.fromEntries(Object.entries(v).filter(([, valor]) => valor !== ""));
+          (window as any).medir?.("filtro_aplicado", { ...ativos, resultados: visiveis.length });
+        }, 700);
+      }
+    };
+
+    // Estado inicial vindo da URL.
+    const params = new URLSearchParams(location.search);
+    for (const campo of form.querySelectorAll<HTMLSelectElement>("select")) {
+      const valor = params.get(campo.name);
+      if (valor && [...campo.options].some((o) => o.value === valor)) campo.value = valor;
+    }
+    pagina = Math.max(1, Number(params.get("pagina")) || 1);
+
+    form.addEventListener("change", () => {
+      pagina = 1;
+      aplicar(true);
+    });
+
+    form.addEventListener("reset", () => {
+      setTimeout(() => {
+        pagina = 1;
+        aplicar(true);
+      }, 0);
+    });
+
+    btAnterior.addEventListener("click", () => {
+      pagina -= 1;
+      aplicar(false);
+      lista.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    btProxima.addEventListener("click", () => {
+      pagina += 1;
+      aplicar(false);
+      lista.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    aplicar(false);
+  }
+</script>

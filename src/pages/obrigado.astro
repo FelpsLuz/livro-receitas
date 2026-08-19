@@ -1,0 +1,68 @@
+---
+/**
+ * Página de confirmação pós-envio (seção 9.2) — disparo limpo da conversão
+ * primária `avaliacao_enviada` (seção 11). Noindex: só existe pós-formulário.
+ */
+import Base from "../layouts/Base.astro";
+import BotaoWhatsApp from "../components/BotaoWhatsApp.astro";
+import { SITE } from "../config";
+---
+
+<Base
+  titulo={`Recebi seu pedido · ${SITE.marcaPublica}`}
+  descricao="Pedido de avaliação recebido. Retorno em breve com a análise do seu imóvel."
+  noindex
+>
+  <section class="secao container obrigado">
+    <p class="rotulo">Pedido recebido</p>
+    <h1>Obrigado — já estou com os dados do seu imóvel.</h1>
+    <ol class="obrigado__passos">
+      <li>Levanto as vendas reais do seu condomínio e do seu bairro.</li>
+      <li>Preparo a faixa de valor com a justificativa, comparável por comparável.</li>
+      <li>Te retorno pelo WhatsApp — normalmente no mesmo dia útil.</li>
+    </ol>
+    <p>Quer adiantar? Me chama direto:</p>
+    <p class="obrigado__acoes">
+      <BotaoWhatsApp
+        variante="sinal"
+        mensagem="Olá, Felipe. Acabei de pedir a avaliação pelo site e quero adiantar a conversa."
+      />
+      <a class="botao botao--contorno" href="/vendidos">Ver vendas concluídas</a>
+    </p>
+  </section>
+</Base>
+
+<style>
+  .obrigado {
+    max-width: 44rem;
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .obrigado__passos {
+    padding-left: 1.2em;
+    display: grid;
+    gap: var(--esp-2);
+    color: var(--text-mid);
+  }
+
+  .obrigado__acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-3);
+    max-width: none;
+  }
+</style>
+
+<script>
+  // Conversão primária: dispara uma única vez, só quando veio de envio real.
+  try {
+    const tipo = sessionStorage.getItem("conversao");
+    if (tipo) {
+      sessionStorage.removeItem("conversao");
+      (window as any).medir?.("avaliacao_enviada", { origem: tipo });
+    }
+  } catch {
+    // sem storage, sem evento — nunca erro de console
+  }
+</script>

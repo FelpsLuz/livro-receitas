@@ -290,6 +290,7 @@ export async function ogImovel(dados: DadosOgImovel): Promise<Buffer> {
                           fontWeight: 400,
                           fontSize: 22,
                           color: "rgba(255,255,255,0.8)",
+                          maxWidth: 660,
                         },
                         children: dados.local,
                       },
