@@ -1,0 +1,31 @@
+---
+/**
+ * Camada de mensuração condicional (seção 11): com as env vars vazias,
+ * nenhum script externo carrega e nenhum erro aparece no console —
+ * window.medir vira um no-op seguro. Preenchidas, tudo liga sem tocar código.
+ * Eventos de saída usam transporte beacon (navigator.sendBeacon via gtag).
+ */
+const GA4 = import.meta.env.PUBLIC_GA4_ID || "";
+const ADS = import.meta.env.PUBLIC_GOOGLE_ADS_ID || "";
+---
+
+<script is:inline define:vars={{ GA4, ADS }}>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() {
+    window.dataLayer.push(arguments);
+  }
+  window.gtag = gtag;
+  window.medir = function (evento, params) {
+    if (!GA4) return;
+    gtag("event", evento, Object.assign({ transport_type: "beacon" }, params || {}));
+  };
+  if (GA4) {
+    gtag("js", new Date());
+    gtag("config", GA4, { transport_type: "beacon" });
+    if (ADS) gtag("config", ADS);
+    var s = document.createElement("script");
+    s.async = true;
+    s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA4;
+    document.head.appendChild(s);
+  }
+</script>

@@ -1,0 +1,25 @@
+---
+import { schemaBreadcrumb } from "../lib/seo";
+
+interface Props {
+  trilha: { nome: string; href?: string }[];
+}
+
+const { trilha } = Astro.props;
+const jsonLd = JSON.stringify({ "@context": "https://schema.org", ...schemaBreadcrumb(trilha) });
+---
+
+<nav class="trilha" aria-label="Você está aqui">
+  <ol>
+    {
+      trilha.map((item) =>
+        item.href ? (
+          <li><a href={item.href}>{item.nome}</a></li>
+        ) : (
+          <li aria-current="page">{item.nome}</li>
+        )
+      )
+    }
+  </ol>
+</nav>
+<script type="application/ld+json" set:html={jsonLd} is:inline />

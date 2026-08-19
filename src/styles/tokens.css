@@ -1,0 +1,49 @@
+:root {
+  /* Base — azul-petróleo profundo: confiança, não luxo */
+  --ink:        #0D2A33;
+  --ink-2:      #143C48;
+  --ink-line:   #1F5566;
+
+  /* Superfícies */
+  --surface:    #FFFFFF;
+  --surface-2:  #F1F3F2;   /* cinza levemente frio, NÃO creme */
+  --line:       #D8DEDC;
+
+  /* Texto */
+  --text:       #16232A;
+  --text-mid:   #4C5F66;
+  --text-low:   #7C8B91;   /* uso restrito: ≥ 18px ou texto decorativo */
+
+  /* Sinal — só para preço, CTA e disponibilidade */
+  --signal:     #C2410C;   /* laranja queimado, alto contraste sobre branco */
+  --signal-ink: #FFFFFF;
+
+  /* Estados */
+  --ok:         #157F5B;   /* disponível */
+  --warn:       #B08900;   /* reservado — sempre com texto escuro por cima */
+  --off:        #8A9499;   /* vendido */
+
+  /* Tipografia */
+  --f-display: "Archivo Variable", "Archivo", "Arial Narrow", Arial, sans-serif;
+  --f-texto: "Source Sans 3 Variable", "Source Sans 3", "Segoe UI", Roboto, Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* Escala de espaçamento */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+  --esp-8: 4.5rem;
+
+  /* Medidas */
+  --largura-max: 72rem;      /* 1152px */
+  --largura-texto: 42rem;
+  --raio: 6px;
+  --raio-foto: 8px;
+
+  /* Rótulos estruturais em caixa alta */
+  --tracking-rotulo: 0.12em;
+}

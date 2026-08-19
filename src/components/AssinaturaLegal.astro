@@ -1,0 +1,59 @@
+---
+/**
+ * Assinatura obrigatória (Res. COFECI nº 1.065/2007, art. 2º).
+ * A proporção é TRAVADA em em: a linha "Corretor de Imóveis · CRECI"
+ * é sempre 52,5% do tamanho do nome (mínimo legal: 25%) e o número do
+ * CRECI tem destaque idêntico ao da expressão obrigatória — mesma fonte,
+ * mesmo corpo, mesma cor. Não quebra em nenhuma tela.
+ */
+import { SITE } from "../config";
+
+interface Props {
+  variante?: "cabecalho" | "rodape" | "bloco";
+  invertida?: boolean;
+}
+
+const { variante = "bloco", invertida = false } = Astro.props;
+---
+
+<p class:list={["assinatura", `assinatura--${variante}`, { "assinatura--invertida": invertida }]}>
+  <span class="assinatura__nome">{SITE.marcaPublica}</span>
+  <span class="assinatura__creci">{SITE.expressaoObrigatoria} · {SITE.creci}</span>
+</p>
+
+<style>
+  .assinatura {
+    display: flex;
+    flex-direction: column;
+    gap: 0.08em;
+    margin: 0;
+    max-width: none;
+    font-family: var(--f-display);
+    line-height: 1.1;
+  }
+
+  .assinatura__nome {
+    font-size: 1em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* Proporção travada: 0.525em do nome — nunca inferior aos 25% exigidos. */
+  .assinatura__creci {
+    font-size: 0.525em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-mid);
+    white-space: nowrap;
+  }
+
+  .assinatura--cabecalho { font-size: 1.02rem; }
+  .assinatura--bloco { font-size: 1.25rem; }
+  .assinatura--rodape { font-size: 1.6rem; }
+
+  .assinatura--invertida .assinatura__nome { color: #fff; }
+  .assinatura--invertida .assinatura__creci { color: rgba(255, 255, 255, 0.78); }
+</style>

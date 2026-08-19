@@ -1,0 +1,61 @@
+---
+/**
+ * Home provisória da Fase 1 — a home definitiva (mapa do território,
+ * CTA de captação, vendidos, bairros e método) é montada na Fase 3,
+ * na ordem exata da seção 9.1.
+ */
+import Base from "../layouts/Base.astro";
+import AssinaturaLegal from "../components/AssinaturaLegal.astro";
+import CardImovel from "../components/CardImovel.astro";
+import { destaquesHome } from "../lib/imoveis";
+import { TITULOS } from "../lib/seo";
+import { SITE } from "../config";
+
+const destaques = await destaquesHome();
+const descricao = `Corretor de imóveis em ${SITE.cidade}/${SITE.uf}, especialista no vetor oeste e noroeste da cidade. Venda de apartamentos e casas em condomínio e avaliação gratuita de imóveis. ${SITE.creci}.`;
+---
+
+<Base titulo={TITULOS.home()} descricao={descricao}>
+  <section class="secao container">
+    <AssinaturaLegal variante="rodape" />
+    <h1>O corretor do vetor oeste de {SITE.cidade}</h1>
+    <p>
+      Preço por condomínio, venda com prazo real e atendimento direto — do Jardim Brasilândia ao
+      entorno da Facens.
+    </p>
+    <p class="acoes">
+      <a class="botao botao--sinal" href="/avaliacao">Descubra quanto vale seu imóvel</a>
+      <a class="botao botao--contorno" href="/imoveis">Ver imóveis à venda</a>
+    </p>
+  </section>
+
+  {
+    destaques.length > 0 && (
+      <section class="secao container">
+        <div class="secao__cabeca">
+          <h2>Imóveis em destaque</h2>
+          <a href="/imoveis">Ver todos →</a>
+        </div>
+        <div class="grade grade--3">
+          {destaques.map((imovel, i) => (
+            <CardImovel imovel={imovel} prioridade={i === 0} />
+          ))}
+        </div>
+      </section>
+    )
+  }
+</Base>
+
+<style>
+  .acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-3);
+    margin-top: var(--esp-5);
+    max-width: none;
+  }
+
+  h1 {
+    margin-top: var(--esp-5);
+  }
+</style>

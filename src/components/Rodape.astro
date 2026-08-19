@@ -1,0 +1,122 @@
+---
+/**
+ * Rodapé com a assinatura legal completa (Res. COFECI 1.065/2007) em todas
+ * as páginas, navegação secundária, Instagram e contato.
+ */
+import { SITE, EMAIL_CONTATO } from "../config";
+import AssinaturaLegal from "./AssinaturaLegal.astro";
+import BotaoWhatsApp from "./BotaoWhatsApp.astro";
+
+const ano = new Date().getFullYear();
+---
+
+<footer class="rodape">
+  <div class="container rodape__grade">
+    <div class="rodape__marca">
+      <AssinaturaLegal variante="rodape" invertida />
+      <p class="rodape__territorio">
+        Especialista no vetor oeste e noroeste de {SITE.cidade}/{SITE.uf} — do Jardim Brasilândia ao
+        entorno da Facens.
+      </p>
+      <BotaoWhatsApp variante="sinal" />
+    </div>
+
+    <nav class="rodape__nav" aria-label="Mapa do site">
+      <h2 class="rotulo rodape__titulo">Navegue</h2>
+      <ul>
+        <li><a href="/imoveis">Imóveis à venda</a></li>
+        <li><a href="/vendidos">Imóveis vendidos</a></li>
+        <li><a href="/avaliacao">Avaliação gratuita</a></li>
+        <li><a href="/sobre">Sobre o corretor</a></li>
+        <li><a href="/parceiros">Área do parceiro</a></li>
+        <li><a href="/politica-de-privacidade">Política de privacidade</a></li>
+      </ul>
+    </nav>
+
+    <div class="rodape__contato">
+      <h2 class="rotulo rodape__titulo">Contato</h2>
+      <ul>
+        <li>
+          <a href={SITE.instagram} target="_blank" rel="noopener">Instagram — @felipeasluz</a>
+        </li>
+        <li>
+          <a href={`mailto:${EMAIL_CONTATO}`}>{EMAIL_CONTATO}</a>
+        </li>
+        <li>{SITE.cidade}/{SITE.uf} — atendimento na região oeste e noroeste</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rodape__legal">
+    <div class="container">
+      <p>
+        © {ano} {SITE.marcaPublica} · {SITE.expressaoObrigatoria} · {SITE.creci}. Anúncios veiculados
+        com autorização escrita dos proprietários (Decreto 81.871/78).
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .rodape {
+    background: var(--ink);
+    color: rgba(255, 255, 255, 0.88);
+    margin-top: var(--esp-8);
+  }
+
+  .rodape a {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .rodape a:hover {
+    color: #fff;
+  }
+
+  .rodape__grade {
+    display: grid;
+    gap: var(--esp-6);
+    padding-block: var(--esp-7);
+  }
+
+  @media (min-width: 48em) {
+    .rodape__grade {
+      grid-template-columns: 1.4fr 1fr 1fr;
+    }
+  }
+
+  .rodape__marca {
+    display: grid;
+    gap: var(--esp-4);
+    justify-items: start;
+  }
+
+  .rodape__territorio {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.95rem;
+  }
+
+  .rodape__titulo {
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: var(--esp-3);
+  }
+
+  .rodape ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--esp-2);
+    font-size: 0.95rem;
+  }
+
+  .rodape__legal {
+    border-top: 1px solid var(--ink-line);
+    padding-block: var(--esp-4);
+  }
+
+  .rodape__legal p {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.6);
+    max-width: none;
+  }
+</style>

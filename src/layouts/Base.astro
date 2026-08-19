@@ -1,0 +1,114 @@
+---
+/**
+ * Layout base: HTML semântico pt-BR, metadados por página, canonical,
+ * Open Graph/Twitter, JSON-LD (@graph com RealEstateAgent + Person),
+ * fontes self-hosted com subset latino e mensuração condicional.
+ */
+import "@fontsource-variable/archivo";
+import "@fontsource-variable/source-sans-3";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "../styles/tokens.css";
+import "../styles/base.css";
+
+import archivoWoff2 from "@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2?url";
+import sourceSansWoff2 from "@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?url";
+import plexMonoWoff2 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
+
+import { SITE } from "../config";
+import { urlCanonica, urlAbsoluta, grafoGlobal, schemaWebPage } from "../lib/seo";
+import Cabecalho from "../components/Cabecalho.astro";
+import Rodape from "../components/Rodape.astro";
+import Mensuracao from "../components/Mensuracao.astro";
+
+interface Props {
+  titulo: string;
+  descricao: string;
+  /** Caminho da imagem OG (absoluto ou relativo ao domínio). */
+  imagemOg?: string;
+  noindex?: boolean;
+  dataModificacao?: Date;
+  /** Nós JSON-LD adicionais da página (Listing, Place, FAQPage…). */
+  schemaExtra?: object[];
+}
+
+const {
+  titulo,
+  descricao,
+  imagemOg = "/og/site.png",
+  noindex = false,
+  dataModificacao,
+  schemaExtra = [],
+} = Astro.props;
+
+const canonica = urlCanonica(Astro.url.pathname);
+const ogAbsoluta = urlAbsoluta(imagemOg);
+
+const jsonLd = JSON.stringify({
+  "@context": "https://schema.org",
+  "@graph": [
+    ...grafoGlobal(),
+    schemaWebPage({ url: canonica, titulo, descricao, dataModificacao: dataModificacao ?? new Date() }),
+    ...schemaExtra,
+  ],
+});
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{titulo}</title>
+    <meta name="description" content={descricao} />
+    <link rel="canonical" href={canonica} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+
+    <meta name="theme-color" content="#0D2A33" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+
+    <link rel="preload" as="font" type="font/woff2" href={archivoWoff2} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={sourceSansWoff2} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={plexMonoWoff2} crossorigin />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={`${SITE.marcaPublica} · ${SITE.expressaoObrigatoria}`} />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:title" content={titulo} />
+    <meta property="og:description" content={descricao} />
+    <meta property="og:url" content={canonica} />
+    <meta property="og:image" content={ogAbsoluta} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={titulo} />
+    <meta name="twitter:description" content={descricao} />
+    <meta name="twitter:image" content={ogAbsoluta} />
+
+    <script type="application/ld+json" set:html={jsonLd} is:inline />
+    <Mensuracao />
+  </head>
+  <body>
+    <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+    <Cabecalho />
+    <main id="conteudo">
+      <slot />
+    </main>
+    <Rodape />
+
+    <script>
+      // Delegação: qualquer link de WhatsApp dispara o evento de saída.
+      document.addEventListener("click", (e) => {
+        const alvo = e.target as HTMLElement | null;
+        const link = alvo?.closest<HTMLAnchorElement>("a[data-whatsapp]");
+        if (!link) return;
+        const medir = (window as any).medir as ((ev: string, p?: object) => void) | undefined;
+        medir?.("whatsapp_click", {
+          ...(link.dataset.ref ? { ref: link.dataset.ref } : {}),
+          ...(link.dataset.status ? { status: link.dataset.status } : {}),
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+# dependências e build
+node_modules/
+dist/
+.astro/
+
+# ambiente local — nunca commitar chaves
+.env
+.env.local
+.env.production
+
+# sistema
+.DS_Store

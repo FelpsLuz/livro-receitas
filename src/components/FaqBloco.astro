@@ -1,0 +1,37 @@
+---
+/**
+ * Bloco FAQ (seção 10.3): pergunta como as pessoas falam + resposta direta.
+ * Emite schema FAQPage — é este formato que motores generativos citam.
+ * O conteúdo fica 100% no HTML estático (details/summary, sem JS).
+ */
+import { schemaFaq } from "../lib/seo";
+
+interface Props {
+  faqs: { pergunta: string; resposta: string }[];
+  titulo?: string;
+}
+
+const { faqs, titulo = "Perguntas frequentes" } = Astro.props;
+const jsonLd = JSON.stringify({ "@context": "https://schema.org", ...schemaFaq(faqs) });
+---
+
+{
+  faqs.length > 0 && (
+    <section class="faq">
+      <h2>{titulo}</h2>
+      {faqs.map((f) => (
+        <details>
+          <summary>{f.pergunta}</summary>
+          <p>{f.resposta}</p>
+        </details>
+      ))}
+      <script type="application/ld+json" set:html={jsonLd} is:inline />
+    </section>
+  )
+}
+
+<style>
+  .faq h2 {
+    margin-bottom: var(--esp-4);
+  }
+</style>

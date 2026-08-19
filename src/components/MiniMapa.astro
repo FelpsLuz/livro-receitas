@@ -1,0 +1,75 @@
+---
+/**
+ * Localização aproximada, leve e sem embed (seção 9.4): o mapa esquemático
+ * do território com o bairro do imóvel destacado. Nunca rua nem número —
+ * em vendidos, localização apenas em nível de bairro/condomínio (regra 8.4).
+ */
+import { TERRITORIO, VIAS, MARCO_CENTRO, nomeDoBairro } from "../lib/territorio";
+
+interface Props {
+  bairroSlug: string;
+}
+
+const { bairroSlug } = Astro.props;
+const nome = nomeDoBairro(bairroSlug);
+const alvo = TERRITORIO.find((b) => b.slug === bairroSlug);
+---
+
+<div class="minimapa">
+  <svg
+    viewBox="0 0 800 520"
+    role="img"
+    aria-label={`Mapa esquemático do vetor oeste de Sorocaba com o bairro ${nome} destacado`}
+  >
+    {VIAS.map((d) => (
+      <path d={d} fill="none" stroke="var(--line)" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round" />
+    ))}
+    {TERRITORIO.map((b) => (
+      <path
+        d={b.path}
+        fill={b.slug === bairroSlug ? "var(--ink-2)" : "var(--surface-2)"}
+        stroke={b.slug === bairroSlug ? "var(--ink)" : "var(--line)"}
+        stroke-width="2"
+      />
+    ))}
+    {
+      alvo && (
+        <text
+          x={alvo.label.x}
+          y={alvo.label.y}
+          text-anchor="middle"
+          fill="#fff"
+          font-size="26"
+          font-weight="600"
+          font-family="var(--f-display)"
+        >
+          {nome}
+        </text>
+      )
+    }
+    <circle cx={MARCO_CENTRO.x} cy={MARCO_CENTRO.y} r="6" fill="var(--text-low)" />
+    <text x={MARCO_CENTRO.x - 12} y={MARCO_CENTRO.y + 30} text-anchor="end" fill="var(--text-mid)" font-size="22" font-family="var(--f-texto)">
+      Centro →
+    </text>
+  </svg>
+  <p class="minimapa__legenda">
+    Localização aproximada — {nome}, Sorocaba/SP. Mapa esquemático do território, sem precisão de
+    endereço.
+  </p>
+</div>
+
+<style>
+  .minimapa svg {
+    width: 100%;
+    max-width: 560px;
+    border: 1px solid var(--line);
+    border-radius: var(--raio-foto);
+    background: var(--surface);
+  }
+
+  .minimapa__legenda {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+    margin-top: var(--esp-2);
+  }
+</style>

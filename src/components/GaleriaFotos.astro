@@ -1,0 +1,236 @@
+---
+/**
+ * Galeria da página do imóvel: navegação por teclado, swipe no mobile e
+ * lightbox leve com <dialog> nativo — sem biblioteca externa (seção 9.4).
+ */
+import { Image, getImage } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+  fotos: { src: ImageMetadata; alt: string }[];
+  vendido?: boolean;
+}
+
+const { fotos, vendido = false } = Astro.props;
+
+const slides = await Promise.all(
+  fotos.map(async (f) => {
+    const otimizada = await getImage({ src: f.src, width: 1600, format: "webp" });
+    return { src: otimizada.src, alt: f.alt };
+  })
+);
+---
+
+<figure class:list={["galeria", { "galeria--vendido": vendido }]} data-galeria data-slides={JSON.stringify(slides)}>
+  <button class="galeria__principal" type="button" data-abrir="0" aria-label={`Ampliar foto: ${fotos[0].alt}`}>
+    <Image
+      src={fotos[0].src}
+      alt={fotos[0].alt}
+      widths={[480, 800, 1200, 1600]}
+      sizes="(min-width: 64em) 720px, 94vw"
+      loading="eager"
+      fetchpriority="high"
+    />
+    <slot />
+  </button>
+
+  {
+    fotos.length > 1 && (
+      <div class="galeria__miniaturas" role="list" aria-label="Miniaturas das fotos">
+        {fotos.map((foto, i) => (
+          <button
+            type="button"
+            role="listitem"
+            data-abrir={i}
+            aria-label={`Ampliar foto ${i + 1} de ${fotos.length}: ${foto.alt}`}
+          >
+            <Image src={foto.src} alt="" widths={[160, 240]} sizes="120px" loading="lazy" />
+          </button>
+        ))}
+      </div>
+    )
+  }
+  <figcaption class="visualmente-oculto">{fotos.length} fotos do imóvel</figcaption>
+</figure>
+
+<dialog class="galeria-caixa" data-caixa aria-label="Galeria de fotos ampliada">
+  <button class="galeria-caixa__fechar" type="button" data-fechar aria-label="Fechar galeria">×</button>
+  <button class="galeria-caixa__seta galeria-caixa__seta--esq" type="button" data-anterior aria-label="Foto anterior">‹</button>
+  <figure>
+    <img data-slide src="" alt="" />
+    <figcaption><span data-legenda></span> <span class="dado" data-contagem></span></figcaption>
+  </figure>
+  <button class="galeria-caixa__seta galeria-caixa__seta--dir" type="button" data-proxima aria-label="Próxima foto">›</button>
+</dialog>
+
+<style>
+  .galeria__principal {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: var(--surface-2);
+    border-radius: var(--raio-foto);
+    overflow: hidden;
+    cursor: zoom-in;
+    aspect-ratio: 3 / 2;
+  }
+
+  .galeria__principal img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .galeria--vendido img {
+    filter: saturate(0.85);
+  }
+
+  .galeria__miniaturas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: var(--esp-2);
+    margin-top: var(--esp-2);
+  }
+
+  .galeria__miniaturas button {
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: var(--raio);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--surface-2);
+    aspect-ratio: 3 / 2;
+  }
+
+  .galeria__miniaturas button:hover {
+    border-color: var(--ink-line);
+  }
+
+  .galeria__miniaturas img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .galeria-caixa {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    max-width: min(96vw, 1200px);
+    width: 100%;
+  }
+
+  .galeria-caixa::backdrop {
+    background: rgba(13, 42, 51, 0.92);
+  }
+
+  .galeria-caixa figure {
+    margin: 0;
+  }
+
+  .galeria-caixa img {
+    width: 100%;
+    max-height: 82vh;
+    object-fit: contain;
+    border-radius: var(--raio);
+    background: #000;
+  }
+
+  .galeria-caixa figcaption {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--esp-4);
+    color: #fff;
+    font-size: 0.9rem;
+    padding-top: var(--esp-2);
+  }
+
+  .galeria-caixa__fechar,
+  .galeria-caixa__seta {
+    position: fixed;
+    z-index: 2;
+    border: 0;
+    border-radius: 999px;
+    width: 46px;
+    height: 46px;
+    font-size: 1.6rem;
+    line-height: 1;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .galeria-caixa__fechar:hover,
+  .galeria-caixa__seta:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .galeria-caixa__fechar {
+    top: 16px;
+    right: 16px;
+  }
+
+  .galeria-caixa__seta {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .galeria-caixa__seta--esq { left: 12px; }
+  .galeria-caixa__seta--dir { right: 12px; }
+</style>
+
+<script>
+  for (const galeria of document.querySelectorAll<HTMLElement>("[data-galeria]")) {
+    const slides: { src: string; alt: string }[] = JSON.parse(galeria.dataset.slides || "[]");
+    const caixa = galeria.nextElementSibling as HTMLDialogElement | null;
+    if (!caixa || !caixa.matches("[data-caixa]") || slides.length === 0) continue;
+
+    const img = caixa.querySelector<HTMLImageElement>("[data-slide]")!;
+    const legenda = caixa.querySelector<HTMLElement>("[data-legenda]")!;
+    const contagem = caixa.querySelector<HTMLElement>("[data-contagem]")!;
+    let atual = 0;
+
+    const mostrar = (i: number) => {
+      atual = (i + slides.length) % slides.length;
+      img.src = slides[atual].src;
+      img.alt = slides[atual].alt;
+      legenda.textContent = slides[atual].alt;
+      contagem.textContent = `${atual + 1}/${slides.length}`;
+    };
+
+    for (const botao of galeria.querySelectorAll<HTMLButtonElement>("[data-abrir]")) {
+      botao.addEventListener("click", () => {
+        mostrar(Number(botao.dataset.abrir || 0));
+        caixa.showModal();
+      });
+    }
+
+    caixa.querySelector("[data-fechar]")?.addEventListener("click", () => caixa.close());
+    caixa.querySelector("[data-anterior]")?.addEventListener("click", () => mostrar(atual - 1));
+    caixa.querySelector("[data-proxima]")?.addEventListener("click", () => mostrar(atual + 1));
+
+    caixa.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") mostrar(atual - 1);
+      if (e.key === "ArrowRight") mostrar(atual + 1);
+    });
+
+    // Fecha ao clicar no backdrop (fora da figura).
+    caixa.addEventListener("click", (e) => {
+      if (e.target === caixa) caixa.close();
+    });
+
+    // Swipe no mobile.
+    let toqueX = 0;
+    caixa.addEventListener("touchstart", (e) => (toqueX = e.changedTouches[0].clientX), { passive: true });
+    caixa.addEventListener(
+      "touchend",
+      (e) => {
+        const delta = e.changedTouches[0].clientX - toqueX;
+        if (Math.abs(delta) > 48) mostrar(delta > 0 ? atual - 1 : atual + 1);
+      },
+      { passive: true }
+    );
+  }
+</script>

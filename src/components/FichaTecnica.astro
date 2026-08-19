@@ -1,0 +1,84 @@
+---
+/**
+ * Ficha técnica em grade tabular monoespaçada — leitura de documento
+ * técnico, que é a prova de domínio territorial (seção 7.3).
+ */
+import type { Imovel } from "../lib/imoveis";
+import { metros, precoBRL, TIPO_LABEL, plural } from "../lib/formatar";
+
+interface Props {
+  imovel: Imovel;
+}
+
+const { imovel } = Astro.props;
+const d = imovel.data;
+
+const linhas: { rotulo: string; valor: string }[] = [
+  { rotulo: "Ref.", valor: d.ref },
+  { rotulo: "Tipo", valor: TIPO_LABEL[d.tipo] },
+  { rotulo: "Área útil", valor: metros(d.area_util) },
+];
+
+if (d.area_total) linhas.push({ rotulo: "Área total", valor: metros(d.area_total) });
+linhas.push({
+  rotulo: "Dormitórios",
+  valor: d.suites > 0 ? `${d.dormitorios} (${d.suites} ${plural(d.suites, "suíte")})` : String(d.dormitorios),
+});
+linhas.push({ rotulo: "Banheiros", valor: String(d.banheiros) });
+linhas.push({
+  rotulo: "Vagas",
+  valor: d.vagas > 0 ? `${d.vagas}${d.vaga_coberta ? " (coberta)" : ""}` : "—",
+});
+if (typeof d.andar === "number") linhas.push({ rotulo: "Andar", valor: `${d.andar}º` });
+if (typeof d.elevador === "boolean") linhas.push({ rotulo: "Elevador", valor: d.elevador ? "Sim" : "Não" });
+linhas.push({ rotulo: "Mobiliado", valor: d.mobiliado ? "Sim" : "Não" });
+if (typeof d.valor_condominio === "number" && d.valor_condominio > 0)
+  linhas.push({ rotulo: "Condomínio", valor: `${precoBRL(d.valor_condominio)}/mês` });
+if (typeof d.valor_iptu === "number" && d.valor_iptu > 0)
+  linhas.push({ rotulo: "IPTU", valor: `${precoBRL(d.valor_iptu)}/mês` });
+if (d.registro_incorporacao)
+  linhas.push({ rotulo: "Registro de incorporação", valor: d.registro_incorporacao });
+
+const aceites = [
+  d.aceita_financiamento ? "Aceita financiamento" : null,
+  d.aceita_fgts ? "Aceita FGTS" : null,
+  d.aceita_permuta ? "Estuda permuta" : null,
+].filter(Boolean) as string[];
+---
+
+<div class="ficha">
+  <h2 class="rotulo">Ficha técnica</h2>
+  <dl class="ficha-grade">
+    {
+      linhas.map((linha) => (
+        <div>
+          <dt>{linha.rotulo}</dt>
+          <dd>{linha.valor}</dd>
+        </div>
+      ))
+    }
+  </dl>
+  {
+    aceites.length > 0 && (
+      <p class="ficha__aceites">
+        {aceites.map((a) => (
+          <span class="chip">{a}</span>
+        ))}
+      </p>
+    )
+  }
+</div>
+
+<style>
+  .ficha h2 {
+    margin-bottom: var(--esp-3);
+  }
+
+  .ficha__aceites {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-2);
+    margin-top: var(--esp-3);
+    max-width: none;
+  }
+</style>

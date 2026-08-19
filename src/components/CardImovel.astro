@@ -1,0 +1,146 @@
+---
+/**
+ * Card de imóvel (seção 9.3): foto capa 3:2, preço em destaque tipográfico
+ * real (nunca escondido), linha técnica, bairro/condomínio e selos.
+ * Na vitrine carrega data-atributos para o filtro client-side.
+ */
+import { Image } from "astro:assets";
+import { getEntry } from "astro:content";
+import type { Imovel } from "../lib/imoveis";
+import { diasVenda } from "../lib/imoveis";
+import { precoBRL, linhaResumo, mesAno, TIPO_LABEL } from "../lib/formatar";
+import { nomeDoBairro } from "../lib/territorio";
+import SeloVendido from "./SeloVendido.astro";
+
+interface Props {
+  imovel: Imovel;
+  comDados?: boolean; // data-* para o filtro da vitrine
+  prioridade?: boolean; // acima da dobra: eager + fetchpriority
+}
+
+const { imovel, comDados = false, prioridade = false } = Astro.props;
+const d = imovel.data;
+const capa = d.fotos[0];
+const vendido = d.status === "vendido";
+const condominio = d.condominio ? await getEntry("condominios", d.condominio) : undefined;
+const local = [condominio?.data.nome, nomeDoBairro(d.bairro)].filter(Boolean).join(" · ");
+const dias = vendido ? diasVenda(imovel) : null;
+
+const dataAttrs = comDados
+  ? {
+      "data-item": "",
+      "data-ref": d.ref,
+      "data-preco": d.valor,
+      "data-tipo": d.tipo,
+      "data-dormitorios": d.dormitorios,
+      "data-vagas": d.vagas,
+      "data-bairro": d.bairro,
+      "data-condominio": d.condominio ?? "",
+      "data-publicado": d.publicado_em.getTime(),
+    }
+  : {};
+---
+
+<article class:list={["cartao", "cartao-imovel", { "cartao-imovel--vendido": vendido }]} {...dataAttrs}>
+  <a href={`/imovel/${imovel.id}`}>
+    <div class="cartao-imovel__foto">
+      <Image
+        src={capa.src}
+        alt={capa.alt}
+        widths={[420, 640, 960]}
+        sizes="(min-width: 64em) 360px, (min-width: 40em) 45vw, 92vw"
+        loading={prioridade ? "eager" : "lazy"}
+        fetchpriority={prioridade ? "high" : "auto"}
+      />
+      {vendido && <SeloVendido sobreposto dias={dias} quando={d.vendido_em ? mesAno(d.vendido_em) : null} />}
+      {!vendido && d.status === "reservado" && <span class="selo selo--reservado cartao-imovel__status">Reservado</span>}
+    </div>
+    <div class="cartao-imovel__corpo">
+      {
+        vendido ? (
+          <p class="cartao-imovel__prazo dado">{dias ? `Vendido em ${dias} dias` : "Vendido"}{d.vendido_em ? ` · ${mesAno(d.vendido_em)}` : ""}</p>
+        ) : (
+          <p class="cartao-imovel__preco preco">{precoBRL(d.valor)}</p>
+        )
+      }
+      <h3 class="cartao-imovel__titulo">{TIPO_LABEL[d.tipo]} · {linhaResumo(d)}</h3>
+      <p class="cartao-imovel__local">{local}</p>
+      <p class="cartao-imovel__selos">
+        {d.exclusivo && !vendido && <span class="selo selo--exclusivo">Exclusivo</span>}
+        {d.placeholder && <span class="selo selo--exemplo">Exemplo</span>}
+        <span class="dado cartao-imovel__ref">{d.ref}</span>
+      </p>
+    </div>
+  </a>
+</article>
+
+<style>
+  .cartao-imovel__foto {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    background: var(--surface-2);
+  }
+
+  .cartao-imovel__foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Vendido: levemente dessaturado — diferencia do estoque sem esconder a qualidade */
+  .cartao-imovel--vendido .cartao-imovel__foto img {
+    filter: saturate(0.85);
+  }
+
+  .cartao-imovel__status {
+    position: absolute;
+    top: var(--esp-3);
+    left: var(--esp-3);
+  }
+
+  .cartao-imovel__corpo {
+    display: grid;
+    gap: 0.3rem;
+    padding: var(--esp-4);
+  }
+
+  .cartao-imovel__preco {
+    font-size: 1.35rem;
+  }
+
+  .cartao-imovel__prazo {
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .cartao-imovel__titulo {
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .cartao-imovel__local {
+    font-size: 0.92rem;
+    color: var(--text-mid);
+  }
+
+  .cartao-imovel__selos {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esp-2);
+    margin-top: var(--esp-1);
+  }
+
+  .cartao-imovel__ref {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--text-low);
+  }
+
+  .cartao-imovel a:hover .cartao-imovel__titulo {
+    color: var(--ink-2);
+    text-decoration: underline;
+  }
+</style>

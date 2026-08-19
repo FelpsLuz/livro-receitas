@@ -1,0 +1,27 @@
+{
+  "name": "felipeluzcorretor",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Site profissional de Felipe Luz, Corretor de Imóveis — CRECI-SP 266.085-F — Sorocaba/SP",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "imagens-exemplo": "node scripts/gerar-imagens-exemplo.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/archivo": "^5.2.5",
+    "@fontsource-variable/source-sans-3": "^5.2.5",
+    "@fontsource/archivo": "^5.2.5",
+    "@fontsource/ibm-plex-mono": "^5.2.5",
+    "astro": "^5.13.0",
+    "satori": "^0.16.0",
+    "sharp": "^0.34.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "^5.9.0"
+  }
+}

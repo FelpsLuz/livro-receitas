@@ -1,0 +1,60 @@
+---
+/**
+ * Selo VENDIDO (seção 7.4): sóbrio, fundo --ink, Archivo caixa alta com
+ * tracking aberto. Sem faixa diagonal, sem carimbo inclinado, sem vermelho.
+ */
+interface Props {
+  dias?: number | null;
+  quando?: string | null; // já formatado: "jun/2026"
+  sobreposto?: boolean;   // true = canto da foto
+}
+
+const { dias, quando, sobreposto = false } = Astro.props;
+const prazo = [dias ? `Vendido em ${dias} dias` : null, quando].filter(Boolean).join(" · ");
+---
+
+<span class:list={["selo-vendido", { "selo-vendido--sobreposto": sobreposto }]}>
+  <span class="selo-vendido__selo">Vendido</span>
+  {prazo && <span class="selo-vendido__prazo dado">{prazo}</span>}
+</span>
+
+<style>
+  .selo-vendido {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esp-2);
+  }
+
+  .selo-vendido--sobreposto {
+    position: absolute;
+    top: var(--esp-3);
+    left: var(--esp-3);
+    z-index: 2;
+  }
+
+  .selo-vendido__selo {
+    display: inline-block;
+    padding: 0.3em 0.85em;
+    background: var(--ink);
+    color: #fff;
+    border-radius: 3px;
+    font-family: var(--f-display);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-rotulo);
+  }
+
+  .selo-vendido__prazo {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+  }
+
+  .selo-vendido--sobreposto .selo-vendido__prazo {
+    background: rgba(255, 255, 255, 0.92);
+    padding: 0.25em 0.6em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+</style>

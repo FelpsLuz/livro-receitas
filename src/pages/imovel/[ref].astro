@@ -1,0 +1,615 @@
+---
+/**
+ * Página individual do imóvel (seção 9.4) — o link que vai para o WhatsApp
+ * e para o parceiro. Duas variantes: disponível/reservado e vendido.
+ */
+import { getEntry } from "astro:content";
+import { getImage } from "astro:assets";
+import Base from "../../layouts/Base.astro";
+import Breadcrumbs from "../../components/Breadcrumbs.astro";
+import GaleriaFotos from "../../components/GaleriaFotos.astro";
+import FichaTecnica from "../../components/FichaTecnica.astro";
+import SeloVendido from "../../components/SeloVendido.astro";
+import BotaoWhatsApp from "../../components/BotaoWhatsApp.astro";
+import CardImovel from "../../components/CardImovel.astro";
+import MiniMapa from "../../components/MiniMapa.astro";
+import AssinaturaLegal from "../../components/AssinaturaLegal.astro";
+import { SITE } from "../../config";
+import { imoveisRenderizaveis, imoveisSemelhantes, diasVenda, type Imovel } from "../../lib/imoveis";
+import { precoBRL, mesAno, TIPO_LABEL, linhaResumo } from "../../lib/formatar";
+import { nomeDoBairro } from "../../lib/territorio";
+import { mensagemImovel, mensagemVisita } from "../../lib/whatsapp";
+import { schemaListing, urlCanonica, urlAbsoluta } from "../../lib/seo";
+
+export async function getStaticPaths() {
+  const imoveis = await imoveisRenderizaveis();
+  return imoveis.map((imovel) => ({ params: { ref: imovel.id }, props: { imovel } }));
+}
+
+interface Props {
+  imovel: Imovel;
+}
+
+const { imovel } = Astro.props;
+const d = imovel.data;
+const vendido = d.status === "vendido";
+const reservado = d.status === "reservado";
+
+const condominio = d.condominio ? await getEntry("condominios", d.condominio) : undefined;
+const bairroPagina = await getEntry("bairros", d.bairro);
+const bairroNome = bairroPagina?.data.nome ?? nomeDoBairro(d.bairro);
+const dias = vendido ? diasVenda(imovel) : null;
+const quando = d.vendido_em ? mesAno(d.vendido_em) : null;
+const semelhantes = await imoveisSemelhantes(imovel);
+
+// Título por padrão da seção 10.4.
+const dentroDe = condominio ? `no ${condominio.data.nome}, ${bairroNome}` : `no ${bairroNome}`;
+const tituloMeta = vendido
+  ? `Vendido: ${TIPO_LABEL[d.tipo].toLowerCase()} ${dentroDe} — em ${dias ?? "?"} dias`
+  : `${TIPO_LABEL[d.tipo]} ${d.dormitorios} dorm. ${dentroDe} · ${d.exibir_valor ? precoBRL(d.valor) : SITE.cidade}`;
+
+const descricaoMeta = d.descricao.replace(/\s+/g, " ").trim().slice(0, 158);
+
+// Imagem para a ficha imprimível (A4) e para o schema — a mesma capa, otimizada.
+const capaImpressao = await getImage({ src: d.fotos[0].src, width: 1200, format: "jpeg" });
+
+const canonica = urlCanonica(Astro.url.pathname);
+const schemaExtra = [
+  schemaListing({
+    url: canonica,
+    titulo: d.titulo,
+    descricao: descricaoMeta,
+    imagem: urlAbsoluta(capaImpressao.src),
+    tipo: d.tipo,
+    areaUtil: d.area_util,
+    dormitorios: d.dormitorios,
+    banheiros: d.banheiros,
+    bairroNome,
+    valor: d.valor,
+    exibirValor: d.exibir_valor,
+    vendido,
+    publicadoEm: d.publicado_em,
+    atualizadoEm: d.atualizado_em,
+  }),
+];
+
+const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
+---
+
+<Base
+  titulo={tituloMeta}
+  descricao={descricaoMeta}
+  imagemOg={`/og/${imovel.id}.png`}
+  dataModificacao={d.atualizado_em}
+  schemaExtra={schemaExtra}
+>
+  <div class="apenas-tela">
+    <article class="container pagina-imovel" data-imovel-view data-ref={d.ref} data-status={d.status}>
+      <Breadcrumbs
+        trilha={[
+          { nome: "Início", href: "/" },
+          vendido ? { nome: "Vendidos", href: "/vendidos" } : { nome: "Imóveis à venda", href: "/imoveis" },
+          { nome: d.ref },
+        ]}
+      />
+
+      <header class="pagina-imovel__cabeca">
+        <p class="pagina-imovel__selos">
+          {vendido && <SeloVendido dias={dias} quando={quando} />}
+          {reservado && <span class="selo selo--reservado">Reservado</span>}
+          {!vendido && !reservado && <span class="selo selo--disponivel">Disponível</span>}
+          {d.exclusivo && !vendido && <span class="selo selo--exclusivo">Exclusivo</span>}
+          {d.placeholder && <span class="selo selo--exemplo">Imóvel de exemplo</span>}
+          <span class="dado pagina-imovel__ref">{d.ref}</span>
+        </p>
+        <h1>{vendido ? `Vendido: ${d.titulo}` : d.titulo}</h1>
+        <p class="pagina-imovel__local">
+          {condominio ? `${condominio.data.nome} · ` : ""}{bairroNome}, {d.cidade}/{d.uf}
+        </p>
+      </header>
+
+      <div class="pagina-imovel__grade">
+        <div class="pagina-imovel__galeria">
+          <GaleriaFotos fotos={d.fotos} vendido={vendido}>
+            {vendido && <SeloVendido sobreposto dias={dias} quando={quando} />}
+          </GaleriaFotos>
+        </div>
+
+        <aside class="pagina-imovel__painel">
+          {
+            vendido ? (
+              <div class="painel-valor painel-valor--vendido">
+                <p class="rotulo">Resultado</p>
+                <p class="painel-valor__destaque dado">
+                  {dias ? `Vendido em ${dias} dias` : "Vendido"}
+                  {quando && <span class="painel-valor__quando"> · {quando}</span>}
+                </p>
+                {d.exibir_valor && <p class="painel-valor__linha dado">Valor de venda: {precoBRL(d.valor)}</p>}
+                {!d.exibir_valor && (
+                  <p class="painel-valor__nota">O valor final da venda é dado privado das partes.</p>
+                )}
+              </div>
+            ) : (
+              <div class="painel-valor">
+                <p class="rotulo">Valor</p>
+                <p class="painel-valor__preco preco">{d.exibir_valor ? precoBRL(d.valor) : "Consulte"}</p>
+                {typeof d.valor_condominio === "number" && d.valor_condominio > 0 && (
+                  <p class="painel-valor__linha dado">Condomínio {precoBRL(d.valor_condominio)}/mês</p>
+                )}
+                {typeof d.valor_iptu === "number" && d.valor_iptu > 0 && (
+                  <p class="painel-valor__linha dado">IPTU {precoBRL(d.valor_iptu)}/mês</p>
+                )}
+              </div>
+            )
+          }
+
+          <div class="pagina-imovel__ctas">
+            {
+              vendido ? (
+                <>
+                  <a class="botao botao--sinal botao--largo" href="/avaliacao">
+                    Tem um imóvel parecido? Descubra quanto vale
+                  </a>
+                  <BotaoWhatsApp
+                    largo
+                    variante="contorno"
+                    mensagem={`Olá, Felipe. Vi que você vendeu o ${d.ref} (${condominio?.data.nome ?? bairroNome}) e quero conversar sobre vender o meu.`}
+                    refImovel={d.ref}
+                    statusImovel={d.status}
+                  />
+                </>
+              ) : (
+                <>
+                  <BotaoWhatsApp
+                    largo
+                    variante="sinal"
+                    rotulo="Falar sobre este imóvel"
+                    mensagem={mensagemImovel(d.ref, d.titulo)}
+                    refImovel={d.ref}
+                    statusImovel={d.status}
+                  />
+                  <BotaoWhatsApp
+                    largo
+                    variante="tinta"
+                    rotulo="Agendar visita"
+                    mensagem={mensagemVisita(d.ref)}
+                    refImovel={d.ref}
+                    statusImovel={d.status}
+                  />
+                  <button class="botao botao--contorno botao--largo" type="button" data-imprimir-ficha data-ref={d.ref}>
+                    Ficha para parceiro (imprimir)
+                  </button>
+                </>
+              )
+            }
+          </div>
+
+          <p class="pagina-imovel__resumo dado">{linhaResumo(d)}</p>
+        </aside>
+      </div>
+
+      <section class="pagina-imovel__secao">
+        <h2>Sobre o imóvel</h2>
+        {d.descricao.split(/\n\s*\n/).map((par) => <p>{par.trim()}</p>)}
+        {
+          d.depoimento_vendedor && (
+            <blockquote class="pagina-imovel__depoimento">
+              <p>“{d.depoimento_vendedor}”</p>
+              <cite>Vendedor do {d.ref} — depoimento publicado com autorização</cite>
+            </blockquote>
+          )
+        }
+      </section>
+
+      <section class="pagina-imovel__secao">
+        <FichaTecnica imovel={imovel} />
+      </section>
+
+      {
+        (d.caracteristicas.length > 0 || d.condominio_lazer.length > 0) && (
+          <section class="pagina-imovel__secao pagina-imovel__chips">
+            {d.caracteristicas.length > 0 && (
+              <div>
+                <h2 class="rotulo">Características</h2>
+                <p>
+                  {d.caracteristicas.map((c) => (
+                    <span class="chip">{c}</span>
+                  ))}
+                </p>
+              </div>
+            )}
+            {d.condominio_lazer.length > 0 && (
+              <div>
+                <h2 class="rotulo">Lazer do condomínio</h2>
+                <p>
+                  {d.condominio_lazer.map((c) => (
+                    <span class="chip">{c}</span>
+                  ))}
+                </p>
+              </div>
+            )}
+          </section>
+        )
+      }
+
+      {
+        condominio && (
+          <section class="pagina-imovel__secao bloco-condominio">
+            <h2>Sobre o {condominio.data.nome}</h2>
+            <p>{condominio.data.descricao.split(/\n\s*\n/)[0]}</p>
+            <p class="bloco-condominio__dados dado">
+              {condominio.data.tipologias.join(" · ")}
+              {condominio.data.tempo_medio_venda_dias
+                ? ` · tempo médio de venda: ${condominio.data.tempo_medio_venda_dias} dias`
+                : ""}
+            </p>
+            <a href={`/condominio/${condominio.id}`}>Ver página do condomínio →</a>
+          </section>
+        )
+      }
+
+      <section class="pagina-imovel__secao">
+        <h2>Onde fica</h2>
+        <MiniMapa bairroSlug={d.bairro} />
+        {bairroPagina && <p><a href={`/regiao/${bairroPagina.id}`}>Conheça o {bairroNome} →</a></p>}
+      </section>
+
+      {
+        semelhantes.length > 0 && (
+          <section class="pagina-imovel__secao">
+            <div class="secao__cabeca">
+              <h2>Imóveis semelhantes</h2>
+              <a href="/imoveis">Ver todos →</a>
+            </div>
+            <div class="grade grade--3">
+              {semelhantes.map((s) => (
+                <CardImovel imovel={s} />
+              ))}
+            </div>
+          </section>
+        )
+      }
+
+      <section class="pagina-imovel__secao pagina-imovel__assinatura">
+        <AssinaturaLegal variante="bloco" />
+      </section>
+    </article>
+  </div>
+
+  {
+    !vendido && (
+      <section id="ficha-impressao" aria-hidden="true">
+        <header class="ficha-imp__topo">
+          <div>
+            <p class="ficha-imp__nome">{SITE.marcaPublica}</p>
+            <p class="ficha-imp__creci">{SITE.expressaoObrigatoria} · {SITE.creci}</p>
+          </div>
+          <p class="ficha-imp__ref">{d.ref}</p>
+        </header>
+
+        <img class="ficha-imp__foto" src={capaImpressao.src} alt={d.fotos[0].alt} />
+
+        <h1 class="ficha-imp__titulo">{d.titulo}</h1>
+        <p class="ficha-imp__local">
+          {condominio ? `${condominio.data.nome} · ` : ""}
+          {bairroNome}, {d.cidade}/{d.uf}
+        </p>
+
+        <p class="ficha-imp__valor">
+          {d.exibir_valor ? precoBRL(d.valor) : "Valor sob consulta"}
+          {typeof d.valor_condominio === "number" && d.valor_condominio > 0
+            ? ` · Cond. ${precoBRL(d.valor_condominio)}/mês`
+            : ""}
+          {typeof d.valor_iptu === "number" && d.valor_iptu > 0 ? ` · IPTU ${precoBRL(d.valor_iptu)}/mês` : ""}
+        </p>
+
+        <table class="ficha-imp__tabela">
+          <tbody>
+            <tr><th>Tipo</th><td>{TIPO_LABEL[d.tipo]}</td><th>Área útil</th><td>{d.area_util} m²</td></tr>
+            <tr>
+              <th>Dormitórios</th><td>{d.dormitorios}{d.suites > 0 ? ` (${d.suites} suíte${d.suites > 1 ? "s" : ""})` : ""}</td>
+              <th>Banheiros</th><td>{d.banheiros}</td>
+            </tr>
+            <tr>
+              <th>Vagas</th><td>{d.vagas}{d.vaga_coberta ? " coberta(s)" : ""}</td>
+              <th>Condições</th>
+              <td>
+                {[
+                  d.aceita_financiamento ? "financiamento" : null,
+                  d.aceita_fgts ? "FGTS" : null,
+                  d.aceita_permuta ? "estuda permuta" : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "—"}
+              </td>
+            </tr>
+            {d.registro_incorporacao && (
+              <tr><th>Reg. incorporação</th><td colspan="3">{d.registro_incorporacao}</td></tr>
+            )}
+          </tbody>
+        </table>
+
+        <p class="ficha-imp__descricao">{d.descricao.split(/\n\s*\n/)[0]}</p>
+
+        <footer class="ficha-imp__rodape">
+          <p>Ficha para parceria entre corretores — interessados falam direto comigo.</p>
+          <p class="ficha-imp__url">{urlPublica.replace("https://", "")}</p>
+        </footer>
+      </section>
+    )
+  }
+</Base>
+
+<style>
+  .pagina-imovel__cabeca {
+    display: grid;
+    gap: var(--esp-2);
+    margin-bottom: var(--esp-5);
+  }
+
+  .pagina-imovel__selos {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esp-2);
+    max-width: none;
+  }
+
+  .pagina-imovel__ref {
+    color: var(--text-low);
+    font-size: 0.9rem;
+  }
+
+  .pagina-imovel__local {
+    color: var(--text-mid);
+  }
+
+  .pagina-imovel__grade {
+    display: grid;
+    gap: var(--esp-5);
+    margin-bottom: var(--esp-6);
+  }
+
+  @media (min-width: 64em) {
+    .pagina-imovel__grade {
+      grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+      align-items: start;
+    }
+  }
+
+  .pagina-imovel__painel {
+    display: grid;
+    gap: var(--esp-4);
+    position: sticky;
+    top: 84px;
+  }
+
+  .painel-valor {
+    border: 1px solid var(--line);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-4) var(--esp-5);
+    display: grid;
+    gap: var(--esp-1);
+  }
+
+  .painel-valor__preco {
+    font-size: 2rem;
+  }
+
+  .painel-valor__destaque {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .painel-valor__quando {
+    color: var(--text-mid);
+    font-size: 1.1rem;
+  }
+
+  .painel-valor__linha {
+    font-size: 0.92rem;
+    color: var(--text-mid);
+  }
+
+  .painel-valor__nota {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+  }
+
+  .pagina-imovel__ctas {
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .pagina-imovel__resumo {
+    color: var(--text-mid);
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  .pagina-imovel__secao {
+    margin-block: var(--esp-6);
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .pagina-imovel__chips p {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-2);
+    max-width: none;
+    margin-top: var(--esp-2);
+  }
+
+  .pagina-imovel__depoimento {
+    border-left: 3px solid var(--signal);
+    padding-left: var(--esp-4);
+    color: var(--text-mid);
+  }
+
+  .pagina-imovel__depoimento cite {
+    font-size: 0.85rem;
+    font-style: normal;
+    color: var(--text-low);
+  }
+
+  .bloco-condominio {
+    background: var(--surface-2);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-5);
+  }
+
+  .bloco-condominio__dados {
+    font-size: 0.9rem;
+    color: var(--text-mid);
+  }
+
+  .pagina-imovel__assinatura {
+    border-top: 1px solid var(--line);
+    padding-top: var(--esp-5);
+  }
+</style>
+
+<style is:global>
+  /* ===== Ficha para parceiro: A4 limpo via window.print() (seção 9.4) =====
+     Sem navegação, sem CTA, sem cor de fundo e SEM TELEFONE (regra 8.5). */
+  #ficha-impressao {
+    display: none;
+  }
+
+  @media print {
+    @page {
+      size: A4;
+      margin: 14mm;
+    }
+
+    .pular-conteudo,
+    header.cabecalho,
+    footer.rodape,
+    .apenas-tela {
+      display: none !important;
+    }
+
+    body {
+      background: #fff !important;
+    }
+
+    #ficha-impressao {
+      display: block;
+      font-family: var(--f-texto);
+      color: #111;
+    }
+
+    .ficha-imp__topo {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 2px solid #111;
+      padding-bottom: 4mm;
+      margin-bottom: 5mm;
+    }
+
+    .ficha-imp__nome {
+      font-family: var(--f-display);
+      font-size: 16pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Proporção legal travada também na impressão (≥25% do nome). */
+    .ficha-imp__creci {
+      font-family: var(--f-display);
+      font-size: 10pt;
+      font-weight: 600;
+    }
+
+    .ficha-imp__ref {
+      font-family: var(--f-mono);
+      font-size: 14pt;
+    }
+
+    .ficha-imp__foto {
+      width: 100%;
+      max-height: 95mm;
+      object-fit: cover;
+      margin-bottom: 4mm;
+    }
+
+    .ficha-imp__titulo {
+      font-family: var(--f-display);
+      font-size: 16pt;
+      margin-bottom: 1mm;
+    }
+
+    .ficha-imp__local {
+      font-size: 11pt;
+      margin-bottom: 3mm;
+    }
+
+    .ficha-imp__valor {
+      font-family: var(--f-mono);
+      font-size: 13pt;
+      margin-bottom: 4mm;
+    }
+
+    .ficha-imp__tabela {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+      margin-bottom: 4mm;
+    }
+
+    .ficha-imp__tabela th,
+    .ficha-imp__tabela td {
+      border: 1px solid #999;
+      padding: 2mm 3mm;
+      text-align: left;
+    }
+
+    .ficha-imp__tabela th {
+      font-family: var(--f-display);
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .ficha-imp__tabela td {
+      font-family: var(--f-mono);
+    }
+
+    .ficha-imp__descricao {
+      font-size: 10.5pt;
+      line-height: 1.5;
+      margin-bottom: 6mm;
+      max-width: none;
+    }
+
+    .ficha-imp__rodape {
+      border-top: 1px solid #999;
+      padding-top: 3mm;
+      font-size: 9pt;
+    }
+
+    .ficha-imp__url {
+      font-family: var(--f-mono);
+    }
+  }
+</style>
+
+<script>
+  const botaoFicha = document.querySelector<HTMLButtonElement>("[data-imprimir-ficha]");
+  botaoFicha?.addEventListener("click", () => {
+    const medir = (window as any).medir as ((ev: string, p?: object) => void) | undefined;
+    medir?.("ficha_parceiro_impressa", { ref: botaoFicha.dataset.ref });
+    window.print();
+  });
+
+  // imovel_view com ref e status (seção 11).
+  const dados = document.querySelector<HTMLElement>("[data-imovel-view]");
+  if (dados) {
+    const medir = (window as any).medir as ((ev: string, p?: object) => void) | undefined;
+    medir?.("imovel_view", { ref: dados.dataset.ref, status: dados.dataset.status });
+  }
+</script>
