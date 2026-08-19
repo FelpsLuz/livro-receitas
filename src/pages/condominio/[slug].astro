@@ -1,0 +1,285 @@
+---
+/**
+ * /condominio/[slug] — o MOTOR ORGÂNICO (seção 5): quem busca o nome de um
+ * condomínio já decidiu onde quer morar. Template replicável: adicionar um
+ * condomínio = adicionar um arquivo na coleção, sem tocar em código.
+ */
+import { getCollection, getEntry, type CollectionEntry } from "astro:content";
+import { Image } from "astro:assets";
+import Base from "../../layouts/Base.astro";
+import Breadcrumbs from "../../components/Breadcrumbs.astro";
+import CardImovel from "../../components/CardImovel.astro";
+import FaqBloco from "../../components/FaqBloco.astro";
+import SeloVendido from "../../components/SeloVendido.astro";
+import { imoveisDoCondominio, diasVenda } from "../../lib/imoveis";
+import { faixaCurta, mesAno, TIPO_LABEL } from "../../lib/formatar";
+import { nomeDoBairro } from "../../lib/territorio";
+import { TITULOS, schemaPlace, schemaFaq, urlCanonica } from "../../lib/seo";
+import { SITE } from "../../config";
+
+export async function getStaticPaths() {
+  const condominios = await getCollection("condominios");
+  return condominios.map((condominio) => ({ params: { slug: condominio.id }, props: { condominio } }));
+}
+
+interface Props {
+  condominio: CollectionEntry<"condominios">;
+}
+
+const { condominio } = Astro.props;
+const d = condominio.data;
+const bairroNome = nomeDoBairro(d.bairro);
+const bairroPagina = await getEntry("bairros", d.bairro);
+
+const todos = await imoveisDoCondominio(condominio.id);
+const aVenda = todos.filter((i) => i.data.status === "disponivel" || i.data.status === "reservado");
+const vendidosAqui = todos
+  .filter((i) => i.data.status === "vendido")
+  .sort((a, b) => (b.data.vendido_em?.getTime() ?? 0) - (a.data.vendido_em?.getTime() ?? 0));
+
+const rotuloTipo = d.tipo === "vertical" ? "Apartamentos" : "Casas";
+const titulo =
+  d.tipo === "vertical"
+    ? TITULOS.condominio(d.nome, bairroNome)
+    : `Casas à venda no ${d.nome}, ${bairroNome} — ${SITE.cidade}`;
+
+const primeiroParagrafo = d.descricao.split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
+const descricaoMeta = primeiroParagrafo.slice(0, 158);
+
+// FAQ com o nome do condomínio interpolado onde houver {nome}.
+const faqs = d.faq.map((f) => ({
+  pergunta: f.pergunta.replaceAll("{nome}", d.nome),
+  resposta: f.resposta.replaceAll("{nome}", d.nome),
+}));
+
+const canonica = urlCanonica(Astro.url.pathname);
+const schemaExtra: object[] = [
+  schemaPlace({ nome: d.nome, descricao: descricaoMeta, url: canonica, bairroNome }),
+];
+if (faqs.length > 0) schemaExtra.push(schemaFaq(faqs));
+
+const dadosRapidos: [string, string][] = [];
+dadosRapidos.push(["Tipo", d.tipo === "vertical" ? "Vertical" : d.tipo === "horizontal" ? "Horizontal" : "Vilagio"]);
+if (d.ano_entrega) dadosRapidos.push(["Entrega", String(d.ano_entrega)]);
+if (d.numero_unidades) dadosRapidos.push(["Unidades", String(d.numero_unidades)]);
+if (d.faixa_preco_min && d.faixa_preco_max)
+  dadosRapidos.push(["Faixa praticada", faixaCurta(d.faixa_preco_min, d.faixa_preco_max)]);
+if (d.tempo_medio_venda_dias) dadosRapidos.push(["Tempo médio de venda", `${d.tempo_medio_venda_dias} dias`]);
+---
+
+<Base titulo={titulo} descricao={descricaoMeta} dataModificacao={d.atualizado_em} schemaExtra={schemaExtra}>
+  <article class="container secao condo">
+    <Breadcrumbs
+      trilha={[
+        { nome: "Início", href: "/" },
+        bairroPagina ? { nome: bairroNome, href: `/regiao/${d.bairro}` } : { nome: bairroNome },
+        { nome: d.nome },
+      ]}
+    />
+
+    <header class="condo__cabeca">
+      <p class="rotulo">Condomínio · {bairroNome}</p>
+      <h1>{rotuloTipo} à venda no {d.nome}</h1>
+      {d.placeholder && <p><span class="selo selo--exemplo">Conteúdo de exemplo — substituir por condomínio real</span></p>}
+    </header>
+
+    <div class="condo__grade">
+      <div class="condo__texto">
+        {d.descricao.split(/\n\s*\n/).map((par) => <p>{par.trim()}</p>)}
+
+        {
+          d.tipologias.length > 0 && (
+            <p class="condo__tipologias">
+              <span class="rotulo">Tipologias</span>
+              {d.tipologias.map((t) => (
+                <span class="chip dado">{t}</span>
+              ))}
+            </p>
+          )
+        }
+
+        {
+          d.lazer.length > 0 && (
+            <p class="condo__tipologias">
+              <span class="rotulo">Estrutura</span>
+              {d.lazer.map((l) => (
+                <span class="chip">{l}</span>
+              ))}
+            </p>
+          )
+        }
+      </div>
+
+      <aside class="condo__lado">
+        {
+          d.foto_capa && (
+            <Image
+              src={d.foto_capa}
+              alt={`Foto do condomínio ${d.nome}`}
+              widths={[420, 680]}
+              sizes="(min-width: 64em) 380px, 92vw"
+              loading="eager"
+              class="condo__foto"
+            />
+          )
+        }
+        <dl class="ficha-grade">
+          {
+            dadosRapidos.map(([rotulo, valor]) => (
+              <div>
+                <dt>{rotulo}</dt>
+                <dd>{valor}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </aside>
+    </div>
+
+    {
+      aVenda.length > 0 && (
+        <section class="condo__secao">
+          <div class="secao__cabeca">
+            <h2>À venda no {d.nome} agora</h2>
+            <a href={`/imoveis?condominio=${condominio.id}`}>Ver na vitrine →</a>
+          </div>
+          <div class="grade grade--3">
+            {aVenda.map((imovel) => (
+              <CardImovel imovel={imovel} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      vendidosAqui.length > 0 && (
+        <section class="condo__secao condo__vendas">
+          <h2>Já vendi neste condomínio</h2>
+          <ul role="list">
+            {vendidosAqui.map((imovel) => {
+              const dias = diasVenda(imovel);
+              return (
+                <li>
+                  <a href={`/imovel/${imovel.id}`}>
+                    <SeloVendido dias={dias} quando={imovel.data.vendido_em ? mesAno(imovel.data.vendido_em) : null} />
+                    <span class="condo__vendas-desc">
+                      {TIPO_LABEL[imovel.data.tipo]} · {imovel.data.area_util} m² · {imovel.data.dormitorios} dorm.
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+          <p class="condo__vendas-nota">
+            Preço ancorado no que realmente fechou negócio aqui — não no que está anunciado.
+          </p>
+        </section>
+      )
+    }
+
+    <FaqBloco faqs={faqs} titulo={`Perguntas sobre o ${d.nome}`} />
+
+    <section class="condo__cta">
+      <h2>Tem um imóvel no {d.nome}? Descubra quanto vale hoje.</h2>
+      <p>
+        Avaliação gratuita com base nas vendas reais do próprio condomínio
+        {vendidosAqui.length > 0 ? " — incluindo as que eu mesmo concluí aqui" : ""}.
+      </p>
+      <a class="botao botao--sinal" href="/avaliacao">Pedir avaliação gratuita</a>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .condo__cabeca {
+    display: grid;
+    gap: var(--esp-2);
+    margin-bottom: var(--esp-5);
+  }
+
+  .condo__grade {
+    display: grid;
+    gap: var(--esp-6);
+    margin-bottom: var(--esp-6);
+  }
+
+  @media (min-width: 64em) {
+    .condo__grade {
+      grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+      align-items: start;
+    }
+  }
+
+  .condo__texto {
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .condo__tipologias {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esp-2);
+    max-width: none;
+    margin-top: var(--esp-2);
+  }
+
+  .condo__lado {
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .condo__foto {
+    border-radius: var(--raio-foto);
+  }
+
+  .condo__secao {
+    margin-block: var(--esp-6);
+  }
+
+  .condo__vendas ul {
+    list-style: none;
+    margin: var(--esp-4) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .condo__vendas a {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esp-3);
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: var(--raio);
+    padding: var(--esp-3) var(--esp-4);
+  }
+
+  .condo__vendas a:hover {
+    border-color: var(--ink-line);
+  }
+
+  .condo__vendas-desc {
+    color: var(--text-mid);
+    font-size: 0.95rem;
+  }
+
+  .condo__vendas-nota {
+    margin-top: var(--esp-3);
+    color: var(--text-mid);
+    font-size: 0.95rem;
+  }
+
+  .condo__cta {
+    margin-top: var(--esp-7);
+    background: var(--surface-2);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-6);
+    display: grid;
+    gap: var(--esp-3);
+    justify-items: start;
+  }
+</style>

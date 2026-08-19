@@ -1,0 +1,97 @@
+---
+/**
+ * /vendidos — portfólio de prova (seção 9.5). Agregados SEMPRE calculados
+ * da coleção, nunca digitados; com menos de 3 casos, só os cases aparecem.
+ */
+import Base from "../layouts/Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import CardImovel from "../components/CardImovel.astro";
+import { imoveisVendidos, agregadosVendas } from "../lib/imoveis";
+import { nomeDoBairro } from "../lib/territorio";
+import { TITULOS } from "../lib/seo";
+import { SITE } from "../config";
+
+const vendidos = await imoveisVendidos();
+const agregados = await agregadosVendas();
+
+const descricao = `Imóveis vendidos por ${SITE.marcaPublica} na zona oeste de ${SITE.cidade}, com o prazo real de cada venda. Intermediações reais, datadas e com autorização escrita. ${SITE.creci}.`;
+---
+
+<Base titulo={TITULOS.vendidos()} descricao={descricao}>
+  <section class="secao container">
+    <Breadcrumbs trilha={[{ nome: "Início", href: "/" }, { nome: "Vendidos" }]} />
+
+    <header class="vendidos__cabeca">
+      <p class="rotulo">Prova, não promessa</p>
+      <h1>Imóveis vendidos — com o prazo real de cada venda</h1>
+      <p>
+        Cada case abaixo é uma intermediação real, datada e feita com autorização escrita. O valor
+        final de venda é dado privado das partes — o que eu mostro é o que importa para quem quer
+        vender: em quanto tempo vendeu.
+      </p>
+      {
+        agregados && (
+          <p class="vendidos__agregados dado">
+            {agregados.total} imóveis vendidos
+            {agregados.medianaDias ? ` · mediana de ${agregados.medianaDias} dias` : ""}
+            {" · "}
+            {agregados.bairros.map((b) => nomeDoBairro(b)).join(", ")}
+          </p>
+        )
+      }
+    </header>
+
+    {
+      vendidos.length > 0 ? (
+        <div class="grade grade--3">
+          {vendidos.map((imovel, i) => (
+            <CardImovel imovel={imovel} prioridade={i === 0} />
+          ))}
+        </div>
+      ) : (
+        <p>Os primeiros cases com prazo de venda serão publicados aqui.</p>
+      )
+    }
+  </section>
+
+  <section class="secao container vendidos__fecho">
+    <h2>Seu imóvel pode ser o próximo desta página.</h2>
+    <p>
+      A avaliação é gratuita e baseada nas vendas reais do seu condomínio e do seu bairro — as
+      mesmas que você viu acima.
+    </p>
+    <a class="botao botao--sinal vendidos__cta" href="/avaliacao">Descubra quanto vale seu imóvel</a>
+  </section>
+</Base>
+
+<style>
+  .vendidos__cabeca {
+    display: grid;
+    gap: var(--esp-3);
+    max-width: 48rem;
+    margin-bottom: var(--esp-6);
+  }
+
+  .vendidos__agregados {
+    font-size: 1.05rem;
+    color: var(--ink);
+    border-left: 3px solid var(--signal);
+    padding-left: var(--esp-3);
+  }
+
+  .vendidos__fecho {
+    text-align: center;
+    display: grid;
+    gap: var(--esp-3);
+    justify-items: center;
+    background: var(--surface-2);
+    border-radius: var(--raio-foto);
+    margin-inline: auto;
+    max-width: var(--largura-max);
+  }
+
+  .vendidos__cta {
+    font-size: 1.1rem;
+    padding: 0.9em 1.8em;
+  }
+</style>

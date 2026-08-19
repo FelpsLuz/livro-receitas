@@ -98,9 +98,9 @@ export async function imoveisDoBairro(slug: string): Promise<Imovel[]> {
   return lista.filter((i) => i.data.bairro === slug);
 }
 
-/** Contagem de disponíveis por bairro — alimenta o mapa e a grade da home. */
+/** Contagem de DISPONÍVEIS por bairro — alimenta o mapa e a grade da home. */
 export async function contagemPorBairro(): Promise<Map<string, number>> {
-  const disponiveis = await imoveisVitrine();
+  const disponiveis = await imoveisDisponiveis();
   const mapa = new Map<string, number>();
   for (const i of disponiveis) {
     mapa.set(i.data.bairro, (mapa.get(i.data.bairro) ?? 0) + 1);

@@ -1,34 +1,179 @@
 ---
 /**
- * Home provisória da Fase 1 — a home definitiva (mapa do território,
- * CTA de captação, vendidos, bairros e método) é montada na Fase 3,
- * na ordem exata da seção 9.1.
+ * Home (seção 9.1) — ordem exata:
+ * 1 barra fixa (layout) · 2 hero com o mapa do território · 3 CTA de captação
+ * com formulário curto · 4 vendidos recentemente (a prova encosta no pedido)
+ * · 5 destaques · 6 bairros do território · 7 como eu trabalho · 8 rodapé.
  */
+import { getCollection } from "astro:content";
+import { Image } from "astro:assets";
 import Base from "../layouts/Base.astro";
-import AssinaturaLegal from "../components/AssinaturaLegal.astro";
+import MapaTerritorio from "../components/MapaTerritorio.astro";
+import ProvaVendidos from "../components/ProvaVendidos.astro";
 import CardImovel from "../components/CardImovel.astro";
-import { destaquesHome } from "../lib/imoveis";
+import { destaquesHome, agregadosVendas, contagemPorBairro, faixaDoBairro, imoveisVendidos } from "../lib/imoveis";
+import { faixaCurta } from "../lib/formatar";
+import { TERRITORIO, bairroDoTerritorio, nomeDoBairro } from "../lib/territorio";
 import { TITULOS } from "../lib/seo";
 import { SITE } from "../config";
 
 const destaques = await destaquesHome();
-const descricao = `Corretor de imóveis em ${SITE.cidade}/${SITE.uf}, especialista no vetor oeste e noroeste da cidade. Venda de apartamentos e casas em condomínio e avaliação gratuita de imóveis. ${SITE.creci}.`;
+const agregados = await agregadosVendas();
+const temVendidos = (await imoveisVendidos()).length > 0;
+const contagem = await contagemPorBairro();
+
+const bairrosConteudo = await getCollection("bairros");
+const bairrosGrade = await Promise.all(
+  bairrosConteudo.map(async (b) => {
+    const faixaReal = await faixaDoBairro(b.id);
+    const tipica = bairroDoTerritorio(b.id)?.faixaTipica ?? null;
+    return {
+      entrada: b,
+      faixa: faixaReal ?? tipica,
+      faixaEhReal: Boolean(faixaReal),
+      quantos: contagem.get(b.id) ?? 0,
+    };
+  })
+);
+const demaisBairros = TERRITORIO.filter(
+  (t) => t.camada !== "alto-padrao" && !bairrosConteudo.some((b) => b.id === t.slug)
+).map((t) => t.nome);
+
+const condominios = await getCollection("condominios");
+const sugestoes = [...condominios.map((c) => c.data.nome), ...TERRITORIO.map((b) => b.nome)];
+
+const descricao = `Corretor de imóveis em ${SITE.cidade}/${SITE.uf}, especialista no vetor oeste e noroeste: preço por condomínio, vendas com prazo real e avaliação gratuita de imóveis. ${SITE.creci}.`;
+
+const metodo = [
+  {
+    titulo: "Preço ancorado em venda real",
+    texto:
+      "Avalio pelo que fechou negócio no seu condomínio e no seu bairro — não pelo que está anunciado e parado. É por isso que os imóveis que eu pego vendem.",
+  },
+  {
+    titulo: "Anúncio que gera confiança",
+    texto:
+      "Ficha técnica completa, fotos que mostram o imóvel de verdade e uma página própria por imóvel, com preview limpo no WhatsApp.",
+  },
+  {
+    titulo: "Atendimento direto, sem repasse",
+    texto:
+      "Quem responde no WhatsApp é o corretor que conhece o imóvel e o território — do primeiro contato à assinatura.",
+  },
+  {
+    titulo: "Rede de parceria que multiplica alcance",
+    texto:
+      "Divulgo para corretores parceiros com ficha pronta para repasse. Mais gente vendendo o seu imóvel, com o controle em um lugar só.",
+  },
+];
 ---
 
 <Base titulo={TITULOS.home()} descricao={descricao}>
-  <section class="secao container">
-    <AssinaturaLegal variante="rodape" />
-    <h1>O corretor do vetor oeste de {SITE.cidade}</h1>
-    <p>
-      Preço por condomínio, venda com prazo real e atendimento direto — do Jardim Brasilândia ao
-      entorno da Facens.
-    </p>
-    <p class="acoes">
-      <a class="botao botao--sinal" href="/avaliacao">Descubra quanto vale seu imóvel</a>
-      <a class="botao botao--contorno" href="/imoveis">Ver imóveis à venda</a>
-    </p>
+  <!-- 2. HERO: o mapa do território -->
+  <section class="hero">
+    <div class="container hero__grade">
+      <div class="hero__texto">
+        <p class="rotulo">{SITE.expressaoObrigatoria} · {SITE.cidade} zona oeste</p>
+        <h1>O corretor que domina o vetor oeste de {SITE.cidade}</h1>
+        <p class="hero__sub">
+          Preço por condomínio, venda com prazo provado e atendimento direto — do Jardim
+          Brasilândia ao entorno da Facens.
+        </p>
+        <p class="hero__acoes">
+          <a class="botao botao--sinal" href="/avaliacao">Descubra quanto vale seu imóvel</a>
+          <a class="botao botao--contorno" href="/imoveis">Ver imóveis à venda</a>
+        </p>
+      </div>
+      <div class="hero__mapa">
+        <MapaTerritorio />
+      </div>
+    </div>
   </section>
 
+  <!-- 3. CTA DE CAPTAÇÃO (prioridade máxima) + 4. VENDIDOS RECENTEMENTE -->
+  <section class="captacao">
+    <div class="container captacao__grade">
+      <div class="captacao__form-bloco">
+        <h2>Quanto vale seu imóvel hoje?</h2>
+        <p>
+          Me diga onde fica e como é. Eu comparo com as vendas reais da região e te devolvo a faixa
+          de valor — grátis e sem compromisso.
+        </p>
+        <form id="form-captacao" novalidate>
+          <div class="campo">
+            <label for="c-localizacao">Bairro ou condomínio</label>
+            <input
+              type="text"
+              id="c-localizacao"
+              name="localizacao"
+              list="c-lista-locais"
+              autocomplete="off"
+              required
+              placeholder="Ex.: Jardim Brasilândia"
+            />
+            <datalist id="c-lista-locais">
+              {sugestoes.map((s) => <option value={s} />)}
+            </datalist>
+          </div>
+          <div class="captacao__dupla">
+            <div class="campo">
+              <label for="c-tipo">Tipo</label>
+              <select id="c-tipo" name="tipo" required>
+                <option value="">Selecione…</option>
+                <option value="Apartamento">Apartamento</option>
+                <option value="Casa em condomínio">Casa em condomínio</option>
+                <option value="Casa">Casa de rua</option>
+                <option value="Terreno">Terreno</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="c-dormitorios">Dormitórios</label>
+              <select id="c-dormitorios" name="dormitorios" required>
+                <option value="">Selecione…</option>
+                <option>1</option>
+                <option>2</option>
+                <option>3</option>
+                <option value="4 ou mais">4+</option>
+              </select>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="c-email">Seu e-mail</label>
+            <input type="email" id="c-email" name="email" autocomplete="email" required />
+          </div>
+          <div class="campo campo--consentimento">
+            <input type="checkbox" id="c-consentimento" name="consentimento" required />
+            <label for="c-consentimento">
+              Autorizo o uso destes dados só para preparar e enviar a avaliação do meu imóvel,
+              conforme a <a href="/politica-de-privacidade">política de privacidade</a>. (LGPD)
+            </label>
+          </div>
+          <button type="submit" class="botao botao--sinal botao--largo">
+            Pedir minha avaliação gratuita
+          </button>
+          <p class="captacao__alternativa">
+            Prefere contar mais detalhes? <a href="/avaliacao">Use o formulário completo</a>.
+          </p>
+        </form>
+      </div>
+
+      <!-- A prova encosta no pedido, de propósito. -->
+      <aside class="captacao__prova">
+        <h2 class="rotulo">Vendidos recentemente</h2>
+        <ProvaVendidos limite={3} />
+        {
+          agregados && (
+            <p class="captacao__agregados dado">
+              {agregados.total} imóveis vendidos · mediana de {agregados.medianaDias} dias
+            </p>
+          )
+        }
+        {temVendidos && <a class="captacao__link-vendidos" href="/vendidos">Ver todas as vendas concluídas →</a>}
+      </aside>
+    </div>
+  </section>
+
+  <!-- 5. IMÓVEIS EM DESTAQUE -->
   {
     destaques.length > 0 && (
       <section class="secao container">
@@ -37,25 +182,310 @@ const descricao = `Corretor de imóveis em ${SITE.cidade}/${SITE.uf}, especialis
           <a href="/imoveis">Ver todos →</a>
         </div>
         <div class="grade grade--3">
-          {destaques.map((imovel, i) => (
-            <CardImovel imovel={imovel} prioridade={i === 0} />
+          {destaques.map((imovel) => (
+            <CardImovel imovel={imovel} />
           ))}
         </div>
       </section>
     )
   }
+
+  <!-- 6. BAIRROS DO TERRITÓRIO -->
+  <section class="secao container">
+    <div class="secao__cabeca">
+      <h2>Bairros do território</h2>
+    </div>
+    <div class="grade grade--3">
+      {
+        bairrosGrade.map(({ entrada, faixa, faixaEhReal, quantos }) => (
+          <article class="cartao bairro-card">
+            <a href={`/regiao/${entrada.id}`}>
+              {entrada.data.foto_capa && (
+                <div class="bairro-card__foto">
+                  <Image
+                    src={entrada.data.foto_capa}
+                    alt={`Foto do bairro ${entrada.data.nome}`}
+                    widths={[420, 640]}
+                    sizes="(min-width: 64em) 360px, 92vw"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+              <div class="bairro-card__corpo">
+                <h3>{entrada.data.nome}</h3>
+                {faixa && (
+                  <p class="dado bairro-card__faixa">
+                    {faixaCurta(faixa.min, faixa.max)}
+                    {!faixaEhReal && <span class="bairro-card__nota"> · faixa da região</span>}
+                  </p>
+                )}
+                <p class="bairro-card__contagem">
+                  {quantos > 0 ? `${quantos} ${quantos === 1 ? "imóvel disponível" : "imóveis disponíveis"}` : "Consulte disponibilidade"}
+                </p>
+              </div>
+            </a>
+          </article>
+        ))
+      }
+    </div>
+    {
+      demaisBairros.length > 0 && (
+        <p class="bairros__demais">
+          Também atendo: {demaisBairros.join(", ")} — e os condomínios do entorno.
+        </p>
+      )
+    }
+  </section>
+
+  <!-- 7. COMO EU TRABALHO -->
+  <section class="metodo">
+    <div class="container">
+      <h2>Como eu trabalho</h2>
+      <div class="grade grade--4 metodo__grade">
+        {
+          metodo.map((bloco) => (
+            <div class="metodo__bloco">
+              <h3>{bloco.titulo}</h3>
+              <p>{bloco.texto}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
 </Base>
 
 <style>
-  .acoes {
+  .hero {
+    border-bottom: 1px solid var(--line);
+    padding-block: clamp(2rem, 5vw, 3.5rem);
+  }
+
+  .hero__grade {
+    display: grid;
+    gap: var(--esp-6);
+    align-items: center;
+  }
+
+  @media (min-width: 64em) {
+    .hero__grade {
+      grid-template-columns: minmax(320px, 2fr) 3fr;
+    }
+  }
+
+  .hero__texto {
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .hero__sub {
+    font-size: 1.15rem;
+    color: var(--text-mid);
+  }
+
+  .hero__acoes {
     display: flex;
     flex-wrap: wrap;
     gap: var(--esp-3);
-    margin-top: var(--esp-5);
     max-width: none;
   }
 
-  h1 {
+  .captacao {
+    background: var(--ink);
+    color: #fff;
+    padding-block: clamp(2.5rem, 6vw, 4rem);
+  }
+
+  .captacao__grade {
+    display: grid;
+    gap: var(--esp-6);
+  }
+
+  @media (min-width: 64em) {
+    .captacao__grade {
+      grid-template-columns: 3fr 2fr;
+      align-items: start;
+    }
+  }
+
+  .captacao__form-bloco h2 {
+    color: #fff;
+    margin-bottom: var(--esp-2);
+  }
+
+  .captacao__form-bloco > p {
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: var(--esp-5);
+  }
+
+  .captacao form {
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--raio-foto);
+    padding: clamp(1.25rem, 3vw, 2rem);
+  }
+
+  .captacao__dupla {
+    display: grid;
+    gap: 0 var(--esp-4);
+  }
+
+  @media (min-width: 30em) {
+    .captacao__dupla {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .captacao__alternativa {
+    margin-top: var(--esp-3);
+    font-size: 0.9rem;
+    color: var(--text-mid);
+    text-align: center;
+    max-width: none;
+  }
+
+  .captacao__prova {
+    display: grid;
+    gap: var(--esp-3);
+    align-content: start;
+  }
+
+  .captacao__prova > h2 {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .captacao__agregados {
+    color: #fff;
+    font-size: 1.02rem;
+    border-left: 3px solid var(--signal);
+    padding-left: var(--esp-3);
+  }
+
+  .captacao__link-vendidos {
+    color: #fff;
+  }
+
+  .bairro-card__foto {
+    aspect-ratio: 3 / 2;
+    background: var(--surface-2);
+  }
+
+  .bairro-card__foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .bairro-card__corpo {
+    padding: var(--esp-4);
+    display: grid;
+    gap: 0.3rem;
+  }
+
+  .bairro-card__faixa {
+    color: var(--signal);
+    font-weight: 500;
+  }
+
+  .bairro-card__nota {
+    color: var(--text-low);
+    font-weight: 400;
+    font-size: 0.85em;
+  }
+
+  .bairro-card__contagem {
+    font-size: 0.9rem;
+    color: var(--text-mid);
+  }
+
+  .bairro-card a:hover h3 {
+    text-decoration: underline;
+  }
+
+  .bairros__demais {
     margin-top: var(--esp-5);
+    color: var(--text-mid);
+    font-size: 0.95rem;
+  }
+
+  .metodo {
+    background: var(--surface-2);
+    padding-block: clamp(2.5rem, 6vw, 4rem);
+    margin-top: var(--esp-7);
+  }
+
+  .metodo h2 {
+    margin-bottom: var(--esp-5);
+  }
+
+  .metodo__grade {
+    gap: var(--esp-5);
+  }
+
+  .metodo__bloco {
+    display: grid;
+    gap: var(--esp-2);
+    align-content: start;
+  }
+
+  .metodo__bloco h3 {
+    font-size: 1.08rem;
+  }
+
+  .metodo__bloco p {
+    font-size: 0.95rem;
+    color: var(--text-mid);
   }
 </style>
+
+<script>
+  import { enviarLead, marcarConversao } from "../lib/cliente/envio";
+
+  const form = document.getElementById("form-captacao") as HTMLFormElement | null;
+
+  if (form) {
+    const medir = (ev: string, p?: object) => (window as any).medir?.(ev, p);
+
+    let iniciou = false;
+    form.addEventListener("focusin", () => {
+      if (!iniciou) {
+        iniciou = true;
+        medir("avaliacao_iniciada", { origem: "home" });
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const dados = new FormData(form);
+      const v = (nome: string) => String(dados.get(nome) ?? "");
+      const botao = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      botao.disabled = true;
+      botao.textContent = "Enviando…";
+
+      try {
+        await enviarLead({
+          assunto: `Avaliação (home) — ${v("localizacao")} (${v("tipo")})`,
+          emailRemetente: v("email"),
+          campos: [
+            ["Bairro/Condomínio", v("localizacao")],
+            ["Tipo", v("tipo")],
+            ["Dormitórios", v("dormitorios")],
+            ["E-mail", v("email")],
+            ["Origem", "formulário curto da home"],
+            ["Consentimento LGPD", "sim"],
+          ],
+        });
+        marcarConversao("home");
+        window.location.assign("/obrigado");
+      } catch {
+        botao.disabled = false;
+        botao.textContent = "Pedir minha avaliação gratuita";
+      }
+    });
+  }
+</script>

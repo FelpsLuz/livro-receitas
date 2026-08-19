@@ -1,0 +1,304 @@
+---
+/**
+ * /regiao/[bairro] — página de bairro (seções 5, 6.3 e 9.6).
+ * Template replicável; exibe faixa real praticada (dos imóveis), vendas
+ * concluídas no bairro, condomínios trabalhados e FAQ com schema.
+ */
+import { getCollection, type CollectionEntry } from "astro:content";
+import { Image } from "astro:assets";
+import Base from "../../layouts/Base.astro";
+import Breadcrumbs from "../../components/Breadcrumbs.astro";
+import CardImovel from "../../components/CardImovel.astro";
+import FaqBloco from "../../components/FaqBloco.astro";
+import SeloVendido from "../../components/SeloVendido.astro";
+import MiniMapa from "../../components/MiniMapa.astro";
+import { imoveisDoBairro, faixaDoBairro, diasVenda } from "../../lib/imoveis";
+import { faixaCurta, mesAno, TIPO_LABEL } from "../../lib/formatar";
+import { bairroDoTerritorio, CAMADA_LABEL } from "../../lib/territorio";
+import { TITULOS, schemaPlace, schemaFaq, urlCanonica } from "../../lib/seo";
+import { SITE } from "../../config";
+
+export async function getStaticPaths() {
+  const bairros = await getCollection("bairros");
+  return bairros.map((bairro) => ({ params: { bairro: bairro.id }, props: { bairro } }));
+}
+
+interface Props {
+  bairro: CollectionEntry<"bairros">;
+}
+
+const { bairro } = Astro.props;
+const d = bairro.data;
+const territorio = bairroDoTerritorio(bairro.id);
+
+const todos = await imoveisDoBairro(bairro.id);
+const aVenda = todos.filter((i) => i.data.status === "disponivel" || i.data.status === "reservado");
+const vendidosAqui = todos
+  .filter((i) => i.data.status === "vendido")
+  .sort((a, b) => (b.data.vendido_em?.getTime() ?? 0) - (a.data.vendido_em?.getTime() ?? 0));
+
+const condominiosDoBairro = (await getCollection("condominios")).filter((c) => c.data.bairro === bairro.id);
+
+// Faixa REAL praticada (calculada dos imóveis); fallback: faixa típica da camada (briefing).
+const faixaReal = await faixaDoBairro(bairro.id);
+const faixaTipica = territorio?.faixaTipica ?? null;
+
+const primeiroParagrafo = d.descricao.split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
+const descricaoMeta = primeiroParagrafo.slice(0, 158);
+
+const faqs = d.faq.map((f) => ({
+  pergunta: f.pergunta.replaceAll("{nome}", d.nome),
+  resposta: f.resposta.replaceAll("{nome}", d.nome),
+}));
+
+const canonica = urlCanonica(Astro.url.pathname);
+const schemaExtra: object[] = [
+  schemaPlace({ nome: `${d.nome}, ${SITE.cidade}`, descricao: descricaoMeta, url: canonica }),
+];
+if (faqs.length > 0) schemaExtra.push(schemaFaq(faqs));
+---
+
+<Base titulo={TITULOS.bairro(d.nome)} descricao={descricaoMeta} dataModificacao={d.atualizado_em} schemaExtra={schemaExtra}>
+  <article class="container secao regiao">
+    <Breadcrumbs trilha={[{ nome: "Início", href: "/" }, { nome: d.nome }]} />
+
+    <header class="regiao__cabeca">
+      <p class="rotulo">{CAMADA_LABEL[d.camada]} · {SITE.cidade} zona oeste</p>
+      <h1>Imóveis à venda no {d.nome}</h1>
+      <p class="regiao__faixa dado">
+        {
+          faixaReal
+            ? `Faixa praticada agora no site: ${faixaCurta(faixaReal.min, faixaReal.max)}`
+            : faixaTipica
+              ? `Faixa típica da região: ${faixaCurta(faixaTipica.min, faixaTipica.max)}`
+              : ""
+        }
+      </p>
+      {d.placeholder && <p><span class="selo selo--exemplo">Conteúdo de exemplo — revisar antes do go-live</span></p>}
+    </header>
+
+    <div class="regiao__grade">
+      <div class="regiao__texto">
+        {d.descricao.split(/\n\s*\n/).map((par) => <p>{par.trim()}</p>)}
+
+        {
+          d.pontos_de_interesse.length > 0 && (
+            <div class="regiao__pontos">
+              <h2 class="rotulo">No entorno</h2>
+              <ul>
+                {d.pontos_de_interesse.map((p) => (
+                  <li>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )
+        }
+      </div>
+
+      <aside class="regiao__lado">
+        {
+          d.foto_capa && (
+            <Image
+              src={d.foto_capa}
+              alt={`Foto do bairro ${d.nome}`}
+              widths={[420, 680]}
+              sizes="(min-width: 64em) 380px, 92vw"
+              loading="eager"
+              class="regiao__foto"
+            />
+          )
+        }
+        <MiniMapa bairroSlug={bairro.id} />
+      </aside>
+    </div>
+
+    {
+      condominiosDoBairro.length > 0 && (
+        <section class="regiao__secao">
+          <h2>Condomínios que eu trabalho no {d.nome}</h2>
+          <ul class="regiao__condominios" role="list">
+            {condominiosDoBairro.map((c) => (
+              <li>
+                <a href={`/condominio/${c.id}`}>
+                  <strong>{c.data.nome}</strong>
+                  {c.data.faixa_preco_min && c.data.faixa_preco_max && (
+                    <span class="dado"> {faixaCurta(c.data.faixa_preco_min, c.data.faixa_preco_max)}</span>
+                  )}
+                  <span class="regiao__condominios-seta" aria-hidden="true">
+                    →
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    {
+      aVenda.length > 0 && (
+        <section class="regiao__secao">
+          <div class="secao__cabeca">
+            <h2>À venda no {d.nome} agora</h2>
+            <a href={`/imoveis?bairro=${bairro.id}`}>Ver na vitrine →</a>
+          </div>
+          <div class="grade grade--3">
+            {aVenda.map((imovel) => (
+              <CardImovel imovel={imovel} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      vendidosAqui.length > 0 && (
+        <section class="regiao__secao regiao__vendas">
+          <h2>Já vendi neste bairro</h2>
+          <ul role="list">
+            {vendidosAqui.map((imovel) => {
+              const dias = diasVenda(imovel);
+              return (
+                <li>
+                  <a href={`/imovel/${imovel.id}`}>
+                    <SeloVendido dias={dias} quando={imovel.data.vendido_em ? mesAno(imovel.data.vendido_em) : null} />
+                    <span class="regiao__vendas-desc">
+                      {TIPO_LABEL[imovel.data.tipo]} · {imovel.data.area_util} m² · {imovel.data.dormitorios} dorm.
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )
+    }
+
+    <FaqBloco faqs={faqs} titulo={`Perguntas sobre o ${d.nome}`} />
+
+    <section class="regiao__cta">
+      <h2>Tem um imóvel no {d.nome}? Descubra quanto vale hoje.</h2>
+      <p>Avaliação gratuita, ancorada nas vendas reais do bairro — não em anúncio parado.</p>
+      <a class="botao botao--sinal" href="/avaliacao">Pedir avaliação gratuita</a>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .regiao__cabeca {
+    display: grid;
+    gap: var(--esp-2);
+    margin-bottom: var(--esp-5);
+  }
+
+  .regiao__faixa {
+    color: var(--text-mid);
+  }
+
+  .regiao__grade {
+    display: grid;
+    gap: var(--esp-6);
+    margin-bottom: var(--esp-6);
+  }
+
+  @media (min-width: 64em) {
+    .regiao__grade {
+      grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+      align-items: start;
+    }
+  }
+
+  .regiao__texto {
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .regiao__pontos ul {
+    margin: var(--esp-2) 0 0;
+    padding-left: 1.2em;
+    display: grid;
+    gap: var(--esp-1);
+    color: var(--text-mid);
+  }
+
+  .regiao__lado {
+    display: grid;
+    gap: var(--esp-4);
+  }
+
+  .regiao__foto {
+    border-radius: var(--raio-foto);
+  }
+
+  .regiao__secao {
+    margin-block: var(--esp-6);
+  }
+
+  .regiao__condominios {
+    list-style: none;
+    margin: var(--esp-4) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .regiao__condominios a {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--esp-3);
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: var(--raio);
+    padding: var(--esp-3) var(--esp-4);
+  }
+
+  .regiao__condominios a:hover {
+    border-color: var(--ink-line);
+  }
+
+  .regiao__condominios-seta {
+    margin-left: auto;
+    color: var(--signal);
+  }
+
+  .regiao__vendas ul {
+    list-style: none;
+    margin: var(--esp-4) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--esp-3);
+  }
+
+  .regiao__vendas a {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--esp-3);
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: var(--raio);
+    padding: var(--esp-3) var(--esp-4);
+  }
+
+  .regiao__vendas a:hover {
+    border-color: var(--ink-line);
+  }
+
+  .regiao__vendas-desc {
+    color: var(--text-mid);
+    font-size: 0.95rem;
+  }
+
+  .regiao__cta {
+    margin-top: var(--esp-7);
+    background: var(--surface-2);
+    border-radius: var(--raio-foto);
+    padding: var(--esp-6);
+    display: grid;
+    gap: var(--esp-3);
+    justify-items: start;
+  }
+</style>

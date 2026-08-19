@@ -1,0 +1,352 @@
+---
+/**
+ * O ELEMENTO ASSINATURA (seção 7.1): mapa SVG esquemático do vetor
+ * oeste/noroeste, desenhado à mão — não é embed de mapa.
+ *
+ * - Navegável: bairro → /regiao/[slug]; condomínio → /condominio/[slug]
+ * - Contagem de imóveis disponíveis por bairro
+ * - Vendas concluídas marcadas com pontos na cor --off (prova de atividade)
+ * - Acessível por teclado (foco visível, aria-label por região)
+ * - Em telas estreitas degrada para lista navegável
+ */
+import { getCollection } from "astro:content";
+import { TERRITORIO, VIAS, MARCO_CENTRO, CAMADA_LABEL, type Camada } from "../lib/territorio";
+import { contagemPorBairro, vendasPorBairro } from "../lib/imoveis";
+
+const disponiveis = await contagemPorBairro();
+const vendas = await vendasPorBairro();
+const paginasBairro = new Set((await getCollection("bairros")).map((b) => b.id));
+const condominios = (await getCollection("condominios")).filter(
+  (c) => typeof c.data.mapa_x === "number" && typeof c.data.mapa_y === "number"
+);
+
+const OPACIDADE: Record<Camada, number> = { nucleo: 0.2, "faixa-alta": 0.12, "alto-padrao": 0.06 };
+
+// Deslocamentos determinísticos para agrupar os pontos de venda concluída.
+const DESLOC_VENDA = [
+  [0, 0],
+  [16, 6],
+  [-16, 6],
+  [8, -12],
+  [-8, -12],
+  [24, -4],
+];
+
+function rotuloAcessivel(slug: string, nome: string): string {
+  const n = disponiveis.get(slug) ?? 0;
+  const v = vendas.get(slug) ?? 0;
+  const partes = [
+    n > 0 ? `${n} ${n === 1 ? "imóvel disponível" : "imóveis disponíveis"}` : "sem imóveis disponíveis no momento",
+    v > 0 ? `${v} ${v === 1 ? "venda concluída" : "vendas concluídas"}` : null,
+  ].filter(Boolean);
+  return `${nome}: ${partes.join(", ")}`;
+}
+
+/** Quebra nomes longos em duas linhas de <tspan>. */
+function linhasDoNome(nome: string): string[] {
+  if (nome.length <= 14) return [nome];
+  const palavras = nome.split(" ");
+  if (palavras.length === 1) return [nome];
+  let melhor = 1;
+  let menorDif = Infinity;
+  for (let i = 1; i < palavras.length; i++) {
+    const a = palavras.slice(0, i).join(" ").length;
+    const b = palavras.slice(i).join(" ").length;
+    if (Math.abs(a - b) < menorDif) {
+      menorDif = Math.abs(a - b);
+      melhor = i;
+    }
+  }
+  return [palavras.slice(0, melhor).join(" "), palavras.slice(melhor).join(" ")];
+}
+
+const camadas: Camada[] = ["nucleo", "faixa-alta", "alto-padrao"];
+---
+
+<div class="mapa">
+  <svg
+    class="mapa__svg"
+    viewBox="0 0 800 520"
+    aria-label="Mapa esquemático do território: vetor oeste e noroeste de Sorocaba"
+  >
+    {VIAS.map((d) => (
+      <path d={d} fill="none" stroke="var(--line)" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round" aria-hidden="true" />
+    ))}
+
+    {
+      TERRITORIO.map((b) => {
+        const temPagina = paginasBairro.has(b.slug);
+        const nDisponiveis = disponiveis.get(b.slug) ?? 0;
+        const nVendas = vendas.get(b.slug) ?? 0;
+        const linhas = linhasDoNome(b.nome);
+        const yBase = b.label.y - (linhas.length > 1 ? 8 : 0);
+
+        const conteudo = (
+          <>
+            <path
+              class="mapa__area"
+              d={b.path}
+              fill={`rgba(31, 85, 102, ${OPACIDADE[b.camada]})`}
+              stroke="var(--ink-line)"
+              stroke-opacity="0.45"
+              stroke-width="1.5"
+            />
+            <text class="mapa__nome" x={b.label.x} y={yBase} text-anchor="middle">
+              {linhas.map((linha, i) => (
+                <tspan x={b.label.x} dy={i === 0 ? 0 : 19}>
+                  {linha}
+                </tspan>
+              ))}
+            </text>
+            {nDisponiveis > 0 && (
+              <g aria-hidden="true">
+                <circle cx={b.ancora.x - (nVendas > 0 ? 16 : 0)} cy={b.ancora.y + (linhas.length > 1 ? 16 : 8)} r="12" fill="var(--surface)" stroke="var(--ink-line)" stroke-width="1.5" />
+                <text
+                  class="mapa__contagem"
+                  x={b.ancora.x - (nVendas > 0 ? 16 : 0)}
+                  y={b.ancora.y + (linhas.length > 1 ? 21 : 13)}
+                  text-anchor="middle"
+                >
+                  {nDisponiveis}
+                </text>
+              </g>
+            )}
+            {nVendas > 0 && (
+              <g aria-hidden="true">
+                {Array.from({ length: Math.min(nVendas, DESLOC_VENDA.length) }).map((_, i) => (
+                  <circle
+                    cx={b.ancora.x + (nDisponiveis > 0 ? 16 : 0) + DESLOC_VENDA[i][0] * 0.5}
+                    cy={b.ancora.y + (linhas.length > 1 ? 16 : 8) + DESLOC_VENDA[i][1] * 0.5}
+                    r="5.5"
+                    fill="var(--off)"
+                    stroke="var(--surface)"
+                    stroke-width="1.5"
+                  />
+                ))}
+              </g>
+            )}
+          </>
+        );
+
+        return temPagina ? (
+          <a href={`/regiao/${b.slug}`} aria-label={`${rotuloAcessivel(b.slug, b.nome)} — ver página do bairro`}>
+            {conteudo}
+          </a>
+        ) : (
+          <g role="img" aria-label={rotuloAcessivel(b.slug, b.nome)}>
+            {conteudo}
+          </g>
+        );
+      })
+    }
+
+    {
+      condominios.map((c) => {
+        const cx = (c.data.mapa_x! / 100) * 800;
+        const cy = (c.data.mapa_y! / 100) * 520;
+        return (
+          <a href={`/condominio/${c.id}`} aria-label={`Condomínio ${c.data.nome} — ver página`}>
+            <circle class="mapa__condominio" cx={cx} cy={cy} r="6.5" fill="var(--ink)" stroke="var(--surface)" stroke-width="2" />
+          </a>
+        );
+      })
+    }
+
+    <g aria-hidden="true">
+      <rect x={MARCO_CENTRO.x - 5} y={MARCO_CENTRO.y - 5} width="10" height="10" fill="var(--text-low)" />
+      <text class="mapa__marco" x={MARCO_CENTRO.x - 10} y={MARCO_CENTRO.y + 26} text-anchor="end">Centro</text>
+      <text class="mapa__marco" x="770" y="36" text-anchor="middle">N</text>
+      <path d="M770 44 v18 M770 44 l-5 8 M770 44 l5 8" stroke="var(--text-low)" stroke-width="2" fill="none" />
+    </g>
+  </svg>
+
+  <p class="mapa__legenda" aria-hidden="true">
+    <span><span class="mapa__leg-num">2</span> disponíveis no bairro</span>
+    <span><span class="mapa__leg-off"></span> venda concluída</span>
+    <span><span class="mapa__leg-cond"></span> condomínio com página</span>
+    <span class="mapa__leg-nota">mapa esquemático</span>
+  </p>
+
+  <nav class="mapa__lista" aria-label="Bairros do território">
+    {
+      camadas.map((camada) => (
+        <section>
+          <h3 class="rotulo">{CAMADA_LABEL[camada]}</h3>
+          <ul role="list">
+            {TERRITORIO.filter((b) => b.camada === camada).map((b) => {
+              const n = disponiveis.get(b.slug) ?? 0;
+              const v = vendas.get(b.slug) ?? 0;
+              const resumo = [
+                n > 0 ? `${n} à venda` : null,
+                v > 0 ? `${v} ${v === 1 ? "vendido" : "vendidos"}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <li>
+                  {paginasBairro.has(b.slug) ? <a href={`/regiao/${b.slug}`}>{b.nome}</a> : <span>{b.nome}</span>}
+                  {resumo && <span class="dado mapa__lista-resumo">{resumo}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))
+    }
+  </nav>
+</div>
+
+<style>
+  .mapa__svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .mapa__svg a {
+    cursor: pointer;
+    outline: none;
+  }
+
+  .mapa__area {
+    transition: fill 0.15s ease;
+  }
+
+  .mapa__svg a:hover .mapa__area {
+    fill: rgba(31, 85, 102, 0.34);
+  }
+
+  /* Foco visível por região (acessibilidade por teclado). */
+  .mapa__svg a:focus-visible .mapa__area {
+    stroke: var(--signal);
+    stroke-width: 4;
+    stroke-opacity: 1;
+    fill: rgba(31, 85, 102, 0.3);
+  }
+
+  .mapa__svg a:focus-visible .mapa__condominio {
+    stroke: var(--signal);
+    stroke-width: 4;
+  }
+
+  .mapa__nome {
+    font-family: var(--f-display);
+    font-size: 17px;
+    font-weight: 600;
+    fill: var(--ink);
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+
+  .mapa__contagem {
+    font-family: var(--f-mono);
+    font-size: 14px;
+    font-weight: 500;
+    fill: var(--ink);
+  }
+
+  .mapa__marco {
+    font-family: var(--f-texto);
+    font-size: 17px;
+    fill: var(--text-mid);
+  }
+
+  .mapa__condominio:hover {
+    fill: var(--ink-2);
+  }
+
+  .mapa__legenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--esp-2) var(--esp-4);
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-mid);
+    margin-top: var(--esp-3);
+    max-width: none;
+  }
+
+  .mapa__legenda > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+
+  .mapa__leg-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    border: 1.5px solid var(--ink-line);
+    border-radius: 999px;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--ink);
+    background: var(--surface);
+  }
+
+  .mapa__leg-off,
+  .mapa__leg-cond {
+    width: 0.7em;
+    height: 0.7em;
+    border-radius: 999px;
+  }
+
+  .mapa__leg-off {
+    background: var(--off);
+  }
+
+  .mapa__leg-cond {
+    background: var(--ink);
+  }
+
+  .mapa__leg-nota {
+    margin-left: auto;
+    color: var(--text-low);
+    font-size: 0.78rem;
+  }
+
+  /* Lista navegável: substitui o mapa quando a tela é estreita demais. */
+  .mapa__lista {
+    display: none;
+  }
+
+  @media (max-width: 35.94em) {
+    .mapa__svg,
+    .mapa__legenda {
+      display: none;
+    }
+
+    .mapa__lista {
+      display: grid;
+      gap: var(--esp-4);
+      border: 1px solid var(--line);
+      border-radius: var(--raio-foto);
+      padding: var(--esp-4);
+    }
+
+    .mapa__lista ul {
+      list-style: none;
+      margin: var(--esp-2) 0 0;
+      padding: 0;
+      display: grid;
+      gap: var(--esp-2);
+    }
+
+    .mapa__lista li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--esp-3);
+    }
+
+    .mapa__lista-resumo {
+      font-size: 0.78rem;
+      color: var(--text-mid);
+      white-space: nowrap;
+    }
+  }
+</style>
