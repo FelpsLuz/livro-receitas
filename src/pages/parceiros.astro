@@ -101,7 +101,7 @@ const descricao = `Área do corretor parceiro: imóveis disponíveis para parcer
       </p>
     </section>
 
-    <section class="parceiros__form-bloco">
+    <section class="parceiros__form-bloco painel-suave">
       <h2>Cadastro de parceiro</h2>
       <p>Me diga quem você é e onde atua. Eu retorno com as condições e os imóveis abertos a parceria.</p>
       <form id="form-parceiro" novalidate>
@@ -207,7 +207,12 @@ const descricao = `Área do corretor parceiro: imóveis disponíveis para parcer
 
   .parceiros__form-bloco {
     margin-top: var(--esp-7);
-    max-width: 40rem;
+    max-width: 44rem;
+  }
+
+  .parceiros__form-bloco input,
+  .parceiros__form-bloco select {
+    background: var(--surface);
   }
 
   .parceiros__form-bloco h2 {

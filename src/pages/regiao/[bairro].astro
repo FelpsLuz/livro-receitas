@@ -119,7 +119,7 @@ if (faqs.length > 0) schemaExtra.push(schemaFaq(faqs));
           <ul class="regiao__condominios" role="list">
             {condominiosDoBairro.map((c) => (
               <li>
-                <a href={`/condominio/${c.id}`}>
+                <a class="linha-cartao" href={`/condominio/${c.id}`}>
                   <strong>{c.data.nome}</strong>
                   {c.data.faixa_preco_min && c.data.faixa_preco_max && (
                     <span class="dado"> {faixaCurta(c.data.faixa_preco_min, c.data.faixa_preco_max)}</span>
@@ -160,7 +160,7 @@ if (faqs.length > 0) schemaExtra.push(schemaFaq(faqs));
               const dias = diasVenda(imovel);
               return (
                 <li>
-                  <a href={`/imovel/${imovel.id}`}>
+                  <a class="linha-cartao" href={`/imovel/${imovel.id}`}>
                     <SeloVendido dias={dias} quando={imovel.data.vendido_em ? mesAno(imovel.data.vendido_em) : null} />
                     <span class="regiao__vendas-desc">
                       {TIPO_LABEL[imovel.data.tipo]} · {imovel.data.area_util} m² · {imovel.data.dormitorios} dorm.
@@ -249,13 +249,7 @@ if (faqs.length > 0) schemaExtra.push(schemaFaq(faqs));
     gap: var(--esp-3);
     text-decoration: none;
     color: inherit;
-    border: 1px solid var(--line);
-    border-radius: var(--raio);
-    padding: var(--esp-3) var(--esp-4);
-  }
-
-  .regiao__condominios a:hover {
-    border-color: var(--ink-line);
+    padding: var(--esp-4);
   }
 
   .regiao__condominios-seta {
@@ -278,13 +272,7 @@ if (faqs.length > 0) schemaExtra.push(schemaFaq(faqs));
     gap: var(--esp-3);
     text-decoration: none;
     color: inherit;
-    border: 1px solid var(--line);
-    border-radius: var(--raio);
-    padding: var(--esp-3) var(--esp-4);
-  }
-
-  .regiao__vendas a:hover {
-    border-color: var(--ink-line);
+    padding: var(--esp-4);
   }
 
   .regiao__vendas-desc {

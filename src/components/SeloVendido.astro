@@ -38,10 +38,10 @@ const prazo = [dias ? `Vendido em ${dias} dias` : null, quando].filter(Boolean).
     padding: 0.3em 0.85em;
     background: var(--ink);
     color: #fff;
-    border-radius: 3px;
+    border-radius: 4px;
     font-family: var(--f-display);
     font-size: 0.78rem;
-    font-weight: 600;
+    font-weight: 620;
     text-transform: uppercase;
     letter-spacing: var(--tracking-rotulo);
   }
@@ -51,10 +51,11 @@ const prazo = [dias ? `Vendido em ${dias} dias` : null, quando].filter(Boolean).
     color: var(--text-mid);
   }
 
+  /* Pill sobre foto: fundo --ink a 85% garante contraste em qualquer fotografia */
   .selo-vendido--sobreposto .selo-vendido__prazo {
-    background: rgba(255, 255, 255, 0.92);
-    padding: 0.25em 0.6em;
-    border-radius: 3px;
-    color: var(--ink);
+    background: rgba(13, 42, 51, 0.85);
+    padding: 0.3em 0.7em;
+    border-radius: 999px;
+    color: #fff;
   }
 </style>

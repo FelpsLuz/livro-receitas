@@ -40,8 +40,8 @@ faq:
   - pergunta: "Apartamento no Parque das Andorinhas aceita financiamento e FGTS?"
     resposta: "Sim. O condomínio tem matrículas individualizadas e as unidades se enquadram nas linhas de financiamento bancário; FGTS pode ser usado dentro das regras vigentes de avaliação e enquadramento."
 foto_capa: "./fotos/condominio-parque-das-andorinhas.jpg"
-mapa_x: 37.5
-mapa_y: 51
+mapa_x: 31.5
+mapa_y: 43.5
 placeholder: true
 atualizado_em: 2026-08-19
 ---

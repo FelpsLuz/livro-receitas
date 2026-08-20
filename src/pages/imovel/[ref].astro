@@ -20,6 +20,10 @@ import { precoBRL, mesAno, TIPO_LABEL, linhaResumo } from "../../lib/formatar";
 import { nomeDoBairro } from "../../lib/territorio";
 import { mensagemImovel, mensagemVisita } from "../../lib/whatsapp";
 import { schemaListing, urlCanonica, urlAbsoluta } from "../../lib/seo";
+import { svgCurvas } from "../../lib/curvas";
+
+// Curvas de nível no cabeçalho da ficha A4 (uso 2 de 3 — Fase 5, 3.4).
+const curvasFicha = svgCurvas("#0D2A33", 0.04);
 
 export async function getStaticPaths() {
   const imoveis = await imoveisRenderizaveis();
@@ -120,9 +124,17 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
             vendido ? (
               <div class="painel-valor painel-valor--vendido">
                 <p class="rotulo">Resultado</p>
-                <p class="painel-valor__destaque dado">
-                  {dias ? `Vendido em ${dias} dias` : "Vendido"}
-                  {quando && <span class="painel-valor__quando"> · {quando}</span>}
+                <p class="painel-valor__destaque prazo">
+                  {dias ? (
+                    <>
+                      <span class="visualmente-oculto">Vendido em {dias} dias</span>
+                      <span class="prazo__num" aria-hidden="true">{dias}</span>
+                      <span class="prazo__unidade" aria-hidden="true">dias</span>
+                    </>
+                  ) : (
+                    <span class="prazo__unidade">Vendido</span>
+                  )}
+                  {quando && <span class="prazo__quando">· {quando}</span>}
                 </p>
                 {d.exibir_valor && <p class="painel-valor__linha dado">Valor de venda: {precoBRL(d.valor)}</p>}
                 {!d.exibir_valor && (
@@ -201,7 +213,7 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
         }
       </section>
 
-      <section class="pagina-imovel__secao">
+      <section class="pagina-imovel__secao painel-suave">
         <FichaTecnica imovel={imovel} />
       </section>
 
@@ -256,7 +268,7 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
 
       {
         semelhantes.length > 0 && (
-          <section class="pagina-imovel__secao">
+          <section class="pagina-imovel__secao painel-suave">
             <div class="secao__cabeca">
               <h2>Imóveis semelhantes</h2>
               <a href="/imoveis">Ver todos →</a>
@@ -280,6 +292,7 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
     !vendido && (
       <section id="ficha-impressao" aria-hidden="true">
         <header class="ficha-imp__topo">
+          <div class="ficha-imp__curvas" set:html={curvasFicha} aria-hidden="true" />
           <div>
             <p class="ficha-imp__nome">{SITE.marcaPublica}</p>
             <p class="ficha-imp__creci">{SITE.expressaoObrigatoria} · {SITE.creci}</p>
@@ -385,26 +398,22 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
   }
 
   .painel-valor {
-    border: 1px solid var(--line);
     border-radius: var(--raio-foto);
-    padding: var(--esp-4) var(--esp-5);
+    background: var(--surface);
+    box-shadow: var(--sombra-card);
+    padding: var(--esp-5);
     display: grid;
-    gap: var(--esp-1);
+    gap: var(--esp-2);
   }
 
+  /* Preço do disponível: display 700, 40px, sem centavos (Fase 5, seção 4) */
   .painel-valor__preco {
-    font-size: 2rem;
+    font-size: 2.5rem;
+    line-height: 1;
   }
 
   .painel-valor__destaque {
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--ink);
-  }
-
-  .painel-valor__quando {
-    color: var(--text-mid);
-    font-size: 1.1rem;
+    font-size: 1.25rem;
   }
 
   .painel-valor__linha {
@@ -456,8 +465,8 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
 
   .bloco-condominio {
     background: var(--surface-2);
-    border-radius: var(--raio-foto);
-    padding: var(--esp-5);
+    border-radius: var(--raio-painel);
+    padding: clamp(1.25rem, 3vw, 2rem);
   }
 
   .bloco-condominio__dados {
@@ -502,12 +511,26 @@ const urlPublica = `${SITE.dominioCanonico}/imovel/${imovel.id}`;
     }
 
     .ficha-imp__topo {
+      position: relative;
+      overflow: hidden;
       display: flex;
       justify-content: space-between;
       align-items: baseline;
       border-bottom: 2px solid #111;
-      padding-bottom: 4mm;
+      padding: 3mm 2mm 4mm;
       margin-bottom: 5mm;
+    }
+
+    .ficha-imp__curvas {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+    }
+
+    .ficha-imp__curvas svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
     .ficha-imp__nome {

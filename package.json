@@ -12,7 +12,6 @@
     "imagens-exemplo": "node scripts/gerar-imagens-exemplo.mjs"
   },
   "dependencies": {
-    "@fontsource-variable/archivo": "^5.2.5",
     "@fontsource-variable/source-sans-3": "^5.2.5",
     "@fontsource/archivo": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.5",

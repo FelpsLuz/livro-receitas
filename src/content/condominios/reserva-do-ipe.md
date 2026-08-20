@@ -39,8 +39,8 @@ faq:
   - pergunta: "A Reserva do Ipê fica perto da Facens?"
     resposta: "Sim, o condomínio está no entorno do Jardim Botânico, a poucos minutos da Facens. É procurado por professores, funcionários da faculdade e famílias que usam o eixo da rodovia no dia a dia."
 foto_capa: "./fotos/condominio-reserva-do-ipe.jpg"
-mapa_x: 74.5
-mapa_y: 36.5
+mapa_x: 77.5
+mapa_y: 31.5
 placeholder: true
 atualizado_em: 2026-08-19
 ---

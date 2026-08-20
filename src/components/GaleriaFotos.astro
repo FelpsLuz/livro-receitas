@@ -22,32 +22,36 @@ const slides = await Promise.all(
 ---
 
 <figure class:list={["galeria", { "galeria--vendido": vendido }]} data-galeria data-slides={JSON.stringify(slides)}>
-  <button class="galeria__principal" type="button" data-abrir="0" aria-label={`Ampliar foto: ${fotos[0].alt}`}>
-    <Image
-      src={fotos[0].src}
-      alt={fotos[0].alt}
-      widths={[480, 800, 1200, 1600]}
-      sizes="(min-width: 64em) 720px, 94vw"
-      loading="eager"
-      fetchpriority="high"
-    />
-    <slot />
-  </button>
+  <div class="galeria__palco">
+    <button class="galeria__principal" type="button" data-abrir="0" aria-label={`Ampliar foto: ${fotos[0].alt}`}>
+      <Image
+        src={fotos[0].src}
+        alt={fotos[0].alt}
+        widths={[480, 800, 1200, 1600]}
+        sizes="(min-width: 64em) 720px, 94vw"
+        loading="eager"
+        fetchpriority="high"
+      />
+    </button>
+    <!-- Selo como camada irmã: não entra no nome acessível do botão. -->
+    <span class="galeria__selo-camada" aria-hidden="true"><slot /></span>
+  </div>
 
   {
     fotos.length > 1 && (
-      <div class="galeria__miniaturas" role="list" aria-label="Miniaturas das fotos">
+      <ul class="galeria__miniaturas" role="list" aria-label="Miniaturas das fotos">
         {fotos.map((foto, i) => (
-          <button
-            type="button"
-            role="listitem"
-            data-abrir={i}
-            aria-label={`Ampliar foto ${i + 1} de ${fotos.length}: ${foto.alt}`}
-          >
-            <Image src={foto.src} alt="" widths={[160, 240]} sizes="120px" loading="lazy" />
-          </button>
+          <li>
+            <button
+              type="button"
+              data-abrir={i}
+              aria-label={`Ampliar foto ${i + 1} de ${fotos.length}: ${foto.alt}`}
+            >
+              <Image src={foto.src} alt="" widths={[160, 240]} sizes="120px" loading="lazy" />
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
     )
   }
   <figcaption class="visualmente-oculto">{fotos.length} fotos do imóvel</figcaption>
@@ -64,6 +68,17 @@ const slides = await Promise.all(
 </dialog>
 
 <style>
+  .galeria__palco {
+    position: relative;
+  }
+
+  .galeria__selo-camada {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
   .galeria__principal {
     position: relative;
     display: block;
@@ -87,14 +102,32 @@ const slides = await Promise.all(
     filter: saturate(0.85);
   }
 
+  /* Véu --ink a 10% nos vendidos — consistência entre fotos de origens diferentes */
+  .galeria--vendido .galeria__principal::after,
+  .galeria--vendido .galeria__miniaturas button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(13, 42, 51, 0.1);
+    pointer-events: none;
+  }
+
+  .galeria--vendido .galeria__miniaturas button {
+    position: relative;
+  }
+
   .galeria__miniaturas {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
     gap: var(--esp-2);
-    margin-top: var(--esp-2);
+    margin: var(--esp-2) 0 0;
+    list-style: none;
+    padding: 0;
   }
 
   .galeria__miniaturas button {
+    display: block;
+    width: 100%;
     padding: 0;
     border: 2px solid transparent;
     border-radius: var(--raio);

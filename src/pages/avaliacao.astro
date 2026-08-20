@@ -193,8 +193,10 @@ const descricao =
     </div>
   </section>
 
-  <section class="secao container">
-    <FaqBloco faqs={faqs} titulo="Perguntas de quem quer vender" />
+  <section class="secao secao--painel">
+    <div class="container">
+      <FaqBloco faqs={faqs} titulo="Perguntas de quem quer vender" />
+    </div>
   </section>
 </Base>
 
@@ -235,8 +237,8 @@ const descricao =
   }
 
   .avaliacao__form {
-    border: 1px solid var(--line);
-    border-radius: var(--raio-foto);
+    border-radius: var(--raio-painel);
+    box-shadow: var(--sombra-card);
     padding: clamp(1.25rem, 3vw, 2rem);
     background: var(--surface);
   }

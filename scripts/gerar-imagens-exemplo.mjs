@@ -1,8 +1,9 @@
 /**
- * Gera as imagens PROCEDURAIS de exemplo (seção 12 do briefing):
- * blocos 3:2 de 2400px de largura com a ref e a instrução de substituição.
- * Rodar uma vez: `npm run imagens-exemplo`. Os arquivos são commitados;
- * o build do site não depende deste script.
+ * Gera as imagens de exemplo (Fase 5, seção 2): gradiente duotônico
+ * --ink → --ink-2, ref em mono discreta no canto inferior esquerdo e o
+ * aviso técnico reduzido a uma linha no canto — nada de texto gigante
+ * central, para o placeholder não contaminar a avaliação de layout.
+ * Rodar uma vez: `npm run imagens-exemplo`. Os arquivos são commitados.
  */
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -21,9 +22,16 @@ const plexMono = await readFile(
 
 const LARGURA = 2400;
 const ALTURA = 1600;
-const TONS = ["#0D2A33", "#143C48", "#1F5566", "#28505F", "#33616F"];
 
-async function gerar(destino, principal, secundario, indiceTom) {
+// Variações do duotônico petróleo — sempre --ink ↔ --ink-2/--ink-line.
+const GRADIENTES = [
+  "linear-gradient(140deg, #0D2A33 0%, #143C48 100%)",
+  "linear-gradient(160deg, #143C48 0%, #0D2A33 100%)",
+  "linear-gradient(125deg, #0D2A33 10%, #1F5566 100%)",
+  "linear-gradient(150deg, #143C48 0%, #1F5566 100%)",
+];
+
+async function gerar(destino, ref, ambiente, indice) {
   const svg = await satori(
     {
       type: "div",
@@ -32,10 +40,7 @@ async function gerar(destino, principal, secundario, indiceTom) {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: TONS[indiceTom % TONS.length],
+          backgroundImage: GRADIENTES[indice % GRADIENTES.length],
           color: "#FFFFFF",
         },
         children: [
@@ -44,47 +49,39 @@ async function gerar(destino, principal, secundario, indiceTom) {
             props: {
               style: {
                 position: "absolute",
-                top: 64,
-                left: 64,
-                right: 64,
-                bottom: 64,
-                border: "4px dashed rgba(255,255,255,0.35)",
-                borderRadius: 24,
+                left: 96,
+                bottom: 88,
                 display: "flex",
+                flexDirection: "column",
               },
-            },
-          },
-          {
-            type: "div",
-            props: {
-              style: { fontFamily: "IBM Plex Mono", fontSize: 200, letterSpacing: 8 },
-              children: principal,
-            },
-          },
-          {
-            type: "div",
-            props: {
-              style: {
-                fontFamily: "Archivo",
-                fontSize: 88,
-                marginTop: 24,
-                textTransform: "uppercase",
-                letterSpacing: 14,
-                color: "rgba(255,255,255,0.85)",
-              },
-              children: secundario,
-            },
-          },
-          {
-            type: "div",
-            props: {
-              style: {
-                fontFamily: "IBM Plex Mono",
-                fontSize: 52,
-                marginTop: 120,
-                color: "rgba(255,255,255,0.65)",
-              },
-              children: "SUBSTITUIR POR FOTO REAL · 3:2 · MÍN. 2400 PX",
+              children: [
+                {
+                  type: "div",
+                  props: {
+                    style: {
+                      fontFamily: "IBM Plex Mono",
+                      fontSize: 56,
+                      letterSpacing: 4,
+                      color: "rgba(255,255,255,0.55)",
+                    },
+                    children: ref,
+                  },
+                },
+                {
+                  type: "div",
+                  props: {
+                    style: {
+                      fontFamily: "Archivo",
+                      fontSize: 34,
+                      marginTop: 10,
+                      textTransform: "uppercase",
+                      letterSpacing: 8,
+                      color: "rgba(255,255,255,0.35)",
+                    },
+                    children: ambiente,
+                  },
+                },
+              ],
             },
           },
           {
@@ -92,12 +89,14 @@ async function gerar(destino, principal, secundario, indiceTom) {
             props: {
               style: {
                 position: "absolute",
-                bottom: 96,
+                right: 96,
+                bottom: 92,
                 fontFamily: "IBM Plex Mono",
-                fontSize: 40,
-                color: "rgba(255,255,255,0.45)",
+                fontSize: 26,
+                letterSpacing: 2,
+                color: "rgba(255,255,255,0.35)",
               },
-              children: "imagem de exemplo — não publicar",
+              children: "SUBSTITUIR POR FOTO REAL · 3:2 · MÍN. 2400 PX",
             },
           },
         ],
@@ -114,7 +113,7 @@ async function gerar(destino, principal, secundario, indiceTom) {
   );
 
   await mkdir(dirname(destino), { recursive: true });
-  const jpeg = await sharp(Buffer.from(svg)).jpeg({ quality: 70, mozjpeg: true }).toBuffer();
+  const jpeg = await sharp(Buffer.from(svg)).jpeg({ quality: 72, mozjpeg: true }).toBuffer();
   await writeFile(destino, jpeg);
   console.log(`✓ ${destino.replace(raiz + "/", "")} (${Math.round(jpeg.length / 1024)} KB)`);
 }
@@ -127,7 +126,7 @@ const FOTOS_IMOVEIS = {
   "fl-0005": ["sala-jantar", "suite", "piscina"],
 };
 
-let tom = 0;
+let indice = 0;
 for (const [ref, ambientes] of Object.entries(FOTOS_IMOVEIS)) {
   for (let i = 0; i < ambientes.length; i++) {
     const arquivo = `${ref}-${String(i + 1).padStart(2, "0")}-${ambientes[i]}.jpg`;
@@ -135,7 +134,7 @@ for (const [ref, ambientes] of Object.entries(FOTOS_IMOVEIS)) {
       join(raiz, "src/content/imoveis/fotos", arquivo),
       ref.toUpperCase(),
       ambientes[i].replaceAll("-", " "),
-      tom++
+      indice++
     );
   }
 }
@@ -143,18 +142,18 @@ for (const [ref, ambientes] of Object.entries(FOTOS_IMOVEIS)) {
 for (const slug of ["parque-das-andorinhas", "reserva-do-ipe"]) {
   await gerar(
     join(raiz, "src/content/condominios/fotos", `condominio-${slug}.jpg`),
-    "CONDOMÍNIO",
-    slug.replaceAll("-", " "),
-    tom++
+    slug.replaceAll("-", " ").toUpperCase(),
+    "condomínio",
+    indice++
   );
 }
 
 for (const slug of ["jardim-brasilandia", "vila-esperanca", "jardim-botanico"]) {
   await gerar(
     join(raiz, "src/content/bairros/fotos", `bairro-${slug}.jpg`),
-    "BAIRRO",
-    slug.replaceAll("-", " "),
-    tom++
+    slug.replaceAll("-", " ").toUpperCase(),
+    "bairro",
+    indice++
   );
 }
 

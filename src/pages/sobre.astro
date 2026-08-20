@@ -115,14 +115,17 @@ const porCamada = (camada: (typeof TERRITORIO)[number]["camada"]) =>
       </p>
     </section>
 
-    <section class="sobre__cta">
+  </article>
+
+  <section class="secao secao--tinta sobre__cta">
+    <div class="container sobre__cta-miolo">
       <h2>Vamos falar do seu imóvel?</h2>
       <p class="sobre__cta-acoes">
         <a class="botao botao--sinal" href="/avaliacao">Pedir avaliação gratuita</a>
         <BotaoWhatsApp variante="contorno" />
       </p>
-    </section>
-  </article>
+    </div>
+  </section>
 </Base>
 
 <style>
@@ -157,9 +160,10 @@ const porCamada = (camada: (typeof TERRITORIO)[number]["camada"]) =>
   }
 
   .sobre__camadas > div {
-    border: 1px solid var(--line);
-    border-radius: var(--raio);
-    padding: var(--esp-4);
+    background: var(--surface);
+    border-radius: var(--raio-foto);
+    box-shadow: var(--sombra-card);
+    padding: var(--esp-5);
     display: grid;
     gap: var(--esp-2);
     align-content: start;
@@ -192,19 +196,21 @@ const porCamada = (camada: (typeof TERRITORIO)[number]["camada"]) =>
 
   .sobre__registro {
     background: var(--surface-2);
-    border-radius: var(--raio-foto);
-    padding: var(--esp-5);
+    border-radius: var(--raio-painel);
+    padding: clamp(1.25rem, 3vw, 2rem);
   }
 
-  .sobre__cta {
-    margin-top: var(--esp-7);
+  .sobre__cta-miolo {
     display: grid;
     gap: var(--esp-4);
+    justify-items: center;
+    text-align: center;
   }
 
   .sobre__cta-acoes {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--esp-3);
     max-width: none;
   }

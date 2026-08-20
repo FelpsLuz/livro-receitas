@@ -41,7 +41,10 @@ const dataAttrs = comDados
   : {};
 ---
 
-<article class:list={["cartao", "cartao-imovel", { "cartao-imovel--vendido": vendido }]} {...dataAttrs}>
+<article
+  class:list={["cartao", "cartao--clicavel", "cartao-imovel", { "cartao-imovel--vendido": vendido }]}
+  {...dataAttrs}
+>
   <a href={`/imovel/${imovel.id}`}>
     <div class="cartao-imovel__foto">
       <Image
@@ -58,7 +61,18 @@ const dataAttrs = comDados
     <div class="cartao-imovel__corpo">
       {
         vendido ? (
-          <p class="cartao-imovel__prazo dado">{dias ? `Vendido em ${dias} dias` : "Vendido"}{d.vendido_em ? ` · ${mesAno(d.vendido_em)}` : ""}</p>
+          <p class="cartao-imovel__prazo prazo">
+            {dias ? (
+              <>
+                <span class="visualmente-oculto">Vendido em {dias} dias</span>
+                <span class="prazo__num" aria-hidden="true">{dias}</span>
+                <span class="prazo__unidade" aria-hidden="true">dias</span>
+              </>
+            ) : (
+              <span class="prazo__unidade">Vendido</span>
+            )}
+            {d.vendido_em && <span class="prazo__quando">· {mesAno(d.vendido_em)}</span>}
+          </p>
         ) : (
           <p class="cartao-imovel__preco preco">{precoBRL(d.valor)}</p>
         )
@@ -87,9 +101,17 @@ const dataAttrs = comDados
     object-fit: cover;
   }
 
-  /* Vendido: levemente dessaturado — diferencia do estoque sem esconder a qualidade */
+  /* Vendido: dessaturado + véu --ink a 10% — consistência entre fotos de origens diferentes */
   .cartao-imovel--vendido .cartao-imovel__foto img {
     filter: saturate(0.85);
+  }
+
+  .cartao-imovel--vendido .cartao-imovel__foto::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(13, 42, 51, 0.1);
+    pointer-events: none;
   }
 
   .cartao-imovel__status {
@@ -105,13 +127,11 @@ const dataAttrs = comDados
   }
 
   .cartao-imovel__preco {
-    font-size: 1.35rem;
+    font-size: 1.45rem;
   }
 
   .cartao-imovel__prazo {
-    font-size: 1.05rem;
-    font-weight: 500;
-    color: var(--ink);
+    font-size: 1rem;
   }
 
   .cartao-imovel__titulo {

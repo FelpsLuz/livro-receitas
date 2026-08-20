@@ -54,13 +54,15 @@ const descricao = `Imóveis vendidos por ${SITE.marcaPublica} na zona oeste de $
     }
   </section>
 
-  <section class="secao container vendidos__fecho">
-    <h2>Seu imóvel pode ser o próximo desta página.</h2>
-    <p>
-      A avaliação é gratuita e baseada nas vendas reais do seu condomínio e do seu bairro — as
-      mesmas que você viu acima.
-    </p>
-    <a class="botao botao--sinal vendidos__cta" href="/avaliacao">Descubra quanto vale seu imóvel</a>
+  <section class="secao secao--tinta vendidos__fecho">
+    <div class="container vendidos__fecho-miolo">
+      <h2>Seu imóvel pode ser o próximo desta página.</h2>
+      <p>
+        A avaliação é gratuita e baseada nas vendas reais do seu condomínio e do seu bairro — as
+        mesmas que você viu acima.
+      </p>
+      <a class="botao botao--sinal vendidos__cta" href="/avaliacao">Descubra quanto vale seu imóvel</a>
+    </div>
   </section>
 </Base>
 
@@ -79,20 +81,20 @@ const descricao = `Imóveis vendidos por ${SITE.marcaPublica} na zona oeste de $
     padding-left: var(--esp-3);
   }
 
-  .vendidos__fecho {
+  .vendidos__fecho-miolo {
     text-align: center;
     display: grid;
-    gap: var(--esp-3);
+    gap: var(--esp-4);
     justify-items: center;
-    background: var(--surface-2);
-    border-radius: var(--raio-foto);
-    margin-inline: auto;
-    max-width: var(--largura-max);
+  }
+
+  .vendidos__fecho p {
+    color: rgba(255, 255, 255, 0.82);
   }
 
   .vendidos__cta {
     font-size: 1.1rem;
-    padding: 0.9em 1.8em;
+    padding: 16px 28px;
   }
 </style>
 

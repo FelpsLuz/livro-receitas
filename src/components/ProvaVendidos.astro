@@ -48,10 +48,18 @@ const cases = await Promise.all(
               <span class="prova__selo">Vendido</span>
             </span>
             <span class="prova__texto">
-              <strong class="dado prova__prazo">
-                {dias ? `Vendido em ${dias} dias` : "Vendido"}
-                {quando ? ` · ${quando}` : ""}
-              </strong>
+              <span class="prazo prova__prazo">
+                {dias ? (
+                  <>
+                    <span class="visualmente-oculto">Vendido em {dias} dias</span>
+                    <span class="prazo__num" aria-hidden="true">{dias}</span>
+                    <span class="prazo__unidade" aria-hidden="true">dias</span>
+                  </>
+                ) : (
+                  <span class="prazo__unidade">Vendido</span>
+                )}
+                {quando && <span class="prazo__quando">· {quando}</span>}
+              </span>
               <span class="prova__desc">
                 {TIPO_LABEL[imovel.data.tipo]} · {local}
               </span>
@@ -76,16 +84,24 @@ const cases = await Promise.all(
     display: flex;
     align-items: center;
     gap: var(--esp-4);
-    border: 1px solid var(--line);
     border-radius: var(--raio-foto);
     padding: var(--esp-3);
     text-decoration: none;
     color: inherit;
     background: var(--surface);
+    box-shadow: var(--sombra-card);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
   }
 
   .prova__case:hover {
-    border-color: var(--ink-line);
+    transform: translateY(-2px);
+    box-shadow: var(--sombra-card-alta);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .prova__case:hover {
+      transform: none;
+    }
   }
 
   .prova__foto {
@@ -104,15 +120,24 @@ const cases = await Promise.all(
     filter: saturate(0.85);
   }
 
+  .prova__foto::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(13, 42, 51, 0.1);
+    pointer-events: none;
+  }
+
   .prova__selo {
     position: absolute;
+    z-index: 1;
     top: 6px;
     left: 6px;
     background: var(--ink);
     color: #fff;
     font-family: var(--f-display);
     font-size: 0.58rem;
-    font-weight: 600;
+    font-weight: 620;
     text-transform: uppercase;
     letter-spacing: var(--tracking-rotulo);
     padding: 0.2em 0.55em;
@@ -125,8 +150,7 @@ const cases = await Promise.all(
   }
 
   .prova__prazo {
-    font-size: 1.05rem;
-    color: var(--ink);
+    font-size: 0.98rem;
   }
 
   .prova__desc {

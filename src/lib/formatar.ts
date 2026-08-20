@@ -12,6 +12,7 @@ export function precoBRL(valor: number): string {
 export function faixaCurta(min: number, max: number): string {
   const mil = (v: number) =>
     v >= 1_000_000 ? `${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi` : `${Math.round(v / 1000)} mil`;
+  if (min === max) return `R$ ${mil(min)}`;
   return `R$ ${mil(min)} – R$ ${mil(max)}`;
 }
 

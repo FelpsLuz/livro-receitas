@@ -22,7 +22,11 @@ const agregados = await agregadosVendas();
 const temVendidos = (await imoveisVendidos()).length > 0;
 const contagem = await contagemPorBairro();
 
-const bairrosConteudo = await getCollection("bairros");
+// Núcleo primeiro (é o coração da operação), depois faixa alta.
+const ordemCamada = { nucleo: 0, "faixa-alta": 1, "alto-padrao": 2 } as const;
+const bairrosConteudo = (await getCollection("bairros")).sort(
+  (a, b) => ordemCamada[a.data.camada] - ordemCamada[b.data.camada] || a.data.nome.localeCompare(b.data.nome)
+);
 const bairrosGrade = await Promise.all(
   bairrosConteudo.map(async (b) => {
     const faixaReal = await faixaDoBairro(b.id);
@@ -91,7 +95,7 @@ const metodo = [
   </section>
 
   <!-- 3. CTA DE CAPTAÇÃO (prioridade máxima) + 4. VENDIDOS RECENTEMENTE -->
-  <section class="captacao">
+  <section class="captacao secao--tinta">
     <div class="container captacao__grade">
       <div class="captacao__form-bloco">
         <h2>Quanto vale seu imóvel hoje?</h2>
@@ -178,6 +182,7 @@ const metodo = [
     destaques.length > 0 && (
       <section class="secao container">
         <div class="secao__cabeca">
+          <p class="rotulo">À venda agora</p>
           <h2>Imóveis em destaque</h2>
           <a href="/imoveis">Ver todos →</a>
         </div>
@@ -191,14 +196,16 @@ const metodo = [
   }
 
   <!-- 6. BAIRROS DO TERRITÓRIO -->
-  <section class="secao container">
+  <section class="secao secao--painel">
+    <div class="container">
     <div class="secao__cabeca">
+      <p class="rotulo">Onde eu trabalho</p>
       <h2>Bairros do território</h2>
     </div>
     <div class="grade grade--3">
       {
         bairrosGrade.map(({ entrada, faixa, faixaEhReal, quantos }) => (
-          <article class="cartao bairro-card">
+          <article class="cartao cartao--clicavel bairro-card">
             <a href={`/regiao/${entrada.id}`}>
               {entrada.data.foto_capa && (
                 <div class="bairro-card__foto">
@@ -214,7 +221,7 @@ const metodo = [
               <div class="bairro-card__corpo">
                 <h3>{entrada.data.nome}</h3>
                 {faixa && (
-                  <p class="dado bairro-card__faixa">
+                  <p class="bairro-card__faixa">
                     {faixaCurta(faixa.min, faixa.max)}
                     {!faixaEhReal && <span class="bairro-card__nota"> · faixa da região</span>}
                   </p>
@@ -235,11 +242,13 @@ const metodo = [
         </p>
       )
     }
+    </div>
   </section>
 
   <!-- 7. COMO EU TRABALHO -->
-  <section class="metodo">
+  <section class="metodo secao">
     <div class="container">
+      <p class="rotulo metodo__eyebrow">Método</p>
       <h2>Como eu trabalho</h2>
       <div class="grade grade--4 metodo__grade">
         {
@@ -278,6 +287,15 @@ const metodo = [
     gap: var(--esp-4);
   }
 
+  /* H1 da hero: presença de display (Fase 5, seção 4).
+     Teto em 60px (não 76px): a hero divide a largura com o mapa e o teto
+     cheio quebraria o título em uma palavra por linha. */
+  .hero__texto h1 {
+    font-size: clamp(2.5rem, 4.6vw, 3.75rem);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+  }
+
   .hero__sub {
     font-size: 1.15rem;
     color: var(--text-mid);
@@ -291,9 +309,7 @@ const metodo = [
   }
 
   .captacao {
-    background: var(--ink);
-    color: #fff;
-    padding-block: clamp(2.5rem, 6vw, 4rem);
+    padding-block: clamp(4rem, 3rem + 4vw, 7rem);
   }
 
   .captacao__grade {
@@ -321,7 +337,8 @@ const metodo = [
   .captacao form {
     background: var(--surface);
     color: var(--text);
-    border-radius: var(--raio-foto);
+    border-radius: var(--raio-painel);
+    box-shadow: var(--sombra-card-alta);
     padding: clamp(1.25rem, 3vw, 2rem);
   }
 
@@ -384,7 +401,10 @@ const metodo = [
 
   .bairro-card__faixa {
     color: var(--signal);
-    font-weight: 500;
+    font-family: var(--f-display);
+    font-weight: 620;
+    font-stretch: 110%;
+    font-size: 1.05rem;
   }
 
   .bairro-card__nota {
@@ -408,14 +428,12 @@ const metodo = [
     font-size: 0.95rem;
   }
 
-  .metodo {
-    background: var(--surface-2);
-    padding-block: clamp(2.5rem, 6vw, 4rem);
-    margin-top: var(--esp-7);
+  .metodo__eyebrow {
+    margin-bottom: var(--esp-2);
   }
 
   .metodo h2 {
-    margin-bottom: var(--esp-5);
+    margin-bottom: var(--esp-6);
   }
 
   .metodo__grade {

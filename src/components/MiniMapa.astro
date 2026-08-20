@@ -4,7 +4,7 @@
  * do território com o bairro do imóvel destacado. Nunca rua nem número —
  * em vendidos, localização apenas em nível de bairro/condomínio (regra 8.4).
  */
-import { TERRITORIO, VIAS, MARCO_CENTRO, nomeDoBairro } from "../lib/territorio";
+import { TERRITORIO, VIAS, MARCOS, VIEWBOX, nomeDoBairro } from "../lib/territorio";
 
 interface Props {
   bairroSlug: string;
@@ -17,40 +17,38 @@ const alvo = TERRITORIO.find((b) => b.slug === bairroSlug);
 
 <div class="minimapa">
   <svg
-    viewBox="0 0 800 520"
+    viewBox={`0 0 ${VIEWBOX.largura} ${VIEWBOX.altura}`}
     role="img"
     aria-label={`Mapa esquemático do vetor oeste de Sorocaba com o bairro ${nome} destacado`}
   >
-    {VIAS.map((d) => (
-      <path d={d} fill="none" stroke="var(--line)" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round" />
-    ))}
-    {TERRITORIO.map((b) => (
-      <path
-        d={b.path}
-        fill={b.slug === bairroSlug ? "var(--ink-2)" : "var(--surface-2)"}
-        stroke={b.slug === bairroSlug ? "var(--ink)" : "var(--line)"}
-        stroke-width="2"
-      />
-    ))}
+    {VIAS.map((d) => <path class="minimapa__via" d={d} />)}
+    <path class="minimapa__parque" d={MARCOS.parqueDasAguas.path} />
+    {
+      TERRITORIO.map((b) => (
+        <path
+          class:list={["minimapa__forma", { "minimapa__forma--alvo": b.slug === bairroSlug }]}
+          d={b.path}
+        />
+      ))
+    }
     {
       alvo && (
-        <text
-          x={alvo.label.x}
-          y={alvo.label.y}
-          text-anchor="middle"
-          fill="#fff"
-          font-size="26"
-          font-weight="600"
-          font-family="var(--f-display)"
-        >
-          {nome}
+        <text class="minimapa__nome" x={alvo.label.x} y={alvo.label.y} text-anchor="middle">
+          {alvo.labelLinhas.map((linha, i) => (
+            <tspan x={alvo.label.x} dy={i === 0 ? 0 : 15}>
+              {linha}
+            </tspan>
+          ))}
         </text>
       )
     }
-    <circle cx={MARCO_CENTRO.x} cy={MARCO_CENTRO.y} r="6" fill="var(--text-low)" />
-    <text x={MARCO_CENTRO.x - 12} y={MARCO_CENTRO.y + 30} text-anchor="end" fill="var(--text-mid)" font-size="22" font-family="var(--f-texto)">
-      Centro →
-    </text>
+    <g class="minimapa__centro" aria-hidden="true">
+      <text x={MARCOS.centro.label.x} y={MARCOS.centro.label.y} text-anchor="end">CENTRO</text>
+      <path d={`M ${MARCOS.centro.x - 48} ${MARCOS.centro.y} L ${MARCOS.centro.x} ${MARCOS.centro.y}`} />
+      <path
+        d={`M ${MARCOS.centro.x - 8} ${MARCOS.centro.y - 5} L ${MARCOS.centro.x} ${MARCOS.centro.y} L ${MARCOS.centro.x - 8} ${MARCOS.centro.y + 5}`}
+      />
+    </g>
   </svg>
   <p class="minimapa__legenda">
     Localização aproximada — {nome}, Sorocaba/SP. Mapa esquemático do território, sem precisão de
@@ -62,9 +60,58 @@ const alvo = TERRITORIO.find((b) => b.slug === bairroSlug);
   .minimapa svg {
     width: 100%;
     max-width: 560px;
-    border: 1px solid var(--line);
-    border-radius: var(--raio-foto);
-    background: var(--surface);
+    display: block;
+  }
+
+  .minimapa__via {
+    fill: none;
+    stroke: var(--ink-line);
+    stroke-opacity: 0.2;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .minimapa__parque {
+    fill: var(--ok);
+    fill-opacity: 0.12;
+    stroke: none;
+  }
+
+  .minimapa__forma {
+    fill: var(--ink);
+    fill-opacity: 0.06;
+    stroke: var(--ink-line);
+    stroke-opacity: 0.55;
+    stroke-width: 1.25;
+    stroke-linejoin: round;
+  }
+
+  .minimapa__forma--alvo {
+    fill: var(--ink-2);
+    fill-opacity: 1;
+    stroke: var(--ink);
+  }
+
+  .minimapa__nome {
+    font-family: var(--f-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    fill: #fff;
+  }
+
+  .minimapa__centro text {
+    font-family: var(--f-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    fill: var(--text-mid);
+  }
+
+  .minimapa__centro path {
+    stroke: var(--text-mid);
+    stroke-width: 1.5;
+    fill: none;
   }
 
   .minimapa__legenda {

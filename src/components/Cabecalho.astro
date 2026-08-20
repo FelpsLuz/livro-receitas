@@ -63,6 +63,12 @@ const caminho = Astro.url.pathname.replace(/\.html$/, "");
     z-index: 50;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
+    transition: box-shadow 0.2s ease;
+  }
+
+  /* Hairline por padrão; sombra suave só depois do scroll (Fase 5, seção 5) */
+  .cabecalho.rolou {
+    box-shadow: var(--sombra-cabecalho);
   }
 
   .cabecalho__linha {
@@ -204,5 +210,13 @@ const caminho = Astro.url.pathname.replace(/\.html$/, "");
         botao.focus();
       }
     });
+  }
+
+  // Sombra do cabeçalho só após o scroll.
+  const cabecalho = document.querySelector(".cabecalho");
+  if (cabecalho) {
+    const atualizar = () => cabecalho.classList.toggle("rolou", window.scrollY > 4);
+    atualizar();
+    window.addEventListener("scroll", atualizar, { passive: true });
   }
 </script>

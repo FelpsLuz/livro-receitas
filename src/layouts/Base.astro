@@ -4,19 +4,23 @@
  * Open Graph/Twitter, JSON-LD (@graph com RealEstateAgent + Person),
  * fontes self-hosted com subset latino e mensuração condicional.
  */
-import "@fontsource-variable/archivo";
 import "@fontsource-variable/source-sans-3";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "../styles/tokens.css";
 import "../styles/base.css";
 
-import archivoWoff2 from "@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2?url";
+// Archivo VF self-hosted: subset latino com eixo de largura (Fase 5, seção 4).
+import archivoWoff2 from "../assets/fontes/archivo-vf-latin.woff2?url";
 import sourceSansWoff2 from "@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?url";
 import plexMonoWoff2 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
 
 import { SITE } from "../config";
 import { urlCanonica, urlAbsoluta, grafoGlobal, schemaWebPage } from "../lib/seo";
+import { dataUriCurvas } from "../lib/curvas";
+
+// Textura de curvas de nível para seções --ink (uso 1 de 3 — Fase 5, 3.4).
+const curvasTinta = `:root{--curvas-tinta:url("${dataUriCurvas("#FFFFFF", 0.05)}")}`;
 import Cabecalho from "../components/Cabecalho.astro";
 import Rodape from "../components/Rodape.astro";
 import Mensuracao from "../components/Mensuracao.astro";
@@ -86,6 +90,7 @@ const jsonLd = JSON.stringify({
     <meta name="twitter:description" content={descricao} />
     <meta name="twitter:image" content={ogAbsoluta} />
 
+    <style set:html={curvasTinta} is:inline></style>
     <script type="application/ld+json" set:html={jsonLd} is:inline />
     <Mensuracao />
   </head>

@@ -161,7 +161,7 @@ if (d.tempo_medio_venda_dias) dadosRapidos.push(["Tempo médio de venda", `${d.t
               const dias = diasVenda(imovel);
               return (
                 <li>
-                  <a href={`/imovel/${imovel.id}`}>
+                  <a class="linha-cartao" href={`/imovel/${imovel.id}`}>
                     <SeloVendido dias={dias} quando={imovel.data.vendido_em ? mesAno(imovel.data.vendido_em) : null} />
                     <span class="condo__vendas-desc">
                       {TIPO_LABEL[imovel.data.tipo]} · {imovel.data.area_util} m² · {imovel.data.dormitorios} dorm.
@@ -253,13 +253,7 @@ if (d.tempo_medio_venda_dias) dadosRapidos.push(["Tempo médio de venda", `${d.t
     gap: var(--esp-3);
     text-decoration: none;
     color: inherit;
-    border: 1px solid var(--line);
-    border-radius: var(--raio);
-    padding: var(--esp-3) var(--esp-4);
-  }
-
-  .condo__vendas a:hover {
-    border-color: var(--ink-line);
+    padding: var(--esp-4);
   }
 
   .condo__vendas-desc {
